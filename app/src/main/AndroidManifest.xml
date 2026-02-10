@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Calendar reading -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
+    <!-- Exact alarms via setAlarmClock (exempt from SCHEDULE_EXACT_ALARM on 12+) -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Re-schedule alarms after device reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Notification permission (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Keep CPU alive briefly while processing alarm -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Vibrate for alarm -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:name=".CronApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Cron">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Cron">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Alarm notification receiver -->
+        <receiver
+            android:name=".receiver.AlarmReceiver"
+            android:exported="false" />
+
+        <!-- Re-schedule alarms on boot -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Re-sync when calendar provider changes -->
+        <receiver
+            android:name=".receiver.CalendarChangeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PROVIDER_CHANGED" />
+                <data
+                    android:scheme="content"
+                    android:host="com.android.calendar" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>
