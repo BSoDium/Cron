@@ -27,7 +27,6 @@ import fr.bsodium.cron.ui.components.AlarmCard
 import fr.bsodium.cron.ui.components.EventListItem
 import fr.bsodium.cron.ui.components.PermissionGate
 import fr.bsodium.cron.ui.components.StatusToggle
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -62,8 +61,9 @@ fun HomeScreen(
         PermissionGate(
             hasCalendarPermission = uiState.hasCalendarPermission,
             hasNotificationPermission = uiState.hasNotificationPermission,
-            onPermissionsResult = { calendarGranted, notificationGranted ->
-                viewModel.updatePermissionState(calendarGranted, notificationGranted)
+            hasLocationPermission = uiState.hasLocationPermission,
+            onPermissionsResult = { calendarGranted, notificationGranted, locationGranted ->
+                viewModel.updatePermissionState(calendarGranted, notificationGranted, locationGranted)
                 if (calendarGranted) {
                     viewModel.startObserving()
                     viewModel.refresh()
@@ -89,7 +89,8 @@ fun HomeScreen(
                 AlarmCard(
                     alarm = uiState.nextAlarm,
                     status = uiState.status,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    travelInfo = uiState.travelInfo
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -143,5 +144,5 @@ private fun filterTomorrowEvents(events: List<CalendarEvent>): List<CalendarEven
     val tomorrowStart = tomorrow.atStartOfDay(zone).toInstant()
     val tomorrowEnd = tomorrow.plusDays(1).atStartOfDay(zone).toInstant()
 
-    return events.filter { it.startTime >= tomorrowStart && it.startTime < tomorrowEnd }
+    return events.filter { it.startTime in tomorrowStart..<tomorrowEnd }
 }

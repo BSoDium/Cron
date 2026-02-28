@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 fun StatusToggle(
     isEnabled: Boolean,
     onToggle: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
