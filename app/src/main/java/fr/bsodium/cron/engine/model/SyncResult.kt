@@ -11,7 +11,10 @@ data class SyncResult(
     val alarm: ScheduledAlarm?,
 
     /** Why the sync resulted in this outcome. */
-    val status: Status
+    val status: Status,
+
+    /** Diagnostic information about the travel time estimation attempt. */
+    val travelInfo: TravelInfo? = null
 ) {
     enum class Status {
         /** An alarm was successfully scheduled. */
