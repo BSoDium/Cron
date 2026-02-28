@@ -6,7 +6,9 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
 
     <!-- Exact alarms via setAlarmClock (exempt from SCHEDULE_EXACT_ALARM on 12+) -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.USE_EXACT_ALARM"
+        tools:ignore="ExactAlarmPolicy" />
 
     <!-- Re-schedule alarms after device reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -19,6 +21,12 @@
 
     <!-- Vibrate for alarm -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Network access for Google Routes API (travel time estimation) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Coarse location for travel time origin (city-block accuracy is sufficient) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:name=".CronApplication"
@@ -34,7 +42,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.Cron">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -56,15 +63,15 @@
             </intent-filter>
         </receiver>
 
-        <!-- Re-sync when calendar provider changes -->
+        <!-- Re-sync when calendar changes -->
         <receiver
             android:name=".receiver.CalendarChangeReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.PROVIDER_CHANGED" />
                 <data
-                    android:scheme="content"
-                    android:host="com.android.calendar" />
+                    android:host="com.android.calendar"
+                    android:scheme="content" />
             </intent-filter>
         </receiver>
 

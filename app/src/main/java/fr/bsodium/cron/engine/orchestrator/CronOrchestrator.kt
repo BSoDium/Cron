@@ -5,12 +5,14 @@ import fr.bsodium.cron.engine.config.CronConfig
 import fr.bsodium.cron.engine.model.CalendarEvent
 import fr.bsodium.cron.engine.model.ScheduledAlarm
 import fr.bsodium.cron.engine.model.SyncResult
+import fr.bsodium.cron.engine.model.TravelInfo
 import fr.bsodium.cron.engine.scheduler.AlarmScheduler
+import fr.bsodium.cron.engine.travel.GoogleRoutesTravelTimeProvider
+import fr.bsodium.cron.engine.travel.TravelTimeProvider
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
-import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
 /**
@@ -25,7 +27,8 @@ import java.time.temporal.ChronoUnit
 class CronOrchestrator(
     private val calendarReader: CalendarReader,
     private val alarmScheduler: AlarmScheduler,
-    private val config: CronConfig = CronConfig.DEFAULT
+    private val config: CronConfig = CronConfig.DEFAULT,
+    private val travelTimeProvider: TravelTimeProvider? = null
 ) {
 
     /**
@@ -38,7 +41,11 @@ class CronOrchestrator(
      * @param now The current instant (injectable for testing).
      * @return A [SyncResult] describing what happened.
      */
-    fun synchronize(now: Instant = Instant.now()): SyncResult {
+    fun synchronize(
+        now: Instant = Instant.now(),
+        originLat: Double? = null,
+        originLng: Double? = null
+    ): SyncResult {
         if (!config.enabled) {
             // Cancel any previously scheduled alarm
             val requestCode = computeRequestCode(now)
@@ -58,12 +65,12 @@ class CronOrchestrator(
 
         // Filter to only events that start on "the next day" (tomorrow or later today
         // if all of today's events have passed). We focus on the next calendar day.
-        val tomorrow = LocalDate.ofInstant(now, zone).plusDays(1)
+        val tomorrow = now.atZone(zone).toLocalDate().plusDays(1)
         val tomorrowStart = tomorrow.atStartOfDay(zone).toInstant()
         val tomorrowEnd = tomorrow.plusDays(1).atStartOfDay(zone).toInstant()
 
         val tomorrowEvents = allEvents.filter { event ->
-            event.startTime >= tomorrowStart && event.startTime < tomorrowEnd
+            event.startTime in tomorrowStart..<tomorrowEnd
         }
 
         if (tomorrowEvents.isEmpty()) {
@@ -79,27 +86,62 @@ class CronOrchestrator(
 
         // Merge nearby events into blocks; find the first block's start time
         val firstBlockStart = findFirstBlockStart(tomorrowEvents)
+        val targetEvent = tomorrowEvents.first()
 
-        // Compute alarm time: first event start minus prep time
-        val alarmInstant = firstBlockStart.minus(config.prepTime)
-        val alarmLocalTime = LocalTime.ofInstant(alarmInstant, zone)
+        // Build travel info diagnostics
+        val eventLocation = targetEvent.location
+        val hasApiKey = travelTimeProvider != null
+        val hasLocation = originLat != null && originLng != null
+        val hasEventLoc = !eventLocation.isNullOrBlank()
+
+        val travelTime: Duration?
+        val travelError: String?
+
+        if (travelTimeProvider != null && originLat != null && originLng != null && !eventLocation.isNullOrBlank()) {
+            if (travelTimeProvider is GoogleRoutesTravelTimeProvider) {
+                val (duration, error) = travelTimeProvider.estimateWithError(originLat, originLng, eventLocation)
+                travelTime = duration
+                travelError = error
+            } else {
+                travelTime = travelTimeProvider.estimateTravelTime(originLat, originLng, eventLocation)
+                travelError = if (travelTime == null) "Provider returned null" else null
+            }
+        } else {
+            travelTime = null
+            travelError = null
+        }
+
+        val travelInfo = TravelInfo(
+            hasApiKey = hasApiKey,
+            hasDeviceLocation = hasLocation,
+            hasEventLocation = hasEventLoc,
+            eventLocation = eventLocation,
+            travelTime = travelTime,
+            error = travelError
+        )
+
+        // Compute alarm time: first event start minus prep time (and travel time if available)
+        val totalLeadTime = config.prepTime.plus(travelTime ?: Duration.ZERO)
+        val alarmInstant = firstBlockStart.minus(totalLeadTime)
+        val alarmLocalTime = alarmInstant.atZone(zone).toLocalTime()
 
         // Clamp to the allowed alarm window
         val requestCode = computeRequestCodeForDate(tomorrow)
 
-        // If the alarm would be after the latest allowed time, skip it
+        // If the alarm is after the latest allowed time, skip it
         if (alarmLocalTime.isAfter(config.latestAlarm)) {
             alarmScheduler.cancel(requestCode)
             return SyncResult(
                 events = allEvents,
                 alarm = null,
-                status = SyncResult.Status.ALARM_TOO_LATE
+                status = SyncResult.Status.ALARM_TOO_LATE,
+                travelInfo = travelInfo
             )
         }
 
         // Determine the final alarm instant
         val finalAlarmInstant = if (alarmLocalTime.isBefore(config.earliestAlarm)) {
-            // Clamp to earliest allowed time
+            // Clamp to the earliest allowed time
             tomorrow.atTime(config.earliestAlarm).atZone(zone).toInstant()
         } else {
             alarmInstant
@@ -111,19 +153,19 @@ class CronOrchestrator(
             return SyncResult(
                 events = allEvents,
                 alarm = null,
-                status = SyncResult.Status.ALARM_IN_PAST
+                status = SyncResult.Status.ALARM_IN_PAST,
+                travelInfo = travelInfo
             )
         }
 
-        // Build the target event (the first event in the first block)
-        val targetEvent = tomorrowEvents.first()
         val label = "Wake up for: ${targetEvent.title}"
 
         val alarm = ScheduledAlarm(
             triggerTime = finalAlarmInstant,
             targetEvent = targetEvent,
             label = label,
-            requestCode = requestCode
+            requestCode = requestCode,
+            travelTime = travelTime
         )
 
         // Schedule the alarm
@@ -132,7 +174,8 @@ class CronOrchestrator(
         return SyncResult(
             events = allEvents,
             alarm = alarm,
-            status = SyncResult.Status.ALARM_SET
+            status = SyncResult.Status.ALARM_SET,
+            travelInfo = travelInfo
         )
     }
 
@@ -162,7 +205,7 @@ class CronOrchestrator(
      * Generates a request code for "tomorrow" relative to [now].
      */
     private fun computeRequestCode(now: Instant): Int {
-        val tomorrow = LocalDate.ofInstant(now, ZoneId.systemDefault()).plusDays(1)
+        val tomorrow = now.atZone(ZoneId.systemDefault()).toLocalDate().plusDays(1)
         return computeRequestCodeForDate(tomorrow)
     }
 }

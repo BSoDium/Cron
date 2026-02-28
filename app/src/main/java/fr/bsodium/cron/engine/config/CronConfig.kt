@@ -14,7 +14,7 @@ data class CronConfig(
 
     /** Time to subtract from the first event's start to compute the alarm.
      *  This represents the user's preparation time (shower, breakfast, etc.). */
-    val prepTime: Duration = Duration.ofMinutes(45),
+    val prepTime: Duration = Duration.ofMinutes(75),
 
     /** Earliest allowed alarm time. Alarms computed before this
      *  will be clamped to this value. */

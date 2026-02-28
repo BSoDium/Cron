@@ -1,19 +1,25 @@
 package fr.bsodium.cron.ui.screens.home
 
 import android.app.Application
+import android.content.Context
 import android.database.ContentObserver
+import android.location.LocationManager
 import android.os.Handler
 import android.os.Looper
 import android.provider.CalendarContract
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import fr.bsodium.cron.BuildConfig
 import fr.bsodium.cron.engine.calendar.CalendarReaderImpl
 import fr.bsodium.cron.engine.config.CronConfig
 import fr.bsodium.cron.engine.model.CalendarEvent
 import fr.bsodium.cron.engine.model.ScheduledAlarm
 import fr.bsodium.cron.engine.model.SyncResult
+import fr.bsodium.cron.engine.model.TravelInfo
 import fr.bsodium.cron.engine.orchestrator.CronOrchestrator
 import fr.bsodium.cron.engine.scheduler.AlarmSchedulerImpl
+import fr.bsodium.cron.engine.travel.GoogleRoutesTravelTimeProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel for the Home screen.
@@ -34,7 +41,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val config = CronConfig.DEFAULT
     private val calendarReader = CalendarReaderImpl(application.contentResolver, config)
     private val alarmScheduler = AlarmSchedulerImpl(application)
-    private val orchestrator = CronOrchestrator(calendarReader, alarmScheduler, config)
+    private val travelTimeProvider = BuildConfig.GOOGLE_ROUTES_API_KEY
+        .takeIf { it.isNotBlank() }
+        ?.let { GoogleRoutesTravelTimeProvider(it) }
+    private val orchestrator = CronOrchestrator(
+        calendarReader, alarmScheduler, config, travelTimeProvider
+    )
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -82,12 +94,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun refresh() {
         viewModelScope.launch {
-            val result = orchestrator.synchronize()
+            val result = withContext(Dispatchers.IO) {
+                val (lat, lng) = getLastKnownLocation()
+                orchestrator.synchronize(originLat = lat, originLng = lng)
+            }
             _uiState.update { current ->
                 current.copy(
                     nextAlarm = result.alarm,
                     events = result.events,
-                    status = result.status
+                    status = result.status,
+                    travelInfo = result.travelInfo
                 )
             }
         }
@@ -105,8 +121,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             // Cancel any existing alarm
             viewModelScope.launch {
                 val disabledConfig = config.copy(enabled = false)
-                val tempOrchestrator = CronOrchestrator(calendarReader, alarmScheduler, disabledConfig)
-                tempOrchestrator.synchronize()
+                val tempOrchestrator = CronOrchestrator(
+                    calendarReader, alarmScheduler, disabledConfig, travelTimeProvider
+                )
+                withContext(Dispatchers.IO) { tempOrchestrator.synchronize() }
                 _uiState.update { it.copy(nextAlarm = null, status = SyncResult.Status.DISABLED) }
             }
         } else {
@@ -114,12 +132,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updatePermissionState(hasCalendar: Boolean, hasNotification: Boolean) {
+    fun updatePermissionState(
+        hasCalendar: Boolean,
+        hasNotification: Boolean,
+        hasLocation: Boolean = false
+    ) {
         _uiState.update {
             it.copy(
                 hasCalendarPermission = hasCalendar,
-                hasNotificationPermission = hasNotification
+                hasNotificationPermission = hasNotification,
+                hasLocationPermission = hasLocation
             )
+        }
+    }
+
+    /**
+     * Returns the device's last known location as (lat, lng), or (null, null)
+     * if location is unavailable or permission was not granted.
+     */
+    private fun getLastKnownLocation(): Pair<Double?, Double?> {
+        return try {
+            val locationManager = getApplication<Application>()
+                .getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val location =
+                locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                    ?: locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            if (location != null) Pair(location.latitude, location.longitude) else Pair(null, null)
+        } catch (_: SecurityException) {
+            // Location permission not granted — travel time will be silently skipped
+            Pair(null, null)
         }
     }
 
@@ -146,5 +187,7 @@ data class HomeUiState(
     val status: SyncResult.Status = SyncResult.Status.NO_EVENTS,
     val isEnabled: Boolean = true,
     val hasCalendarPermission: Boolean = false,
-    val hasNotificationPermission: Boolean = false
+    val hasNotificationPermission: Boolean = false,
+    val hasLocationPermission: Boolean = false,
+    val travelInfo: TravelInfo? = null
 )

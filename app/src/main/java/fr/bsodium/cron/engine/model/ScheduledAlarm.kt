@@ -1,5 +1,6 @@
 package fr.bsodium.cron.engine.model
 
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -18,5 +19,9 @@ data class ScheduledAlarm(
 
     /** Unique request code for the PendingIntent. Derived from the target
      *  date so re-syncing overwrites the previous alarm for the same day. */
-    val requestCode: Int
+    val requestCode: Int,
+
+    /** Estimated travel time to the event location, or `null` if not applicable
+     *  (no location, no API key, API failure, etc.). Used by the UI layer. */
+    val travelTime: Duration? = null
 )
