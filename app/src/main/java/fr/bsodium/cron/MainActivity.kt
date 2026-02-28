@@ -36,7 +36,11 @@ class MainActivity : ComponentActivity() {
             true
         }
 
-        viewModel.updatePermissionState(hasCalendar, hasNotification)
+        val hasLocation = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        viewModel.updatePermissionState(hasCalendar, hasNotification, hasLocation)
 
         setContent {
             CronTheme {

@@ -22,6 +22,12 @@
     <!-- Vibrate for alarm -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Network access for Google Routes API (travel time estimation) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Coarse location for travel time origin (city-block accuracy is sufficient) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <application
         android:name=".CronApplication"
         android:allowBackup="true"
@@ -57,7 +63,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Re-sync when calendar provider changes -->
+        <!-- Re-sync when calendar changes -->
         <receiver
             android:name=".receiver.CalendarChangeReceiver"
             android:exported="true">

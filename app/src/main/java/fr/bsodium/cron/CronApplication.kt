@@ -33,29 +33,27 @@ class CronApplication : Application() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
+        val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
 
-            val channel = NotificationChannel(
-                AlarmReceiver.CHANNEL_ID,
-                "Cron Alarms",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Wake-up alarm notifications scheduled by Cron"
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
-                setSound(alarmSound, audioAttributes)
-                setBypassDnd(true)
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-            }
-
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            AlarmReceiver.CHANNEL_ID,
+            "Cron Alarms",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Wake-up alarm notifications scheduled by Cron"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
+            setSound(alarmSound, audioAttributes)
+            setBypassDnd(true)
+            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
         }
+
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.createNotificationChannel(channel)
     }
 
     private fun enqueuePeriodicSync() {

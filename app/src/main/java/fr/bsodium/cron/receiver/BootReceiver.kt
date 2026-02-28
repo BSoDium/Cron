@@ -22,6 +22,8 @@ class BootReceiver : BroadcastReceiver() {
         val config = CronConfig.DEFAULT
         val calendarReader = CalendarReaderImpl(context.contentResolver, config)
         val alarmScheduler = AlarmSchedulerImpl(context)
+        // No travel time provider on boot — runs on main thread, can't do network I/O.
+        // The next CalendarSyncWorker run will incorporate travel time.
         val orchestrator = CronOrchestrator(calendarReader, alarmScheduler, config)
 
         orchestrator.synchronize()

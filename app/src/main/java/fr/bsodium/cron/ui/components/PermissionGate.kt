@@ -37,10 +37,12 @@ import androidx.compose.ui.unit.dp
  *
  * If READ_CALENDAR is not granted, shows a centered prompt
  * explaining why the permission is needed and a button to request it.
- * Also requests POST_NOTIFICATIONS on Android 13+.
+ * Also requests POST_NOTIFICATIONS on Android 13+ and ACCESS_COARSE_LOCATION
+ * for travel time estimation.
  *
  * @param hasCalendarPermission Whether READ_CALENDAR is currently granted.
  * @param hasNotificationPermission Whether POST_NOTIFICATIONS is currently granted.
+ * @param hasLocationPermission Whether ACCESS_COARSE_LOCATION is currently granted.
  * @param onPermissionsResult Callback when permissions are granted/denied.
  * @param content The main UI to show when permissions are granted.
  */
@@ -48,7 +50,8 @@ import androidx.compose.ui.unit.dp
 fun PermissionGate(
     hasCalendarPermission: Boolean,
     hasNotificationPermission: Boolean,
-    onPermissionsResult: (calendarGranted: Boolean, notificationGranted: Boolean) -> Unit,
+    hasLocationPermission: Boolean = false,
+    onPermissionsResult: (calendarGranted: Boolean, notificationGranted: Boolean, locationGranted: Boolean) -> Unit,
     content: @Composable () -> Unit
 ) {
     if (hasCalendarPermission) {
@@ -69,7 +72,8 @@ fun PermissionGate(
         } else {
             true
         }
-        onPermissionsResult(calendarGranted, notificationGranted)
+        val locationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        onPermissionsResult(calendarGranted, notificationGranted, locationGranted)
     }
 
     Column(
@@ -108,7 +112,10 @@ fun PermissionGate(
         if (!hasRequestedOnce) {
             Button(
                 onClick = {
-                    val permissions = mutableListOf(Manifest.permission.READ_CALENDAR)
+                    val permissions = mutableListOf(
+                        Manifest.permission.READ_CALENDAR,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         permissions.add(Manifest.permission.POST_NOTIFICATIONS)
                     }
