@@ -27,7 +27,6 @@ import fr.bsodium.cron.ui.components.AlarmCard
 import fr.bsodium.cron.ui.components.EventListItem
 import fr.bsodium.cron.ui.components.PermissionGate
 import fr.bsodium.cron.ui.components.StatusToggle
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -90,8 +89,8 @@ fun HomeScreen(
                 AlarmCard(
                     alarm = uiState.nextAlarm,
                     status = uiState.status,
-                    travelInfo = uiState.travelInfo,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    travelInfo = uiState.travelInfo
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))

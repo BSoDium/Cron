@@ -1,8 +1,6 @@
 package fr.bsodium.cron.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,8 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.engine.model.ScheduledAlarm
 import fr.bsodium.cron.engine.model.SyncResult
@@ -33,8 +29,8 @@ import java.time.format.DateTimeFormatter
 fun AlarmCard(
     alarm: ScheduledAlarm?,
     status: SyncResult.Status,
-    travelInfo: TravelInfo? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    travelInfo: TravelInfo? = null
 ) {
     ElevatedCard(
         modifier = modifier.fillMaxWidth()
