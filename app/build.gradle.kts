@@ -37,6 +37,18 @@ android {
         )
     }
 
+    signingConfigs {
+        create("release") {
+            val keyStorePath = System.getenv("RELEASE_KEYSTORE_PATH") ?: localProps.getProperty("STORE_FILE")
+            if (keyStorePath != null) {
+                storeFile = file(keyStorePath)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: localProps.getProperty("STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: localProps.getProperty("KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: localProps.getProperty("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -44,8 +56,20 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfigs.findByName("release")?.let {
+                signingConfig = it
+            }
         }
     }
+
+    (this as? com.android.build.gradle.AppExtension)?.applicationVariants?.all {
+        val variant = this
+        outputs.all {
+            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output?.outputFileName = "cron-${variant.versionName}.apk"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
