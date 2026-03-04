@@ -5,6 +5,34 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// Derive version from git tags so it stays in sync automatically.
+// Tag format: v1.0.0 or v1.0.0-alpha.1
+fun gitVersionName(): String {
+    return try {
+        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
+            .redirectErrorStream(true)
+            .start()
+        val tag = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        if (tag.startsWith("v")) tag.substring(1) else tag
+    } catch (_: Exception) {
+        "0.0.0"
+    }
+}
+
+fun gitVersionCode(): Int {
+    return try {
+        val process = ProcessBuilder("git", "rev-list", "HEAD", "--count")
+            .redirectErrorStream(true)
+            .start()
+        val count = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        count.toIntOrNull() ?: 1
+    } catch (_: Exception) {
+        1
+    }
+}
+
 // Read local.properties for sensitive config (file is gitignored)
 val localProps = Properties().apply {
     rootProject.file("local.properties")
@@ -24,8 +52,8 @@ android {
         applicationId = "fr.bsodium.cron"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = gitVersionCode()
+        versionName = gitVersionName()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
