@@ -62,13 +62,6 @@ android {
         }
     }
 
-    (this as? com.android.build.gradle.AppExtension)?.applicationVariants?.all {
-        val variant = this
-        outputs.all {
-            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output?.outputFileName = "cron-${variant.versionName}.apk"
-        }
-    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -77,6 +70,19 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+}
+
+tasks.configureEach {
+    if (name == "assembleRelease") {
+        doLast {
+            val versionName = android.defaultConfig.versionName ?: "unknown"
+            val apkDir = layout.buildDirectory.dir("outputs/apk/release").get().asFile
+            apkDir.listFiles()?.filter { it.extension == "apk" }?.forEach { apk ->
+                val target = File(apkDir, "cron-${versionName}.apk")
+                apk.renameTo(target)
+            }
+        }
     }
 }
 
