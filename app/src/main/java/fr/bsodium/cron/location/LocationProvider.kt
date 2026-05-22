@@ -47,12 +47,13 @@ class LocationProvider(private val context: Context) {
 
         val fused = LocationServices.getFusedLocationProviderClient(context)
 
-        // Step 1: one-shot fresh fix — always try this first so we get the user's
-        // actual current location, not a cached position from earlier in the day.
-        val fresh = withTimeoutOrNull(20.seconds.inWholeMilliseconds) {
+        // Step 1: high-accuracy GPS fix — engages GPS chip for a precise fix.
+        // Always tried first; if the result is coarser than MAX_ACCURACY_METERS
+        // (cell-tower range), persistAndReturn returns null and we fall through.
+        val fresh = withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
             val req = CurrentLocationRequest.Builder()
-                .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
-                .setDurationMillis(20.seconds.inWholeMilliseconds)
+                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                .setDurationMillis(30.seconds.inWholeMilliseconds)
                 .build()
             runCatching {
                 fused.getCurrentLocation(req, null).awaitNullable()
@@ -76,6 +77,9 @@ class LocationProvider(private val context: Context) {
         source: LocationSource,
         checkpoints: PollCheckpointStore,
     ): LocationPayload? {
+        // Reject fixes coarser than 500 m — those are cell-tower-only positions and
+        // will misplace the user by kilometres (e.g. Ivry → Nation/Bastille).
+        if (location.accuracy > MAX_ACCURACY_METERS) return null
         val capturedAt = Instant.fromEpochMilliseconds(location.time)
         checkpoints.setLastLocationFix(location.latitude, location.longitude, capturedAt)
         return LocationPayload(
@@ -125,6 +129,10 @@ class LocationProvider(private val context: Context) {
             source = LocationSource.Unavailable,
             capturedAt = Clock.System.now(),
         )
+    }
+
+    companion object {
+        private const val MAX_ACCURACY_METERS = 500f
     }
 
     private fun isRecent(location: Location, maxAge: kotlin.time.Duration): Boolean =

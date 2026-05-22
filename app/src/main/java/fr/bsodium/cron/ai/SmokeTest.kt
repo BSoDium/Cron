@@ -101,6 +101,7 @@ class SmokeTest(private val context: Context) {
             "## Current location (captured at session start)\n" +
                 "- Latitude: ${location.lat}, Longitude: ${location.lng}\n" +
                 "- Source: ${location.source.name.lowercase()}\n" +
+                "- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}\n" +
                 "- Captured at: ${location.capturedAt}"
         }
 

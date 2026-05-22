@@ -179,6 +179,7 @@ class AiTurnWorker(
                 appendLine("## Current location (captured at session start)")
                 appendLine("- Latitude: ${location.lat}, Longitude: ${location.lng}")
                 appendLine("- Source: ${location.source.name.lowercase()}")
+                appendLine("- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}")
                 appendLine("- Captured at: ${location.capturedAt}")
             } else {
                 appendLine("## Location")
