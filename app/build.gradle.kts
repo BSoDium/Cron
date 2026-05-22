@@ -146,6 +146,10 @@ dependencies {
     implementation(libs.androidx.health.connect)
     implementation(libs.play.services.location)
 
+    // Image loading (for route map in debug card)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)

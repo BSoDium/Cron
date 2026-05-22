@@ -27,13 +27,17 @@ object SystemPrompts {
            - Ignore virtual / phone-based events unless they are the only events of the day.
            - If multiple events cluster (back-to-back at the same place), anchor on the one that
              actually determines when the user needs to leave home.
-        3. If you found an anchor with a location, estimate commute time directly:
-           - Use the T0 event's location.lat/lng as origin (see "location" field in the user message).
-           - Use your knowledge of transit times and local geography to estimate travel duration
-             to the destination address.
+        3. If you found an anchor with a location, resolve commute time:
+           - Use the user's lat/lng as origin (from "location" field in the user message).
+           - Call geocode_address on the event's location string to get destination lat/lng.
+           - Call estimate_commute(origin_lat, origin_lng, destination,
+               arrival_time_iso=<anchor_event.start_utc_iso>).
+             The arrival_time_iso field is the event's start_utc_iso from read_calendar.
+             Passing it makes the API compute the correct morning route backwards from
+             required arrival, not a route departing now at planning time.
+           - If the destination might be walkable (<1 km from origin), also call
+             estimate_commute_multi_mode with the same arrival_time_iso.
            - Add a 15-minute personal preparation buffer minimum.
-           - If you are uncertain about the route, round up conservatively and mention it in
-             the reason.
         4. If no anchor exists tomorrow, use the user's free-day wake preferences
            (provided in the user message).
         5. Once you have a wake time, call set_alarm with the resulting time, a short label,

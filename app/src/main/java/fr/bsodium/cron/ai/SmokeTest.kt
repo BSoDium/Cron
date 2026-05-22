@@ -1,12 +1,18 @@
 package fr.bsodium.cron.ai
 
 import android.content.Context
+import fr.bsodium.cron.BuildConfig
 import fr.bsodium.cron.ai.tools.CancelAlarmTool
 import fr.bsodium.cron.ai.tools.DoNothingTool
+import fr.bsodium.cron.ai.tools.EstimateCommuteMultiModeTool
+import fr.bsodium.cron.ai.tools.EstimateCommuteTool
+import fr.bsodium.cron.ai.tools.GeocodeTool
 import fr.bsodium.cron.ai.tools.NotifyWarningTool
 import fr.bsodium.cron.ai.tools.ReadCalendarTool
 import fr.bsodium.cron.ai.tools.SendBriefTool
 import fr.bsodium.cron.ai.tools.SetAlarmTool
+import fr.bsodium.cron.travel.GeocodingClient
+import fr.bsodium.cron.travel.RoutesClient
 import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.alarm.AlarmScheduler
 import fr.bsodium.cron.calendar.CalendarReader
@@ -45,6 +51,9 @@ class SmokeTest(private val context: Context) {
         val assistantText: String?,
         val roundTrips: Int,
         val error: String? = null,
+        val originLat: Double? = null,
+        val originLng: Double? = null,
+        val destination: String? = null,
     )
 
     suspend fun run(): Outcome {
@@ -68,7 +77,7 @@ class SmokeTest(private val context: Context) {
             scheduler.cancel(tomorrow)
         }
 
-        val tools = ToolRegistry(listOf(
+        val toolList = mutableListOf(
             ReadCalendarTool(CalendarReader(context.contentResolver)),
             SetAlarmTool(
                 scheduler = scheduler,
@@ -82,7 +91,15 @@ class SmokeTest(private val context: Context) {
             CancelAlarmTool(scheduler, repository, sessionId, tomorrow),
             SendBriefTool(context, repository, sessionId),
             NotifyWarningTool(context, repository, sessionId),
-        ))
+        )
+        val routesKey = BuildConfig.GOOGLE_ROUTES_API_KEY.takeIf { it.isNotBlank() }
+        if (routesKey != null) {
+            val routesClient = RoutesClient(routesKey)
+            toolList.add(GeocodeTool(GeocodingClient(routesKey)))
+            toolList.add(EstimateCommuteTool(routesClient))
+            toolList.add(EstimateCommuteMultiModeTool(routesClient))
+        }
+        val tools = ToolRegistry(toolList)
 
         val client = AnthropicClient(apiKeyProvider = { apiKey })
         val runner = TurnRunner(
@@ -91,7 +108,7 @@ class SmokeTest(private val context: Context) {
             model = TurnRunner.MODEL_SONNET,
             systemPrompt = SystemPrompts.EVENING_PLAN,
             tools = tools,
-            maxRoundTrips = 8,
+            maxRoundTrips = 12,
         )
 
         val location = LocationProvider(context).acquireForEveningPlan()
@@ -131,7 +148,16 @@ class SmokeTest(private val context: Context) {
                     "(budget exhausted)" to outcome.roundTrips
                 }
             }
-            Outcome(ok = true, assistantText = text.ifBlank { "(no text content)" }, roundTrips = rounds)
+            val updatedPlan = database.sessionDao().findById(sessionId)
+                ?.planJson?.let { runCatching { SessionJson.decodeFromString<DayPlan>(it) }.getOrNull() }
+            Outcome(
+                ok = true,
+                assistantText = text.ifBlank { "(no text content)" },
+                roundTrips = rounds,
+                originLat = location.lat.takeIf { location.source != LocationSource.Unavailable },
+                originLng = location.lng.takeIf { location.source != LocationSource.Unavailable },
+                destination = updatedPlan?.firstEventLocation,
+            )
         } catch (t: Throwable) {
             Outcome(ok = false, assistantText = null, roundTrips = 0, error = t.message ?: t::class.simpleName)
         } finally {

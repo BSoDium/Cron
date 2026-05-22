@@ -59,18 +59,26 @@ class EstimateCommuteMultiModeTool(private val client: RoutesClient) : Tool {
         val arrivalMs = obj["arrival_time_iso"]?.jsonPrimitive?.content
             ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
 
-        val transitD = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.TRANSIT, arrivalMs) }
-        val walkD = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.WALK) }
-        val driveD = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.DRIVE) }
-        val bicycleD = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.BICYCLE) }
+        val transitD = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.TRANSIT, arrivalMs).getOrNull() }
+        val walkD    = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.WALK).getOrNull() }
+        val driveD   = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.DRIVE).getOrNull() }
+        val bicycleD = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.BICYCLE).getOrNull() }
 
         fun RoutesClient.RouteResult.toMode() = ModeResult(durationSeconds, distanceMeters)
         val output = Output(
             transit = transitD.await()?.toMode(),
-            walk = walkD.await()?.toMode(),
-            drive = driveD.await()?.toMode(),
+            walk    = walkD.await()?.toMode(),
+            drive   = driveD.await()?.toMode(),
             bicycle = bicycleD.await()?.toMode(),
         )
+        if (output.transit == null && output.walk == null &&
+            output.drive == null && output.bicycle == null
+        ) {
+            return@coroutineScope ToolResult(
+                """{"error":"all commute modes failed — check API key or destination address"}""",
+                isError = true,
+            )
+        }
         ToolResult(SessionJson.encodeToString(output))
     }
 

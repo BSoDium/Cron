@@ -64,8 +64,9 @@ class EstimateCommuteTool(private val client: RoutesClient) : Tool {
         val arrivalMs = obj["arrival_time_iso"]?.jsonPrimitive?.content
             ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
 
-        val result = client.estimate(lat, lng, dest, mode, arrivalMs)
-            ?: return ToolResult("""{"error":"could not estimate commute — check destination or try a different mode"}""")
+        val result = client.estimate(lat, lng, dest, mode, arrivalMs).getOrElse { e ->
+            return ToolResult("""{"error":"commute estimate failed: ${e.message?.take(300)}"}""", isError = true)
+        }
 
         return ToolResult(SessionJson.encodeToString(Output(result.durationSeconds, result.distanceMeters)))
     }

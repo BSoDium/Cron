@@ -1,5 +1,7 @@
 package fr.bsodium.cron.ui.components
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +30,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -34,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import fr.bsodium.cron.ui.screens.home.SmokeState
 
 private sealed class Block {
@@ -51,6 +58,7 @@ fun AiDebugCard(
     onSaveKey: (String) -> Unit,
     onRunSmoke: () -> Unit,
     modifier: Modifier = Modifier,
+    routesApiKey: String? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -88,7 +96,7 @@ fun AiDebugCard(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        SmokeResult(smokeState)
+        SmokeResult(smokeState, routesApiKey)
     }
 }
 
@@ -114,7 +122,7 @@ private fun ApiKeyEntry(onSaveKey: (String) -> Unit) {
 }
 
 @Composable
-private fun SmokeResult(state: SmokeState) {
+private fun SmokeResult(state: SmokeState, routesApiKey: String?) {
     when (state) {
         SmokeState.Idle -> Unit
         SmokeState.Running -> Box(
@@ -152,6 +160,17 @@ private fun SmokeResult(state: SmokeState) {
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
+            }
+            if (state.originLat != null && state.originLng != null &&
+                state.destination != null && routesApiKey != null
+            ) {
+                Spacer(modifier = Modifier.height(4.dp))
+                RouteMapCard(
+                    originLat = state.originLat,
+                    originLng = state.originLng,
+                    destination = state.destination,
+                    apiKey = routesApiKey,
+                )
             }
         }
         is SmokeState.Failure -> {
@@ -210,6 +229,43 @@ private fun BlockquoteBlock(block: Block.Blockquote) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun RouteMapCard(
+    originLat: Double,
+    originLng: Double,
+    destination: String,
+    apiKey: String,
+) {
+    val staticUrl = "https://maps.googleapis.com/maps/api/staticmap?" +
+        "size=600x220" +
+        "&markers=color:blue%7Clabel:H%7C$originLat,$originLng" +
+        "&markers=color:red%7Clabel:D%7C${Uri.encode(destination)}" +
+        "&key=$apiKey"
+    val mapsUrl = "https://www.google.com/maps/dir/?api=1" +
+        "&origin=$originLat,$originLng" +
+        "&destination=${Uri.encode(destination)}" +
+        "&travelmode=transit"
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AsyncImage(
+            model = staticUrl,
+            contentDescription = "Route map",
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Crop,
+        )
+        val ctx = LocalContext.current
+        TextButton(
+            onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(mapsUrl))) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open transit route in Maps →")
+        }
     }
 }
 
