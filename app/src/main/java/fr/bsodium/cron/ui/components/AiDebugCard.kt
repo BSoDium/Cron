@@ -22,6 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,12 +62,6 @@ fun AiDebugCard(
     routesApiKey: String? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "AI diagnostics",
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
         if (!hasKey) {
             ApiKeyEntry(onSaveKey = onSaveKey)
         } else {
@@ -185,27 +180,36 @@ private fun SmokeResult(state: SmokeState, routesApiKey: String?) {
 
 @Composable
 private fun TableBlock(table: Block.Table) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            for (header in table.headers) {
-                Text(
-                    text = parseBold(header),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-        for (row in table.rows) {
-            val padded = List(table.headers.size) { i -> row.getOrElse(i) { "" } }
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                for (cell in padded) {
+                for (header in table.headers) {
                     Text(
-                        text = parseBold(cell),
-                        style = MaterialTheme.typography.bodySmall,
+                        text = parseBold(header),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f),
                     )
+                }
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+            for (row in table.rows) {
+                val padded = List(table.headers.size) { i -> row.getOrElse(i) { "" } }
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    for (cell in padded) {
+                        Text(
+                            text = parseBold(cell),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }
