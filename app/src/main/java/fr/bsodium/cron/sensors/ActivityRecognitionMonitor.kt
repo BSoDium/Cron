@@ -1,6 +1,7 @@
 package fr.bsodium.cron.sensors
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -57,6 +58,7 @@ class ActivityRecognitionMonitor(
 
     private var pendingIntent: PendingIntent? = null
 
+    @SuppressLint("WrongConstant") // ContextCompat.RECEIVER_NOT_EXPORTED is the correct compat value for API < 33
     fun start(): Boolean {
         if (!hasPermission()) {
             Log.w(TAG, "ACTIVITY_RECOGNITION permission not granted; monitor inactive")

@@ -1,6 +1,7 @@
 package fr.bsodium.cron.location
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
@@ -37,6 +38,7 @@ import kotlin.time.Duration.Companion.seconds
  */
 class LocationProvider(private val context: Context) {
 
+    @SuppressLint("MissingPermission") // permission checked via hasAnyLocationPermission() at entry
     suspend fun acquireForEveningPlan(
         checkpoints: PollCheckpointStore = PollCheckpointStore(context),
         settings: SettingsRepository = SettingsRepository(context),
