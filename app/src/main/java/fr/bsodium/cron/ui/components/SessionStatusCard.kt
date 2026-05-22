@@ -7,7 +7,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -15,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.session.model.ActionType
@@ -74,12 +81,6 @@ private fun NoSessionContent() {
         text = "No active session",
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(modifier = Modifier.height(4.dp))
-    Text(
-        text = "Cron will plan tonight's alarm at your evening trigger time.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
     )
 }
 
@@ -143,14 +144,6 @@ private fun SessionContent(state: SessionDisplayState) {
         }
     }
 
-    if (state.reason.isNotBlank()) {
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = state.reason,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable
@@ -163,4 +156,72 @@ private fun StatusChip(status: SessionStatus) {
         SessionStatus.Complete -> "Complete"
     }
     SuggestionChip(onClick = {}, label = { Text(label) })
+}
+
+/**
+ * Chat-style card showing the AI's latest decision reasoning.
+ * Displayed below the hero alarm card on the Home screen.
+ */
+@Composable
+fun AiPlanCard(
+    state: SessionDisplayState?,
+    modifier: Modifier = Modifier,
+) {
+    val reason = state?.reason?.takeIf { it.isNotBlank() }
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (reason != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Alarm,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "Cron",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = reason,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                val actionLabel = when (state.action) {
+                    ActionType.SetAlarm -> "Alarm scheduled"
+                    ActionType.CancelAlarm -> "Alarm cancelled"
+                    ActionType.SendBrief -> "Morning brief queued"
+                    ActionType.DoNothing -> "No change needed"
+                    ActionType.NotifyWarning -> "Warning issued"
+                }
+                Text(
+                    text = actionLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                )
+            } else {
+                Text(
+                    text = "Cron will plan tonight's alarm at your evening trigger time.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontStyle = FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
+        }
+    }
 }
