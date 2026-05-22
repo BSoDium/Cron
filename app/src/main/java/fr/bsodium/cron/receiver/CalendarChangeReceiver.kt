@@ -6,29 +6,27 @@ import android.content.Intent
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import fr.bsodium.cron.worker.CalendarSyncWorker
+import fr.bsodium.cron.worker.CalendarChangeWorker
+import java.util.concurrent.TimeUnit
 
 /**
- * Responds to calendar provider changes (event created, modified, deleted).
+ * Responds to calendar provider changes and triggers a debounced analysis.
  *
- * Instead of running the orchestrator directly (which could block the
- * broadcast receiver's time limit), this enqueues an expedited one-time
- * [CalendarSyncWorker] to handle the re-sync.
+ * Calendar change events can fire in rapid bursts (e.g., syncing a batch of
+ * events). The 2-second delay + REPLACE policy means only the last change
+ * in a burst triggers [CalendarChangeWorker], which checks whether the first
+ * anchor event actually changed before touching the session or AI.
  */
 class CalendarChangeReceiver : BroadcastReceiver() {
 
-    companion object {
-        private const val WORK_NAME = "calendar_change_sync"
-    }
-
     override fun onReceive(context: Context, intent: Intent) {
-        // Enqueue a one-time sync, replacing any pending one (debounce)
-        val syncRequest = OneTimeWorkRequestBuilder<CalendarSyncWorker>().build()
-
+        val request = OneTimeWorkRequestBuilder<CalendarChangeWorker>()
+            .setInitialDelay(2, TimeUnit.SECONDS)
+            .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            WORK_NAME,
+            CalendarChangeWorker.NAME,
             ExistingWorkPolicy.REPLACE,
-            syncRequest
+            request,
         )
     }
 }
