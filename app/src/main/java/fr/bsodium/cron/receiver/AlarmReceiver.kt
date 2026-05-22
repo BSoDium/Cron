@@ -180,7 +180,7 @@ class AlarmReceiver : BroadcastReceiver() {
                         timestamp = Clock.System.now(),
                         data = EventData.AlarmInteraction(
                             snoozeDurationMinutes = 10,
-                            snoozeCount = session.snoozeCount,
+                            snoozeCount = session.snoozeCount + 1,
                         ),
                     )
                     fsm.onSnooze(session.id, event)

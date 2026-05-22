@@ -272,6 +272,7 @@ private fun RouteMapCard(
 private fun parseBlocks(text: String): List<Block> {
     val blocks = mutableListOf<Block>()
     var paraLines = mutableListOf<String>()
+    var quoteLines = mutableListOf<String>()
     var tableHeaders: List<String>? = null
     var tableRows = mutableListOf<List<String>>()
 
@@ -279,6 +280,13 @@ private fun parseBlocks(text: String): List<Block> {
         if (paraLines.isNotEmpty()) {
             blocks.add(Block.Paragraph(paraLines.joinToString("\n")))
             paraLines = mutableListOf()
+        }
+    }
+
+    fun flushQuote() {
+        if (quoteLines.isNotEmpty()) {
+            blocks.add(Block.Blockquote(quoteLines.joinToString("\n")))
+            quoteLines = mutableListOf()
         }
     }
 
@@ -312,6 +320,7 @@ private fun parseBlocks(text: String): List<Block> {
             isSep -> Unit
             isTableRow -> {
                 flushPara()
+                flushQuote()
                 val cells = parseCells(line)
                 if (cells.isNotEmpty()) {
                     if (tableHeaders == null) tableHeaders = cells else tableRows.add(cells)
@@ -320,21 +329,24 @@ private fun parseBlocks(text: String): List<Block> {
             isQuote -> {
                 flushPara()
                 flushTable()
-                blocks.add(Block.Blockquote(line.removePrefix("> ")))
+                quoteLines.add(line.removePrefix("> "))
             }
             headingMatch != null -> {
                 flushPara()
                 flushTable()
+                flushQuote()
                 val level = headingMatch.groupValues[1].length
                 blocks.add(Block.Heading(level, headingMatch.groupValues[2]))
             }
             isHRule -> {
                 flushPara()
                 flushTable()
+                flushQuote()
                 blocks.add(Block.HorizontalRule)
             }
             else -> {
                 flushTable()
+                flushQuote()
                 paraLines.add(line)
             }
         }
@@ -342,6 +354,7 @@ private fun parseBlocks(text: String): List<Block> {
 
     flushPara()
     flushTable()
+    flushQuote()
     return blocks
 }
 

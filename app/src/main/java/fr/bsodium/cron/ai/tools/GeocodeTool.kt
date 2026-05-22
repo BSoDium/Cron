@@ -2,6 +2,7 @@ package fr.bsodium.cron.ai.tools
 
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolResult
+import fr.bsodium.cron.ai.toolErrorResult
 import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.session.db.SessionJson
@@ -36,7 +37,7 @@ class GeocodeTool(private val client: GeocodingClient) : Tool {
             ?: return ToolResult("""{"error":"address is required"}""", isError = true)
 
         val result = client.geocode(address).getOrElse { e ->
-            return ToolResult("""{"error":"geocoding failed: ${e.message?.take(300)}"}""", isError = true)
+            return toolErrorResult("geocoding failed: ${e.message?.take(300)}")
         }
 
         return ToolResult(SessionJson.encodeToString(Output(result.lat, result.lng, result.formattedAddress)))

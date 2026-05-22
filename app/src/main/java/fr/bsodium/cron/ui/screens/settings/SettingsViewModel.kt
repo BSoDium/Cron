@@ -6,13 +6,10 @@ import androidx.lifecycle.viewModelScope
 import fr.bsodium.cron.alarm.EveningPlanScheduler
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalTime
 
@@ -23,15 +20,12 @@ data class SettingsUiState(
     val freeDayWakeEnd: LocalTime = LocalTime(9, 30),
     val commuteBufferMinutes: Int = 15,
     val hasApiKey: Boolean = false,
-    val saved: Boolean = false,
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repo = SettingsRepository(application)
     private val secureStore = SecureKeyStore(application)
-
-    private val _saved = MutableStateFlow(false)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         repo.eveningTriggerLocalTime,

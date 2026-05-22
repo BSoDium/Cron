@@ -88,13 +88,15 @@ class TurnRunner(
     private suspend fun executeToolCall(call: ContentBlock.ToolUse): ContentBlock.ToolResult {
         val tool = tools[call.name] ?: return ContentBlock.ToolResult(
             tool_use_id = call.id,
-            content = """{"error":"unknown tool '${call.name}'"}""",
+            content = toolErrorResult("unknown tool '${call.name}'").payload,
             is_error = true,
         )
         val result = runCatching { tool.execute(call.input) }.getOrElse { thrown ->
             return ContentBlock.ToolResult(
                 tool_use_id = call.id,
-                content = """{"error":"tool '${call.name}' threw: ${thrown.message?.take(200) ?: thrown::class.simpleName}"}""",
+                content = toolErrorResult(
+                    "tool '${call.name}' threw: ${thrown.message?.take(200) ?: thrown::class.simpleName}"
+                ).payload,
                 is_error = true,
             )
         }
