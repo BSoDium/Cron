@@ -30,7 +30,7 @@ class RoutesClient(
         destinationAddress: String,
         mode: TravelMode = TravelMode.TRANSIT,
         arrivalTimeEpochMs: Long? = null,
-    ): RouteResult? = withContext(Dispatchers.IO) {
+    ): Result<RouteResult> = withContext(Dispatchers.IO) {
         runCatching {
             val bodyJson = JSONObject().apply {
                 put("origin", JSONObject().put("location", JSONObject().put("latLng",
@@ -53,21 +53,17 @@ class RoutesClient(
 
             http.newCall(request).execute().use { response ->
                 val raw = response.body.string()
-                if (!response.isSuccessful) {
-                    Log.w(TAG, "Routes API ${response.code} ($mode): ${raw.take(200)}")
-                    return@use null
-                }
-                val routes = JSONObject(raw).optJSONArray("routes") ?: return@use null
-                if (routes.length() == 0) return@use null
+                if (!response.isSuccessful)
+                    error("HTTP ${response.code} ($mode): ${raw.take(300)}")
+                val routes = JSONObject(raw).optJSONArray("routes")
+                    ?: error("no 'routes' key in response")
+                if (routes.length() == 0) error("no routes found for mode $mode")
                 val route = routes.getJSONObject(0)
                 val durSec = route.optString("duration").removeSuffix("s").toLongOrNull()
-                    ?: return@use null
+                    ?: error("could not parse duration: ${route.optString("duration")}")
                 RouteResult(durSec, route.optInt("distanceMeters", 0))
             }
-        }.getOrElse { e ->
-            Log.w(TAG, "Routes exception ($mode): ${e.message}")
-            null
-        }
+        }.onFailure { Log.w(TAG, "Routes ($mode): ${it.message}") }
     }
 
     companion object {

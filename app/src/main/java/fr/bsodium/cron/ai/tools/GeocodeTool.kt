@@ -35,8 +35,9 @@ class GeocodeTool(private val client: GeocodingClient) : Tool {
         val address = input.jsonObject["address"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
             ?: return ToolResult("""{"error":"address is required"}""", isError = true)
 
-        val result = client.geocode(address)
-            ?: return ToolResult("""{"error":"unable to geocode '${address.take(100)}' — check the address or use a home_address fallback"}""")
+        val result = client.geocode(address).getOrElse { e ->
+            return ToolResult("""{"error":"geocoding failed: ${e.message?.take(300)}"}""", isError = true)
+        }
 
         return ToolResult(SessionJson.encodeToString(Output(result.lat, result.lng, result.formattedAddress)))
     }

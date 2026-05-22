@@ -35,7 +35,13 @@ data class HomeUiState(
 sealed class SmokeState {
     data object Idle : SmokeState()
     data object Running : SmokeState()
-    data class Success(val text: String, val roundTrips: Int) : SmokeState()
+    data class Success(
+        val text: String,
+        val roundTrips: Int,
+        val originLat: Double? = null,
+        val originLng: Double? = null,
+        val destination: String? = null,
+    ) : SmokeState()
     data class Failure(val message: String) : SmokeState()
 }
 
@@ -82,7 +88,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 SmokeTest(getApplication()).run()
             }
             _smokeState.value = if (result.ok) {
-                SmokeState.Success(result.assistantText.orEmpty(), result.roundTrips)
+                SmokeState.Success(
+                    text = result.assistantText.orEmpty(),
+                    roundTrips = result.roundTrips,
+                    originLat = result.originLat,
+                    originLng = result.originLng,
+                    destination = result.destination,
+                )
             } else {
                 SmokeState.Failure(result.error ?: "unknown error")
             }

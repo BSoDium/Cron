@@ -4,7 +4,6 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.receiver.EveningPlanReceiver
 import fr.bsodium.cron.settings.SettingsRepository
 import kotlinx.datetime.Clock
@@ -50,8 +49,9 @@ class EveningPlanScheduler(
         } else now.date
         val targetInstant = LocalDateTime(targetDate, triggerLocal).toInstant(tz)
 
-        alarmManager.setAlarmClock(
-            AlarmManager.AlarmClockInfo(targetInstant.toEpochMilliseconds(), showIntent()),
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            targetInstant.toEpochMilliseconds(),
             pendingIntent(create = true)!!,
         )
     }
@@ -76,10 +76,5 @@ class EveningPlanScheduler(
         )
     }
 
-    private fun showIntent(): PendingIntent = PendingIntent.getActivity(
-        context,
-        0,
-        Intent(context, MainActivity::class.java),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+
 }

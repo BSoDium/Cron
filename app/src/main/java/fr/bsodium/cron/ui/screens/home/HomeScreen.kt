@@ -71,6 +71,7 @@ fun HomeScreen(
                     onSaveKey = viewModel::saveAnthropicKey,
                     onRunSmoke = viewModel::runSmokeTest,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    routesApiKey = BuildConfig.GOOGLE_ROUTES_API_KEY.takeIf { it.isNotBlank() },
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 val sensorEvents by viewModel.recentSensorEvents.collectAsState()
