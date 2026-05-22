@@ -27,6 +27,25 @@
 
     <!-- Coarse location for travel time origin (city-block accuracy is sufficient) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Activity Recognition (transition API for out-of-bed detection) -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Foreground service for hosting dynamic sensor receivers overnight -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Battery optimization exemption for reliable overnight tracking -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Health Connect: sleep session records -->
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+
+    <!-- Health Connect provider visibility (Android 11+) -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
     <application
         android:name=".CronApplication"
@@ -74,6 +93,30 @@
                     android:scheme="content" />
             </intent-filter>
         </receiver>
+
+        <!-- Re-arm evening trigger when system timezone changes (travel DST) -->
+        <receiver
+            android:name=".receiver.TimeZoneChangedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Daily evening trigger that starts a sleep session -->
+        <receiver
+            android:name=".receiver.EveningPlanReceiver"
+            android:exported="false" />
+
+        <!-- Long-running foreground service hosting overnight sensor monitors -->
+        <service
+            android:name=".service.SleepSessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="overnight sleep stage monitoring for adaptive alarm" />
+        </service>
 
     </application>
 

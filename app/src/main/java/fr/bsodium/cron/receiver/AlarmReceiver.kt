@@ -9,9 +9,20 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.R
+import fr.bsodium.cron.alarm.AlarmConstants
+import fr.bsodium.cron.session.SessionFsm
+import fr.bsodium.cron.session.SessionRepository
+import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.SessionEvent
+import fr.bsodium.cron.session.model.TriggerType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 /**
  * Fires when a scheduled alarm triggers.
@@ -31,6 +42,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
         const val CHANNEL_ID = "cron_alarm_channel"
         const val NOTIFICATION_ID = 9001
+
+        private const val TAG = "AlarmReceiver"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -44,6 +57,27 @@ class AlarmReceiver : BroadcastReceiver() {
     private fun handleAlarmFired(context: Context, intent: Intent) {
         val label = intent.getStringExtra(EXTRA_LABEL) ?: "Cron Alarm"
         val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0)
+        val kind = intent.getStringExtra(AlarmConstants.EXTRA_KIND) ?: "legacy"
+        val sessionId = intent.getStringExtra(AlarmConstants.EXTRA_SESSION_ID)
+        Log.i(TAG, "Alarm fired kind=$kind label=$label sessionId=$sessionId")
+
+        if (kind == AlarmConstants.KIND_HARD_LATEST && !sessionId.isNullOrBlank()) {
+            val pending = goAsync()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val repository = SessionRepository(context)
+                    SessionFsm(context, repository).onEvent(SessionEvent(
+                        trigger = TriggerType.HardLatestFired,
+                        timestamp = Clock.System.now(),
+                        data = EventData.Empty,
+                    ))
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Failed to emit hard_latest_fired event", t)
+                } finally {
+                    pending.finish()
+                }
+            }
+        }
 
         ensureNotificationChannel(context)
 
@@ -102,48 +136,89 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     private fun handleDismiss(context: Context) {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(NOTIFICATION_ID)
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(NOTIFICATION_ID)
+
+        // Emit alarm_dismissed to the FSM (completes the session, clears both alarms).
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val repository = SessionRepository(context)
+                val session = repository.findCurrent()
+                if (session != null) {
+                    SessionFsm(context, repository).onEvent(SessionEvent(
+                        trigger = TriggerType.AlarmDismissed,
+                        timestamp = Clock.System.now(),
+                        data = EventData.Empty,
+                    ))
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to emit alarm_dismissed event", t)
+            } finally {
+                pending.finish()
+            }
+        }
     }
 
     private fun handleSnooze(context: Context, intent: Intent) {
         val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0)
         val label = intent.getStringExtra(EXTRA_LABEL) ?: "Cron Alarm"
-        val snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
 
-        // Dismiss the current notification
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(NOTIFICATION_ID)
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(NOTIFICATION_ID)
 
-        // Schedule a new alarm for snooze duration from now
-        val alarmManager =
-            context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        // Emit alarm_snoozed to the FSM; the FSM handles escalation and scheduling.
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val repository = SessionRepository(context)
+                val session = repository.findCurrent()
+                if (session != null) {
+                    val fsm = SessionFsm(context, repository)
+                    val event = SessionEvent(
+                        trigger = TriggerType.AlarmSnoozed,
+                        timestamp = Clock.System.now(),
+                        data = EventData.AlarmInteraction(
+                            snoozeDurationMinutes = 10,
+                            snoozeCount = session.snoozeCount + 1,
+                        ),
+                    )
+                    fsm.onSnooze(session.id, event)
+                } else {
+                    // No session — fall back to a plain 10-min snooze.
+                    scheduleSimpleSnooze(context, requestCode, label)
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to handle snooze via FSM", t)
+                scheduleSimpleSnooze(context, requestCode, label)
+            } finally {
+                pending.finish()
+            }
+        }
+    }
 
-        val snoozeMillis = System.currentTimeMillis() + (10 * 60 * 1000) // 10 min default
-
-        val snoozeAlarmIntent = Intent(context, AlarmReceiver::class.java).apply {
+    private fun scheduleSimpleSnooze(context: Context, requestCode: Int, label: String) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        val snoozeMillis = System.currentTimeMillis() + 10 * 60 * 1000L
+        val snoozeIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_ALARM_FIRED
             putExtra(EXTRA_REQUEST_CODE, requestCode)
             putExtra(EXTRA_LABEL, "$label (snoozed)")
-            putExtra(EXTRA_SNOOZE_COUNT, snoozeCount + 1)
         }
-        val snoozePendingIntent = PendingIntent.getBroadcast(
-            context, requestCode + 30000 + snoozeCount,
-            snoozeAlarmIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val pi = PendingIntent.getBroadcast(
+            context, requestCode + 30000, snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-
-        val alarmClockInfo = android.app.AlarmManager.AlarmClockInfo(
-            snoozeMillis,
-            PendingIntent.getActivity(
-                context, 0,
-                Intent(context, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+        alarmManager.setAlarmClock(
+            android.app.AlarmManager.AlarmClockInfo(
+                snoozeMillis,
+                PendingIntent.getActivity(
+                    context, 0, Intent(context, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            ),
+            pi,
         )
-        alarmManager.setAlarmClock(alarmClockInfo, snoozePendingIntent)
     }
 
     private fun ensureNotificationChannel(context: Context) {

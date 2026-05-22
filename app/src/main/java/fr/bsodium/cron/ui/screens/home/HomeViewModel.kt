@@ -1,193 +1,118 @@
 package fr.bsodium.cron.ui.screens.home
 
 import android.app.Application
-import android.content.Context
-import android.database.ContentObserver
-import android.location.LocationManager
-import android.os.Handler
-import android.os.Looper
-import android.provider.CalendarContract
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import fr.bsodium.cron.BuildConfig
-import fr.bsodium.cron.engine.calendar.CalendarReaderImpl
-import fr.bsodium.cron.engine.config.CronConfig
-import fr.bsodium.cron.engine.model.CalendarEvent
-import fr.bsodium.cron.engine.model.ScheduledAlarm
-import fr.bsodium.cron.engine.model.SyncResult
-import fr.bsodium.cron.engine.model.TravelInfo
-import fr.bsodium.cron.engine.orchestrator.CronOrchestrator
-import fr.bsodium.cron.engine.scheduler.AlarmSchedulerImpl
-import fr.bsodium.cron.engine.travel.GoogleRoutesTravelTimeProvider
+import fr.bsodium.cron.ai.SmokeTest
+import fr.bsodium.cron.sensors.DebugSensorEventSink
+import fr.bsodium.cron.service.SleepSessionService
+import fr.bsodium.cron.session.db.CronDatabase
+import fr.bsodium.cron.session.db.SessionEntity
+import fr.bsodium.cron.session.db.SessionJson
+import fr.bsodium.cron.session.model.Instruction
+import fr.bsodium.cron.session.model.SessionEvent
+import fr.bsodium.cron.session.model.SessionStatus
+import fr.bsodium.cron.settings.SecureKeyStore
+import fr.bsodium.cron.ui.components.SessionDisplayState
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.runningFold
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
 
-/**
- * ViewModel for the Home screen.
- *
- * Bridges the Cron engine to the Compose UI by exposing a reactive
- * [HomeUiState] and managing the lifecycle of a [ContentObserver]
- * that watches for calendar changes while the app is in the foreground.
- */
-class HomeViewModel(application: Application) : AndroidViewModel(application) {
+data class HomeUiState(
+    val sessionDisplay: SessionDisplayState? = null,
+    val hasAnthropicKey: Boolean = false,
+    val smokeState: SmokeState = SmokeState.Idle,
+)
 
-    private val config = CronConfig.DEFAULT
-    private val calendarReader = CalendarReaderImpl(application.contentResolver, config)
-    private val alarmScheduler = AlarmSchedulerImpl(application)
-    private val travelTimeProvider = BuildConfig.GOOGLE_ROUTES_API_KEY
-        .takeIf { it.isNotBlank() }
-        ?.let { GoogleRoutesTravelTimeProvider(it) }
-    private val orchestrator = CronOrchestrator(
-        calendarReader, alarmScheduler, config, travelTimeProvider
-    )
-
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-
-    private var debounceJob: Job? = null
-
-    /**
-     * ContentObserver that watches for calendar changes and triggers a
-     * debounced refresh. Calendar apps often fire multiple onChange events
-     * in rapid succession, so we debounce to avoid unnecessary work.
-     */
-    private val calendarObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
-        override fun onChange(selfChange: Boolean) {
-            refreshDebounced()
-        }
-    }
-
-    /**
-     * Register the ContentObserver. Call from the UI layer when the
-     * composable enters the composition (e.g., via DisposableEffect).
-     */
-    fun startObserving() {
-        try {
-            getApplication<Application>().contentResolver.registerContentObserver(
-                CalendarContract.Events.CONTENT_URI,
-                true, // notifyForDescendants
-                calendarObserver
-            )
-        } catch (_: SecurityException) {
-            // Calendar permission not granted — observer won't work,
-            // but that's fine; the UI will prompt for permission.
-        }
-    }
-
-    /**
-     * Unregister the ContentObserver. Call from the UI layer when the
-     * composable leaves the composition.
-     */
-    fun stopObserving() {
-        getApplication<Application>().contentResolver.unregisterContentObserver(calendarObserver)
-    }
-
-    /**
-     * Run a full sync and update the UI state.
-     */
-    fun refresh() {
-        viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                val (lat, lng) = getLastKnownLocation()
-                orchestrator.synchronize(originLat = lat, originLng = lng)
-            }
-            _uiState.update { current ->
-                current.copy(
-                    nextAlarm = result.alarm,
-                    events = result.events,
-                    status = result.status,
-                    travelInfo = result.travelInfo
-                )
-            }
-        }
-    }
-
-    /**
-     * Enable or disable the automatic alarm engine.
-     */
-    fun setEnabled(enabled: Boolean) {
-        _uiState.update { it.copy(isEnabled = enabled) }
-        // In a future version, this would persist to DataStore
-        // and reconstruct the config. For now, we just re-sync
-        // with the engine's hardcoded config.
-        if (!enabled) {
-            // Cancel any existing alarm
-            viewModelScope.launch {
-                val disabledConfig = config.copy(enabled = false)
-                val tempOrchestrator = CronOrchestrator(
-                    calendarReader, alarmScheduler, disabledConfig, travelTimeProvider
-                )
-                withContext(Dispatchers.IO) { tempOrchestrator.synchronize() }
-                _uiState.update { it.copy(nextAlarm = null, status = SyncResult.Status.DISABLED) }
-            }
-        } else {
-            refresh()
-        }
-    }
-
-    fun updatePermissionState(
-        hasCalendar: Boolean,
-        hasNotification: Boolean,
-        hasLocation: Boolean = false
-    ) {
-        _uiState.update {
-            it.copy(
-                hasCalendarPermission = hasCalendar,
-                hasNotificationPermission = hasNotification,
-                hasLocationPermission = hasLocation
-            )
-        }
-    }
-
-    /**
-     * Returns the device's last known location as (lat, lng), or (null, null)
-     * if location is unavailable or permission was not granted.
-     */
-    private fun getLastKnownLocation(): Pair<Double?, Double?> {
-        return try {
-            val locationManager = getApplication<Application>()
-                .getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            val location =
-                locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                    ?: locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-            if (location != null) Pair(location.latitude, location.longitude) else Pair(null, null)
-        } catch (_: SecurityException) {
-            // Location permission not granted — travel time will be silently skipped
-            Pair(null, null)
-        }
-    }
-
-    private fun refreshDebounced() {
-        debounceJob?.cancel()
-        debounceJob = viewModelScope.launch {
-            delay(2000) // 2-second debounce
-            refresh()
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        stopObserving()
-    }
+sealed class SmokeState {
+    data object Idle : SmokeState()
+    data object Running : SmokeState()
+    data class Success(
+        val text: String,
+        val roundTrips: Int,
+        val originLat: Double? = null,
+        val originLng: Double? = null,
+        val destination: String? = null,
+    ) : SmokeState()
+    data class Failure(val message: String) : SmokeState()
 }
 
-/**
- * UI state for the Home screen.
- */
-data class HomeUiState(
-    val nextAlarm: ScheduledAlarm? = null,
-    val events: List<CalendarEvent> = emptyList(),
-    val status: SyncResult.Status = SyncResult.Status.NO_EVENTS,
-    val isEnabled: Boolean = true,
-    val hasCalendarPermission: Boolean = false,
-    val hasNotificationPermission: Boolean = false,
-    val hasLocationPermission: Boolean = false,
-    val travelInfo: TravelInfo? = null
-)
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val db = CronDatabase.get(application)
+    private val secureStore = SecureKeyStore(application)
+
+    private val _smokeState = MutableStateFlow<SmokeState>(SmokeState.Idle)
+    private val _hasApiKey = MutableStateFlow(secureStore.hasAnthropicKey())
+
+    val uiState: StateFlow<HomeUiState> = combine(
+        db.sessionDao().observeLatest().map { it?.toDisplayState() },
+        _smokeState,
+        _hasApiKey,
+    ) { session, smoke, hasKey ->
+        HomeUiState(sessionDisplay = session, smokeState = smoke, hasAnthropicKey = hasKey)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+
+    val recentSensorEvents: StateFlow<List<SessionEvent>> = DebugSensorEventSink.events
+        .runningFold(emptyList<SessionEvent>()) { acc, ev -> (listOf(ev) + acc).take(20) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun saveAnthropicKey(key: String) {
+        secureStore.anthropicApiKey = if (key.isBlank()) null else key
+        _hasApiKey.value = secureStore.hasAnthropicKey()
+        _smokeState.value = SmokeState.Idle
+    }
+
+    fun startSensorService() {
+        val ctx = getApplication<Application>()
+        ctx.startForegroundService(SleepSessionService.startIntent(ctx))
+    }
+
+    fun stopSensorService() {
+        val ctx = getApplication<Application>()
+        ctx.startService(SleepSessionService.stopIntent(ctx))
+    }
+
+    fun runSmokeTest() {
+        _smokeState.value = SmokeState.Running
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                SmokeTest(getApplication()).run()
+            }
+            _smokeState.value = if (result.ok) {
+                SmokeState.Success(
+                    text = result.assistantText.orEmpty(),
+                    roundTrips = result.roundTrips,
+                    originLat = result.originLat,
+                    originLng = result.originLng,
+                    destination = result.destination,
+                )
+            } else {
+                SmokeState.Failure(result.error ?: "unknown error")
+            }
+        }
+    }
+
+    private fun SessionEntity.toDisplayState(): SessionDisplayState? {
+        val instruction = runCatching {
+            SessionJson.decodeFromString<Instruction>(currentInstructionJson)
+        }.getOrNull() ?: return null
+        val sessionDate = runCatching { LocalDate.parse(date) }.getOrNull() ?: return null
+        return SessionDisplayState(
+            status = runCatching { SessionStatus.valueOf(status) }.getOrElse { SessionStatus.Complete },
+            action = instruction.action,
+            alarmTime = instruction.alarmTime,
+            reason = instruction.reason,
+            sessionDate = sessionDate,
+            snoozeCount = snoozeCount,
+        )
+    }
+}
