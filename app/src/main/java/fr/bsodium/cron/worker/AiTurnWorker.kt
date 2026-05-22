@@ -120,8 +120,9 @@ class AiTurnWorker(
 
         val routesKey = BuildConfig.GOOGLE_ROUTES_API_KEY.takeIf { it.isNotBlank() }
         if (routesKey != null) {
-            val routesClient = RoutesClient(routesKey)
-            tools.add(GeocodeTool(GeocodingClient(routesKey)))
+            val sharedHttp = RoutesClient.defaultHttp()
+            val routesClient = RoutesClient(routesKey, sharedHttp)
+            tools.add(GeocodeTool(GeocodingClient(routesKey, sharedHttp)))
             tools.add(EstimateCommuteTool(routesClient))
             tools.add(EstimateCommuteMultiModeTool(routesClient))
         }

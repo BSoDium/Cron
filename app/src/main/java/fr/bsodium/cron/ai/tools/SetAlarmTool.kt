@@ -3,6 +3,7 @@ package fr.bsodium.cron.ai.tools
 import android.util.Log
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolResult
+import fr.bsodium.cron.ai.toolErrorResult
 import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.alarm.AlarmScheduler
@@ -75,7 +76,7 @@ class SetAlarmTool(
         val reason = obj["reason"]?.jsonPrimitive?.content ?: ""
 
         val requested = runCatching { Instant.parse(timeIso) }.getOrNull()
-            ?: return ToolResult("""{"error":"time_iso is not a valid ISO-8601 instant: $timeIso"}""", isError = true)
+            ?: return toolErrorResult("time_iso is not a valid ISO-8601 instant: $timeIso")
 
         val plan = scheduler.schedule(
             requested = requested,

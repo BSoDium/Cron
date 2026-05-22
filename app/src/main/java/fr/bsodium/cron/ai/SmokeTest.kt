@@ -68,76 +68,73 @@ class SmokeTest(private val context: Context) {
         val localNow = now.toLocalDateTime(tz)
         val tomorrow = localNow.date.plus(1, DateTimeUnit.DAY)
 
-        seedSession(database, sessionId, tomorrow, tz)
         val repository = SessionRepository(context)
         val scheduler = AlarmScheduler(context)
 
-        val cleanup: suspend () -> Unit = {
-            markComplete(database, sessionId)
-            scheduler.cancel(tomorrow)
-        }
-
-        val toolList = mutableListOf(
-            ReadCalendarTool(CalendarReader(context.contentResolver)),
-            SetAlarmTool(
-                scheduler = scheduler,
-                repository = repository,
-                sessionId = sessionId,
-                sessionDate = tomorrow,
-                timezone = tz,
-                hardLatest = LocalTime(10, 0),
-            ),
-            DoNothingTool(repository, sessionId),
-            CancelAlarmTool(scheduler, repository, sessionId, tomorrow),
-            SendBriefTool(context, repository, sessionId),
-            NotifyWarningTool(context, repository, sessionId),
-        )
-        val routesKey = BuildConfig.GOOGLE_ROUTES_API_KEY.takeIf { it.isNotBlank() }
-        if (routesKey != null) {
-            val routesClient = RoutesClient(routesKey)
-            toolList.add(GeocodeTool(GeocodingClient(routesKey)))
-            toolList.add(EstimateCommuteTool(routesClient))
-            toolList.add(EstimateCommuteMultiModeTool(routesClient))
-        }
-        val tools = ToolRegistry(toolList)
-
-        val client = AnthropicClient(apiKeyProvider = { apiKey })
-        val runner = TurnRunner(
-            client = client,
-            aiMessageDao = database.aiMessageDao(),
-            model = TurnRunner.MODEL_SONNET,
-            systemPrompt = SystemPrompts.EVENING_PLAN,
-            tools = tools,
-            maxRoundTrips = 12,
-        )
-
-        val location = LocationProvider(context).acquireForEveningPlan()
-        val locationSection = if (location.source == LocationSource.Unavailable) {
-            "## Location\n- Source: unavailable — apply a flat +30 min buffer and mention it in the reason"
-        } else {
-            "## Current location (captured at session start)\n" +
-                "- Latitude: ${location.lat}, Longitude: ${location.lng}\n" +
-                "- Source: ${location.source.name.lowercase()}\n" +
-                "- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}\n" +
-                "- Captured at: ${location.capturedAt}"
-        }
-
-        val userMessage = """
-            Smoke test. It is now $localNow ($tz).
-
-            ## Session context
-            - Morning date: $tomorrow
-            - Hard latest (never exceed): 10:00
-            - Wake window: 07:00–09:30
-            - Minimum commute buffer: 30 min
-
-            $locationSection
-
-            Read the calendar for the next 24 hours and plan tomorrow's alarm.
-            Follow the process in your system prompt: read calendar, identify anchor event, then call set_alarm (or do_nothing if there are no actionable events tomorrow).
-        """.trimIndent()
-
         return try {
+            seedSession(database, sessionId, tomorrow, tz)
+
+            val toolList = mutableListOf(
+                ReadCalendarTool(CalendarReader(context.contentResolver)),
+                SetAlarmTool(
+                    scheduler = scheduler,
+                    repository = repository,
+                    sessionId = sessionId,
+                    sessionDate = tomorrow,
+                    timezone = tz,
+                    hardLatest = LocalTime(10, 0),
+                ),
+                DoNothingTool(repository, sessionId),
+                CancelAlarmTool(scheduler, repository, sessionId, tomorrow),
+                SendBriefTool(context, repository, sessionId),
+                NotifyWarningTool(context, repository, sessionId),
+            )
+            val routesKey = BuildConfig.GOOGLE_ROUTES_API_KEY.takeIf { it.isNotBlank() }
+            if (routesKey != null) {
+                val sharedHttp = RoutesClient.defaultHttp()
+                val routesClient = RoutesClient(routesKey, sharedHttp)
+                toolList.add(GeocodeTool(GeocodingClient(routesKey, sharedHttp)))
+                toolList.add(EstimateCommuteTool(routesClient))
+                toolList.add(EstimateCommuteMultiModeTool(routesClient))
+            }
+            val tools = ToolRegistry(toolList)
+
+            val client = AnthropicClient(apiKeyProvider = { apiKey })
+            val runner = TurnRunner(
+                client = client,
+                aiMessageDao = database.aiMessageDao(),
+                model = TurnRunner.MODEL_SONNET,
+                systemPrompt = SystemPrompts.EVENING_PLAN,
+                tools = tools,
+                maxRoundTrips = 12,
+            )
+
+            val location = LocationProvider(context).acquireForEveningPlan()
+            val locationSection = if (location.source == LocationSource.Unavailable) {
+                "## Location\n- Source: unavailable — apply a flat +30 min buffer and mention it in the reason"
+            } else {
+                "## Current location (captured at session start)\n" +
+                    "- Latitude: ${location.lat}, Longitude: ${location.lng}\n" +
+                    "- Source: ${location.source.name.lowercase()}\n" +
+                    "- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}\n" +
+                    "- Captured at: ${location.capturedAt}"
+            }
+
+            val userMessage = """
+                Smoke test. It is now $localNow ($tz).
+
+                ## Session context
+                - Morning date: $tomorrow
+                - Hard latest (never exceed): 10:00
+                - Wake window: 07:00–09:30
+                - Minimum commute buffer: 30 min
+
+                $locationSection
+
+                Read the calendar for the next 24 hours and plan tomorrow's alarm.
+                Follow the process in your system prompt: read calendar, identify anchor event, then call set_alarm (or do_nothing if there are no actionable events tomorrow).
+            """.trimIndent()
+
             val outcome = runner.run(sessionId = sessionId, turnIndex = 0, initialUserMessage = userMessage)
             val (text, rounds) = when (outcome) {
                 is TurnRunner.Outcome.Completed -> {
@@ -161,7 +158,8 @@ class SmokeTest(private val context: Context) {
         } catch (t: Throwable) {
             Outcome(ok = false, assistantText = null, roundTrips = 0, error = t.message ?: t::class.simpleName)
         } finally {
-            cleanup()
+            markComplete(database, sessionId)
+            scheduler.cancel(tomorrow)
         }
     }
 

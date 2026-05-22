@@ -134,6 +134,7 @@ class ActivityRecognitionMonitor(
 
     private fun createPendingIntent(): PendingIntent {
         val intent = Intent(ACTION_TRANSITIONS).apply { setPackage(context.packageName) }
+        // FLAG_MUTABLE required — Activity Recognition fills ActivityTransitionResult extras into the intent.
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         return PendingIntent.getBroadcast(context, REQUEST_CODE, intent, flags)
     }

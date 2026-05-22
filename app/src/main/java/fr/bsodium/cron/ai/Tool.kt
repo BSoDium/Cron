@@ -3,6 +3,7 @@ package fr.bsodium.cron.ai
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * A single tool the model can invoke. Each tool declares its JSON Schema
@@ -31,6 +32,16 @@ interface Tool {
 data class ToolResult(
     val payload: String,
     val isError: Boolean = false,
+)
+
+/**
+ * Safe alternative to hand-crafted `{"error":"..."}` strings. Uses
+ * [JsonPrimitive] to escape the message so dynamic content can't break
+ * the JSON or inject unexpected fields.
+ */
+fun toolErrorResult(message: String): ToolResult = ToolResult(
+    payload = JsonObject(mapOf("error" to JsonPrimitive(message))).toString(),
+    isError = true,
 )
 
 /** Convenience builder used by tools to encode their input_schema. */

@@ -114,7 +114,7 @@ class ScreenStateMonitor(
     private fun scheduleOnsetCheck(threshold: kotlin.time.Duration = sleepOnsetThreshold) {
         pendingOnset?.cancel()
         pendingOnset = scope.launch {
-            kotlinx.coroutines.delay(threshold.inWholeMilliseconds.milliseconds.inWholeMilliseconds)
+            kotlinx.coroutines.delay(threshold)
             val since = screenOffSince ?: return@launch
             if (sleepOnsetEmitted) return@launch
             val onsetThresholdMet = (Clock.System.now() - since) >= threshold

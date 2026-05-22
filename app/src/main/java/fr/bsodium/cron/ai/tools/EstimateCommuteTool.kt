@@ -2,6 +2,7 @@ package fr.bsodium.cron.ai.tools
 
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolResult
+import fr.bsodium.cron.ai.toolErrorResult
 import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.session.db.SessionJson
@@ -65,7 +66,7 @@ class EstimateCommuteTool(private val client: RoutesClient) : Tool {
             ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
 
         val result = client.estimate(lat, lng, dest, mode, arrivalMs).getOrElse { e ->
-            return ToolResult("""{"error":"commute estimate failed: ${e.message?.take(300)}"}""", isError = true)
+            return toolErrorResult("commute estimate failed: ${e.message?.take(300)}")
         }
 
         return ToolResult(SessionJson.encodeToString(Output(result.durationSeconds, result.distanceMeters)))
