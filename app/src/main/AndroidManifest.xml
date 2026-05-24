@@ -16,6 +16,9 @@
     <!-- Notification permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Full-screen alarm overlay on lock screen -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- Keep CPU alive briefly while processing alarm -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -67,6 +70,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Full-screen lock-screen alarm UI -->
+        <activity
+            android:name=".ui.screens.alarm.AlarmActivity"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:exported="false" />
 
         <!-- Alarm notification receiver -->
         <receiver

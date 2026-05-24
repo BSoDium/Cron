@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.R
+import fr.bsodium.cron.ui.screens.alarm.AlarmActivity
 import fr.bsodium.cron.alarm.AlarmConstants
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
@@ -84,33 +85,16 @@ class AlarmReceiver : BroadcastReceiver() {
         val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-        // Full-screen intent to open the app
-        val fullScreenIntent = Intent(context, MainActivity::class.java).apply {
+        // Full-screen intent — opens AlarmActivity on the lock screen
+        val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val fullScreenPendingIntent = PendingIntent.getActivity(
-            context, 0, fullScreenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // Dismiss action
-        val dismissIntent = Intent(context, AlarmReceiver::class.java).apply {
-            action = ACTION_DISMISS
-        }
-        val dismissPendingIntent = PendingIntent.getBroadcast(
-            context, requestCode + 10000, dismissIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // Snooze action
-        val snoozeIntent = Intent(context, AlarmReceiver::class.java).apply {
-            action = ACTION_SNOOZE
-            putExtra(EXTRA_REQUEST_CODE, requestCode)
             putExtra(EXTRA_LABEL, label)
+            putExtra(EXTRA_REQUEST_CODE, requestCode)
+            putExtra(AlarmConstants.EXTRA_SESSION_ID, sessionId)
             putExtra(EXTRA_SNOOZE_COUNT, intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0))
         }
-        val snoozePendingIntent = PendingIntent.getBroadcast(
-            context, requestCode + 20000, snoozeIntent,
+        val fullScreenPendingIntent = PendingIntent.getActivity(
+            context, requestCode, fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -125,9 +109,8 @@ class AlarmReceiver : BroadcastReceiver() {
             .setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
             .setAutoCancel(false)
             .setOngoing(true)
+            .setContentIntent(fullScreenPendingIntent)
             .setFullScreenIntent(fullScreenPendingIntent, true)
-            .addAction(0, "Dismiss", dismissPendingIntent)
-            .addAction(0, "Snooze", snoozePendingIntent)
             .build()
 
         val notificationManager =
