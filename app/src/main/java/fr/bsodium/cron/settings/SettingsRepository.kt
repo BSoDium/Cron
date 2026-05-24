@@ -41,6 +41,10 @@ class SettingsRepository(private val context: Context) {
         prefs[COMMUTE_BUFFER] ?: 15
     }
 
+    val preparationBufferMinutes: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[PREPARATION_BUFFER] ?: 15
+    }
+
     val homeAddressLat: Flow<Double?> = context.dataStore.data.map { prefs ->
         prefs[HOME_LAT]?.toDoubleOrNull()
     }
@@ -68,6 +72,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCommuteBufferMinutes(minutes: Int) =
         context.dataStore.edit { it[COMMUTE_BUFFER] = minutes }
 
+    suspend fun setPreparationBufferMinutes(minutes: Int) =
+        context.dataStore.edit { it[PREPARATION_BUFFER] = minutes }
+
     suspend fun setHomeAddress(lat: Double, lng: Double) =
         context.dataStore.edit {
             it[HOME_LAT] = lat.toString()
@@ -92,6 +99,7 @@ class SettingsRepository(private val context: Context) {
         val FREE_DAY_WAKE_START = stringPreferencesKey("free_day_wake_start")
         val FREE_DAY_WAKE_END = stringPreferencesKey("free_day_wake_end")
         val COMMUTE_BUFFER = intPreferencesKey("commute_buffer_minutes")
+        val PREPARATION_BUFFER = intPreferencesKey("preparation_buffer_minutes")
         val HOME_LAT = stringPreferencesKey("home_address_lat")
         val HOME_LNG = stringPreferencesKey("home_address_lng")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")

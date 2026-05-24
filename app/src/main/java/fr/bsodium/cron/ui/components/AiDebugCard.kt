@@ -21,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,6 +59,8 @@ fun AiDebugCard(
     smokeState: SmokeState,
     onSaveKey: (String) -> Unit,
     onRunSmoke: () -> Unit,
+    onFireTestAlarm: () -> Unit,
+    onOpenAlarmScreen: () -> Unit,
     modifier: Modifier = Modifier,
     routesApiKey: String? = null,
 ) {
@@ -67,26 +70,33 @@ fun AiDebugCard(
         } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = "Anthropic key: stored",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                TextButton(onClick = { onSaveKey("") }) { Text("Clear") }
+                Button(
+                    onClick = onRunSmoke,
+                    enabled = smokeState !is SmokeState.Running,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        when (smokeState) {
+                            is SmokeState.Running -> "Running…"
+                            else -> "Run AI turn now"
+                        }
+                    )
+                }
+                TextButton(onClick = { onSaveKey("") }) { Text("Clear key") }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = onRunSmoke,
-                enabled = smokeState !is SmokeState.Running,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    when (smokeState) {
-                        is SmokeState.Running -> "Running…"
-                        else -> "Run AI turn now"
-                    }
-                )
+                OutlinedButton(onClick = onFireTestAlarm, modifier = Modifier.weight(1f)) {
+                    Text("Fire in 30s")
+                }
+                OutlinedButton(onClick = onOpenAlarmScreen, modifier = Modifier.weight(1f)) {
+                    Text("Preview UI")
+                }
             }
         }
 

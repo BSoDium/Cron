@@ -27,8 +27,9 @@ import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.settings.SecureKeyStore
+import fr.bsodium.cron.settings.SettingsRepository
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.Clock
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
@@ -38,7 +39,7 @@ import java.util.UUID
 
 /**
  * Single-shot validator for the full evening planning flow. Creates a throwaway
- * session for tomorrow, runs one TurnRunner pass with the complete evening tool
+ * session for sessionDate, runs one TurnRunner pass with the complete evening tool
  * set, and returns the final assistant text + tool round-trip count.
  *
  * Intended for the "AI diagnostics" debug card on Home. Any alarm scheduled
@@ -66,13 +67,16 @@ class SmokeTest(private val context: Context) {
         val now = Clock.System.now()
         val tz = TimeZone.currentSystemDefault()
         val localNow = now.toLocalDateTime(tz)
-        val tomorrow = localNow.date.plus(1, DateTimeUnit.DAY)
+        val sessionDate = SessionRepository.morningDate(now, tz)
 
         val repository = SessionRepository(context)
         val scheduler = AlarmScheduler(context)
+        val settings = SettingsRepository(context)
+        val commuteBuffer = settings.commuteBufferMinutes.first()
+        val prepBuffer = settings.preparationBufferMinutes.first()
 
         return try {
-            seedSession(database, sessionId, tomorrow, tz)
+            seedSession(database, sessionId, sessionDate, tz, commuteBuffer, prepBuffer)
 
             val toolList = mutableListOf(
                 ReadCalendarTool(CalendarReader(context.contentResolver)),
@@ -80,12 +84,12 @@ class SmokeTest(private val context: Context) {
                     scheduler = scheduler,
                     repository = repository,
                     sessionId = sessionId,
-                    sessionDate = tomorrow,
+                    sessionDate = sessionDate,
                     timezone = tz,
                     hardLatest = LocalTime(10, 0),
                 ),
                 DoNothingTool(repository, sessionId),
-                CancelAlarmTool(scheduler, repository, sessionId, tomorrow),
+                CancelAlarmTool(scheduler, repository, sessionId, sessionDate),
                 SendBriefTool(context, repository, sessionId),
                 NotifyWarningTool(context, repository, sessionId),
             )
@@ -124,15 +128,16 @@ class SmokeTest(private val context: Context) {
                 Smoke test. It is now $localNow ($tz).
 
                 ## Session context
-                - Morning date: $tomorrow
+                - Morning date: $sessionDate
                 - Hard latest (never exceed): 10:00
                 - Wake window: 07:00–09:30
-                - Minimum commute buffer: 30 min
+                - Minimum commute buffer: $commuteBuffer min
+                - Personal preparation buffer: $prepBuffer min
 
                 $locationSection
 
-                Read the calendar for the next 24 hours and plan tomorrow's alarm.
-                Follow the process in your system prompt: read calendar, identify anchor event, then call set_alarm (or do_nothing if there are no actionable events tomorrow).
+                Read the calendar for the next 24 hours and plan the morning alarm.
+                Follow the process in your system prompt: read calendar, identify anchor event, then call set_alarm (or do_nothing if there are no actionable events that morning).
             """.trimIndent()
 
             val outcome = runner.run(sessionId = sessionId, turnIndex = 0, initialUserMessage = userMessage)
@@ -159,29 +164,32 @@ class SmokeTest(private val context: Context) {
             Outcome(ok = false, assistantText = null, roundTrips = 0, error = t.message ?: t::class.simpleName)
         } finally {
             markComplete(database, sessionId)
-            scheduler.cancel(tomorrow)
+            scheduler.cancel(sessionDate)
         }
     }
 
     private suspend fun seedSession(
         db: CronDatabase,
         sessionId: String,
-        tomorrow: kotlinx.datetime.LocalDate,
+        sessionDate: kotlinx.datetime.LocalDate,
         tz: TimeZone,
+        commuteBufferMinutes: Int,
+        preparationBufferMinutes: Int,
     ) {
         val now = Clock.System.now()
         val plan = DayPlan(
             hardLatest = LocalTime(10, 0),
             wakeWindowStart = LocalTime(7, 0),
             wakeWindowEnd = LocalTime(9, 30),
-            commuteBufferMinutes = 30,
+            commuteBufferMinutes = commuteBufferMinutes,
+            preparationBufferMinutes = preparationBufferMinutes,
             isFreeDayFallback = true,
             generatedAt = now,
         )
         val instruction = Instruction(action = ActionType.DoNothing, reason = "smoke seed", issuedAt = now)
         val entity = SessionEntity(
             id = sessionId,
-            date = tomorrow.toString(),
+            date = sessionDate.toString(),
             status = SessionStatus.Planning.name,
             planJson = SessionJson.encodeToString(plan),
             currentInstructionJson = SessionJson.encodeToString(instruction),

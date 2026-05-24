@@ -1,10 +1,17 @@
 package fr.bsodium.cron.worker
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import fr.bsodium.cron.BuildConfig
+import fr.bsodium.cron.CronApplication
+import fr.bsodium.cron.MainActivity
+import fr.bsodium.cron.R
 import fr.bsodium.cron.ai.AnthropicClient
 import fr.bsodium.cron.ai.SystemPrompts
 import fr.bsodium.cron.ai.Tool
@@ -23,6 +30,7 @@ import fr.bsodium.cron.alarm.AlarmScheduler
 import fr.bsodium.cron.calendar.CalendarReader
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
+import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SleepSession
@@ -96,6 +104,9 @@ class AiTurnWorker(
                     Log.i(TAG, "Turn $turnIndex complete for $sessionId (stop=${outcome.response.stop_reason})")
                 is TurnRunner.Outcome.BudgetExhausted ->
                     Log.w(TAG, "Turn $turnIndex budget exhausted after ${outcome.roundTrips} round-trips for $sessionId")
+            }
+            if (BuildConfig.DEBUG && isEveningPlan) {
+                postPlanningNotification(sessionId)
             }
             Result.success()
         } catch (e: AnthropicClient.MissingApiKeyException) {
@@ -174,6 +185,7 @@ class AiTurnWorker(
             appendLine("- Hard latest (never exceed): ${plan.hardLatest}")
             appendLine("- Wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
             appendLine("- Minimum commute buffer: ${plan.commuteBufferMinutes} min")
+            appendLine("- Personal preparation buffer: ${plan.preparationBufferMinutes} min")
             appendLine("- Free day wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
             appendLine()
             if (location != null) {
@@ -237,6 +249,44 @@ class AiTurnWorker(
             }
             appendLine()
             appendLine("Decide what the alarm system should do. Call set_alarm if you want to adjust the wake time. If the current alarm is already optimal, respond with a brief explanation and do not call any tool.")
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Debug-only planning notification
+    // ---------------------------------------------------------------------------
+
+    private suspend fun postPlanningNotification(sessionId: String) {
+        val updated = repository.findById(sessionId) ?: return
+        val instruction = updated.currentInstruction
+        val title = when (instruction.action) {
+            ActionType.SetAlarm ->
+                instruction.alarmTime?.let { "Alarm set for $it" } ?: "Alarm set (time unknown)"
+            ActionType.CancelAlarm -> "Alarm cancelled"
+            ActionType.DoNothing -> "No alarm scheduled"
+            ActionType.SendBrief -> "Brief sent"
+            ActionType.NotifyWarning -> "Warning posted"
+        }
+        val openApp = PendingIntent.getActivity(
+            applicationContext,
+            0,
+            Intent(applicationContext, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(applicationContext, CronApplication.PLANNING_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_alarm)
+            .setContentTitle(title)
+            .setContentText(instruction.reason)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(instruction.reason))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(openApp)
+            .setAutoCancel(true)
+            .build()
+        try {
+            NotificationManagerCompat.from(applicationContext)
+                .notify(CronApplication.PLANNING_NOTIFICATION_ID, notification)
+        } catch (se: SecurityException) {
+            Log.w(TAG, "POST_NOTIFICATIONS denied; planning notification dropped", se)
         }
     }
 

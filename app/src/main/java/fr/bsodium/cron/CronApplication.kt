@@ -91,9 +91,26 @@ class CronApplication : Application() {
             }
             nm.createNotificationChannel(sessionChannel)
         }
+
+        // Planning result channel (debug builds only — silent informational notification)
+        if (nm.getNotificationChannel(PLANNING_CHANNEL_ID) == null) {
+            val planningChannel = NotificationChannel(
+                PLANNING_CHANNEL_ID,
+                "Planning result (debug)",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Shown after an AI evening plan completes (debug builds only)"
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            }
+            nm.createNotificationChannel(planningChannel)
+        }
     }
 
     companion object {
         private const val TAG = "CronApplication"
+        const val PLANNING_CHANNEL_ID = "cron_planning_channel"
+        const val PLANNING_NOTIFICATION_ID = 9004
     }
 }
