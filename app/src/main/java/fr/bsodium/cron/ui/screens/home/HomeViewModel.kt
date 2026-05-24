@@ -1,9 +1,14 @@
 package fr.bsodium.cron.ui.screens.home
 
+import android.app.AlarmManager
 import android.app.Application
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import fr.bsodium.cron.ai.SmokeTest
+import fr.bsodium.cron.receiver.AlarmReceiver
 import fr.bsodium.cron.sensors.DebugSensorEventSink
 import fr.bsodium.cron.service.SleepSessionService
 import fr.bsodium.cron.session.db.CronDatabase
@@ -14,6 +19,7 @@ import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.ui.components.SessionDisplayState
+import fr.bsodium.cron.ui.screens.alarm.AlarmActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -81,6 +87,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         ctx.startService(SleepSessionService.stopIntent(ctx))
     }
 
+    fun fireTestAlarm() {
+        val ctx = getApplication<Application>()
+        val triggerAt = System.currentTimeMillis() + 30_000L
+        val intent = Intent(ctx, AlarmReceiver::class.java).apply {
+            action = AlarmReceiver.ACTION_ALARM_FIRED
+            putExtra(AlarmReceiver.EXTRA_REQUEST_CODE, TEST_ALARM_REQUEST_CODE)
+            putExtra(AlarmReceiver.EXTRA_LABEL, "Test alarm")
+            putExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, 0)
+        }
+        val pi = PendingIntent.getBroadcast(
+            ctx, TEST_ALARM_REQUEST_CODE, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+    }
+
+    fun openAlarmScreen() {
+        val ctx = getApplication<Application>()
+        ctx.startActivity(
+            Intent(ctx, AlarmActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                putExtra(AlarmReceiver.EXTRA_LABEL, "Preview alarm")
+                putExtra(AlarmReceiver.EXTRA_REQUEST_CODE, TEST_ALARM_REQUEST_CODE)
+                putExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, 0)
+            }
+        )
+    }
+
     fun runSmokeTest() {
         _smokeState.value = SmokeState.Running
         viewModelScope.launch {
@@ -114,5 +149,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             sessionDate = sessionDate,
             snoozeCount = snoozeCount,
         )
+    }
+
+    companion object {
+        private const val TEST_ALARM_REQUEST_CODE = 999_999
     }
 }

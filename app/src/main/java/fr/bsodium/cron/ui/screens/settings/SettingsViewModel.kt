@@ -19,6 +19,7 @@ data class SettingsUiState(
     val freeDayWakeStart: LocalTime = LocalTime(8, 0),
     val freeDayWakeEnd: LocalTime = LocalTime(9, 30),
     val commuteBufferMinutes: Int = 15,
+    val preparationBufferMinutes: Int = 15,
     val hasApiKey: Boolean = false,
 )
 
@@ -42,6 +43,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             commuteBufferMinutes = buffer,
             hasApiKey = secureStore.hasAnthropicKey(),
         )
+    }.combine(repo.preparationBufferMinutes) { state, prepBuffer ->
+        state.copy(preparationBufferMinutes = prepBuffer)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setEveningTrigger(time: LocalTime) {
@@ -61,6 +64,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setCommuteBuffer(minutes: Int) {
         viewModelScope.launch { repo.setCommuteBufferMinutes(minutes) }
+    }
+
+    fun setPreparationBuffer(minutes: Int) {
+        viewModelScope.launch { repo.setPreparationBufferMinutes(minutes) }
     }
 
     fun clearApiKey() {

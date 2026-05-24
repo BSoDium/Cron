@@ -100,7 +100,7 @@ fun SettingsScreen(
 
             SectionHeader("Commute")
             Text(
-                text = "Buffer before first event",
+                text = "Travel buffer before first event",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(top = 8.dp, start = 4.dp),
             )
@@ -113,6 +113,24 @@ fun SettingsScreen(
             Slider(
                 value = state.commuteBufferMinutes.toFloat(),
                 onValueChange = { viewModel.setCommuteBuffer(it.toInt()) },
+                valueRange = 0f..60f,
+                steps = 11,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Preparation time (shower, breakfast, etc.)",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+            )
+            Text(
+                text = "${state.preparationBufferMinutes} minutes",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            Slider(
+                value = state.preparationBufferMinutes.toFloat(),
+                onValueChange = { viewModel.setPreparationBuffer(it.toInt()) },
                 valueRange = 0f..60f,
                 steps = 11,
                 modifier = Modifier.fillMaxWidth(),
