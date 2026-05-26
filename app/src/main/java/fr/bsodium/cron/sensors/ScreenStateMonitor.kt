@@ -41,6 +41,9 @@ class ScreenStateMonitor(
     private var screenOffSince: Instant? = null
     private var sleepOnsetEmitted: Boolean = false
     private var pendingOnset: Job? = null
+    /** True after [rearm] has been called; consumed by the next SleepOnset emission. */
+    private var isRearm: Boolean = false
+    private var currentOnsetThreshold: kotlin.time.Duration = sleepOnsetThreshold
     private val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
 
     private val receiver = object : BroadcastReceiver() {
@@ -74,9 +77,16 @@ class ScreenStateMonitor(
         Log.i(TAG, "ScreenStateMonitor stopped")
     }
 
-    /** Resets sleep-onset latch after the FSM moves to MONITORING_AWAKE. */
-    fun rearm(threshold: kotlin.time.Duration = sleepOnsetThreshold) {
+    /**
+     * Resets sleep-onset latch after the FSM moves to AWAKE. Uses a shorter
+     * threshold by default since the user has already proven they can fall
+     * asleep tonight, and we want to catch a second sleep onset quickly so
+     * the AI can re-arm the alarm without losing too much window.
+     */
+    fun rearm(threshold: kotlin.time.Duration = REARM_ONSET_THRESHOLD) {
         sleepOnsetEmitted = false
+        isRearm = true
+        currentOnsetThreshold = threshold
         screenOffSince = if (!powerManager.isInteractive) Clock.System.now() else null
         scheduleOnsetCheck(threshold)
     }
@@ -120,22 +130,26 @@ class ScreenStateMonitor(
             val onsetThresholdMet = (Clock.System.now() - since) >= threshold
             if (onsetThresholdMet) {
                 sleepOnsetEmitted = true
+                val wasRearm = isRearm
+                isRearm = false
                 sink.emit(
                     SessionEvent(
                         trigger = TriggerType.SleepOnset,
                         timestamp = Clock.System.now(),
                         data = EventData.SleepOnset(
                             screenOffSince = since,
-                            rearm = false,
+                            rearm = wasRearm,
                         ),
                     )
                 )
-                Log.i(TAG, "Sleep onset emitted at ${Clock.System.now()}")
+                Log.i(TAG, "Sleep onset emitted at ${Clock.System.now()} (rearm=$wasRearm)")
             }
         }
     }
 
     companion object {
         private const val TAG = "ScreenStateMonitor"
+        /** Shorter threshold for re-arm; user has already proven they sleep tonight. */
+        private val REARM_ONSET_THRESHOLD = 15.minutes
     }
 }

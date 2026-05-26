@@ -13,6 +13,7 @@ import fr.bsodium.cron.CronApplication
 import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.R
 import fr.bsodium.cron.ai.AnthropicClient
+import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.ai.SystemPrompts
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolRegistry
@@ -79,6 +80,12 @@ class AiTurnWorker(
             return Result.failure()
         }
 
+        val budget = BudgetStore(applicationContext)
+        if (!budget.hasHeadroom()) {
+            Log.w(TAG, "Daily token budget exhausted (${budget.usedToday()} used); skipping turn for $sessionId")
+            return Result.failure()
+        }
+
         val turnIndex = (db.aiMessageDao().maxTurnIndex(sessionId) ?: -1) + 1
         val isEveningPlan = session.events.lastOrNull()?.trigger == TriggerType.EveningPlan
 
@@ -99,11 +106,12 @@ class AiTurnWorker(
 
         return try {
             val outcome = runner.run(sessionId, turnIndex, userMessage)
+            budget.record(outcome.totalUsage)
             when (outcome) {
                 is TurnRunner.Outcome.Completed ->
-                    Log.i(TAG, "Turn $turnIndex complete for $sessionId (stop=${outcome.response.stop_reason})")
+                    Log.i(TAG, "Turn $turnIndex complete for $sessionId (stop=${outcome.response.stop_reason}, tokens=${outcome.totalUsage.input_tokens + outcome.totalUsage.output_tokens})")
                 is TurnRunner.Outcome.BudgetExhausted ->
-                    Log.w(TAG, "Turn $turnIndex budget exhausted after ${outcome.roundTrips} round-trips for $sessionId")
+                    Log.w(TAG, "Turn $turnIndex round-trip budget exhausted after ${outcome.roundTrips} round-trips for $sessionId")
             }
             if (BuildConfig.DEBUG && isEveningPlan) {
                 postPlanningNotification(sessionId)

@@ -5,6 +5,7 @@ import fr.bsodium.cron.ai.wire.MessageInput
 import fr.bsodium.cron.ai.wire.MessagesRequest
 import fr.bsodium.cron.ai.wire.MessagesResponse
 import fr.bsodium.cron.ai.wire.ToolChoice
+import fr.bsodium.cron.ai.wire.Usage
 import fr.bsodium.cron.session.db.AiMessageDao
 import fr.bsodium.cron.session.db.AiMessageEntity
 import fr.bsodium.cron.session.db.SessionJson
@@ -40,8 +41,18 @@ class TurnRunner(
 ) {
 
     sealed class Outcome {
-        data class Completed(val response: MessagesResponse) : Outcome()
-        data class BudgetExhausted(val roundTrips: Int) : Outcome()
+        /** Aggregated token usage across every round-trip in the turn. */
+        abstract val totalUsage: Usage
+
+        data class Completed(
+            val response: MessagesResponse,
+            override val totalUsage: Usage,
+        ) : Outcome()
+
+        data class BudgetExhausted(
+            val roundTrips: Int,
+            override val totalUsage: Usage,
+        ) : Outcome()
     }
 
     suspend fun run(
@@ -50,6 +61,7 @@ class TurnRunner(
         initialUserMessage: String,
     ): Outcome {
         val messages = loadOrSeed(sessionId, turnIndex, initialUserMessage).toMutableList()
+        var aggregateUsage = Usage()
 
         repeat(maxRoundTrips) { round ->
             val request = MessagesRequest(
@@ -62,6 +74,7 @@ class TurnRunner(
             )
 
             val response = sendWithRetries(request)
+            aggregateUsage = aggregateUsage.plus(response.usage)
 
             // Persist assistant message.
             val assistantBlocks = response.content
@@ -70,7 +83,7 @@ class TurnRunner(
 
             val toolUses = assistantBlocks.filterIsInstance<ContentBlock.ToolUse>()
             if (toolUses.isEmpty() || response.stop_reason == "end_turn") {
-                return Outcome.Completed(response)
+                return Outcome.Completed(response, aggregateUsage)
             }
 
             // Execute every tool_use block emitted in this assistant message.
@@ -82,7 +95,17 @@ class TurnRunner(
             messages.add(MessageInput(role = "user", content = toolResults))
         }
 
-        return Outcome.BudgetExhausted(maxRoundTrips)
+        return Outcome.BudgetExhausted(maxRoundTrips, aggregateUsage)
+    }
+
+    private fun Usage.plus(other: Usage?): Usage {
+        if (other == null) return this
+        return Usage(
+            input_tokens = input_tokens + other.input_tokens,
+            output_tokens = output_tokens + other.output_tokens,
+            cache_creation_input_tokens = cache_creation_input_tokens + other.cache_creation_input_tokens,
+            cache_read_input_tokens = cache_read_input_tokens + other.cache_read_input_tokens,
+        )
     }
 
     private suspend fun executeToolCall(call: ContentBlock.ToolUse): ContentBlock.ToolResult {
