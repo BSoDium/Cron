@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,8 +46,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.receiver.AlarmReceiver
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.ExpressiveFontFamily
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
@@ -134,10 +137,15 @@ private fun AlarmScreen(
         ) {
             Text(
                 text = timeText,
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Light,
+                fontFamily = ExpressiveFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 128.sp,
                 color = MaterialTheme.colorScheme.onPrimary,
+                style = androidx.compose.ui.text.TextStyle(
+                    fontFeatureSettings = "tnum",
+                ),
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.titleMedium,

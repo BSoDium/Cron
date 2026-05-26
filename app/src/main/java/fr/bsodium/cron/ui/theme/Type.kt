@@ -2,33 +2,117 @@ package fr.bsodium.cron.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-// Set of Material typography styles to start with
-val Typography = Typography(
+/**
+ * Material 3 Expressive typography scale.
+ *
+ * Same role names as standard M3, but tuned for the expressive aesthetic:
+ *  - Display roles are larger and bolder than the M3 defaults.
+ *  - Tight negative tracking on display sizes ties characters together for
+ *    that oversized-headline feel.
+ *  - Body/label roles stay near M3 defaults; readability is non-negotiable.
+ *
+ * All roles use [ExpressiveFontFamily] (Google Sans Flex → Roboto Flex).
+ */
+val Typography: Typography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 64.sp,
+        lineHeight = 68.sp,
+        letterSpacing = (-0.03).em,
+    ),
+    displayMedium = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 52.sp,
+        lineHeight = 56.sp,
+        letterSpacing = (-0.025).em,
+    ),
+    displaySmall = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 40.sp,
+        lineHeight = 46.sp,
+        letterSpacing = (-0.02).em,
+    ),
+    headlineLarge = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 32.sp,
+        lineHeight = 38.sp,
+        letterSpacing = (-0.015).em,
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 26.sp,
+        lineHeight = 32.sp,
+        letterSpacing = (-0.01).em,
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+    ),
+    titleLarge = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+    ),
+    titleMedium = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+    ),
+    titleSmall = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = ExpressiveFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = ExpressiveFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
+    bodySmall = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+    ),
+    labelLarge = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
+    labelMedium = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.04.em,
     ),
     labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = ExpressiveFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+        letterSpacing = 0.06.em,
+    ),
 )
