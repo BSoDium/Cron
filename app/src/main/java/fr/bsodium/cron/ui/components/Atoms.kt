@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -47,6 +48,7 @@ fun PillBadge(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     leadingDot: Color? = null,
+    textStyle: TextStyle? = null,
 ) {
     Surface(
         color = containerColor,
@@ -67,7 +69,7 @@ fun PillBadge(
             }
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelSmall,
+                style = textStyle ?: MaterialTheme.typography.labelSmall,
                 color = contentColor,
             )
         }

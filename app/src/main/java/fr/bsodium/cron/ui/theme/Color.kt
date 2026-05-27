@@ -5,15 +5,67 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Color schemes for devices that don't support Material You dynamic color
- * (API ≤30). On API 31+, [CronTheme] uses `dynamicLightColorScheme(context)`
- * / `dynamicDarkColorScheme(context)` so the palette tracks the user's
- * wallpaper — these constants only kick in below that.
+ * Cron's color system.
  *
- * The fallback keeps the warm cream-on-charcoal surfaces the user designed,
- * but replaces every "brand" slot with a neutral tan / warm-grey derived
- * from the same surface palette. There is intentionally no brand color.
+ * The app ships with a single brand palette ([BrandColors]) — near-black
+ * surfaces with a saturated orange accent. Material You / dynamic colors
+ * are intentionally not used because the app's identity depends on the
+ * fixed brand tone.
+ *
+ * The legacy [FallbackLightColors] / [FallbackDarkColors] are kept around
+ * for any code paths that still reach for them, but [CronTheme] always
+ * applies [BrandColors].
  */
+
+// ---------------------------------------------------------------------------
+// Brand palette (dark + orange) — the only palette CronTheme ever applies.
+// ---------------------------------------------------------------------------
+
+val BrandOrange = Color(0xFFFF6B2C)
+val BrandOnOrange = Color(0xFFFFFFFF)
+private val BrandBackground = Color(0xFF0A0A0A)
+private val BrandSurface = Color(0xFF131316)
+private val BrandSurfaceContainerLow = Color(0xFF111114)
+private val BrandSurfaceContainer = Color(0xFF15151A)
+private val BrandSurfaceContainerHigh = Color(0xFF1E1E24)
+private val BrandOnBackground = Color(0xFFF2F2F2)
+private val BrandOnSurfaceVariant = Color(0xFFA8A8AC)
+private val BrandOutline = Color(0xFF2A2A30)
+
+val BrandColors = darkColorScheme(
+    primary = BrandOrange,
+    onPrimary = BrandOnOrange,
+    primaryContainer = BrandOrange,
+    onPrimaryContainer = BrandOnOrange,
+    secondary = BrandOrange,
+    onSecondary = BrandOnOrange,
+    secondaryContainer = BrandSurfaceContainer,
+    onSecondaryContainer = BrandOnBackground,
+    tertiary = BrandOrange,
+    onTertiary = BrandOnOrange,
+    tertiaryContainer = BrandSurfaceContainer,
+    onTertiaryContainer = BrandOnBackground,
+    background = BrandBackground,
+    onBackground = BrandOnBackground,
+    surface = BrandSurface,
+    onSurface = BrandOnBackground,
+    surfaceVariant = BrandSurfaceContainer,
+    onSurfaceVariant = BrandOnSurfaceVariant,
+    surfaceContainerLow = BrandSurfaceContainerLow,
+    surfaceContainer = BrandSurfaceContainer,
+    surfaceContainerHigh = BrandSurfaceContainerHigh,
+    outline = BrandOutline,
+    outlineVariant = BrandOutline,
+    error = Color(0xFFFF6B5A),
+    onError = Color(0xFF141414),
+    errorContainer = Color(0xFF3D1310),
+    onErrorContainer = Color(0xFFFFB4AB),
+)
+
+// ---------------------------------------------------------------------------
+// Legacy fallback palettes — kept for code that still references them but
+// no longer wired into CronTheme.
+// ---------------------------------------------------------------------------
 
 // Light surfaces (warm cream)
 private val LightBackground = Color(0xFFF8F5F0)

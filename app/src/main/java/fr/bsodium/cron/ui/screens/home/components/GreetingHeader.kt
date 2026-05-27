@@ -22,6 +22,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.theme.BrandOrange
 
 /**
  * Two-line greeting header with optional avatar slot.
@@ -53,13 +54,13 @@ fun GreetingHeader(
                         }
                     }
                 },
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
                 text = "Welcome back",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onBackground,
             )
         }
         if (avatar != null) {
@@ -74,8 +75,8 @@ fun GreetingHeader(
 private fun DefaultAvatar() {
     Box(
         modifier = Modifier
-            .size(52.dp)
-            .border(width = 2.dp, color = MaterialTheme.colorScheme.primary, shape = CircleShape)
+            .size(56.dp)
+            .border(width = 3.dp, color = BrandOrange, shape = CircleShape)
             .padding(4.dp)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
         contentAlignment = Alignment.Center,
