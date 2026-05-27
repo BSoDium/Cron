@@ -18,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -116,6 +117,10 @@ fun SettingsScreen(
             }
 
             Section(label = "Account") {
+                DisplayNameRow(
+                    name = state.displayName,
+                    onSave = viewModel::setDisplayName,
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -252,6 +257,68 @@ private fun BufferSlider(
             valueRange = 0f..60f,
             steps = 11,
             modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun DisplayNameRow(
+    name: String?,
+    onSave: (String) -> Unit,
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showDialog = true },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Display name",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = "Shown in the morning greeting",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = name ?: "—",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (name != null) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+
+    if (showDialog) {
+        var draft by remember { mutableStateOf(name.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Display name") },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = true,
+                    label = { Text("Your name") },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onSave(draft.trim())
+                        showDialog = false
+                    },
+                    enabled = draft.isNotBlank(),
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+            },
         )
     }
 }

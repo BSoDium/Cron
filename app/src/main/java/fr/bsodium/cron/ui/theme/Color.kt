@@ -7,30 +7,32 @@ import androidx.compose.ui.graphics.Color
 /**
  * Cron's color system.
  *
- * The app ships with a single brand palette ([BrandColors]) — near-black
- * surfaces with a saturated orange accent. Material You / dynamic colors
- * are intentionally not used because the app's identity depends on the
- * fixed brand tone.
+ * The brand identity is dark surfaces + saturated orange. Dynamic Material You
+ * colors are intentionally not used so the brand tone never shifts with the
+ * wallpaper. The dark palette ([BrandColors]) is mirrored by a warm-cream light
+ * palette ([BrandLightColors]); [CronTheme] picks one based on the system's
+ * dark-theme setting.
  *
- * The legacy [FallbackLightColors] / [FallbackDarkColors] are kept around
- * for any code paths that still reach for them, but [CronTheme] always
- * applies [BrandColors].
+ * The `inverseSurface` / `inverseOnSurface` slots are explicitly populated on
+ * both palettes so the high-contrast alarm card (white-on-dark page or
+ * dark-on-light page) reads correctly in either mode.
  */
-
-// ---------------------------------------------------------------------------
-// Brand palette (dark + orange) — the only palette CronTheme ever applies.
-// ---------------------------------------------------------------------------
 
 val BrandOrange = Color(0xFFFF6B2C)
 val BrandOnOrange = Color(0xFFFFFFFF)
-private val BrandBackground = Color(0xFF0A0A0A)
-private val BrandSurface = Color(0xFF131316)
-private val BrandSurfaceContainerLow = Color(0xFF111114)
-private val BrandSurfaceContainer = Color(0xFF15151A)
-private val BrandSurfaceContainerHigh = Color(0xFF1E1E24)
-private val BrandOnBackground = Color(0xFFF2F2F2)
-private val BrandOnSurfaceVariant = Color(0xFFA8A8AC)
-private val BrandOutline = Color(0xFF2A2A30)
+
+// ---------------------------------------------------------------------------
+// Dark palette (default brand identity)
+// ---------------------------------------------------------------------------
+
+private val BrandDarkBackground = Color(0xFF0A0A0A)
+private val BrandDarkSurface = Color(0xFF131316)
+private val BrandDarkSurfaceContainerLow = Color(0xFF111114)
+private val BrandDarkSurfaceContainer = Color(0xFF15151A)
+private val BrandDarkSurfaceContainerHigh = Color(0xFF1E1E24)
+private val BrandDarkOnBackground = Color(0xFFF2F2F2)
+private val BrandDarkOnSurfaceVariant = Color(0xFFA8A8AC)
+private val BrandDarkOutline = Color(0xFF2A2A30)
 
 val BrandColors = darkColorScheme(
     primary = BrandOrange,
@@ -39,23 +41,27 @@ val BrandColors = darkColorScheme(
     onPrimaryContainer = BrandOnOrange,
     secondary = BrandOrange,
     onSecondary = BrandOnOrange,
-    secondaryContainer = BrandSurfaceContainer,
-    onSecondaryContainer = BrandOnBackground,
+    secondaryContainer = BrandDarkSurfaceContainer,
+    onSecondaryContainer = BrandDarkOnBackground,
     tertiary = BrandOrange,
     onTertiary = BrandOnOrange,
-    tertiaryContainer = BrandSurfaceContainer,
-    onTertiaryContainer = BrandOnBackground,
-    background = BrandBackground,
-    onBackground = BrandOnBackground,
-    surface = BrandSurface,
-    onSurface = BrandOnBackground,
-    surfaceVariant = BrandSurfaceContainer,
-    onSurfaceVariant = BrandOnSurfaceVariant,
-    surfaceContainerLow = BrandSurfaceContainerLow,
-    surfaceContainer = BrandSurfaceContainer,
-    surfaceContainerHigh = BrandSurfaceContainerHigh,
-    outline = BrandOutline,
-    outlineVariant = BrandOutline,
+    tertiaryContainer = BrandDarkSurfaceContainer,
+    onTertiaryContainer = BrandDarkOnBackground,
+    background = BrandDarkBackground,
+    onBackground = BrandDarkOnBackground,
+    surface = BrandDarkSurface,
+    onSurface = BrandDarkOnBackground,
+    surfaceVariant = BrandDarkSurfaceContainer,
+    onSurfaceVariant = BrandDarkOnSurfaceVariant,
+    surfaceContainerLow = BrandDarkSurfaceContainerLow,
+    surfaceContainer = BrandDarkSurfaceContainer,
+    surfaceContainerHigh = BrandDarkSurfaceContainerHigh,
+    outline = BrandDarkOutline,
+    outlineVariant = BrandDarkOutline,
+    // Inverse pair powers the high-contrast alarm card: light surface in dark mode.
+    inverseSurface = Color(0xFFF2F2F2),
+    inverseOnSurface = Color(0xFF0A0A0A),
+    inversePrimary = BrandOrange,
     error = Color(0xFFFF6B5A),
     onError = Color(0xFF141414),
     errorContainer = Color(0xFF3D1310),
@@ -63,97 +69,48 @@ val BrandColors = darkColorScheme(
 )
 
 // ---------------------------------------------------------------------------
-// Legacy fallback palettes — kept for code that still references them but
-// no longer wired into CronTheme.
+// Light palette (warm cream + brand orange, system-driven)
 // ---------------------------------------------------------------------------
 
-// Light surfaces (warm cream)
-private val LightBackground = Color(0xFFF8F5F0)
-private val LightSurface = Color(0xFFFFFFFF)
-private val LightSurfaceVariant = Color(0xFFEFEAE1)
-private val LightSurfaceContainerLow = Color(0xFFF2EDE5)
-private val LightSurfaceContainer = Color(0xFFEAE4D9)
-private val LightSurfaceContainerHigh = Color(0xFFE0D9CC)
-private val LightOnBackground = Color(0xFF141414)
-private val LightOnSurfaceVariant = Color(0xFF6B6B6B)
-private val LightOutline = Color(0xFFD9D2C7)
+private val BrandLightBackground = Color(0xFFF8F5F0)
+private val BrandLightSurface = Color(0xFFFFFFFF)
+private val BrandLightSurfaceContainerLow = Color(0xFFF2EDE5)
+private val BrandLightSurfaceContainer = Color(0xFFEAE4D9)
+private val BrandLightSurfaceContainerHigh = Color(0xFFE0D9CC)
+private val BrandLightOnBackground = Color(0xFF141414)
+private val BrandLightOnSurfaceVariant = Color(0xFF6B6B6B)
+private val BrandLightOutline = Color(0xFFD9D2C7)
 
-// Neutral accent — warm graphite used in place of the old burnt-orange brand
-private val NeutralPrimaryLight = Color(0xFF3A352D)
-private val NeutralPrimaryContainerLight = Color(0xFFD8CFC1)
-private val NeutralOnPrimaryContainerLight = Color(0xFF1F1B14)
-
-// Dark surfaces (true near-black)
-private val DarkBackground = Color(0xFF0A0A0A)
-private val DarkSurface = Color(0xFF141414)
-private val DarkSurfaceVariant = Color(0xFF1F1F1F)
-private val DarkSurfaceContainerLow = Color(0xFF101010)
-private val DarkSurfaceContainer = Color(0xFF1A1A1A)
-private val DarkSurfaceContainerHigh = Color(0xFF252525)
-private val DarkOnBackground = Color(0xFFF5F5F5)
-private val DarkOnSurfaceVariant = Color(0xFFA8A8A8)
-private val DarkOutline = Color(0xFF2A2A2A)
-
-private val NeutralPrimaryDark = Color(0xFFE6DECF)
-private val NeutralPrimaryContainerDark = Color(0xFF2B2620)
-private val NeutralOnPrimaryContainerDark = Color(0xFFE6DECF)
-
-val FallbackLightColors = lightColorScheme(
-    primary = NeutralPrimaryLight,
-    onPrimary = Color.White,
-    primaryContainer = NeutralPrimaryContainerLight,
-    onPrimaryContainer = NeutralOnPrimaryContainerLight,
-    secondary = NeutralPrimaryLight,
-    onSecondary = Color.White,
-    secondaryContainer = LightSurfaceContainer,
-    onSecondaryContainer = LightOnBackground,
-    tertiary = NeutralPrimaryLight,
-    onTertiary = Color.White,
-    tertiaryContainer = LightSurfaceContainer,
-    onTertiaryContainer = LightOnBackground,
-    background = LightBackground,
-    onBackground = LightOnBackground,
-    surface = LightSurface,
-    onSurface = LightOnBackground,
-    surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = LightOnSurfaceVariant,
-    surfaceContainerLow = LightSurfaceContainerLow,
-    surfaceContainer = LightSurfaceContainer,
-    surfaceContainerHigh = LightSurfaceContainerHigh,
-    outline = LightOutline,
-    outlineVariant = LightSurfaceContainer,
+val BrandLightColors = lightColorScheme(
+    primary = BrandOrange,
+    onPrimary = BrandOnOrange,
+    primaryContainer = BrandOrange,
+    onPrimaryContainer = BrandOnOrange,
+    secondary = BrandOrange,
+    onSecondary = BrandOnOrange,
+    secondaryContainer = BrandLightSurfaceContainer,
+    onSecondaryContainer = BrandLightOnBackground,
+    tertiary = BrandOrange,
+    onTertiary = BrandOnOrange,
+    tertiaryContainer = BrandLightSurfaceContainer,
+    onTertiaryContainer = BrandLightOnBackground,
+    background = BrandLightBackground,
+    onBackground = BrandLightOnBackground,
+    surface = BrandLightSurface,
+    onSurface = BrandLightOnBackground,
+    surfaceVariant = BrandLightSurfaceContainer,
+    onSurfaceVariant = BrandLightOnSurfaceVariant,
+    surfaceContainerLow = BrandLightSurfaceContainerLow,
+    surfaceContainer = BrandLightSurfaceContainer,
+    surfaceContainerHigh = BrandLightSurfaceContainerHigh,
+    outline = BrandLightOutline,
+    outlineVariant = BrandLightOutline,
+    // Inverse pair powers the high-contrast alarm card: dark surface in light mode.
+    inverseSurface = Color(0xFF0A0A0A),
+    inverseOnSurface = Color(0xFFF2F2F2),
+    inversePrimary = BrandOrange,
     error = Color(0xFFD14638),
     onError = Color.White,
     errorContainer = Color(0xFFFFE0DA),
     onErrorContainer = Color(0xFF5C1410),
-)
-
-val FallbackDarkColors = darkColorScheme(
-    primary = NeutralPrimaryDark,
-    onPrimary = Color(0xFF141414),
-    primaryContainer = NeutralPrimaryContainerDark,
-    onPrimaryContainer = NeutralOnPrimaryContainerDark,
-    secondary = NeutralPrimaryDark,
-    onSecondary = Color(0xFF141414),
-    secondaryContainer = DarkSurfaceContainer,
-    onSecondaryContainer = DarkOnBackground,
-    tertiary = NeutralPrimaryDark,
-    onTertiary = Color(0xFF141414),
-    tertiaryContainer = DarkSurfaceContainer,
-    onTertiaryContainer = DarkOnBackground,
-    background = DarkBackground,
-    onBackground = DarkOnBackground,
-    surface = DarkSurface,
-    onSurface = DarkOnBackground,
-    surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = DarkOnSurfaceVariant,
-    surfaceContainerLow = DarkSurfaceContainerLow,
-    surfaceContainer = DarkSurfaceContainer,
-    surfaceContainerHigh = DarkSurfaceContainerHigh,
-    outline = DarkOutline,
-    outlineVariant = Color(0xFF202020),
-    error = Color(0xFFFF6B5A),
-    onError = Color(0xFF141414),
-    errorContainer = Color(0xFF3D1310),
-    onErrorContainer = Color(0xFFFFB4AB),
 )

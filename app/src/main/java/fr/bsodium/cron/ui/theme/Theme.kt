@@ -1,12 +1,14 @@
 package fr.bsodium.cron.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.runtime.Composable
 
 /**
- * Cron's theme wrapper. Always applies the brand dark-orange palette so
- * the app's identity is fixed regardless of system theme or wallpaper.
+ * Cron's theme wrapper. Picks [BrandColors] or [BrandLightColors] based on
+ * the device's dark-theme setting, so the page background flips between
+ * near-black and warm cream while the brand orange stays put.
  *
  * Wraps content in [MaterialExpressiveTheme] so M3 components render with
  * their expressive variants (pill buttons, larger radii, springy motion).
@@ -14,8 +16,9 @@ import androidx.compose.runtime.Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CronTheme(content: @Composable () -> Unit) {
+    val colors = if (isSystemInDarkTheme()) BrandColors else BrandLightColors
     MaterialExpressiveTheme(
-        colorScheme = BrandColors,
+        colorScheme = colors,
         typography = Typography,
         content = content,
     )

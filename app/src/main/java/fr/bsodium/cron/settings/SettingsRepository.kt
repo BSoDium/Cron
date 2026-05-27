@@ -57,6 +57,11 @@ class SettingsRepository(private val context: Context) {
         prefs[ONBOARDING_COMPLETE] ?: false
     }
 
+    /** User-supplied display name shown in the home greeting. */
+    val displayName: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[DISPLAY_NAME]?.takeIf { it.isNotBlank() }
+    }
+
     suspend fun setEveningTriggerLocalTime(time: LocalTime) =
         context.dataStore.edit { it[EVENING_TRIGGER] = time.toString() }
 
@@ -84,6 +89,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setOnboardingComplete() =
         context.dataStore.edit { it[ONBOARDING_COMPLETE] = true }
 
+    suspend fun setDisplayName(name: String) =
+        context.dataStore.edit { it[DISPLAY_NAME] = name.trim() }
+
     /** One-shot read for use from broadcast receivers and one-shot workers. */
     suspend fun currentEveningTriggerLocalTime(): LocalTime = eveningTriggerLocalTime.first()
     suspend fun currentHardLatestDefault(): LocalTime = hardLatestDefault.first()
@@ -103,5 +111,6 @@ class SettingsRepository(private val context: Context) {
         val HOME_LAT = stringPreferencesKey("home_address_lat")
         val HOME_LNG = stringPreferencesKey("home_address_lng")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
+        val DISPLAY_NAME = stringPreferencesKey("display_name")
     }
 }

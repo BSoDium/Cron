@@ -60,6 +60,7 @@ fun OnboardingScreen(
 
             when (state.step) {
                 OnboardingStep.Welcome -> WelcomeStep(onNext = viewModel::advance)
+                OnboardingStep.Name -> NameStep(state = state, viewModel = viewModel)
                 OnboardingStep.ApiKey -> ApiKeyStep(state = state, viewModel = viewModel)
                 OnboardingStep.Permissions -> PermissionsStep(
                     onGranted = {
@@ -109,6 +110,44 @@ private fun WelcomeStep(onNext: () -> Unit) {
         Spacer(modifier = Modifier.height(40.dp))
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
             Text("Get started")
+        }
+    }
+}
+
+@Composable
+private fun NameStep(
+    state: OnboardingUiState,
+    viewModel: OnboardingViewModel,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("What should Cron call you?", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Your name appears in the morning greeting. Stored on this device only.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = state.displayNameInput,
+            onValueChange = viewModel::onDisplayNameChanged,
+            label = { Text("Your name") },
+            placeholder = { Text("Elliot") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = viewModel::saveDisplayName,
+            enabled = state.displayNameInput.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Continue")
         }
     }
 }
