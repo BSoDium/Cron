@@ -34,13 +34,24 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel) {
+fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     val uiState by viewModel.uiState.collectAsState()
+    DisposableEffect(viewModel, uiState.isRetrying) {
+        fabRegistry.set(
+            FabAction(
+                onClick = viewModel::retryAiPlan,
+                spinning = uiState.isRetrying,
+            )
+        )
+        onDispose { fabRegistry.clear() }
+    }
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -70,21 +81,26 @@ fun HomeScreen(viewModel: HomeViewModel) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(24.dp))
-        GreetingHeader(prefix = uiState.greetingPrefix, name = uiState.greetingName)
+        GreetingHeader(
+            prefix = uiState.greetingPrefix,
+            name = uiState.greetingName,
+            photoUrl = uiState.greetingPhotoUrl,
+        )
         Spacer(Modifier.height(20.dp))
         NextAlarmCard(
             dateLabel = uiState.dateLabel,
             alarmTime = uiState.sessionDisplay?.alarmTime,
             sleepDurationLabel = uiState.sleepStats?.durationLabel,
             sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-            isRetrying = uiState.isRetrying,
-            onRetry = viewModel::retryAiPlan,
         )
         Spacer(Modifier.height(24.dp))
-        uiState.aiThread?.let { thread ->
+        val thread = uiState.aiThread
+        if (thread != null) {
             AiThinkingThread(thread)
-            Spacer(Modifier.height(16.dp))
+        } else {
+            AiThreadEmptyPlaceholder()
         }
+        Spacer(Modifier.height(16.dp))
 
         if (!hasNotificationPermission) {
             NotificationPermissionRow(
@@ -101,6 +117,16 @@ fun HomeScreen(viewModel: HomeViewModel) {
 
         Spacer(Modifier.height(32.dp))
     }
+}
+
+@Composable
+private fun AiThreadEmptyPlaceholder(modifier: Modifier = Modifier) {
+    Text(
+        text = "Tap ▶ to plan tomorrow's alarm from your calendar.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

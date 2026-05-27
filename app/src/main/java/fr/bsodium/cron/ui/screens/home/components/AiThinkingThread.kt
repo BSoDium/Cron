@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ToolStep
-import fr.bsodium.cron.ui.theme.BrandOrange
 import fr.bsodium.cron.ui.theme.MonoFontFamily
 import fr.bsodium.cron.ui.theme.SerifFontFamily
 
@@ -231,7 +230,7 @@ private fun DoneRow() {
 
 @Composable
 private fun ResponseBody(text: String) {
-    val accent = BrandOrange
+    val accent = MaterialTheme.colorScheme.primary
     val chipBg = MaterialTheme.colorScheme.surfaceContainerHigh
     val onSurface = MaterialTheme.colorScheme.onSurface
     val annotated = remember(text, accent, chipBg, onSurface) {

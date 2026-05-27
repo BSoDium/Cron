@@ -40,6 +40,7 @@ data class HomeUiState(
     val sessionDisplay: SessionDisplayState? = null,
     val greetingPrefix: String = "Welcome",
     val greetingName: String? = null,
+    val greetingPhotoUrl: String? = null,
     val dateLabel: String = "",
     val sleepStats: SleepStatsUi? = null,
     val aiThread: AiThreadUi? = null,
@@ -95,17 +96,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else db.aiMessageDao().observeBySession(id).map { rows -> buildAiThread(rows) }
         }
 
+    private val profileFlow = combine(settings.displayName, settings.displayPhotoUrl) { name, url ->
+        name to url
+    }
+
     val uiState: StateFlow<HomeUiState> = combine(
         sessionFlow.map { it?.toDisplayState() },
         sleepStatsFlow,
         aiThreadFlow,
-        settings.displayName,
+        profileFlow,
         _isRetrying,
-    ) { session, sleepStats, thread, displayName, retrying ->
+    ) { session, sleepStats, thread, profile, retrying ->
+        val (displayName, photoUrl) = profile
         HomeUiState(
             sessionDisplay = session,
             greetingPrefix = greetingPrefix(),
             greetingName = displayName,
+            greetingPhotoUrl = photoUrl,
             dateLabel = formatDateLabel(),
             sleepStats = sleepStats,
             aiThread = thread,

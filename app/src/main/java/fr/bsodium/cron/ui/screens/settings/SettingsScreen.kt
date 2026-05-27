@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.SectionLabel
@@ -117,6 +120,15 @@ fun SettingsScreen(
             }
 
             Section(label = "Account") {
+                val context = LocalContext.current
+                GoogleSignInRow(
+                    photoUrl = state.displayPhotoUrl,
+                    displayName = state.displayName,
+                    isSigningIn = state.isSigningIn,
+                    error = state.signInError,
+                    onSignIn = { viewModel.signInWithGoogle(context) },
+                    onSignOut = viewModel::signOut,
+                )
                 DisplayNameRow(
                     name = state.displayName,
                     onSave = viewModel::setDisplayName,
@@ -258,6 +270,58 @@ private fun BufferSlider(
             steps = 11,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+@Composable
+private fun GoogleSignInRow(
+    photoUrl: String?,
+    displayName: String?,
+    isSigningIn: Boolean,
+    error: String?,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    val signedIn = !photoUrl.isNullOrBlank()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Google profile",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = when {
+                    signedIn && !displayName.isNullOrBlank() -> "Signed in as $displayName"
+                    signedIn -> "Signed in"
+                    else -> "Use your Google account for name + avatar"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            error?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+        when {
+            isSigningIn -> CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+            )
+            signedIn -> TextButton(onClick = onSignOut) {
+                Text("Sign out", color = MaterialTheme.colorScheme.primary)
+            }
+            else -> TextButton(onClick = onSignIn) {
+                Text("Sign in", color = MaterialTheme.colorScheme.primary)
+            }
+        }
     }
 }
 
