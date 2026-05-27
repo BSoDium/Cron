@@ -31,6 +31,9 @@ interface SessionDao {
     @Query("SELECT * FROM sessions ORDER BY createdAt DESC LIMIT 1")
     fun observeLatest(): Flow<SessionEntity?>
 
+    @Query("SELECT * FROM sessions ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<SessionEntity>>
+
     @Query("DELETE FROM sessions WHERE createdAt < :olderThanMillis")
     suspend fun deleteOlderThan(olderThanMillis: Long): Int
 }

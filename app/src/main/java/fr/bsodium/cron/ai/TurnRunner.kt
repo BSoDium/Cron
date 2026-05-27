@@ -4,6 +4,7 @@ import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.ai.wire.MessageInput
 import fr.bsodium.cron.ai.wire.MessagesRequest
 import fr.bsodium.cron.ai.wire.MessagesResponse
+import fr.bsodium.cron.ai.wire.ThinkingConfig
 import fr.bsodium.cron.ai.wire.ToolChoice
 import fr.bsodium.cron.ai.wire.Usage
 import fr.bsodium.cron.session.db.AiMessageDao
@@ -38,6 +39,7 @@ class TurnRunner(
     private val maxRetries: Int = 3,
     private val maxTokens: Int = 2048,
     private val toolChoice: ToolChoice? = null,
+    private val thinking: ThinkingConfig? = null,
 ) {
 
     sealed class Outcome {
@@ -71,6 +73,7 @@ class TurnRunner(
                 messages = messages.toList(),
                 tools = tools.definitions,
                 tool_choice = toolChoice,
+                thinking = thinking,
             )
 
             val response = sendWithRetries(request)

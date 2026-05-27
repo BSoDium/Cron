@@ -39,3 +39,18 @@ val ExpressiveFontFamily: FontFamily = FontFamily(
         WEIGHTS.forEach { w -> add(Font(googleFont = RobotoFlex, fontProvider = Provider, weight = w)) }
     },
 )
+
+/**
+ * Segmented / LCD-style face for the next-alarm hero time. We list
+ * **Major Mono Display** first (slashed-zero, segmented look matching the
+ * mockup) and fall back to **VT323** for a heavier terminal-style numeral
+ * if Major Mono fails to resolve on the device. Both are available on the
+ * Google Fonts downloadable-fonts provider.
+ */
+private val MajorMonoDisplay = GoogleFont("Major Mono Display")
+private val Vt323 = GoogleFont("VT323")
+
+val LcdFontFamily: FontFamily = FontFamily(
+    Font(googleFont = MajorMonoDisplay, fontProvider = Provider, weight = FontWeight.Normal),
+    Font(googleFont = Vt323, fontProvider = Provider, weight = FontWeight.Normal),
+)

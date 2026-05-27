@@ -18,6 +18,7 @@ import fr.bsodium.cron.ai.SystemPrompts
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolRegistry
 import fr.bsodium.cron.ai.TurnRunner
+import fr.bsodium.cron.ai.wire.ThinkingConfig
 import fr.bsodium.cron.ai.tools.CancelAlarmTool
 import fr.bsodium.cron.ai.tools.DoNothingTool
 import fr.bsodium.cron.ai.tools.EstimateCommuteMultiModeTool
@@ -94,12 +95,18 @@ class AiTurnWorker(
 
         val tools = buildToolRegistry(session, apiKey)
         val client = AnthropicClient(apiKeyProvider = { apiKey })
+        // Anthropic requires max_tokens > thinking.budget_tokens, so widen the
+        // ceiling on evening_plan turns to leave room for the visible response.
+        val thinking = if (isEveningPlan) ThinkingConfig(budgetTokens = THINKING_BUDGET) else null
+        val maxTokens = if (isEveningPlan) THINKING_BUDGET + 2048 else 2048
         val runner = TurnRunner(
             client = client,
             aiMessageDao = db.aiMessageDao(),
             model = model,
             systemPrompt = systemPrompt,
             tools = tools,
+            maxTokens = maxTokens,
+            thinking = thinking,
         )
 
         val userMessage = buildUserMessage(session, isEveningPlan)
@@ -315,5 +322,6 @@ class AiTurnWorker(
         const val WORK_PREFIX = "ai_turn_"
         private const val TAG = "AiTurnWorker"
         private val PHONE_ONLY_THRESHOLD = 90.minutes
+        private const val THINKING_BUDGET = 2_000
     }
 }

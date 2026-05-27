@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AiMessageDao {
@@ -25,4 +26,7 @@ interface AiMessageDao {
 
     @Query("SELECT * FROM ai_messages WHERE sessionId = :sessionId ORDER BY id ASC")
     suspend fun findBySession(sessionId: String): List<AiMessageEntity>
+
+    @Query("SELECT * FROM ai_messages WHERE sessionId = :sessionId ORDER BY id ASC")
+    fun observeBySession(sessionId: String): Flow<List<AiMessageEntity>>
 }
