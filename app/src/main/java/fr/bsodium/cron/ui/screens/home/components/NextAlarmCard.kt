@@ -1,28 +1,16 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,17 +19,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.components.PillBadge
-import fr.bsodium.cron.ui.theme.BrandOnOrange
-import fr.bsodium.cron.ui.theme.BrandOrange
 import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.MonoFontFamily
 import kotlinx.coroutines.delay
@@ -56,67 +44,54 @@ fun NextAlarmCard(
     alarmTime: LocalTime?,
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
-    isRetrying: Boolean,
-    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.inverseSurface,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = RoundedCornerShape(28.dp),
-        tonalElevation = 0.dp,
+        tonalElevation = 4.dp,
+        shadowElevation = 2.dp,
     ) {
         Column(modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 22.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Text(
-                    text = dateLabel.ifBlank { "—" },
+            Text(
+                text = dateLabel.ifBlank { "—" },
+                color = MaterialTheme.colorScheme.onSurface,
+                style = TightTextStyle.copy(
                     fontFamily = MonoFontFamily,
                     fontSize = 22.sp,
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(top = 6.dp),
-                )
-                RetryButton(spinning = isRetrying, onClick = onRetry)
-            }
-            Spacer(Modifier.height(2.dp))
-            LcdTimeDisplay(alarmTime = alarmTime)
-            Spacer(Modifier.height(18.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.2f)),
+                    lineHeight = 22.sp,
+                ),
             )
-            Spacer(Modifier.height(18.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Sleep",
-                    fontFamily = MonoFontFamily,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                if (sleepDurationLabel != null) {
-                    PillBadge(
-                        text = sleepDurationLabel,
-                        containerColor = BrandOrange,
-                        contentColor = BrandOnOrange,
-                        textStyle = MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = MonoFontFamily,
-                            fontWeight = FontWeight.Bold,
-                        ),
+            LcdTimeDisplay(alarmTime = alarmTime)
+            if (sleepSegments.isNotEmpty()) {
+                Spacer(Modifier.height(20.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Sleep",
+                        fontFamily = MonoFontFamily,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
                     )
+                    if (sleepDurationLabel != null) {
+                        PillBadge(
+                            text = sleepDurationLabel,
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            textStyle = MaterialTheme.typography.labelMedium.copy(
+                                fontFamily = MonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                        )
+                    }
                 }
+                Spacer(Modifier.height(14.dp))
+                SleepTimeline(segments = sleepSegments)
             }
-            Spacer(Modifier.height(14.dp))
-            SleepTimeline(segments = sleepSegments)
         }
     }
 }
@@ -130,29 +105,42 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
             delay(1_000)
         }
     }
-    val display = alarmTime
-    val hhmm = display?.let { String.format("%02d:%02d", it.hour, it.minute) } ?: "--:--"
-    val ss = display?.let { String.format("%02d", seconds) } ?: "--"
+    val pending = alarmTime == null
+    val hh = alarmTime?.let { String.format("%02d", it.hour) } ?: "00"
+    val mm = alarmTime?.let { String.format("%02d", it.minute) } ?: "00"
+    val ss = if (pending) "00" else String.format("%02d", seconds)
+    val base = MaterialTheme.colorScheme.onSurface
+    val digitColor = if (pending) base.copy(alpha = 0.22f) else base
+    val ssColor = if (pending) base.copy(alpha = 0.16f) else base.copy(alpha = 0.6f)
+
+    val lcdStyle = TightTextStyle.copy(
+        fontFamily = LcdFontFamily,
+        fontSize = 76.sp,
+        lineHeight = 76.sp,
+    )
 
     Row(
-        modifier = modifier,
+        // Compensate for Major Mono Display's left side bearing so the visible
+        // left edge of the digits lines up with the date label's first letter.
+        modifier = modifier.offset(x = (-6).dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Text(
-            text = hhmm,
-            fontSize = 76.sp,
-            lineHeight = 76.sp,
-            fontFamily = LcdFontFamily,
-            color = MaterialTheme.colorScheme.inverseOnSurface,
-            maxLines = 1,
-            softWrap = false,
+        Text(text = hh, color = digitColor, style = lcdStyle, maxLines = 1, softWrap = false)
+        ColonSeparator(
+            color = digitColor,
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .padding(horizontal = 8.dp),
         )
+        Text(text = mm, color = digitColor, style = lcdStyle, maxLines = 1, softWrap = false)
         Text(
             text = ss,
-            fontSize = 24.sp,
-            lineHeight = 24.sp,
-            fontFamily = LcdFontFamily,
-            color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.6f),
+            color = ssColor,
+            style = TightTextStyle.copy(
+                fontFamily = LcdFontFamily,
+                fontSize = 24.sp,
+                lineHeight = 24.sp,
+            ),
             modifier = Modifier.padding(start = 6.dp, top = 6.dp),
             maxLines = 1,
             softWrap = false,
@@ -160,35 +148,39 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
     }
 }
 
+/** Two small filled dots stacked vertically — replaces the chunky Major Mono colon. */
+@Composable
+private fun ColonSeparator(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(width = 8.dp, height = 56.dp)) {
+        drawColonDot(color, yFraction = 0.35f)
+        drawColonDot(color, yFraction = 0.65f)
+    }
+}
+
+private fun DrawScope.drawColonDot(color: Color, yFraction: Float) {
+    val radius = size.width * 0.45f
+    drawCircle(
+        color = color,
+        radius = radius,
+        center = Offset(x = size.width / 2f, y = size.height * yFraction),
+    )
+}
+
 private fun currentSeconds(): Int =
     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).second
 
-@Composable
-private fun RetryButton(spinning: Boolean, onClick: () -> Unit) {
-    val transition = rememberInfiniteTransition(label = "retry-spin")
-    val angle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = -360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "retry-spin-angle",
-    )
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(40.dp),
-        colors = IconButtonDefaults.iconButtonColors(
-            contentColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.7f),
-        ),
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Refresh,
-            contentDescription = "Re-run alarm prediction",
-            modifier = (if (spinning) Modifier.rotate(angle) else Modifier).size(20.dp),
-        )
-    }
-}
+/**
+ * Shared text style that strips font padding and trims the line-height box so
+ * adjacent rows of LCD/mono text sit flush against each other (Compose's
+ * default `includeFontPadding=true` adds extra leading above tall glyphs).
+ */
+private val TightTextStyle: TextStyle = TextStyle(
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.Both,
+    ),
+)
 
 /**
  * Solid brand-orange tile with white tick marks across the strip and
@@ -200,29 +192,16 @@ private fun SleepTimeline(
     segments: List<SleepSegment>,
     modifier: Modifier = Modifier,
 ) {
+    val tile = MaterialTheme.colorScheme.primary
+    val onTile = MaterialTheme.colorScheme.onPrimary
+    val barColor = onTile.copy(alpha = 0.95f)
     Surface(
-        color = BrandOrange,
+        color = tile,
         shape = RoundedCornerShape(18.dp),
         modifier = modifier
             .fillMaxWidth()
             .height(82.dp),
     ) {
-        if (segments.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "No sleep data yet",
-                    fontFamily = MonoFontFamily,
-                    fontSize = 16.sp,
-                    color = BrandOnOrange.copy(alpha = 0.9f),
-                    textAlign = TextAlign.Center,
-                )
-            }
-            return@Surface
-        }
-
         val tStart = segments.first().start
         val tEnd = segments.last().end
         val totalSpanMs = (tEnd - tStart).inWholeMilliseconds.coerceAtLeast(1)
@@ -247,7 +226,7 @@ private fun SleepTimeline(
                         text = String.format("%02d:%02d", local.hour, local.minute),
                         fontFamily = MonoFontFamily,
                         fontSize = 16.sp,
-                        color = BrandOnOrange,
+                        color = onTile,
                     )
                 }
             }
@@ -261,7 +240,7 @@ private fun SleepTimeline(
                 val h = size.height
                 val midY = h * 0.5f
                 val tickCount = 80
-                val tickColor = BrandOnOrange.copy(alpha = 0.65f)
+                val tickColor = onTile.copy(alpha = 0.65f)
                 for (i in 0 until tickCount) {
                     val x = w * i / (tickCount - 1).toFloat()
                     drawLine(
@@ -271,8 +250,6 @@ private fun SleepTimeline(
                         strokeWidth = 1.2f,
                     )
                 }
-                // Stage overlay bars — near-black horizontal lines across each segment.
-                val barColor = Color(0xFF1A0A04)
                 segments.forEach { seg ->
                     val frac0 = ((seg.start - tStart).inWholeMilliseconds.toFloat() / totalSpanMs).coerceIn(0f, 1f)
                     val frac1 = ((seg.end - tStart).inWholeMilliseconds.toFloat() / totalSpanMs).coerceIn(0f, 1f)
@@ -296,7 +273,7 @@ private fun SleepTimeline(
                         text = seg.stage.name.uppercase(),
                         fontFamily = MonoFontFamily,
                         fontSize = 14.sp,
-                        color = BrandOnOrange,
+                        color = onTile,
                     )
                 }
             }

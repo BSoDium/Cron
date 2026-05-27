@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -119,6 +122,7 @@ private fun NameStep(
     state: OnboardingUiState,
     viewModel: OnboardingViewModel,
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -132,6 +136,32 @@ private fun NameStep(
         )
         Spacer(modifier = Modifier.height(24.dp))
 
+        OutlinedButton(
+            onClick = { viewModel.signInWithGoogle(context) },
+            enabled = !state.isSigningIn,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (state.isSigningIn) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                )
+                Spacer(modifier = Modifier.size(12.dp))
+                Text("Signing in…")
+            } else {
+                Text("Sign in with Google")
+            }
+        }
+        state.signInError?.let {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = state.displayNameInput,
             onValueChange = viewModel::onDisplayNameChanged,
