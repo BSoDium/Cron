@@ -5,12 +5,17 @@ import android.content.Context
 import java.time.LocalTime
 
 /**
- * Resolves the user's display name for the home greeting. We pull the primary
- * Google account name via [AccountManager]; on modern Android, the owning app
- * can read its own primary account's name without holding GET_ACCOUNTS.
+ * Best-effort prefill for the user's display name during onboarding.
  *
- * Returns null if no Google account is available, in which case the UI should
- * render the greeting without a name (e.g. "Good morning").
+ * Since Android 8.0, [AccountManager.getAccountsByType] only returns accounts
+ * that have granted visibility to the calling package. Google accounts created
+ * via Settings → Accounts do not grant visibility to arbitrary third-party
+ * apps, so this almost always returns an empty array on a real device,
+ * regardless of how many Google accounts are signed in.
+ *
+ * Treat the return value strictly as a pre-fill hint for the onboarding name
+ * field — the canonical name lives in `SettingsRepository.displayName`,
+ * captured during onboarding.
  */
 fun resolveGreetingName(context: Context): String? {
     val accounts = runCatching {

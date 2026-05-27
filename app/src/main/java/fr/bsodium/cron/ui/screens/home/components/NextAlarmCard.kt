@@ -8,7 +8,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -63,10 +61,8 @@ fun NextAlarmCard(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(width = 2.dp, color = BrandOrange, shape = RoundedCornerShape(28.dp)),
-        color = MaterialTheme.colorScheme.background,
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.inverseSurface,
         shape = RoundedCornerShape(28.dp),
         tonalElevation = 0.dp,
     ) {
@@ -79,7 +75,7 @@ fun NextAlarmCard(
                     text = dateLabel.ifBlank { "—" },
                     fontFamily = MonoFontFamily,
                     fontSize = 22.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
                     modifier = Modifier
                         .weight(1f)
                         .padding(top = 6.dp),
@@ -93,7 +89,7 @@ fun NextAlarmCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                    .background(MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.2f)),
             )
             Spacer(Modifier.height(18.dp))
             Row(
@@ -104,7 +100,7 @@ fun NextAlarmCard(
                     text = "Sleep",
                     fontFamily = MonoFontFamily,
                     fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
                     modifier = Modifier.weight(1f),
                 )
                 if (sleepDurationLabel != null) {
@@ -147,7 +143,7 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
             fontSize = 76.sp,
             lineHeight = 76.sp,
             fontFamily = LcdFontFamily,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MaterialTheme.colorScheme.inverseOnSurface,
             maxLines = 1,
             softWrap = false,
         )
@@ -156,7 +152,7 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
             fontSize = 24.sp,
             lineHeight = 24.sp,
             fontFamily = LcdFontFamily,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.6f),
             modifier = Modifier.padding(start = 6.dp, top = 6.dp),
             maxLines = 1,
             softWrap = false,
@@ -181,15 +177,15 @@ private fun RetryButton(spinning: Boolean, onClick: () -> Unit) {
     )
     IconButton(
         onClick = onClick,
-        modifier = Modifier
-            .size(48.dp)
-            .background(BrandOrange, CircleShape),
-        colors = IconButtonDefaults.iconButtonColors(contentColor = BrandOnOrange),
+        modifier = Modifier.size(40.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            contentColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.7f),
+        ),
     ) {
         Icon(
             imageVector = Icons.Filled.Refresh,
             contentDescription = "Re-run alarm prediction",
-            modifier = if (spinning) Modifier.rotate(angle) else Modifier,
+            modifier = (if (spinning) Modifier.rotate(angle) else Modifier).size(20.dp),
         )
     }
 }

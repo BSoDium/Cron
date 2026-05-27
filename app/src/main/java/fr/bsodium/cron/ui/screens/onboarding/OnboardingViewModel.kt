@@ -5,16 +5,18 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
+import fr.bsodium.cron.ui.screens.home.resolveGreetingName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class OnboardingStep { Welcome, ApiKey, Permissions, Done }
+enum class OnboardingStep { Welcome, Name, ApiKey, Permissions, Done }
 
 data class OnboardingUiState(
     val step: OnboardingStep = OnboardingStep.Welcome,
+    val displayNameInput: String = "",
     val apiKeyInput: String = "",
     val apiKeySaved: Boolean = false,
     val permissionsGranted: Boolean = false,
@@ -30,10 +32,24 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
     private val _uiState = MutableStateFlow(
         OnboardingUiState(
             step = if (secureStore.hasAnthropicKey()) OnboardingStep.Permissions else OnboardingStep.Welcome,
+            displayNameInput = resolveGreetingName(application).orEmpty(),
             apiKeySaved = secureStore.hasAnthropicKey(),
         )
     )
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
+
+    fun onDisplayNameChanged(name: String) {
+        _uiState.update { it.copy(displayNameInput = name) }
+    }
+
+    fun saveDisplayName() {
+        val name = _uiState.value.displayNameInput.trim()
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            settings.setDisplayName(name)
+        }
+        advance()
+    }
 
     fun onApiKeyChanged(key: String) {
         _uiState.update { it.copy(apiKeyInput = key.trim(), keyError = null) }
@@ -57,7 +73,8 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
     fun advance() {
         val current = _uiState.value.step
         val next = when (current) {
-            OnboardingStep.Welcome -> OnboardingStep.ApiKey
+            OnboardingStep.Welcome -> OnboardingStep.Name
+            OnboardingStep.Name -> OnboardingStep.ApiKey
             OnboardingStep.ApiKey -> OnboardingStep.Permissions
             OnboardingStep.Permissions -> OnboardingStep.Done
             OnboardingStep.Done -> OnboardingStep.Done
