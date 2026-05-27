@@ -22,6 +22,13 @@ data class MessagesRequest(
     val tools: List<ToolDefinition>? = null,
     val tool_choice: ToolChoice? = null,
     val temperature: Double? = null,
+    val thinking: ThinkingConfig? = null,
+)
+
+@Serializable
+data class ThinkingConfig(
+    val type: String = "enabled",
+    @SerialName("budget_tokens") val budgetTokens: Int,
 )
 
 @Serializable
@@ -66,6 +73,18 @@ sealed class ContentBlock {
         val tool_use_id: String,
         val content: String,
         val is_error: Boolean? = null,
+    ) : ContentBlock()
+
+    /**
+     * Anthropic extended thinking block. The `signature` is returned by the
+     * API and must be echoed back verbatim on follow-up turns alongside the
+     * thinking content — see https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
+     */
+    @Serializable
+    @SerialName("thinking")
+    data class Thinking(
+        val thinking: String,
+        val signature: String? = null,
     ) : ContentBlock()
 }
 
