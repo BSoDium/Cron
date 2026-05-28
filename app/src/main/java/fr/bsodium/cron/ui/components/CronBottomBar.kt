@@ -1,10 +1,13 @@
 package fr.bsodium.cron.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,13 +38,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.theme.Radius
 
 /**
  * Floating bottom action bar: a pill housing the three tab icons, optionally
@@ -64,19 +69,31 @@ fun CronFloatingNav(
             .fillMaxWidth()
             .padding(bottom = systemBars.calculateBottomPadding())
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NavPill(currentRoute = currentRoute, onNavigate = onNavigate)
+        FabSlot(fabAction)
+    }
+}
+
+/**
+ * Fixed-size slot for the play FAB. Reserves the layout space regardless of
+ * whether the FAB is currently visible so the nav pill never jumps when the
+ * FAB animates in or out across navigation transitions.
+ */
+@Composable
+private fun FabSlot(fabAction: FabAction?) {
+    Box(
+        modifier = Modifier.size(56.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         AnimatedVisibility(
             visible = fabAction != null,
-            enter = scaleIn() + fadeIn(),
-            exit = scaleOut() + fadeOut(),
+            enter = fadeIn(tween(180)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.85f),
+            exit = fadeOut(tween(140)) + scaleOut(tween(180, easing = FastOutSlowInEasing), targetScale = 0.85f),
         ) {
-            Row {
-                Box(modifier = Modifier.size(12.dp))
-                PrimaryActionFab(fabAction)
-            }
+            PrimaryActionFab(fabAction)
         }
     }
 }
@@ -93,9 +110,9 @@ private fun NavPill(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(50),
+        shape = Radius.full,
         tonalElevation = 6.dp,
-        shadowElevation = 6.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
@@ -118,20 +135,24 @@ private fun RowScope.NavSlot(
     onNavigate: (String) -> Unit,
 ) {
     val selected = currentRoute == route
-    val container = if (selected) MaterialTheme.colorScheme.secondaryContainer
+    val targetContainer = if (selected) MaterialTheme.colorScheme.secondaryContainer
         else MaterialTheme.colorScheme.surfaceContainer
-    val iconTint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+    val targetTint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
         else MaterialTheme.colorScheme.onSurfaceVariant
+    val container by animateColorAsState(targetContainer, animationSpec = NAV_COLOR_SPEC, label = "nav-container")
+    val iconTint by animateColorAsState(targetTint, animationSpec = NAV_COLOR_SPEC, label = "nav-tint")
     Surface(
         color = container,
-        shape = RoundedCornerShape(50),
+        shape = Radius.full,
         modifier = Modifier
             .widthIn(min = 56.dp)
+            // Clip BEFORE clickable so the ripple respects the pill shape
+            // instead of bleeding into a square highlight.
+            .clip(Radius.full)
             .clickable(enabled = !selected) { onNavigate(route) },
     ) {
         Box(
-            modifier = Modifier
-                .size(width = 56.dp, height = 44.dp),
+            modifier = Modifier.size(width = 56.dp, height = 48.dp),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -142,6 +163,8 @@ private fun RowScope.NavSlot(
         }
     }
 }
+
+private val NAV_COLOR_SPEC = tween<Color>(durationMillis = 220, easing = FastOutSlowInEasing)
 
 @Composable
 private fun PrimaryActionFab(action: FabAction?) {
@@ -158,12 +181,14 @@ private fun PrimaryActionFab(action: FabAction?) {
     )
     FloatingActionButton(
         onClick = action.onClick,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(Radius.lg),
         containerColor = MaterialTheme.colorScheme.inverseSurface,
         contentColor = MaterialTheme.colorScheme.inverseOnSurface,
         elevation = FloatingActionButtonDefaults.elevation(
-            defaultElevation = 6.dp,
-            pressedElevation = 8.dp,
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
         ),
     ) {
         Icon(

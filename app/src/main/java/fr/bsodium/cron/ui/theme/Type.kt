@@ -1,8 +1,10 @@
 package fr.bsodium.cron.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
@@ -114,5 +116,53 @@ val Typography: Typography = Typography(
         fontSize = 11.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.06.em,
+    ),
+)
+
+/**
+ * App-specific Typography roles that live outside the Material scale because
+ * they bind to brand fonts (`DisplayFontFamily`, `SerifFontFamily`,
+ * `MonoFontFamily`) rather than the expressive sans. Use these wherever a
+ * `TextStyle.copy(fontFamily = ...)` would otherwise be repeated.
+ */
+object CronTypography {
+    private val tight = TightTextStyle
+
+    /** Date label on the alarm card — "Thursday 28". */
+    val dateLabel: TextStyle = tight.copy(
+        fontFamily = DisplayFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 24.sp,
+        lineHeight = 24.sp,
+    )
+
+    /** AI response prose — the "conclusion" paragraph below the thinking thread. */
+    val bodySerif: TextStyle = TextStyle(
+        fontFamily = SerifFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+    )
+
+    /** Small mono label — sleep stage names, tool-step chips, timeline timestamps. */
+    val labelMono: TextStyle = TextStyle(
+        fontFamily = MonoFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
+    )
+}
+
+/**
+ * Shared no-padding text style for tight headline rows. Stripping the default
+ * font padding lets adjacent rows of LCD/mono text sit flush against each
+ * other (Compose's default `includeFontPadding=true` adds extra leading above
+ * tall glyphs).
+ */
+val TightTextStyle: TextStyle = TextStyle(
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.Both,
     ),
 )

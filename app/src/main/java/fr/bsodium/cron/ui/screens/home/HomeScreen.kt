@@ -5,6 +5,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,12 +22,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +39,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -43,14 +57,12 @@ import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
 @Composable
 fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     val uiState by viewModel.uiState.collectAsState()
-    DisposableEffect(viewModel, uiState.isRetrying) {
-        fabRegistry.set(
-            FabAction(
-                onClick = viewModel::retryAiPlan,
-                spinning = uiState.isRetrying,
-            )
-        )
+    DisposableEffect(viewModel, fabRegistry) {
+        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, spinning = false))
         onDispose { fabRegistry.clear() }
+    }
+    LaunchedEffect(uiState.isRetrying, fabRegistry) {
+        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, spinning = uiState.isRetrying))
     }
 
     val context = LocalContext.current
@@ -78,29 +90,29 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = Spacing.xl),
     ) {
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(Spacing.xxl))
         GreetingHeader(
             prefix = uiState.greetingPrefix,
             name = uiState.greetingName,
             photoUrl = uiState.greetingPhotoUrl,
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(Spacing.xl))
         NextAlarmCard(
             dateLabel = uiState.dateLabel,
             alarmTime = uiState.sessionDisplay?.alarmTime,
             sleepDurationLabel = uiState.sleepStats?.durationLabel,
             sleepSegments = uiState.sleepStats?.segments.orEmpty(),
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(Spacing.xxl))
         val thread = uiState.aiThread
         if (thread != null) {
             AiThinkingThread(thread)
         } else {
-            AiThreadEmptyPlaceholder()
+            EmptyPlanIndicator()
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         if (!hasNotificationPermission) {
             NotificationPermissionRow(
@@ -112,21 +124,54 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                     )
                 },
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(Spacing.xxxl))
     }
 }
 
+/**
+ * Pulsing curved arrow tucked under the alarm card, pointing toward the
+ * play FAB at the bottom-right. Replaces the previous prose hint.
+ */
 @Composable
-private fun AiThreadEmptyPlaceholder(modifier: Modifier = Modifier) {
-    Text(
-        text = "Tap ▶ to plan tomorrow's alarm from your calendar.",
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.fillMaxWidth(),
+private fun EmptyPlanIndicator(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "empty-plan-hint")
+    val alpha by transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "empty-plan-alpha",
     )
+    val drift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "empty-plan-drift",
+    )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = Spacing.xs, end = Spacing.sm),
+        contentAlignment = Alignment.CenterEnd,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.KeyboardDoubleArrowDown,
+            contentDescription = "Tap the play button to plan",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.graphicsLayer {
+                this.alpha = alpha
+                translationY = drift
+            },
+        )
+    }
 }
 
 @Composable
@@ -134,7 +179,7 @@ private fun NotificationPermissionRow(onEnable: () -> Unit, modifier: Modifier =
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(Radius.lg),
         tonalElevation = 0.dp,
     ) {
         Row(

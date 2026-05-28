@@ -46,8 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ToolStep
+import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MonoFontFamily
-import fr.bsodium.cron.ui.theme.SerifFontFamily
+import fr.bsodium.cron.ui.theme.Radius
 
 /**
  * Renders the latest AI turn as a thread:
@@ -180,7 +181,7 @@ private fun ToolStepRow(step: ToolStep) {
             )
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(6.dp),
+                shape = RoundedCornerShape(Radius.sm),
             ) {
                 Text(
                     text = step.name,
@@ -238,11 +239,7 @@ private fun ResponseBody(text: String) {
     }
     Text(
         text = annotated,
-        style = MaterialTheme.typography.bodyLarge.copy(
-            fontFamily = SerifFontFamily,
-            fontSize = 16.sp,
-            lineHeight = 22.sp,
-        ),
+        style = CronTypography.bodySerif,
         color = MaterialTheme.colorScheme.onSurface,
     )
 }
