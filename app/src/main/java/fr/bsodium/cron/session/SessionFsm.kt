@@ -86,6 +86,7 @@ class SessionFsm(
             wakeWindowStart = settings.freeDayWakeStart.first(),
             wakeWindowEnd = settings.freeDayWakeEnd.first(),
             commuteBufferMinutes = settings.commuteBufferMinutes.first(),
+            preparationBufferMinutes = settings.preparationBufferMinutes.first(),
             isFreeDayFallback = true,
             generatedAt = Clock.System.now(),
         )

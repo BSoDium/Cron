@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -60,6 +63,7 @@ fun OnboardingScreen(
 
             when (state.step) {
                 OnboardingStep.Welcome -> WelcomeStep(onNext = viewModel::advance)
+                OnboardingStep.Name -> NameStep(state = state, viewModel = viewModel)
                 OnboardingStep.ApiKey -> ApiKeyStep(state = state, viewModel = viewModel)
                 OnboardingStep.Permissions -> PermissionsStep(
                     onGranted = {
@@ -109,6 +113,71 @@ private fun WelcomeStep(onNext: () -> Unit) {
         Spacer(modifier = Modifier.height(40.dp))
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
             Text("Get started")
+        }
+    }
+}
+
+@Composable
+private fun NameStep(
+    state: OnboardingUiState,
+    viewModel: OnboardingViewModel,
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("What should Cron call you?", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Your name appears in the morning greeting. Stored on this device only.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedButton(
+            onClick = { viewModel.signInWithGoogle(context) },
+            enabled = !state.isSigningIn,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (state.isSigningIn) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                )
+                Spacer(modifier = Modifier.size(12.dp))
+                Text("Signing in…")
+            } else {
+                Text("Sign in with Google")
+            }
+        }
+        state.signInError?.let {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = state.displayNameInput,
+            onValueChange = viewModel::onDisplayNameChanged,
+            label = { Text("Your name") },
+            placeholder = { Text("Elliot") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = viewModel::saveDisplayName,
+            enabled = state.displayNameInput.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Continue")
         }
     }
 }

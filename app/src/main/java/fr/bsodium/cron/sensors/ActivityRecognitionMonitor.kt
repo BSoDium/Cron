@@ -57,6 +57,10 @@ class ActivityRecognitionMonitor(
     }
 
     private var pendingIntent: PendingIntent? = null
+    private var sleepOnsetDetected = false
+
+    fun onSleepOnset() { sleepOnsetDetected = true }
+    fun onWake()       { sleepOnsetDetected = false }
 
     @SuppressLint("WrongConstant") // ContextCompat.RECEIVER_NOT_EXPORTED is the correct compat value for API < 33
     fun start(): Boolean {
@@ -105,6 +109,7 @@ class ActivityRecognitionMonitor(
     }
 
     private fun handleEnter(activity: Int) {
+        if (!sleepOnsetDetected) return
         val type = when (activity) {
             DetectedActivity.STILL -> ActivityType.Still
             DetectedActivity.WALKING -> ActivityType.Walking
