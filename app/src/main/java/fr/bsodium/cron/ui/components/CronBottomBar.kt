@@ -102,8 +102,8 @@ private fun FabSlot(fabAction: FabAction?) {
     ) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(tween(180)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.85f),
-            exit = fadeOut(tween(140)) + scaleOut(tween(180, easing = FastOutSlowInEasing), targetScale = 0.85f),
+            enter = FAB_ENTER,
+            exit = FAB_EXIT,
         ) {
             PrimaryActionFab(fabAction)
         }
@@ -111,7 +111,12 @@ private fun FabSlot(fabAction: FabAction?) {
 }
 
 private val FAB_SLOT_WIDTH = 68.dp // 56dp FAB + 12dp leading gap
-private val FAB_SLOT_SPEC = tween<Dp>(durationMillis = 240, easing = FastOutSlowInEasing)
+private val FAB_SLOT_SPEC = tween<Dp>(durationMillis = 200, easing = FastOutSlowInEasing)
+// A pronounced grow-from-centre + fade so the FAB pops rather than slides in.
+private val FAB_ENTER =
+    fadeIn(tween(180)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.5f)
+private val FAB_EXIT =
+    fadeOut(tween(140)) + scaleOut(tween(180, easing = FastOutSlowInEasing), targetScale = 0.5f)
 
 data class FabAction(
     val onClick: () -> Unit,
