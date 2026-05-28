@@ -2,7 +2,9 @@ package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,15 +14,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,71 +39,88 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.ParagraphStyle
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextIndent
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.mikepenz.markdown.compose.components.MarkdownComponentModel
+import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
+import com.mikepenz.markdown.model.markdownPadding
+import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
-import fr.bsodium.cron.ui.screens.home.ToolStep
+import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MonoFontFamily
 import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.SerifFontFamily
+import fr.bsodium.cron.ui.theme.Spacing
 
 /**
- * Renders the latest AI turn as a thread:
+ * Latest-turn AI thread:
  *
- *   ▸ {summary}                       (collapsible header — only when there
- *   │ ◷ {thinking content}              is actual thinking content)
- *   │
- *   ● Calling {read_calendar}              ✓
- *   ● Calling {set_alarm}                  ✓
- *   ✓ Done
- *   {serif response prose with `chips` and
- *    • bullet lists when the model emits them}
+ *   ( summary line  ⌄ )                               (pill: lighter bg when open)
+ *   🔍 reasoning / narration (sans, markdown)         ← whole process collapses
+ *   🔧 Calling [read_calendar]            12 events      inside the disclosure;
+ *   🔧 Calling [set_alarm]              set for 09:30     rule emerges from pill
+ *   ✓  Done
+ *   {serif response body, full markdown}              ← final answer, always shown
  */
 @Composable
 fun AiThinkingThread(thread: AiThreadUi, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth()) {
-        val showDisclosure = !thread.thinking.isNullOrBlank() ||
-            (!thread.isComplete && thread.response.isNullOrBlank())
-        if (showDisclosure) {
+        val inProgress = !thread.isComplete && thread.response == null
+        if (thread.process.isNotEmpty() || inProgress) {
             ThinkingDisclosure(
                 summary = thread.summary,
-                thinking = thread.thinking,
-                inProgress = !thread.isComplete && thread.response == null,
+                process = thread.process,
+                isComplete = thread.isComplete,
+                inProgress = inProgress,
             )
         }
-        if (thread.toolSteps.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            thread.toolSteps.forEach { step -> ToolStepRow(step) }
-        }
-        if (thread.isComplete) {
-            Spacer(Modifier.height(14.dp))
-            DoneRow()
-        }
         if (!thread.response.isNullOrBlank()) {
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.md + Spacing.xs))
             ResponseBody(thread.response)
         }
     }
 }
 
+private val GUTTER_WIDTH = 28.dp
+private val STEP_ICON_SIZE = 16.dp
+private val ICON_MASK_SIZE = 24.dp
+
 @Composable
-private fun ThinkingDisclosure(summary: String?, thinking: String?, inProgress: Boolean) {
+private fun ThinkingDisclosure(
+    summary: String?,
+    process: List<ProcessItem>,
+    isComplete: Boolean,
+    inProgress: Boolean,
+) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val canExpand = !thinking.isNullOrBlank()
+    val canExpand = process.isNotEmpty()
+    // Pill button: transparent when collapsed; a subtly lighter fill when open,
+    // the same colour the timeline rule uses so the thread reads as emerging
+    // from the pill. Bigger left padding gives the text button-like breathing room.
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .clip(Radius.full)
             .let { if (canExpand) it.clickable { expanded = !expanded } else it }
-            .padding(vertical = 6.dp),
+            .background(
+                if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+                Radius.full,
+            )
+            .heightIn(min = 48.dp)
+            .padding(start = Spacing.lg, top = Spacing.sm, end = Spacing.md, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Text(
             text = summary ?: "Thinking…",
@@ -106,7 +128,7 @@ private fun ThinkingDisclosure(summary: String?, thinking: String?, inProgress: 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f, fill = false),
         )
         if (inProgress) {
             CircularProgressIndicator(
@@ -123,107 +145,161 @@ private fun ThinkingDisclosure(summary: String?, thinking: String?, inProgress: 
         }
     }
     AnimatedVisibility(visible = expanded && canExpand) {
-        // IntrinsicSize.Min gives the vertical divider a height to fill — without it
-        // fillMaxHeight() resolves to zero inside this unconstrained Row.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .padding(top = 4.dp, bottom = 8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Schedule,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(18.dp)
-                    .padding(top = 2.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = thinking.orEmpty(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        TimelineColumn {
+            process.forEach { item ->
+                when (item) {
+                    is ProcessItem.Reasoning -> ProcessTextRow(item.text)
+                    is ProcessItem.Narration -> ProcessTextRow(item.text)
+                    is ProcessItem.Tool -> ToolStepRow(item)
+                }
+            }
+            if (isComplete) DoneRow()
         }
     }
 }
 
 @Composable
-private fun ToolStepRow(step: ToolStep) {
+private fun ThinkingIcon() = Icon(
+    painter = painterResource(R.drawable.ic_thinking),
+    contentDescription = null,
+    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    modifier = Modifier.size(STEP_ICON_SIZE),
+)
+
+@Composable
+private fun ProcessTextRow(text: String) {
+    TimelineRow(icon = { ThinkingIcon() }) {
+        MarkdownBlock(
+            text = text,
+            bodyStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+            serif = false,
+        )
+    }
+}
+
+/** Stacks timeline rows so their per-row [TimelineRow] rules join into one thread. */
+@Composable
+private fun TimelineColumn(content: @Composable () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) { content() }
+}
+
+@Composable
+private fun TimelineRow(
+    icon: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    // The rule shares the open-pill colour so the thread looks continuous with it.
+    val ruleColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val maskColor = MaterialTheme.colorScheme.background
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .height(IntrinsicSize.Min),
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        // Gutter: a full-height rule, with the step icon centered on the row in a
+        // page-coloured disc that masks the rule, leaving a clean gap around it.
+        Box(modifier = Modifier.width(GUTTER_WIDTH)) {
             Box(
                 modifier = Modifier
-                    .size(6.dp)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(50)),
+                    .align(Alignment.TopCenter)
+                    .width(2.dp)
+                    .fillMaxHeight()
+                    .background(ruleColor),
             )
-            Text(
-                text = "Calling",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(Radius.sm),
-            ) {
-                Text(
-                    text = step.name,
-                    fontFamily = MonoFontFamily,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                )
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(ICON_MASK_SIZE)
+                        .clip(CircleShape)
+                        .background(maskColor),
+                    contentAlignment = Alignment.Center,
+                ) { icon() }
             }
         }
-        if (step.isComplete) {
-            Icon(
-                imageVector = Icons.Outlined.CheckCircle,
-                contentDescription = "Done",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
-        } else {
-            CircularProgressIndicator(
-                modifier = Modifier.size(14.dp),
-                strokeWidth = 1.5.dp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Spacer(Modifier.width(Spacing.sm))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(top = Spacing.xs, bottom = Spacing.xs, end = Spacing.md),
+        ) { content() }
+    }
+}
+
+@Composable
+private fun ToolStepRow(step: ProcessItem.Tool) {
+    TimelineRow(icon = {
+        Icon(
+            imageVector = Icons.Rounded.Build,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(STEP_ICON_SIZE),
+        )
+    }) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                Text(
+                    text = "Calling",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(Radius.sm),
+                ) {
+                    Text(
+                        text = step.name,
+                        style = CronTypography.labelMonoSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(Spacing.sm))
+            when {
+                !step.isComplete -> CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                step.contextLabel != null -> Text(
+                    text = step.contextLabel,
+                    style = CronTypography.labelMonoSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = "Done",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(STEP_ICON_SIZE),
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun DoneRow() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    TimelineRow(icon = {
         Icon(
-            imageVector = Icons.Outlined.CheckCircle,
+            imageVector = Icons.Rounded.Check,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(STEP_ICON_SIZE),
         )
+    }) {
         Text(
             text = "Done",
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -231,80 +307,142 @@ private fun DoneRow() {
 
 @Composable
 private fun ResponseBody(text: String) {
-    val accent = MaterialTheme.colorScheme.primary
-    val chipBg = MaterialTheme.colorScheme.surfaceContainerHigh
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    val annotated = remember(text, accent, chipBg, onSurface) {
-        parseMarkdownLite(text, accent, chipBg, onSurface)
-    }
-    Text(
-        text = annotated,
-        style = CronTypography.bodySerif,
-        color = MaterialTheme.colorScheme.onSurface,
+    MarkdownBlock(
+        text = text,
+        bodyStyle = CronTypography.bodySerif.copy(color = MaterialTheme.colorScheme.onSurface),
+        serif = true,
     )
 }
 
 /**
- * Renders a very narrow subset of markdown:
- *   - backtick-delimited tokens as mono orange chips
- *   - `**bold**` tokens as bold spans
- *   - lines starting with `- ` or `* ` as bulleted list items with a hanging
- *     indent so wrapped continuations align under the text, not the bullet
- *
- * Anything else passes through untouched.
+ * Themed markdown renderer. The thinking area passes `serif = false` (sans
+ * everything); the final response passes `serif = true` (serif body *and*
+ * headers). Tables render through [CronMarkdownTable] — a full-grid,
+ * horizontally scrollable, borders-only table.
  */
-private fun parseMarkdownLite(
+@Composable
+private fun MarkdownBlock(
     text: String,
-    accent: androidx.compose.ui.graphics.Color,
-    chipBg: androidx.compose.ui.graphics.Color,
-    bodyColor: androidx.compose.ui.graphics.Color,
-): AnnotatedString = buildAnnotatedString {
-    val bulletRe = Regex("^[-*]\\s+(.+)$")
-    val lines = text.split('\n')
-
-    lines.forEachIndexed { lineIndex, rawLine ->
-        if (lineIndex > 0) append("\n")
-        val bulletMatch = bulletRe.matchEntire(rawLine)
-        if (bulletMatch != null) {
-            val content = bulletMatch.groupValues[1]
-            withStyle(ParagraphStyle(textIndent = TextIndent(firstLine = 0.sp, restLine = 16.sp))) {
-                append("•  ")
-                appendInline(content, accent, chipBg, bodyColor)
-            }
-        } else {
-            appendInline(rawLine, accent, chipBg, bodyColor)
-        }
-    }
-}
-
-private fun androidx.compose.ui.text.AnnotatedString.Builder.appendInline(
-    line: String,
-    accent: androidx.compose.ui.graphics.Color,
-    chipBg: androidx.compose.ui.graphics.Color,
-    bodyColor: androidx.compose.ui.graphics.Color,
+    bodyStyle: TextStyle,
+    serif: Boolean,
+    modifier: Modifier = Modifier,
 ) {
-    val codeRe = Regex("`([^`]+)`")
-    val boldRe = Regex("\\*\\*([^*]+)\\*\\*")
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val surfaceHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val outline = MaterialTheme.colorScheme.outlineVariant
 
-    data class Token(val start: Int, val end: Int, val kind: String, val content: String)
-    val tokens = mutableListOf<Token>()
-    codeRe.findAll(line).forEach { m -> tokens.add(Token(m.range.first, m.range.last + 1, "code", m.groupValues[1])) }
-    boldRe.findAll(line).forEach { m -> tokens.add(Token(m.range.first, m.range.last + 1, "bold", m.groupValues[1])) }
-    tokens.sortBy { it.start }
+    val colors = markdownColor(
+        text = bodyStyle.color.takeIf { it.alpha > 0f } ?: onSurface,
+        codeBackground = surfaceHigh,
+        inlineCodeBackground = surfaceHigh,
+        dividerColor = outline,
+        tableBackground = Color.Transparent,
+    )
+    val serifize: (TextStyle) -> TextStyle =
+        { if (serif) it.copy(fontFamily = SerifFontFamily) else it }
+    val typography = markdownTypography(
+        h1 = serifize(MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
+        h2 = serifize(MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
+        h3 = serifize(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
+        h4 = serifize(MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium, color = onSurface)),
+        h5 = serifize(MaterialTheme.typography.labelLarge.copy(color = onSurface)),
+        h6 = serifize(MaterialTheme.typography.labelMedium.copy(color = onSurfaceVariant)),
+        text = bodyStyle,
+        paragraph = bodyStyle,
+        bullet = bodyStyle,
+        list = bodyStyle,
+        ordered = bodyStyle,
+        quote = bodyStyle.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+        code = bodyStyle.copy(fontFamily = MonoFontFamily, color = onSurface),
+        inlineCode = bodyStyle.copy(fontFamily = MonoFontFamily, color = onSurface),
+        textLink = androidx.compose.ui.text.TextLinkStyles(
+            style = androidx.compose.ui.text.SpanStyle(color = MaterialTheme.colorScheme.primary),
+        ),
+    )
+    Markdown(
+        content = text,
+        colors = colors,
+        typography = typography,
+        // Tighter than before — paragraphs/headers no longer feel too airy.
+        padding = markdownPadding(block = Spacing.md),
+        components = markdownComponents(
+            table = { model -> CronMarkdownTable(model, bodyStyle) },
+        ),
+        modifier = modifier,
+    )
+}
 
-    var cursor = 0
-    for (t in tokens) {
-        if (t.start < cursor) continue
-        if (t.start > cursor) append(line.substring(cursor, t.start))
-        when (t.kind) {
-            "code" -> withStyle(SpanStyle(fontFamily = MonoFontFamily, color = accent, background = chipBg)) {
-                append(" ${t.content} ")
+/**
+ * Full-grid, borders-only, horizontally scrollable table. Parses the GFM table
+ * source from the AST node range, sizes each column to its widest cell (so wide
+ * tables scroll rather than wrap), and outlines every cell on all four sides.
+ */
+@Composable
+private fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextStyle) {
+    val start = model.node.startOffset.coerceIn(0, model.content.length)
+    val end = model.node.endOffset.coerceIn(start, model.content.length)
+    val source = model.content.substring(start, end)
+    val rows = remember(source) { parseGfmTable(source) }
+    if (rows.isEmpty()) return
+
+    val border = MaterialTheme.colorScheme.outlineVariant
+    val headerStyle = cellStyle.copy(fontWeight = FontWeight.SemiBold)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val numCols = rows.maxOf { it.size }
+    val colWidths = remember(rows, headerStyle) {
+        (0 until numCols).map { c ->
+            val widest = rows.maxOf { row ->
+                measurer.measure(AnnotatedString(row.getOrElse(c) { "" }), headerStyle).size.width
             }
-            "bold" -> withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = bodyColor)) {
-                append(t.content)
+            with(density) { widest.toDp() } + Spacing.sm * 2 + Spacing.xs
+        }
+    }
+
+    Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        rows.forEachIndexed { r, row ->
+            Row {
+                (0 until numCols).forEach { c ->
+                    Box(
+                        modifier = Modifier
+                            .width(colWidths[c])
+                            .border(1.dp, border)
+                            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                    ) {
+                        Text(
+                            text = row.getOrElse(c) { "" },
+                            style = if (r == 0) headerStyle else cellStyle,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
-        cursor = t.end
     }
-    if (cursor < line.length) append(line.substring(cursor))
 }
+
+// Hoisted so they compile once, not on every cell of every table render.
+private val TABLE_DELIMITER_CELL = Regex(":?-+:?")
+private val MD_BOLD = Regex("\\*\\*(.+?)\\*\\*")
+private val MD_BOLD_ALT = Regex("__(.+?)__")
+private val MD_ITALIC = Regex("\\*(.+?)\\*")
+private val MD_INLINE_CODE = Regex("`(.+?)`")
+
+/** Parse a GFM table block into rows of cell text, dropping the `---|---` delimiter row. */
+private fun parseGfmTable(raw: String): List<List<String>> {
+    val rows = raw.trim().lines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { line ->
+            line.removePrefix("|").removeSuffix("|").split("|").map { stripInlineMarks(it.trim()) }
+        }
+    return rows.filterNot { row -> row.isNotEmpty() && row.all { it.matches(TABLE_DELIMITER_CELL) } }
+}
+
+/** Strip the common inline emphasis/code markers so cells don't show literal `**`/`` ` ``. */
+private fun stripInlineMarks(s: String): String = s
+    .replace(MD_BOLD, "$1")
+    .replace(MD_BOLD_ALT, "$1")
+    .replace(MD_ITALIC, "$1")
+    .replace(MD_INLINE_CODE, "$1")

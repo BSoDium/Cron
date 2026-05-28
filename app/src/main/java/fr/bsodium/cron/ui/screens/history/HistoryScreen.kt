@@ -3,12 +3,15 @@ package fr.bsodium.cron.ui.screens.history
 import android.app.Application
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +31,9 @@ import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.SessionEntity
 import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.session.model.Instruction
+import fr.bsodium.cron.ui.components.ScreenTitle
+import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -46,20 +52,21 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
 @Composable
 fun HistoryScreen(viewModel: HistoryViewModel) {
     val sessions by viewModel.sessions.collectAsState()
+    val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = Spacing.xl,
+            end = Spacing.xl,
+            top = statusInsetTop + Spacing.xxl,
+            bottom = navBottomInset + Spacing.navBarClearance,
+        ),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        item {
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = "History",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(12.dp))
+        item(key = "title") {
+            ScreenTitle("History", modifier = Modifier.padding(bottom = Spacing.sm))
         }
         if (sessions.isEmpty()) {
             item {
@@ -73,7 +80,6 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
         items(sessions, key = { it.id }) { session ->
             HistoryRow(session)
         }
-        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -84,7 +90,7 @@ private fun HistoryRow(entity: SessionEntity) {
     }.getOrNull()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(Radius.lg),
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp,
     ) {

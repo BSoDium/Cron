@@ -34,8 +34,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.time.LocalDate as JavaLocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -61,16 +66,22 @@ data class SleepStatsUi(
 data class AiThreadUi(
     val turnIndex: Int,
     val summary: String?,
-    val thinking: String?,
-    val toolSteps: List<ToolStep>,
+    val process: List<ProcessItem>,
     val response: String?,
     val isComplete: Boolean,
 )
 
-data class ToolStep(
-    val name: String,
-    val isComplete: Boolean,
-)
+/** One ordered step of the assistant's thinking process, shown inside the collapsible. */
+sealed interface ProcessItem {
+    data class Reasoning(val text: String) : ProcessItem
+    data class Narration(val text: String) : ProcessItem
+    data class Tool(
+        val name: String,
+        val isComplete: Boolean,
+        /** Short result summary (e.g. "12 events"), shown in place of a checkmark. */
+        val contextLabel: String? = null,
+    ) : ProcessItem
+}
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -217,46 +228,63 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (assistantRows.isEmpty()) return AiThreadUi(
             turnIndex = latestTurn,
             summary = "Thinking…",
-            thinking = null,
-            toolSteps = emptyList(),
+            process = emptyList(),
             response = null,
             isComplete = false,
         )
 
-        val allAssistantBlocks = assistantRows.flatMap { decodeBlocks(it.contentJson) }
+        val blocks = assistantRows.flatMap { decodeBlocks(it.contentJson) }
         val toolResults = userRows
             .flatMap { decodeBlocks(it.contentJson) }
             .filterIsInstance<ContentBlock.ToolResult>()
             .associateBy { it.tool_use_id }
 
-        val thinking = allAssistantBlocks
-            .filterIsInstance<ContentBlock.Thinking>()
-            .joinToString(separator = "\n\n") { it.thinking }
-            .takeIf { it.isNotBlank() }
-        val toolSteps = allAssistantBlocks
-            .filterIsInstance<ContentBlock.ToolUse>()
-            .map { use ->
-                ToolStep(name = use.name, isComplete = toolResults.containsKey(use.id))
-            }
-        val response = allAssistantBlocks
+        // The final answer is the trailing run of Text blocks — those after the
+        // last non-text block (a tool call or reasoning). Text emitted before or
+        // between tool calls is narration that belongs to the thinking process,
+        // not the output, so collapsing the disclosure hides it.
+        val answerStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
+        val response = blocks.drop(answerStart)
             .filterIsInstance<ContentBlock.Text>()
             .joinToString(separator = "\n\n") { it.text }
+            .let(::stripLeadingRule)
             .takeIf { it.isNotBlank() }
-        // Summary is a tiny disclosure preview for the thinking content, not a
-        // copy of the response — that would duplicate text already shown below.
-        val summary = thinking
+
+        val process = blocks.take(answerStart).mapNotNull { block ->
+            when (block) {
+                is ContentBlock.Thinking ->
+                    block.thinking.takeIf { it.isNotBlank() }?.let { ProcessItem.Reasoning(it) }
+                is ContentBlock.Text ->
+                    block.text.takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
+                is ContentBlock.ToolUse -> {
+                    val result = toolResults[block.id]
+                    ProcessItem.Tool(
+                        name = block.name,
+                        isComplete = result != null,
+                        contextLabel = result
+                            ?.takeIf { it.is_error != true }
+                            ?.let { summarizeToolResult(block.name, it.content) },
+                    )
+                }
+                is ContentBlock.ToolResult -> null
+            }
+        }
+
+        // Summary is a tiny disclosure preview for the process, not a copy of the
+        // response — that would duplicate text already shown below.
+        val summary = process
+            .firstNotNullOfOrNull { (it as? ProcessItem.Reasoning)?.text ?: (it as? ProcessItem.Narration)?.text }
             ?.lineSequence()
             ?.firstOrNull { it.isNotBlank() }
             ?.take(80)
-        val isComplete = response != null && allAssistantBlocks
+        val isComplete = response != null && blocks
             .filterIsInstance<ContentBlock.ToolUse>()
             .all { toolResults.containsKey(it.id) }
 
         return AiThreadUi(
             turnIndex = latestTurn,
             summary = summary,
-            thinking = thinking,
-            toolSteps = toolSteps,
+            process = process,
             response = response,
             isComplete = isComplete,
         )
@@ -267,6 +295,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
         .onFailure { Log.w(TAG, "decode AI content blocks failed", it) }
         .getOrElse { emptyList() }
+
+    /** Drop a leading thematic break (e.g. "---") the model sometimes prefixes the answer with. */
+    private fun stripLeadingRule(text: String): String {
+        val lines = text.trimStart().lines()
+        val first = lines.firstOrNull()?.trim().orEmpty()
+        return if (first.matches(Regex("([-*_])\\1{2,}"))) {
+            lines.drop(1).joinToString("\n").trimStart()
+        } else {
+            text
+        }
+    }
+
+    /** Condense a tool's JSON result into a one-line status label, or null if not worth showing. */
+    private fun summarizeToolResult(name: String, content: String): String? = runCatching {
+        val obj = SessionJson.parseToJsonElement(content).jsonObject
+        when (name) {
+            "read_calendar" -> {
+                val n = obj["events"]?.jsonArray?.size ?: 0
+                if (n == 1) "1 event" else "$n events"
+            }
+            "set_alarm" -> obj["alarm_time"]?.jsonPrimitive?.content?.let { iso ->
+                val local = Instant.parse(iso).toLocalDateTime(TimeZone.currentSystemDefault())
+                String.format(Locale.US, "set for %02d:%02d", local.hour, local.minute)
+            }
+            "cancel_alarm" -> "cancelled"
+            "estimate_commute" -> obj["duration_sec"]?.jsonPrimitive?.content?.toLongOrNull()
+                ?.let { "${it / 60} min" }
+            "geocode_address" -> obj["formatted"]?.jsonPrimitive?.content?.take(28)
+            else -> null
+        }
+    }.onFailure { Log.w(TAG, "summarize tool result failed for $name", it) }.getOrNull()
 
     private fun formatDateLabel(): String {
         val today = JavaLocalDate.now()

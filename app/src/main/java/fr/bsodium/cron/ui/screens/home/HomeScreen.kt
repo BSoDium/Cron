@@ -11,17 +11,22 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material3.Icon
@@ -42,8 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.theme.Radius
-import fr.bsodium.cron.ui.theme.Spacing
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -53,7 +56,10 @@ import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
+import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     val uiState by viewModel.uiState.collectAsState()
@@ -86,54 +92,69 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = Spacing.xl),
+    val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = Spacing.xl,
+            end = Spacing.xl,
+            top = statusInsetTop + Spacing.xxl,
+            bottom = navInsetBottom + Spacing.navBarClearance,
+        ),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xl),
     ) {
-        Spacer(Modifier.height(Spacing.xxl))
-        GreetingHeader(
-            prefix = uiState.greetingPrefix,
-            name = uiState.greetingName,
-            photoUrl = uiState.greetingPhotoUrl,
-        )
-        Spacer(Modifier.height(Spacing.xl))
-        NextAlarmCard(
-            dateLabel = uiState.dateLabel,
-            alarmTime = uiState.sessionDisplay?.alarmTime,
-            sleepDurationLabel = uiState.sleepStats?.durationLabel,
-            sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-        )
-        Spacer(Modifier.height(Spacing.xxl))
-        val thread = uiState.aiThread
-        if (thread != null) {
-            AiThinkingThread(thread)
-        } else {
-            EmptyPlanIndicator()
-        }
-        Spacer(Modifier.height(Spacing.lg))
-
-        if (!hasNotificationPermission) {
-            NotificationPermissionRow(
-                onEnable = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        }
-                    )
-                },
+        item(key = "greeting") {
+            GreetingHeader(
+                prefix = uiState.greetingPrefix,
+                name = uiState.greetingName,
+                photoUrl = uiState.greetingPhotoUrl,
             )
-            Spacer(Modifier.height(Spacing.lg))
         }
-
-        Spacer(Modifier.height(Spacing.xxxl))
+        // Wrap the card in an opaque background so the greeting doesn't bleed
+        // through the rounded card's transparent corners during sticky transit.
+        stickyHeader(key = "alarm") {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(vertical = Spacing.xs),
+            ) {
+                NextAlarmCard(
+                    dateLabel = uiState.dateLabel,
+                    alarmTime = uiState.sessionDisplay?.alarmTime,
+                    sleepDurationLabel = uiState.sleepStats?.durationLabel,
+                    sleepSegments = uiState.sleepStats?.segments.orEmpty(),
+                )
+            }
+        }
+        item(key = "thread") {
+            val thread = uiState.aiThread
+            if (thread != null) {
+                AiThinkingThread(thread)
+            } else {
+                EmptyPlanIndicator()
+            }
+        }
+        if (!hasNotificationPermission) {
+            item(key = "notif-permission") {
+                NotificationPermissionRow(
+                    onEnable = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            }
+                        )
+                    },
+                )
+            }
+        }
     }
 }
 
 /**
- * Pulsing curved arrow tucked under the alarm card, pointing toward the
- * play FAB at the bottom-right. Replaces the previous prose hint.
+ * Pulsing chevron tucked under the alarm card, pointing toward the play FAB
+ * at the bottom-right. Replaces the previous prose hint.
  */
 @Composable
 private fun EmptyPlanIndicator(modifier: Modifier = Modifier) {
