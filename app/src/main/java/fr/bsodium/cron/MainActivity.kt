@@ -106,10 +106,14 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                 ) { innerPadding ->
+                    // Only apply the top inset so screen content can scroll *under*
+                    // the transparent area around the floating nav pill. Each
+                    // scrollable screen carries its own bottom contentPadding to
+                    // keep the last item from being permanently obscured.
                     NavHost(
                         navController = navController,
                         startDestination = startDestination,
-                        modifier = Modifier.padding(innerPadding),
+                        modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
                     ) {
                         composable(
                             route = "onboarding",

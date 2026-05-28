@@ -3,23 +3,30 @@ package fr.bsodium.cron.ui.screens.history
 import android.app.Application
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
@@ -28,6 +35,8 @@ import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.SessionEntity
 import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.session.model.Instruction
+import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -43,37 +52,47 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(viewModel: HistoryViewModel) {
     val sessions by viewModel.sessions.collectAsState()
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = "History",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            LargeTopAppBar(
+                title = { Text(text = "History") },
+                scrollBehavior = scrollBehavior,
             )
-            Spacer(Modifier.height(12.dp))
-        }
-        if (sessions.isEmpty()) {
-            item {
-                Text(
-                    text = "No past sessions yet — Cron will start logging them tonight.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = innerPadding.calculateTopPadding()),
+            contentPadding = PaddingValues(
+                start = Spacing.xl,
+                end = Spacing.xl,
+                top = Spacing.sm,
+                bottom = navBottomInset + 96.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            if (sessions.isEmpty()) {
+                item {
+                    Text(
+                        text = "No past sessions yet — Cron will start logging them tonight.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            items(sessions, key = { it.id }) { session ->
+                HistoryRow(session)
             }
         }
-        items(sessions, key = { it.id }) { session ->
-            HistoryRow(session)
-        }
-        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -84,7 +103,7 @@ private fun HistoryRow(entity: SessionEntity) {
     }.getOrNull()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(Radius.lg),
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp,
     ) {

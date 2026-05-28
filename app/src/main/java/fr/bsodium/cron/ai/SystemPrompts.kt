@@ -75,6 +75,9 @@ object SystemPrompts {
         send_brief / do_nothing) as a tool. After calling the terminal tool, you may emit a
         single short text block summarising what you did — this is optional and not used for
         scheduling, only for logging.
+
+        Style: do not use emojis or pictographs anywhere in your output. The UI renders full
+        Markdown — use headers, lists, bold, inline code, and tables for structure.
     """.trimIndent()
 
     /**
@@ -111,5 +114,8 @@ object SystemPrompts {
           outweigh phone heuristics (confidence: low).
 
         Be terse. Each turn should call exactly one terminal tool and then stop.
+
+        Style: do not use emojis or pictographs anywhere in your output. The UI renders full
+        Markdown — use headers, lists, bold, inline code, and tables for structure.
     """.trimIndent()
 }

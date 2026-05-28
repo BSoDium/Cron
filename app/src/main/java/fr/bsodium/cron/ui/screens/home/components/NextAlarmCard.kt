@@ -44,8 +44,12 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 
@@ -105,21 +109,20 @@ fun NextAlarmCard(
 
 @Composable
 private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier) {
-    // Live seconds tick — only re-emits every second.
-    val seconds by produceState(initialValue = currentSeconds()) {
+    // Tick once a minute so the countdown stays current without flickering.
+    val countdown by produceState<HoursMinutes?>(initialValue = computeCountdown(alarmTime), alarmTime) {
         while (true) {
-            value = currentSeconds()
-            delay(1_000)
+            value = computeCountdown(alarmTime)
+            delay(60_000)
         }
     }
     val pending = alarmTime == null
     // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
     val hh = alarmTime?.let { String.format(Locale.US, "%02d", it.hour) } ?: "00"
     val mm = alarmTime?.let { String.format(Locale.US, "%02d", it.minute) } ?: "00"
-    val ss = if (pending) "00" else String.format(Locale.US, "%02d", seconds)
     val base = MaterialTheme.colorScheme.onSurface
     val digitColor = if (pending) base.copy(alpha = 0.22f) else base
-    val ssColor = if (pending) base.copy(alpha = 0.16f) else base.copy(alpha = 0.6f)
+    val countdownColor = if (pending) base.copy(alpha = 0.16f) else base.copy(alpha = 0.6f)
 
     val lcdStyle = TightTextStyle.copy(
         fontFamily = LcdFontFamily,
@@ -139,19 +142,53 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
                 .padding(horizontal = 8.dp),
         )
         Text(text = mm, color = digitColor, style = lcdStyle, maxLines = 1, softWrap = false)
-        Text(
-            text = ss,
-            color = ssColor,
-            style = TightTextStyle.copy(
-                fontFamily = LcdFontFamily,
-                fontSize = 24.sp,
-                lineHeight = 24.sp,
-            ),
+        CountdownStack(
+            countdown = countdown,
+            color = countdownColor,
             modifier = Modifier.padding(start = 6.dp, top = 6.dp),
-            maxLines = 1,
-            softWrap = false,
         )
     }
+}
+
+private data class HoursMinutes(val hours: Long, val minutes: Long)
+
+/**
+ * Two-line LCD stack ("8H" / "12M") showing time remaining until the alarm.
+ * Renders dim placeholders when no alarm is set.
+ */
+@Composable
+private fun CountdownStack(
+    countdown: HoursMinutes?,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val smallLcd = TightTextStyle.copy(
+        fontFamily = LcdFontFamily,
+        fontSize = 24.sp,
+        lineHeight = 26.sp,
+    )
+    val (top, bottom) = if (countdown == null) "——H" to "——M"
+    else String.format(Locale.US, "%dH", countdown.hours) to
+        String.format(Locale.US, "%dM", countdown.minutes)
+    Column(modifier = modifier) {
+        Text(text = top, color = color, style = smallLcd, maxLines = 1, softWrap = false)
+        Text(text = bottom, color = color, style = smallLcd, maxLines = 1, softWrap = false)
+    }
+}
+
+/**
+ * Distance from `now` to the next occurrence of [alarmTime] (today if it's
+ * still ahead, otherwise tomorrow). Returns null when no alarm is set.
+ */
+private fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
+    if (alarmTime == null) return null
+    val tz = TimeZone.currentSystemDefault()
+    val nowLocal = Clock.System.now().toLocalDateTime(tz)
+    val targetDate = if (alarmTime > nowLocal.time) nowLocal.date else nowLocal.date.plus(1, DateTimeUnit.DAY)
+    val targetInstant = LocalDateTime(targetDate, alarmTime).toInstant(tz)
+    val remaining = targetInstant - Clock.System.now()
+    val totalMinutes = remaining.inWholeMinutes.coerceAtLeast(0)
+    return HoursMinutes(hours = totalMinutes / 60, minutes = totalMinutes % 60)
 }
 
 /** Two small filled dots stacked vertically — replaces the chunky Major Mono colon. */
@@ -171,9 +208,6 @@ private fun DrawScope.drawColonDot(color: Color, yFraction: Float) {
         center = Offset(x = size.width / 2f, y = size.height * yFraction),
     )
 }
-
-private fun currentSeconds(): Int =
-    Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).second
 
 /**
  * Shifts [text] left by the first glyph's side bearing so the painted ink
