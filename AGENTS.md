@@ -5,9 +5,10 @@ These rules exist because LLM passes have repeatedly violated them. Follow them 
 ## Visual design
 
 - The design is flat. **Do not** add `Modifier.shadow(...)`, `shadowElevation > 0`, or any `FloatingActionButtonDefaults.elevation` with non-zero values. Convey depth through `tonalElevation` and `MaterialTheme.colorScheme.surfaceContainer*` shades only.
-- Use the design tokens in `ui/theme/Tokens.kt` (`Spacing`, `Radius`) instead of literal `dp` constants for paddings, spacers, and `RoundedCornerShape`. Add a new token before reaching for a literal.
-- Use the named roles in `Type.kt` — `CronTypography.dateLabel`, `bodySerif`, `labelMono`, plus the Material 3 scale — rather than `TextStyle.copy(fontFamily = ...)` inline. If you find yourself copying a `TextStyle` in three or more sites, add a new role.
+- Use the design tokens in `ui/theme/Tokens.kt` (`Spacing`, `Radius`) instead of literal `dp` constants for paddings, spacers, and `RoundedCornerShape`. Add a new token before reaching for a literal. Clearance reserved below content for the floating nav pill / FAB is the `Spacing.navBarClearance` token — not a per-screen `+ 96.dp` literal.
+- Use the named roles in `Type.kt` — `CronTypography.dateLabel`, `bodySerif`, `labelMono`, `pageTitle`, plus the Material 3 scale — rather than `TextStyle.copy(fontFamily = ...)` inline. If you find yourself copying a `TextStyle` in three or more sites, add a new role.
 - Never rotate a Material icon to fake another direction. Pick a different icon, or commit a custom vector under `res/drawable/`.
+- Converting a Material Symbols SVG (`viewBox="0 -960 960 960"`) to a vector drawable: wrap the path in `<group android:translateY="960">`. That's the correct coordinate mapping into Android's 0-based viewport, **not** an icon flip — see `res/drawable/ic_thinking.xml`. Don't "fix" it.
 
 ## Locale & formatting
 
@@ -20,7 +21,8 @@ These rules exist because LLM passes have repeatedly violated them. Follow them 
 - When reading `LocalFontFamilyResolver.current.resolve(...).value`, cast with `as? Typeface`, never `as Typeface`. The resolver returns `State<Any>`; resolution can fail and the platform contract isn't pinned to Typeface.
 - Don't capture the typeface inside a bare `remember(...)` if the font family contains downloadable fallbacks — measurement will use the fallback and never update. List bundled `Font(R.font.*)` first so resolution is synchronous, or observe via `produceState` keyed on the resolved typeface.
 - `DisposableEffect(...)` keys should be the things whose change *requires* tearing down and re-registering — not every state value the effect happens to read. If a value only needs to update an existing registration, use a `LaunchedEffect` or `SideEffect`. (See `HomeScreen.kt`'s split between `DisposableEffect(viewModel, fabRegistry)` for register/clear and `LaunchedEffect(isRetrying, ...)` for spinner updates.)
-- Hoist `AnimationSpec` instances to `private val` constants at file top, not inside the composable body — they allocate on every recomposition otherwise. See `NAV_COLOR_SPEC` in `CronBottomBar.kt`.
+- Hoist pure heavyweight objects to `private val` constants at file top — `AnimationSpec` (see `NAV_COLOR_SPEC` in `CronBottomBar.kt`) **and** `Regex` literals (see the `MD_*` patterns in `AiThinkingThread.kt`). A `Regex(...)` built inside a function that runs during composition recompiles on every call. Conversely, never wrap a `@Composable` factory (`markdownColor`, `markdownTypography`, `markdownComponents`, any `rememberX`) in `remember { }` — they must be invoked in composition; memoize the plain values they feed instead (e.g. `remember(source) { parseGfmTable(source) }`).
+- `Modifier.padding(...)` overloads don't mix: `start/top/end/bottom` and `horizontal/vertical` are separate overloads, so `padding(start = …, vertical = …)` does not compile. Pick one set. (This broke a build.)
 - Inner clickable rows must hit a minimum 48dp touch target. Don't ship a 44dp pill because it "looks right" — bump the inner box; the visual radius will absorb it.
 - Apply `Modifier.clip(shape)` **before** `.clickable(...)` so the ripple respects the shape. Putting `clickable` first gives you a square highlight on a rounded surface.
 
@@ -48,5 +50,6 @@ These rules exist because LLM passes have repeatedly violated them. Follow them 
   ```sh
   JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
   ```
+- CI runs `:app:lintDebug` and fails the build on lint **errors** (not warnings) — e.g. `UnusedMaterial3ScaffoldPaddingParameter`. Run `./gradlew :app:lintDebug` alongside `assembleDebug` before declaring a UI task done; `assembleDebug` passing locally is not enough. An intentionally-ignored Scaffold padding parameter in an edge-to-edge layout needs `@Suppress("UnusedMaterial3ScaffoldPaddingParameter")` on the enclosing function.
 - If a task spans 3+ steps, use TaskCreate to track them and mark `completed` as soon as each is done — don't batch.
 - Don't run destructive git operations (`reset --hard`, force-push, branch deletion) without explicit user approval; the redesign branch carries hand-tuned visual work that doesn't always show up in diffs.

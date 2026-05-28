@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,7 +49,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.mikepenz.markdown.compose.components.MarkdownComponentModel
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.Markdown
@@ -179,11 +179,7 @@ private fun ProcessTextRow(text: String) {
     }
 }
 
-/**
- * Wraps a vertical sequence of rows in a single timeline column — the children
- * inherit a left-side rule via [TimelineRow]. Groups the reasoning, tool-step
- * rows, and the "Done" marker under a single visual thread.
- */
+/** Stacks timeline rows so their per-row [TimelineRow] rules join into one thread. */
 @Composable
 private fun TimelineColumn(content: @Composable () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) { content() }
@@ -262,7 +258,7 @@ private fun ToolStepRow(step: ProcessItem.Tool) {
                 ) {
                     Text(
                         text = step.name,
-                        style = CronTypography.labelMono.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                        style = CronTypography.labelMonoSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.dp),
                     )
@@ -277,7 +273,7 @@ private fun ToolStepRow(step: ProcessItem.Tool) {
                 )
                 step.contextLabel != null -> Text(
                     text = step.contextLabel,
-                    style = CronTypography.labelMono.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                    style = CronTypography.labelMonoSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 else -> Icon(
@@ -386,7 +382,8 @@ private fun MarkdownBlock(
 private fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextStyle) {
     val start = model.node.startOffset.coerceIn(0, model.content.length)
     val end = model.node.endOffset.coerceIn(start, model.content.length)
-    val rows = parseGfmTable(model.content.substring(start, end))
+    val source = model.content.substring(start, end)
+    val rows = remember(source) { parseGfmTable(source) }
     if (rows.isEmpty()) return
 
     val border = MaterialTheme.colorScheme.outlineVariant
@@ -394,11 +391,13 @@ private fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextStyl
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val numCols = rows.maxOf { it.size }
-    val colWidths = (0 until numCols).map { c ->
-        val widest = rows.maxOf { row ->
-            measurer.measure(AnnotatedString(row.getOrElse(c) { "" }), headerStyle).size.width
+    val colWidths = remember(rows, headerStyle) {
+        (0 until numCols).map { c ->
+            val widest = rows.maxOf { row ->
+                measurer.measure(AnnotatedString(row.getOrElse(c) { "" }), headerStyle).size.width
+            }
+            with(density) { widest.toDp() } + Spacing.sm * 2 + Spacing.xs
         }
-        with(density) { widest.toDp() } + Spacing.sm * 2 + Spacing.xs
     }
 
     Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
@@ -423,6 +422,13 @@ private fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextStyl
     }
 }
 
+// Hoisted so they compile once, not on every cell of every table render.
+private val TABLE_DELIMITER_CELL = Regex(":?-+:?")
+private val MD_BOLD = Regex("\\*\\*(.+?)\\*\\*")
+private val MD_BOLD_ALT = Regex("__(.+?)__")
+private val MD_ITALIC = Regex("\\*(.+?)\\*")
+private val MD_INLINE_CODE = Regex("`(.+?)`")
+
 /** Parse a GFM table block into rows of cell text, dropping the `---|---` delimiter row. */
 private fun parseGfmTable(raw: String): List<List<String>> {
     val rows = raw.trim().lines()
@@ -431,12 +437,12 @@ private fun parseGfmTable(raw: String): List<List<String>> {
         .map { line ->
             line.removePrefix("|").removeSuffix("|").split("|").map { stripInlineMarks(it.trim()) }
         }
-    return rows.filterNot { row -> row.isNotEmpty() && row.all { it.matches(Regex(":?-+:?")) } }
+    return rows.filterNot { row -> row.isNotEmpty() && row.all { it.matches(TABLE_DELIMITER_CELL) } }
 }
 
 /** Strip the common inline emphasis/code markers so cells don't show literal `**`/`` ` ``. */
 private fun stripInlineMarks(s: String): String = s
-    .replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")
-    .replace(Regex("__(.+?)__"), "$1")
-    .replace(Regex("\\*(.+?)\\*"), "$1")
-    .replace(Regex("`(.+?)`"), "$1")
+    .replace(MD_BOLD, "$1")
+    .replace(MD_BOLD_ALT, "$1")
+    .replace(MD_ITALIC, "$1")
+    .replace(MD_INLINE_CODE, "$1")

@@ -128,6 +128,14 @@ val Typography: Typography = Typography(
 object CronTypography {
     private val tight = TightTextStyle
 
+    /** Page title — the home greeting and the History/Settings screen labels. */
+    val pageTitle: TextStyle = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Light,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+    )
+
     /** Date label on the alarm card — "Thursday 28". */
     val dateLabel: TextStyle = tight.copy(
         fontFamily = DisplayFontFamily,
@@ -151,6 +159,9 @@ object CronTypography {
         fontSize = 14.sp,
         lineHeight = 18.sp,
     )
+
+    /** Smaller mono — tool-call name chips and their result labels in the thinking timeline. */
+    val labelMonoSmall: TextStyle = labelMono.copy(fontSize = 12.sp, lineHeight = 16.sp)
 }
 
 /**

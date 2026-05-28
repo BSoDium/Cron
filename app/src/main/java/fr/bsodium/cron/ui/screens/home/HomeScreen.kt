@@ -100,9 +100,7 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
             start = Spacing.xl,
             end = Spacing.xl,
             top = statusInsetTop + Spacing.xxl,
-            // Leave space for the floating nav bar (pill ~68dp + 16dp visual breathing)
-            // plus the system gesture inset.
-            bottom = navInsetBottom + 96.dp,
+            bottom = navInsetBottom + Spacing.navBarClearance,
         ),
         verticalArrangement = Arrangement.spacedBy(Spacing.xl),
     ) {
