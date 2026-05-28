@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -92,12 +93,13 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     }
 
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = Spacing.xl,
             end = Spacing.xl,
-            top = Spacing.xxl,
+            top = statusInsetTop + Spacing.xxl,
             // Leave space for the floating nav bar (pill ~68dp + 16dp visual breathing)
             // plus the system gesture inset.
             bottom = navInsetBottom + 96.dp,

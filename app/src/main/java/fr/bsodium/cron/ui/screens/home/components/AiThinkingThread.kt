@@ -2,24 +2,30 @@ package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,47 +39,52 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mikepenz.markdown.compose.components.MarkdownComponentModel
+import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.mikepenz.markdown.model.markdownPadding
+import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
-import fr.bsodium.cron.ui.screens.home.ToolStep
+import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MonoFontFamily
 import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.SerifFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
 
 /**
  * Latest-turn AI thread:
  *
- *   summary line                                ⌄    (sans, collapsible)
- *   │  thinking body (serif, markdown)
- *   ●  Calling [read_calendar]                  ✓    (sans label, sans pill)
- *   ●  Calling [set_alarm]                      ✓
+ *   ( summary line  ⌄ )                               (pill: lighter bg when open)
+ *   🔍 reasoning / narration (sans, markdown)         ← whole process collapses
+ *   🔧 Calling [read_calendar]            12 events      inside the disclosure;
+ *   🔧 Calling [set_alarm]              set for 09:30     rule emerges from pill
  *   ✓  Done
- *   {serif response body, full markdown}
+ *   {serif response body, full markdown}              ← final answer, always shown
  */
 @Composable
 fun AiThinkingThread(thread: AiThreadUi, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth()) {
-        val showDisclosure = !thread.thinking.isNullOrBlank() ||
-            (!thread.isComplete && thread.response.isNullOrBlank())
-        if (showDisclosure) {
+        val inProgress = !thread.isComplete && thread.response == null
+        if (thread.process.isNotEmpty() || inProgress) {
             ThinkingDisclosure(
                 summary = thread.summary,
-                thinking = thread.thinking,
-                inProgress = !thread.isComplete && thread.response == null,
+                process = thread.process,
+                isComplete = thread.isComplete,
+                inProgress = inProgress,
             )
-        }
-        if (thread.toolSteps.isNotEmpty() || thread.isComplete) {
-            Spacer(Modifier.height(Spacing.sm))
-            TimelineColumn {
-                thread.toolSteps.forEach { step -> ToolStepRow(step) }
-                if (thread.isComplete) DoneRow()
-            }
         }
         if (!thread.response.isNullOrBlank()) {
             Spacer(Modifier.height(Spacing.md + Spacing.xs))
@@ -82,16 +93,34 @@ fun AiThinkingThread(thread: AiThreadUi, modifier: Modifier = Modifier) {
     }
 }
 
+private val GUTTER_WIDTH = 28.dp
+private val STEP_ICON_SIZE = 16.dp
+private val ICON_MASK_SIZE = 24.dp
+
 @Composable
-private fun ThinkingDisclosure(summary: String?, thinking: String?, inProgress: Boolean) {
+private fun ThinkingDisclosure(
+    summary: String?,
+    process: List<ProcessItem>,
+    isComplete: Boolean,
+    inProgress: Boolean,
+) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val canExpand = !thinking.isNullOrBlank()
+    val canExpand = process.isNotEmpty()
+    // Pill button: transparent when collapsed; a subtly lighter fill when open,
+    // the same colour the timeline rule uses so the thread reads as emerging
+    // from the pill. Bigger left padding gives the text button-like breathing room.
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .clip(Radius.full)
             .let { if (canExpand) it.clickable { expanded = !expanded } else it }
-            .padding(vertical = 6.dp),
+            .background(
+                if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+                Radius.full,
+            )
+            .heightIn(min = 48.dp)
+            .padding(start = Spacing.lg, top = Spacing.sm, end = Spacing.md, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Text(
             text = summary ?: "Thinking…",
@@ -99,7 +128,7 @@ private fun ThinkingDisclosure(summary: String?, thinking: String?, inProgress: 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f, fill = false),
         )
         if (inProgress) {
             CircularProgressIndicator(
@@ -116,22 +145,44 @@ private fun ThinkingDisclosure(summary: String?, thinking: String?, inProgress: 
         }
     }
     AnimatedVisibility(visible = expanded && canExpand) {
-        TimelineRow(showBullet = false) {
-            MarkdownBlock(
-                text = thinking.orEmpty(),
-                bodyStyle = CronTypography.bodySerif.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-                modifier = Modifier.padding(bottom = Spacing.sm),
-            )
+        TimelineColumn {
+            process.forEach { item ->
+                when (item) {
+                    is ProcessItem.Reasoning -> ProcessTextRow(item.text)
+                    is ProcessItem.Narration -> ProcessTextRow(item.text)
+                    is ProcessItem.Tool -> ToolStepRow(item)
+                }
+            }
+            if (isComplete) DoneRow()
         }
+    }
+}
+
+@Composable
+private fun ThinkingIcon() = Icon(
+    painter = painterResource(R.drawable.ic_thinking),
+    contentDescription = null,
+    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    modifier = Modifier.size(STEP_ICON_SIZE),
+)
+
+@Composable
+private fun ProcessTextRow(text: String) {
+    TimelineRow(icon = { ThinkingIcon() }) {
+        MarkdownBlock(
+            text = text,
+            bodyStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+            serif = false,
+        )
     }
 }
 
 /**
  * Wraps a vertical sequence of rows in a single timeline column — the children
- * inherit a left-side rule via [TimelineRow]. Useful for grouping the thinking
- * body, tool-step rows, and the "Done" marker under a single visual thread.
+ * inherit a left-side rule via [TimelineRow]. Groups the reasoning, tool-step
+ * rows, and the "Done" marker under a single visual thread.
  */
 @Composable
 private fun TimelineColumn(content: @Composable () -> Unit) {
@@ -140,44 +191,57 @@ private fun TimelineColumn(content: @Composable () -> Unit) {
 
 @Composable
 private fun TimelineRow(
-    showBullet: Boolean = true,
+    icon: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val ruleColor = MaterialTheme.colorScheme.outlineVariant
-    val dotColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // The rule shares the open-pill colour so the thread looks continuous with it.
+    val ruleColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val maskColor = MaterialTheme.colorScheme.background
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(androidx.compose.foundation.layout.IntrinsicSize.Min),
+            .height(IntrinsicSize.Min),
     ) {
-        // Fixed-width gutter that hosts the vertical rule + (optionally) a bullet.
-        Box(modifier = Modifier.width(20.dp)) {
+        // Gutter: a full-height rule, with the step icon centered on the row in a
+        // page-coloured disc that masks the rule, leaving a clean gap around it.
+        Box(modifier = Modifier.width(GUTTER_WIDTH)) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .width(1.dp)
+                    .width(2.dp)
                     .fillMaxHeight()
                     .background(ruleColor),
             )
-            if (showBullet) {
+            if (icon != null) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 7.dp)
-                        .size(8.dp)
+                        .align(Alignment.Center)
+                        .size(ICON_MASK_SIZE)
                         .clip(CircleShape)
-                        .background(dotColor),
-                )
+                        .background(maskColor),
+                    contentAlignment = Alignment.Center,
+                ) { icon() }
             }
         }
         Spacer(Modifier.width(Spacing.sm))
-        Box(modifier = Modifier.padding(vertical = 4.dp)) { content() }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(top = Spacing.xs, bottom = Spacing.xs, end = Spacing.md),
+        ) { content() }
     }
 }
 
 @Composable
-private fun ToolStepRow(step: ToolStep) {
-    TimelineRow(showBullet = true) {
+private fun ToolStepRow(step: ProcessItem.Tool) {
+    TimelineRow(icon = {
+        Icon(
+            imageVector = Icons.Rounded.Build,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(STEP_ICON_SIZE),
+        )
+    }) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -185,7 +249,7 @@ private fun ToolStepRow(step: ToolStep) {
             Row(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     text = "Calling",
@@ -198,24 +262,29 @@ private fun ToolStepRow(step: ToolStep) {
                 ) {
                     Text(
                         text = step.name,
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+                        style = CronTypography.labelMono.copy(fontSize = 12.sp, lineHeight = 16.sp),
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.dp),
                     )
                 }
             }
-            if (step.isComplete) {
-                Icon(
-                    imageVector = Icons.Outlined.CheckCircle,
-                    contentDescription = "Done",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            } else {
-                CircularProgressIndicator(
+            Spacer(Modifier.width(Spacing.sm))
+            when {
+                !step.isComplete -> CircularProgressIndicator(
                     modifier = Modifier.size(14.dp),
                     strokeWidth = 1.5.dp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                step.contextLabel != null -> Text(
+                    text = step.contextLabel,
+                    style = CronTypography.labelMono.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = "Done",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(STEP_ICON_SIZE),
                 )
             }
         }
@@ -224,23 +293,19 @@ private fun ToolStepRow(step: ToolStep) {
 
 @Composable
 private fun DoneRow() {
-    TimelineRow(showBullet = false) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.CheckCircle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = "Done",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+    TimelineRow(icon = {
+        Icon(
+            imageVector = Icons.Rounded.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(STEP_ICON_SIZE),
+        )
+    }) {
+        Text(
+            text = "Done",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -249,19 +314,21 @@ private fun ResponseBody(text: String) {
     MarkdownBlock(
         text = text,
         bodyStyle = CronTypography.bodySerif.copy(color = MaterialTheme.colorScheme.onSurface),
+        serif = true,
     )
 }
 
 /**
- * Themed markdown renderer used for both the assistant's thinking body and
- * the final response. Paragraphs and lists render in the serif body face;
- * headers stay in the sans display face for clear hierarchy; inline & block
- * code render in the mono face on a `surfaceContainerHigh` chip.
+ * Themed markdown renderer. The thinking area passes `serif = false` (sans
+ * everything); the final response passes `serif = true` (serif body *and*
+ * headers). Tables render through [CronMarkdownTable] — a full-grid,
+ * horizontally scrollable, borders-only table.
  */
 @Composable
 private fun MarkdownBlock(
     text: String,
-    bodyStyle: androidx.compose.ui.text.TextStyle,
+    bodyStyle: TextStyle,
+    serif: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -274,15 +341,17 @@ private fun MarkdownBlock(
         codeBackground = surfaceHigh,
         inlineCodeBackground = surfaceHigh,
         dividerColor = outline,
-        tableBackground = surfaceHigh,
+        tableBackground = Color.Transparent,
     )
+    val serifize: (TextStyle) -> TextStyle =
+        { if (serif) it.copy(fontFamily = SerifFontFamily) else it }
     val typography = markdownTypography(
-        h1 = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold, color = onSurface),
-        h2 = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold, color = onSurface),
-        h3 = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, color = onSurface),
-        h4 = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium, color = onSurface),
-        h5 = MaterialTheme.typography.labelLarge.copy(color = onSurface),
-        h6 = MaterialTheme.typography.labelMedium.copy(color = onSurfaceVariant),
+        h1 = serifize(MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
+        h2 = serifize(MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
+        h3 = serifize(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
+        h4 = serifize(MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium, color = onSurface)),
+        h5 = serifize(MaterialTheme.typography.labelLarge.copy(color = onSurface)),
+        h6 = serifize(MaterialTheme.typography.labelMedium.copy(color = onSurfaceVariant)),
         text = bodyStyle,
         paragraph = bodyStyle,
         bullet = bodyStyle,
@@ -299,6 +368,75 @@ private fun MarkdownBlock(
         content = text,
         colors = colors,
         typography = typography,
+        // Tighter than before — paragraphs/headers no longer feel too airy.
+        padding = markdownPadding(block = Spacing.md),
+        components = markdownComponents(
+            table = { model -> CronMarkdownTable(model, bodyStyle) },
+        ),
         modifier = modifier,
     )
 }
+
+/**
+ * Full-grid, borders-only, horizontally scrollable table. Parses the GFM table
+ * source from the AST node range, sizes each column to its widest cell (so wide
+ * tables scroll rather than wrap), and outlines every cell on all four sides.
+ */
+@Composable
+private fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextStyle) {
+    val start = model.node.startOffset.coerceIn(0, model.content.length)
+    val end = model.node.endOffset.coerceIn(start, model.content.length)
+    val rows = parseGfmTable(model.content.substring(start, end))
+    if (rows.isEmpty()) return
+
+    val border = MaterialTheme.colorScheme.outlineVariant
+    val headerStyle = cellStyle.copy(fontWeight = FontWeight.SemiBold)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val numCols = rows.maxOf { it.size }
+    val colWidths = (0 until numCols).map { c ->
+        val widest = rows.maxOf { row ->
+            measurer.measure(AnnotatedString(row.getOrElse(c) { "" }), headerStyle).size.width
+        }
+        with(density) { widest.toDp() } + Spacing.sm * 2 + Spacing.xs
+    }
+
+    Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        rows.forEachIndexed { r, row ->
+            Row {
+                (0 until numCols).forEach { c ->
+                    Box(
+                        modifier = Modifier
+                            .width(colWidths[c])
+                            .border(1.dp, border)
+                            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                    ) {
+                        Text(
+                            text = row.getOrElse(c) { "" },
+                            style = if (r == 0) headerStyle else cellStyle,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Parse a GFM table block into rows of cell text, dropping the `---|---` delimiter row. */
+private fun parseGfmTable(raw: String): List<List<String>> {
+    val rows = raw.trim().lines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { line ->
+            line.removePrefix("|").removeSuffix("|").split("|").map { stripInlineMarks(it.trim()) }
+        }
+    return rows.filterNot { row -> row.isNotEmpty() && row.all { it.matches(Regex(":?-+:?")) } }
+}
+
+/** Strip the common inline emphasis/code markers so cells don't show literal `**`/`` ` ``. */
+private fun stripInlineMarks(s: String): String = s
+    .replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")
+    .replace(Regex("__(.+?)__"), "$1")
+    .replace(Regex("\\*(.+?)\\*"), "$1")
+    .replace(Regex("`(.+?)`"), "$1")

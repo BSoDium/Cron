@@ -8,14 +8,12 @@ import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -105,15 +103,14 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     },
-                ) { innerPadding ->
-                    // Only apply the top inset so screen content can scroll *under*
-                    // the transparent area around the floating nav pill. Each
-                    // scrollable screen carries its own bottom contentPadding to
-                    // keep the last item from being permanently obscured.
+                ) { _ ->
+                    // Content draws edge-to-edge, under the status bar and the
+                    // transparent area around the floating nav pill. Each screen
+                    // folds the status-bar inset into its own top content padding
+                    // and carries bottom contentPadding for the nav pill.
                     NavHost(
                         navController = navController,
                         startDestination = startDestination,
-                        modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
                     ) {
                         composable(
                             route = "onboarding",
@@ -151,10 +148,7 @@ class MainActivity : ComponentActivity() {
                             enterTransition = { fadeIn(animationSpec = tabTween) },
                             exitTransition = { fadeOut(animationSpec = tabTween) },
                         ) {
-                            SettingsScreen(
-                                viewModel = viewModel<SettingsViewModel>(),
-                                onBack = { navController.navigate("home") { popUpTo("home") { inclusive = false } } },
-                            )
+                            SettingsScreen(viewModel = viewModel<SettingsViewModel>())
                         }
                     }
                 }
