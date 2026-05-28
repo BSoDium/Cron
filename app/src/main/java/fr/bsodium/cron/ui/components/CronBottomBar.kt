@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 
 /**
  * Floating bottom action bar: a pill housing the three tab icons, optionally
@@ -72,7 +73,7 @@ fun CronFloatingNav(
         modifier = modifier
             .fillMaxWidth()
             .padding(bottom = systemBars.calculateBottomPadding())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {

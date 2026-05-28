@@ -53,7 +53,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Spacing.xl)
-            .padding(top = statusInsetTop + Spacing.xxl, bottom = navBottomInset + 96.dp),
+            .padding(top = statusInsetTop + Spacing.xxl, bottom = navBottomInset + Spacing.navBarClearance),
     ) {
         ScreenTitle("Settings")
         Section(label = "Schedule") {

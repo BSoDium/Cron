@@ -61,7 +61,7 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
             start = Spacing.xl,
             end = Spacing.xl,
             top = statusInsetTop + Spacing.xxl,
-            bottom = navBottomInset + 96.dp,
+            bottom = navBottomInset + Spacing.navBarClearance,
         ),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {

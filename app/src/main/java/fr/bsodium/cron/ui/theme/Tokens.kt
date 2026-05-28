@@ -15,10 +15,12 @@ object Spacing {
     val xl = 20.dp
     val xxl = 24.dp
     val xxxl = 32.dp
+
+    /** Bottom clearance reserved for the floating nav pill (≈68dp) + breathing room. */
+    val navBarClearance = 96.dp
 }
 
 object Radius {
-    val xs = 2.dp
     val sm = 6.dp
     val md = 12.dp
     val lg = 20.dp
