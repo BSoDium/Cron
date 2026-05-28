@@ -1,9 +1,12 @@
 package fr.bsodium.cron.ui.screens.home
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import fr.bsodium.cron.ai.wire.ContentBlock
+import fr.bsodium.cron.location.LocationProvider
+import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.AiMessageEntity
 import fr.bsodium.cron.session.db.CronDatabase
@@ -12,6 +15,7 @@ import fr.bsodium.cron.session.db.SessionEventEntity
 import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.Instruction
+import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.TriggerType
@@ -29,7 +33,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import java.time.LocalDate as JavaLocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -72,6 +78,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val db = CronDatabase.get(application)
     private val repository = SessionRepository(application)
     private val settings = SettingsRepository(application)
+    private val locationProvider = LocationProvider(application)
 
     private val _isRetrying = MutableStateFlow(false)
 
@@ -121,29 +128,55 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     /**
-     * Re-runs the AI alarm prediction for the active session. No-op if no
-     * session is active. Spins the retry button while the worker runs.
+     * Re-runs the AI alarm prediction for the active session, or bootstraps a
+     * fresh session via the same evening-plan flow the nightly receiver uses
+     * when no session exists. Spins the retry button while the worker runs.
+     *
+     * (We skip the alarm re-arm and foreground-service startup that
+     * [fr.bsodium.cron.receiver.EveningPlanReceiver] also performs — those are
+     * scheduling concerns owned by the receiver, not a manual user trigger.)
      */
     fun retryAiPlan() {
         viewModelScope.launch {
-            val current = withContext(Dispatchers.IO) { db.sessionDao().findCurrent() }
-            val id = current?.id ?: return@launch
             _isRetrying.value = true
-            repository.triggerAiTurn(id)
-            // No tight signal for "AI turn done" yet; spin briefly so the user sees
-            // the tap registered. New messages will stream in via aiThreadFlow.
-            kotlinx.coroutines.delay(2_500)
-            _isRetrying.value = false
+            try {
+                withContext(Dispatchers.IO) {
+                    val current = db.sessionDao().findCurrent()
+                    if (current != null) {
+                        repository.triggerAiTurn(current.id)
+                    } else {
+                        val tz = TimeZone.currentSystemDefault()
+                        val location = locationProvider.acquireForEveningPlan()
+                        val event = SessionEvent(
+                            trigger = TriggerType.EveningPlan,
+                            timestamp = Clock.System.now(),
+                            data = EventData.EveningPlan(timezone = tz.id, location = location),
+                        )
+                        SessionFsm(getApplication(), repository).onEvent(event)
+                    }
+                }
+                // No tight signal for "AI turn done" yet; spin briefly so the user sees
+                // the tap registered. New messages will stream in via aiThreadFlow.
+                kotlinx.coroutines.delay(2_500)
+            } finally {
+                _isRetrying.value = false
+            }
         }
     }
 
     private fun SessionEntity.toDisplayState(): SessionDisplayState? {
         val instruction = runCatching {
             SessionJson.decodeFromString<Instruction>(currentInstructionJson)
-        }.getOrNull() ?: return null
-        val sessionDate = runCatching { LocalDate.parse(date) }.getOrNull() ?: return null
+        }
+            .onFailure { Log.w(TAG, "decode instruction failed for session $id", it) }
+            .getOrNull() ?: return null
+        val sessionDate = runCatching { LocalDate.parse(date) }
+            .onFailure { Log.w(TAG, "parse session date failed for session $id", it) }
+            .getOrNull() ?: return null
         return SessionDisplayState(
-            status = runCatching { SessionStatus.valueOf(status) }.getOrElse { SessionStatus.Complete },
+            status = runCatching { SessionStatus.valueOf(status) }
+                .onFailure { Log.w(TAG, "unknown session status '$status' for $id", it) }
+                .getOrElse { SessionStatus.Complete },
             action = instruction.action,
             alarmTime = instruction.alarmTime,
             reason = instruction.reason,
@@ -158,7 +191,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .mapNotNull { row ->
                 val data = runCatching {
                     SessionJson.decodeFromString<EventData>(row.dataJson)
-                }.getOrNull() as? EventData.HcStageUpdate ?: return@mapNotNull null
+                }
+                    .onFailure { Log.w(TAG, "decode HcStageUpdate failed for event ${row.id}", it) }
+                    .getOrNull() as? EventData.HcStageUpdate ?: return@mapNotNull null
                 SleepSegment(
                     stage = data.stage,
                     start = data.recordStart,
@@ -229,7 +264,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun decodeBlocks(json: String): List<ContentBlock> = runCatching {
         SessionJson.decodeFromString<List<ContentBlock>>(json)
-    }.getOrElse { emptyList() }
+    }
+        .onFailure { Log.w(TAG, "decode AI content blocks failed", it) }
+        .getOrElse { emptyList() }
 
     private fun formatDateLabel(): String {
         val today = JavaLocalDate.now()
@@ -243,5 +280,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val h = total / 60
         val m = total % 60
         return "${h}H ${m}M"
+    }
+
+    private companion object {
+        const val TAG = "HomeViewModel"
     }
 }

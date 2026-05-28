@@ -30,6 +30,7 @@ private val MajorMonoDisplay = GoogleFont("Major Mono Display")
 private val Iceland = GoogleFont("Iceland")
 private val Vt323 = GoogleFont("VT323")
 private val Newsreader = GoogleFont("Newsreader")
+private val SpaceGrotesk = GoogleFont("Space Grotesk")
 
 private val WEIGHTS = listOf(
     FontWeight.Normal,
@@ -78,4 +79,13 @@ val MonoFontFamily: FontFamily = FontFamily(
 val SerifFontFamily: FontFamily = FontFamily(
     Font(R.font.newsreader),
     Font(googleFont = Newsreader, fontProvider = Provider),
+)
+
+/**
+ * Display face for the alarm card's date label — geometric grotesque
+ * with a slightly technical feel that pairs with the LCD digits below.
+ */
+val DisplayFontFamily: FontFamily = FontFamily(
+    Font(R.font.space_grotesk, weight = FontWeight.Medium),
+    Font(googleFont = SpaceGrotesk, fontProvider = Provider, weight = FontWeight.Medium),
 )
