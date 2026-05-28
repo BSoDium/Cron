@@ -2,6 +2,7 @@ package fr.bsodium.cron.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,8 +48,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 
 /**
  * Floating bottom action bar: a pill housing the three tab icons, optionally
@@ -68,8 +73,8 @@ fun CronFloatingNav(
         modifier = modifier
             .fillMaxWidth()
             .padding(bottom = systemBars.calculateBottomPadding())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NavPill(currentRoute = currentRoute, onNavigate = onNavigate)
@@ -78,25 +83,41 @@ fun CronFloatingNav(
 }
 
 /**
- * Fixed-size slot for the play FAB. Reserves the layout space regardless of
- * whether the FAB is currently visible so the nav pill never jumps when the
- * FAB animates in or out across navigation transitions.
+ * Slot for the play FAB whose width animates between [FAB_SLOT_WIDTH] (FAB +
+ * leading gap) and 0.dp. With a `Arrangement.Center` parent Row, this lets the
+ * pill+FAB block re-center smoothly when the FAB hides on non-Home tabs.
  */
 @Composable
 private fun FabSlot(fabAction: FabAction?) {
+    val visible = fabAction != null
+    val width by animateDpAsState(
+        targetValue = if (visible) FAB_SLOT_WIDTH else 0.dp,
+        animationSpec = FAB_SLOT_SPEC,
+        label = "fab-slot-width",
+    )
     Box(
-        modifier = Modifier.size(56.dp),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .width(width)
+            .height(56.dp),
+        contentAlignment = Alignment.CenterEnd,
     ) {
         AnimatedVisibility(
-            visible = fabAction != null,
-            enter = fadeIn(tween(180)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.85f),
-            exit = fadeOut(tween(140)) + scaleOut(tween(180, easing = FastOutSlowInEasing), targetScale = 0.85f),
+            visible = visible,
+            enter = FAB_ENTER,
+            exit = FAB_EXIT,
         ) {
             PrimaryActionFab(fabAction)
         }
     }
 }
+
+private val FAB_SLOT_WIDTH = 68.dp // 56dp FAB + 12dp leading gap
+private val FAB_SLOT_SPEC = tween<Dp>(durationMillis = 200, easing = FastOutSlowInEasing)
+// A pronounced grow-from-centre + fade so the FAB pops rather than slides in.
+private val FAB_ENTER =
+    fadeIn(tween(180)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.5f)
+private val FAB_EXIT =
+    fadeOut(tween(140)) + scaleOut(tween(180, easing = FastOutSlowInEasing), targetScale = 0.5f)
 
 data class FabAction(
     val onClick: () -> Unit,

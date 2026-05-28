@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import fr.bsodium.cron.ui.theme.CronTypography
 
 /**
  * One-line time-of-day greeting with a bolded user name and optional avatar.
@@ -50,7 +51,7 @@ fun GreetingHeader(
                     }
                 }
             },
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
+            style = CronTypography.pageTitle,
             color = MaterialTheme.colorScheme.onBackground,
         )
         if (!photoUrl.isNullOrBlank()) {

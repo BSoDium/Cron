@@ -8,14 +8,12 @@ import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -64,6 +62,9 @@ class FabRegistry {
 
 class MainActivity : ComponentActivity() {
 
+    // The Scaffold padding is intentionally unused: content draws edge-to-edge and
+    // each screen folds the status-bar / nav insets into its own content padding.
+    @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // System-driven bar styling — dark icons on a light page, light icons on dark.
@@ -105,11 +106,14 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     },
-                ) { innerPadding ->
+                ) { _ ->
+                    // Content draws edge-to-edge, under the status bar and the
+                    // transparent area around the floating nav pill. Each screen
+                    // folds the status-bar inset into its own top content padding
+                    // and carries bottom contentPadding for the nav pill.
                     NavHost(
                         navController = navController,
                         startDestination = startDestination,
-                        modifier = Modifier.padding(innerPadding),
                     ) {
                         composable(
                             route = "onboarding",
@@ -147,10 +151,7 @@ class MainActivity : ComponentActivity() {
                             enterTransition = { fadeIn(animationSpec = tabTween) },
                             exitTransition = { fadeOut(animationSpec = tabTween) },
                         ) {
-                            SettingsScreen(
-                                viewModel = viewModel<SettingsViewModel>(),
-                                onBack = { navController.navigate("home") { popUpTo("home") { inclusive = false } } },
-                            )
+                            SettingsScreen(viewModel = viewModel<SettingsViewModel>())
                         }
                     }
                 }
