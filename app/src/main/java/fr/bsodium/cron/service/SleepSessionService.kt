@@ -21,6 +21,7 @@ import fr.bsodium.cron.sensors.ScreenStateMonitor
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.SessionEvent
+import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,6 +53,13 @@ class SleepSessionService : Service() {
                 SessionFsm(applicationContext, SessionRepository(applicationContext)).onEvent(event)
             } catch (t: Throwable) {
                 Log.e(TAG, "FSM error on sensor event ${event.trigger}", t)
+            }
+            // Keep ActivityRecognitionMonitor in sync with sleep state so it only
+            // emits MidSleepActivity events while the user is actually asleep.
+            when (event.trigger) {
+                TriggerType.SleepOnset        -> activityRecognitionMonitor?.onSleepOnset()
+                TriggerType.OutOfBedConfirmed -> activityRecognitionMonitor?.onWake()
+                else                          -> Unit
             }
         }
     }

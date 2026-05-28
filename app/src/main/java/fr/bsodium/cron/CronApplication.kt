@@ -16,6 +16,7 @@ import fr.bsodium.cron.alarm.EveningPlanScheduler
 import fr.bsodium.cron.receiver.AlarmReceiver
 import fr.bsodium.cron.service.SleepSessionService
 import fr.bsodium.cron.worker.HealthConnectPollWorker
+import fr.bsodium.cron.worker.SessionCleanupWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +32,7 @@ class CronApplication : Application() {
         createNotificationChannels()
         armEveningPlan()
         enqueueHealthConnectPoll()
+        enqueueSessionCleanup()
     }
 
     private fun armEveningPlan() {
@@ -51,6 +53,17 @@ class CronApplication : Application() {
 
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             HealthConnectPollWorker.NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+    }
+
+    private fun enqueueSessionCleanup() {
+        val request = PeriodicWorkRequestBuilder<SessionCleanupWorker>(1, TimeUnit.DAYS)
+            .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            SessionCleanupWorker.NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
@@ -91,9 +104,26 @@ class CronApplication : Application() {
             }
             nm.createNotificationChannel(sessionChannel)
         }
+
+        // Planning result channel (debug builds only — silent informational notification)
+        if (nm.getNotificationChannel(PLANNING_CHANNEL_ID) == null) {
+            val planningChannel = NotificationChannel(
+                PLANNING_CHANNEL_ID,
+                "Planning result (debug)",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Shown after an AI evening plan completes (debug builds only)"
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            }
+            nm.createNotificationChannel(planningChannel)
+        }
     }
 
     companion object {
         private const val TAG = "CronApplication"
+        const val PLANNING_CHANNEL_ID = "cron_planning_channel"
+        const val PLANNING_NOTIFICATION_ID = 9004
     }
 }

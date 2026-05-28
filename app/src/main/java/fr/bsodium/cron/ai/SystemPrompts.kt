@@ -22,24 +22,36 @@ object SystemPrompts {
 
         Process:
         1. Call read_calendar for the next 24-30 hours starting from "now".
-        2. Identify the first event that requires physical presence at a specific location.
+        2. Identify the first event that requires the user's physical or focused attendance.
            - Ignore all-day events entirely — they are markers (birthdays, OOO), not appointments.
-           - Ignore virtual / phone-based events unless they are the only events of the day.
-           - If multiple events cluster (back-to-back at the same place), anchor on the one that
-             actually determines when the user needs to leave home.
-        3. If you found an anchor with a location, resolve commute time:
-           - Use the user's lat/lng as origin (from "location" field in the user message).
-           - Call geocode_address on the event's location string to get destination lat/lng.
-           - Call estimate_commute(origin_lat, origin_lng, destination,
-               arrival_time_iso=<anchor_event.start_utc_iso>).
-             The arrival_time_iso field is the event's start_utc_iso from read_calendar.
-             Passing it makes the API compute the correct morning route backwards from
-             required arrival, not a route departing now at planning time.
-           - If the destination might be walkable (<1 km from origin), also call
-             estimate_commute_multi_mode with the same arrival_time_iso.
-           - Add a 15-minute personal preparation buffer minimum.
-        4. If no anchor exists tomorrow, use the user's free-day wake preferences
-           (provided in the user message).
+           - Ignore purely virtual / phone-based events unless they are the only events of the day.
+           - If multiple events cluster (back-to-back), anchor on the one that determines when
+             the user actually needs to leave home (or be ready).
+           - Events with no location string still count as anchors — the user still needs to be
+             ready by their start time. You just can't estimate commute precisely; see step 3b.
+        3. If you found an anchor:
+           a. If it HAS a location string, resolve commute time:
+              - Use the user's lat/lng as origin (from "location" field in the user message).
+              - Call geocode_address on the event's location string to get destination lat/lng.
+              - Call estimate_commute(origin_lat, origin_lng, destination,
+                  arrival_time_iso=<anchor_event.start_utc_iso>).
+                The arrival_time_iso field is the event's start_utc_iso from read_calendar.
+                Passing it makes the API compute the correct morning route backwards from
+                required arrival, not a route departing now at planning time.
+              - If the destination might be walkable (<1 km from origin), also call
+                estimate_commute_multi_mode with the same arrival_time_iso.
+              - Add the user's personal preparation buffer (from "Personal preparation buffer"
+                in the session context) on top of the commute time.
+           b. If it has NO location string: skip geocode_address and estimate_commute. Apply a
+              flat +30 min commute fallback plus the personal preparation buffer. Mention in
+              your reason that the commute is a fallback estimate because the event had no
+              address.
+        4. If no anchor exists (entire day is empty, or only all-day / virtual entries):
+           - Call set_alarm at the LATEST end of the "Free day wake window" provided in the
+             user message (e.g. if the window is 07:00–09:30, set for 09:30). This caps how
+             late the user sleeps without dragging them out of bed prematurely.
+           - In your reason, explicitly note that no anchor was found and you defaulted to the
+             window's late edge.
         5. Once you have a wake time, call set_alarm with the resulting time, a short label,
            and a one-sentence reason. set_alarm clamps to the hard latest server-side, so do
            not worry about exceeding it — but try to stay well within the wake window.
