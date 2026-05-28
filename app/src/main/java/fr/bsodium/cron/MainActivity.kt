@@ -62,6 +62,9 @@ class FabRegistry {
 
 class MainActivity : ComponentActivity() {
 
+    // The Scaffold padding is intentionally unused: content draws edge-to-edge and
+    // each screen folds the status-bar / nav insets into its own content padding.
+    @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // System-driven bar styling — dark icons on a light page, light icons on dark.
