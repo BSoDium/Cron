@@ -29,6 +29,7 @@ private val RobotoFlex = GoogleFont("Roboto Flex")
 private val MajorMonoDisplay = GoogleFont("Major Mono Display")
 private val Iceland = GoogleFont("Iceland")
 private val Vt323 = GoogleFont("VT323")
+private val MartianMono = GoogleFont("Martian Mono")
 private val Newsreader = GoogleFont("Newsreader")
 private val SpaceGrotesk = GoogleFont("Space Grotesk")
 
@@ -70,6 +71,18 @@ val MonoFontFamily: FontFamily = FontFamily(
     Font(R.font.vt323),
     Font(googleFont = Iceland, fontProvider = Provider),
     Font(googleFont = Vt323, fontProvider = Provider),
+)
+
+/**
+ * Real code face for the AI thinking thread — tool-call name chips, result
+ * labels, and markdown code spans. Martian Mono is a clean monospace (variable,
+ * so it can sit light at small sizes) that replaces the retro [MonoFontFamily],
+ * which stays on the LCD clock card and sleep timeline. Bundled .ttf resolves
+ * first; downloadable Google Font is the network fallback.
+ */
+val CodeFontFamily: FontFamily = FontFamily(
+    Font(R.font.martian_mono),
+    Font(googleFont = MartianMono, fontProvider = Provider),
 )
 
 /**

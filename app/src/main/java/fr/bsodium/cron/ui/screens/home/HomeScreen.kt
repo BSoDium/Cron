@@ -5,15 +5,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,11 +19,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -44,18 +41,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
+import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -113,12 +113,15 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
         }
         // Wrap the card in an opaque background so the greeting doesn't bleed
         // through the rounded card's transparent corners during sticky transit.
+        // The top inset is the safe area: when the header pins it parks below the
+        // status bar instead of sliding under it. The background fills the strip
+        // behind it, and EdgeFades softens the seam against the status bar.
         stickyHeader(key = "alarm") {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.background)
-                    .padding(vertical = Spacing.xs),
+                    .padding(top = statusInsetTop + Spacing.xs, bottom = Spacing.xs),
             ) {
                 NextAlarmCard(
                     dateLabel = uiState.dateLabel,
@@ -133,7 +136,10 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
             if (thread != null) {
                 AiThinkingThread(thread)
             } else {
-                EmptyPlanIndicator()
+                EmptyPlanState(
+                    onRun = viewModel::retryAiPlan,
+                    isRunning = uiState.isRetrying,
+                )
             }
         }
         if (!hasNotificationPermission) {
@@ -153,45 +159,54 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
 }
 
 /**
- * Pulsing chevron tucked under the alarm card, pointing toward the play FAB
- * at the bottom-right. Replaces the previous prose hint.
+ * First-run state: Cron hasn't planned a wake-up yet. Explains what a plan needs
+ * and offers a CTA that kicks off the same AI run as the play FAB.
  */
 @Composable
-private fun EmptyPlanIndicator(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "empty-plan-hint")
-    val alpha by transition.animateFloat(
-        initialValue = 0.45f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "empty-plan-alpha",
-    )
-    val drift by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "empty-plan-drift",
-    )
-    Box(
+private fun EmptyPlanState(
+    onRun: () -> Unit,
+    isRunning: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = Spacing.xs, end = Spacing.sm),
-        contentAlignment = Alignment.CenterEnd,
+            .padding(top = Spacing.xxl),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            imageVector = Icons.Filled.KeyboardDoubleArrowDown,
-            contentDescription = "Tap the play button to plan",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.graphicsLayer {
-                this.alpha = alpha
-                translationY = drift
-            },
+            painter = painterResource(R.drawable.ic_thinking),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(48.dp),
         )
+        Spacer(Modifier.height(Spacing.lg))
+        Text(
+            text = "No plan yet",
+            style = CronTypography.pageTitle,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(Spacing.sm))
+        Text(
+            text = "Cron reads your calendar and last night's sleep to pick the " +
+                "smartest wake-up time. Run it to plan your morning.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(Spacing.xl))
+        Button(onClick = onRun, enabled = !isRunning) {
+            if (isRunning) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+                Spacer(Modifier.width(Spacing.sm))
+            }
+            Text(if (isRunning) "Planning…" else "Plan my morning")
+        }
     }
 }
 

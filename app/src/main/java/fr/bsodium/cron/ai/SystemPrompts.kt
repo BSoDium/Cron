@@ -76,6 +76,17 @@ object SystemPrompts {
         single short text block summarising what you did — this is optional and not used for
         scheduling, only for logging.
 
+        Status updates (shown live in the app's thinking pill):
+        - Right before each tool call, emit a one-line text block that starts with "STATUS:"
+          followed by a 2-4 word gerund phrase for what you're doing right now, e.g.
+          "STATUS: Reading your calendar" or "STATUS: Estimating your commute".
+        - Begin your final answer with one line that starts with "SUMMARY:" followed by a
+          single past-tense sentence describing what you decided, e.g.
+          "SUMMARY: Set a 6:40 alarm so you reach your 9am meeting on time." Put it on its
+          own line before the rest of your Markdown answer.
+        The app parses these STATUS/SUMMARY lines and strips them from the displayed text, so
+        keep them short and each on its own line.
+
         Style: do not use emojis or pictographs anywhere in your output. The UI renders full
         Markdown — use headers, lists, bold, inline code, and tables for structure.
     """.trimIndent()
@@ -114,6 +125,10 @@ object SystemPrompts {
           outweigh phone heuristics (confidence: low).
 
         Be terse. Each turn should call exactly one terminal tool and then stop.
+
+        Begin your output with one line that starts with "SUMMARY:" followed by a short
+        past-tense sentence on what you decided, on its own line before any other text. The
+        app parses and strips it from the displayed text.
 
         Style: do not use emojis or pictographs anywhere in your output. The UI renders full
         Markdown — use headers, lists, bold, inline code, and tables for structure.

@@ -239,23 +239,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .filterIsInstance<ContentBlock.ToolResult>()
             .associateBy { it.tool_use_id }
 
+        // Model-authored pill labels: the prompt asks for "STATUS: <gerund>" lines while
+        // working and a leading "SUMMARY: <past tense>" on the answer. Pull them out of the
+        // text in order and strip them so they never render in the timeline or response.
+        val statuses = mutableListOf<String>()
+        var summaryLine: String? = null
+        fun stripDirectives(text: String): String {
+            val kept = StringBuilder()
+            text.lineSequence().forEach { line ->
+                val trimmed = line.trim()
+                val status = STATUS_LINE.matchEntire(trimmed)
+                val summary = SUMMARY_LINE.matchEntire(trimmed)
+                when {
+                    status != null -> status.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { statuses += it }
+                    summary != null -> summary.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { summaryLine = it }
+                    else -> kept.appendLine(line)
+                }
+            }
+            return kept.toString().trim()
+        }
+
         // The final answer is the trailing run of Text blocks — those after the
         // last non-text block (a tool call or reasoning). Text emitted before or
         // between tool calls is narration that belongs to the thinking process,
         // not the output, so collapsing the disclosure hides it.
         val answerStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
-        val response = blocks.drop(answerStart)
-            .filterIsInstance<ContentBlock.Text>()
-            .joinToString(separator = "\n\n") { it.text }
-            .let(::stripLeadingRule)
-            .takeIf { it.isNotBlank() }
 
         val process = blocks.take(answerStart).mapNotNull { block ->
             when (block) {
                 is ContentBlock.Thinking ->
                     block.thinking.takeIf { it.isNotBlank() }?.let { ProcessItem.Reasoning(it) }
                 is ContentBlock.Text ->
-                    block.text.takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
+                    stripDirectives(block.text).takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
                 is ContentBlock.ToolUse -> {
                     val result = toolResults[block.id]
                     ProcessItem.Tool(
@@ -270,16 +285,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Summary is a tiny disclosure preview for the process, not a copy of the
-        // response — that would duplicate text already shown below.
-        val summary = process
+        val response = blocks.drop(answerStart)
+            .filterIsInstance<ContentBlock.Text>()
+            .joinToString(separator = "\n\n") { it.text }
+            .let(::stripDirectives)
+            .let(::stripLeadingRule)
+            .takeIf { it.isNotBlank() }
+
+        val isComplete = response != null && blocks
+            .filterIsInstance<ContentBlock.ToolUse>()
+            .all { toolResults.containsKey(it.id) }
+
+        // Pill preview: the model's gerund while working, its past-tense summary once done.
+        // Fall back to the first line of reasoning if the model skipped the directives.
+        val fallback = process
             .firstNotNullOfOrNull { (it as? ProcessItem.Reasoning)?.text ?: (it as? ProcessItem.Narration)?.text }
             ?.lineSequence()
             ?.firstOrNull { it.isNotBlank() }
             ?.take(80)
-        val isComplete = response != null && blocks
-            .filterIsInstance<ContentBlock.ToolUse>()
-            .all { toolResults.containsKey(it.id) }
+        val liveStatus = statuses.lastOrNull()
+        val summary =
+            if (isComplete) summaryLine ?: liveStatus ?: fallback
+            else liveStatus ?: summaryLine ?: fallback
 
         return AiThreadUi(
             turnIndex = latestTurn,
@@ -300,7 +327,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun stripLeadingRule(text: String): String {
         val lines = text.trimStart().lines()
         val first = lines.firstOrNull()?.trim().orEmpty()
-        return if (first.matches(Regex("([-*_])\\1{2,}"))) {
+        return if (first.matches(LEADING_RULE)) {
             lines.drop(1).joinToString("\n").trimStart()
         } else {
             text
@@ -345,3 +372,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         const val TAG = "HomeViewModel"
     }
 }
+
+// Hoisted so they compile once, not on every buildAiThread call.
+private val LEADING_RULE = Regex("([-*_])\\1{2,}")
+private val STATUS_LINE = Regex("(?i)^STATUS:\\s*(.*)$")
+private val SUMMARY_LINE = Regex("(?i)^SUMMARY:\\s*(.*)$")
