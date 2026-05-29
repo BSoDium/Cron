@@ -221,21 +221,48 @@ private fun stepFirstLineHeight(): Dp {
 
 @Composable
 private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
+    var expanded by rememberSaveable(text) { mutableStateOf(false) }
+    val collapsible = text.length > REASONING_COLLAPSE_CHARS
+    val shown = if (collapsible && !expanded) {
+        text.take(REASONING_COLLAPSE_CHARS).substringBeforeLast(' ').trimEnd() + "…"
+    } else {
+        text
+    }
     TimelineRow(
         firstLineHeight = stepFirstLineHeight(),
         isFirst = isFirst,
         isLast = isLast,
         icon = { ThinkingIcon() },
     ) {
-        MarkdownBlock(
-            text = text,
-            bodyStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-            serif = false,
-        )
+        Column {
+            MarkdownBlock(
+                text = shown,
+                bodyStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                serif = false,
+            )
+            if (collapsible) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(Radius.sm))
+                        .clickable { expanded = !expanded }
+                        .heightIn(min = 48.dp)
+                        .padding(horizontal = Spacing.xs),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text(
+                        text = if (expanded) "See less" else "See more",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
     }
 }
+
+private const val REASONING_COLLAPSE_CHARS = 280
 
 /** Stacks timeline rows so their per-row [TimelineRow] rules join into one thread. */
 @Composable
@@ -526,8 +553,8 @@ private val HEADING_GAP = listOf(
     HeadingGap(Spacing.xs, Spacing.xxs),                         // h5 — 4 / 2
     HeadingGap(Spacing.xs, 0.dp),                                // h6 — 4 / 0
 )
-private val MD_BLOCK_GAP = Spacing.xs
-private val MD_PARA_BELOW = Spacing.xs
+private val MD_BLOCK_GAP = Spacing.xxs
+private val MD_PARA_BELOW = Spacing.xxs
 private val LIST_MARKER_GAP = Spacing.sm
 // Bounds for content-proportional table columns, so no column dominates or collapses.
 private val TABLE_COL_MIN = 64.dp

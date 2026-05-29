@@ -3,6 +3,7 @@ package fr.bsodium.cron.ui.screens.home.components
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,7 @@ fun NextAlarmCard(
         shape = RoundedCornerShape(Radius.xl),
         tonalElevation = 6.dp,
         shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(Spacing.xxl)) {
             AlignedFirstGlyph(

@@ -87,8 +87,10 @@ object SystemPrompts {
         The app parses these STATUS/SUMMARY lines and strips them from the displayed text, so
         keep them short and each on its own line.
 
-        Style: do not use emojis or pictographs anywhere in your output. The UI renders full
-        Markdown — use headers, lists, bold, inline code, and tables for structure.
+        Style: keep the final answer brief — two or three short sentences saying what you set
+        and why. Use at most light formatting (a bold time, or one short list if it genuinely
+        helps); do NOT use headers, tables, or multi-section breakdowns. The UI renders Markdown.
+        No emojis or pictographs anywhere in your output.
     """.trimIndent()
 
     /**
