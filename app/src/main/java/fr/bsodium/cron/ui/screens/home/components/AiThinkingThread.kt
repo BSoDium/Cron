@@ -1,10 +1,13 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,7 +53,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -105,10 +113,11 @@ fun AiThinkingThread(thread: AiThreadUi, modifier: Modifier = Modifier) {
                 process = thread.process,
                 isComplete = thread.isComplete,
                 inProgress = inProgress,
+                durationSeconds = thread.durationSeconds,
             )
         }
         if (!thread.response.isNullOrBlank()) {
-            Spacer(Modifier.height(Spacing.md + Spacing.xs))
+            Spacer(Modifier.height(Spacing.sm))
             ResponseBody(thread.response)
         }
     }
@@ -152,6 +161,7 @@ private fun ThinkingDisclosure(
     process: List<ProcessItem>,
     isComplete: Boolean,
     inProgress: Boolean,
+    durationSeconds: Int?,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val canExpand = process.isNotEmpty()
@@ -169,28 +179,42 @@ private fun ThinkingDisclosure(
             .heightIn(min = 48.dp)
             .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.md + Spacing.xl, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        Text(
-            text = summary ?: "Thinking…",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
         if (inProgress) {
+            // Live: the model's current gerund summary + a spinner.
+            Text(
+                text = summary ?: "Thinking…",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
             CircularProgressIndicator(
                 modifier = Modifier.size(14.dp),
                 strokeWidth = 1.5.dp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else if (canExpand) {
-            Icon(
-                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                contentDescription = if (expanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        } else {
+            // Settled: an avatar-stack of the tools that ran + how long it took.
+            val tools = process.filterIsInstance<ProcessItem.Tool>()
+            if (tools.isNotEmpty()) ToolStack(tools)
+            Text(
+                text = thoughtForLabel(durationSeconds),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
+            if (canExpand) {
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
     AnimatedVisibility(
@@ -209,6 +233,50 @@ private fun ThinkingDisclosure(
                 }
             }
             if (isComplete) DoneRow(isFirst = process.isEmpty(), isLast = true)
+        }
+    }
+}
+
+private fun thoughtForLabel(durationSeconds: Int?): String = when {
+    durationSeconds == null || durationSeconds < 1 -> "Thought for a moment"
+    else -> "Thought for ${durationSeconds}s"
+}
+
+private val TOOL_DISC_SIZE = 26.dp
+private val TOOL_DISC_RING = 1.5.dp
+private val TOOL_DISC_ICON = 13.dp
+private val TOOL_STACK_OVERLAP = 8.dp
+
+/**
+ * Avatar-stack of the tools that ran this turn. Each icon sits in a page-coloured ring, so where
+ * the discs overlap (negative spacing) the later one occludes the earlier with a clean gap.
+ */
+@Composable
+private fun ToolStack(tools: List<ProcessItem.Tool>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(-TOOL_STACK_OVERLAP)) {
+        tools.forEach { tool ->
+            Box(
+                modifier = Modifier
+                    .size(TOOL_DISC_SIZE)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(TOOL_DISC_SIZE - TOOL_DISC_RING * 2)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = toolIcon(tool.name),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(TOOL_DISC_ICON),
+                    )
+                }
+            }
         }
     }
 }
@@ -232,11 +300,13 @@ private fun stepFirstLineHeight(): Dp {
 private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
     var expanded by rememberSaveable(text) { mutableStateOf(false) }
     val collapsible = text.length > REASONING_COLLAPSE_CHARS
-    val shown = if (collapsible && !expanded) {
-        text.take(REASONING_COLLAPSE_CHARS).substringBeforeLast(' ').trimEnd() + "…"
-    } else {
-        text
+    val collapsed = remember(text) {
+        text.take(REASONING_COLLAPSE_CHARS).substringBeforeLast(' ').trimEnd()
     }
+    val bodyStyle = MaterialTheme.typography.bodyMedium.copy(
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        lineHeightStyle = STEP_LINE_HEIGHT,
+    )
     TimelineRow(
         firstLineHeight = stepFirstLineHeight(),
         isFirst = isFirst,
@@ -244,14 +314,19 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
         icon = { ThinkingIcon() },
     ) {
         Column {
-            MarkdownBlock(
-                text = shown,
-                bodyStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeightStyle = STEP_LINE_HEIGHT,
-                ),
-                serif = false,
-            )
+            AnimatedContent(
+                targetState = expanded || !collapsible,
+                transitionSpec = { (fadeIn() togetherWith fadeOut()).using(SizeTransform(clip = false)) },
+                label = "reasoning-expand",
+            ) { showFull ->
+                // Collapsed text dissolves into the page near "See more"; the fade replaces a "…".
+                MarkdownBlock(
+                    text = if (showFull) text else collapsed,
+                    bodyStyle = bodyStyle,
+                    serif = false,
+                    modifier = if (showFull) Modifier else Modifier.fadeBottom(REASONING_FADE_HEIGHT),
+                )
+            }
             if (collapsible) {
                 Box(
                     modifier = Modifier
@@ -273,6 +348,26 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
 }
 
 private const val REASONING_COLLAPSE_CHARS = 280
+private val REASONING_FADE_HEIGHT = Spacing.xl
+
+/**
+ * Fades the bottom [height] of the content to transparent — a soft truncation edge. Renders to an
+ * offscreen layer so the [BlendMode.DstIn] gradient erases only the destination's lower band; the
+ * gradient is opaque above [height] from the bottom, so everything but that band is kept intact.
+ */
+private fun Modifier.fadeBottom(height: Dp): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Black, Color.Transparent),
+                startY = size.height - height.toPx(),
+                endY = size.height,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+    }
 
 /** Stacks timeline rows so their per-row [TimelineRow] rules join into one thread. */
 @Composable

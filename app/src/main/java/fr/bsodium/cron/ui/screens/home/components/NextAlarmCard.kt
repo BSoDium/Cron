@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.components.PillBadge
 import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.DisplayFontFamily
 import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.MonoFontFamily
 import fr.bsodium.cron.ui.theme.Radius
@@ -70,7 +71,14 @@ fun NextAlarmCard(
         shadowElevation = 0.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(modifier = Modifier.padding(Spacing.xxl)) {
+        Column(
+            modifier = Modifier.padding(
+                start = Spacing.xxxl,
+                top = Spacing.xxl,
+                end = Spacing.xxl,
+                bottom = Spacing.xxl,
+            ),
+        ) {
             AlignedFirstGlyph(
                 text = dateLabel.ifBlank { "—" },
                 color = MaterialTheme.colorScheme.onSurface,
@@ -164,10 +172,10 @@ private fun CountdownStack(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
-    // Iceland (readable retro mono) rather than Major Mono Display, whose art-deco H/M glyphs
-    // are hard to read at this size; the hero clock keeps the LCD face.
+    // Space Grotesk (the date-label face) — geometric and legible, pairs with the LCD digits
+    // without Major Mono Display's hard-to-read art-deco H/M.
     val smallLcd = TightTextStyle.copy(
-        fontFamily = MonoFontFamily,
+        fontFamily = DisplayFontFamily,
         fontSize = 24.sp,
         lineHeight = 26.sp,
     )

@@ -22,13 +22,10 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,9 +49,11 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -73,11 +72,17 @@ import fr.bsodium.cron.ui.theme.Spacing
 fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     val uiState by viewModel.uiState.collectAsState()
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, spinning = false))
+        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
     }
     LaunchedEffect(uiState.isRetrying, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, spinning = uiState.isRetrying))
+        fabRegistry.set(
+            FabAction(
+                onClick = viewModel::retryAiPlan,
+                working = uiState.isRetrying,
+                onCancel = viewModel::cancelAiPlan,
+            )
+        )
     }
 
     val context = LocalContext.current
@@ -103,74 +108,102 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
 
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val listState = rememberLazyListState()
-    val density = LocalDensity.current
-    // The alarm card behaves like CSS `position: sticky; top: statusBar + gap`: the list scrolls
-    // edge-to-edge under the status bar while the card flows then sticks just below it. It's an
-    // overlay, not a stickyHeader (which pins at y=0 and can't take a top offset without a rest
-    // gap or pin jump); an invisible "alarm-spacer" holds the card's place in the list flow.
-    var cardHeightPx by remember { mutableStateOf(0) }
+    val onNotifEnable = {
+        context.startActivity(
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            }
+        )
+    }
+    val card: @Composable () -> Unit = {
+        NextAlarmCard(
+            dateLabel = uiState.dateLabel,
+            alarmTime = uiState.sessionDisplay?.alarmTime,
+            sleepDurationLabel = uiState.sleepStats?.durationLabel,
+            sleepSegments = uiState.sleepStats?.segments.orEmpty(),
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = Spacing.xl,
-                end = Spacing.xl,
-                top = statusInsetTop + Spacing.xxl,
-                bottom = navInsetBottom + Spacing.navBarClearance,
-            ),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xl),
-        ) {
-            item(key = "greeting") {
+        if (uiState.aiThread == null) {
+            // First-run / no-plan: a simple Column so the onboarding centres in the empty space
+            // between the alarm card and the nav bar. The play FAB is the call to action.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        start = Spacing.xl,
+                        end = Spacing.xl,
+                        top = statusInsetTop + Spacing.xxl,
+                        bottom = navInsetBottom + Spacing.navBarClearance,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xl),
+            ) {
                 GreetingHeader(
                     prefix = uiState.greetingPrefix,
                     name = uiState.greetingName,
                     photoUrl = uiState.greetingPhotoUrl,
                 )
+                card()
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    OnboardingHint()
+                }
+                if (!hasNotificationPermission) NotificationPermissionRow(onEnable = onNotifEnable)
             }
-            // Reserves the alarm card's flow space; the card itself is the StickyAlarm overlay.
-            item(key = "alarm-spacer") {
-                Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
-            }
-            item(key = "thread") {
-                val thread = uiState.aiThread
-                if (thread != null) {
-                    AiThinkingThread(thread)
-                } else {
-                    EmptyPlanState(
-                        onRun = viewModel::retryAiPlan,
-                        isRunning = uiState.isRetrying,
+            // Hand-drawn arrow pointing down at the play FAB.
+            Icon(
+                painter = painterResource(R.drawable.ic_onboarding_arrow),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = Spacing.xl, bottom = navInsetBottom + Spacing.navBarClearance)
+                    .size(width = 96.dp, height = 120.dp),
+            )
+        } else {
+            // The alarm card behaves like CSS `position: sticky; top: statusBar + gap`: the list
+            // scrolls edge-to-edge under the status bar while the card flows then sticks just below
+            // it. It's an overlay, not a stickyHeader (which pins at y=0 and can't take a top
+            // offset without a rest gap or pin jump); an "alarm-spacer" holds its place in flow.
+            val listState = rememberLazyListState()
+            val density = LocalDensity.current
+            var cardHeightPx by remember { mutableStateOf(0) }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = Spacing.xl,
+                    end = Spacing.xl,
+                    top = statusInsetTop + Spacing.xxl,
+                    bottom = navInsetBottom + Spacing.navBarClearance,
+                ),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xl),
+            ) {
+                item(key = "greeting") {
+                    GreetingHeader(
+                        prefix = uiState.greetingPrefix,
+                        name = uiState.greetingName,
+                        photoUrl = uiState.greetingPhotoUrl,
                     )
                 }
-            }
-            if (!hasNotificationPermission) {
-                item(key = "notif-permission") {
-                    NotificationPermissionRow(
-                        onEnable = {
-                            context.startActivity(
-                                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                }
-                            )
-                        },
-                    )
+                item(key = "alarm-spacer") {
+                    Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
+                }
+                item(key = "thread") {
+                    uiState.aiThread?.let { AiThinkingThread(it) }
+                }
+                if (!hasNotificationPermission) {
+                    item(key = "notif-permission") {
+                        NotificationPermissionRow(onEnable = onNotifEnable)
+                    }
                 }
             }
-        }
-
-        StickyAlarm(
-            listState = listState,
-            safeTop = statusInsetTop + Spacing.sm,
-            cardHeightPx = cardHeightPx,
-            onHeightChanged = { cardHeightPx = it },
-        ) {
-            NextAlarmCard(
-                dateLabel = uiState.dateLabel,
-                alarmTime = uiState.sessionDisplay?.alarmTime,
-                sleepDurationLabel = uiState.sleepStats?.durationLabel,
-                sleepSegments = uiState.sleepStats?.segments.orEmpty(),
+            StickyAlarm(
+                listState = listState,
+                safeTop = statusInsetTop + Spacing.sm,
+                cardHeightPx = cardHeightPx,
+                onHeightChanged = { cardHeightPx = it },
+                card = card,
             )
         }
     }
@@ -244,31 +277,29 @@ private fun BoxScope.StickyAlarm(
 }
 
 /**
- * First-run state: Cron hasn't planned a wake-up yet. Explains what a plan needs
- * and offers a CTA that kicks off the same AI run as the play FAB.
+ * First-run onboarding: the app mark as an illustration, a serif invitation, and a line
+ * explaining what a plan needs. The play FAB (pointed at by a hand-drawn arrow) is the CTA.
  */
 @Composable
-private fun EmptyPlanState(
-    onRun: () -> Unit,
-    isRunning: Boolean,
-    modifier: Modifier = Modifier,
-) {
+private fun OnboardingHint(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(top = Spacing.xxl),
+        modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_thinking),
+            painter = painterResource(R.drawable.ic_launcher_monochrome),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.size(96.dp),
         )
         Spacer(Modifier.height(Spacing.lg))
         Text(
-            text = "No plan yet",
-            style = CronTypography.pageTitle,
+            text = "Let's get started",
+            style = CronTypography.bodySerif.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 30.sp,
+                lineHeight = 36.sp,
+            ),
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
         )
@@ -280,18 +311,6 @@ private fun EmptyPlanState(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(Spacing.xl))
-        Button(onClick = onRun, enabled = !isRunning) {
-            if (isRunning) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-                Spacer(Modifier.width(Spacing.sm))
-            }
-            Text(if (isRunning) "Planning…" else "Plan my morning")
-        }
     }
 }
 

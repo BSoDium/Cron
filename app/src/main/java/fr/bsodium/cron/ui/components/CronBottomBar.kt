@@ -4,11 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,8 +28,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Square
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -45,7 +44,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
@@ -121,7 +119,8 @@ private val FAB_EXIT =
 
 data class FabAction(
     val onClick: () -> Unit,
-    val spinning: Boolean = false,
+    val working: Boolean = false,
+    val onCancel: (() -> Unit)? = null,
 )
 
 @Composable
@@ -140,9 +139,9 @@ private fun NavPill(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavSlot(currentRoute, "home", Icons.Filled.Home, "Home", onNavigate)
-            NavSlot(currentRoute, "history", Icons.Filled.History, "History", onNavigate)
-            NavSlot(currentRoute, "settings", Icons.Filled.Settings, "Settings", onNavigate)
+            NavSlot(currentRoute, "home", Icons.Filled.Home, Icons.Outlined.Home, "Home", onNavigate)
+            NavSlot(currentRoute, "history", Icons.Filled.History, Icons.Outlined.History, "History", onNavigate)
+            NavSlot(currentRoute, "settings", Icons.Filled.Settings, Icons.Outlined.Settings, "Settings", onNavigate)
         }
     }
 }
@@ -151,16 +150,17 @@ private fun NavPill(
 private fun RowScope.NavSlot(
     currentRoute: String?,
     route: String,
-    icon: ImageVector,
+    selectedIcon: ImageVector,
+    unselectedIcon: ImageVector,
     label: String,
     onNavigate: (String) -> Unit,
 ) {
     val selected = currentRoute == route
-    // Selected tab is the inverted, high-contrast pair (matches the FAB) so it reads clearly
-    // against the surfaceContainer pill; unselected stays low-emphasis.
-    val targetContainer = if (selected) MaterialTheme.colorScheme.inverseSurface
+    // Selected tab: a soft (not bright) raised shade with a filled icon; unselected stays
+    // low-emphasis with an outlined icon.
+    val targetContainer = if (selected) MaterialTheme.colorScheme.surfaceContainerHighest
         else MaterialTheme.colorScheme.surfaceContainer
-    val targetTint = if (selected) MaterialTheme.colorScheme.inverseOnSurface
+    val targetTint = if (selected) MaterialTheme.colorScheme.onSurface
         else MaterialTheme.colorScheme.onSurfaceVariant
     val container by animateColorAsState(targetContainer, animationSpec = NAV_COLOR_SPEC, label = "nav-container")
     val iconTint by animateColorAsState(targetTint, animationSpec = NAV_COLOR_SPEC, label = "nav-tint")
@@ -179,7 +179,7 @@ private fun RowScope.NavSlot(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = icon,
+                imageVector = if (selected) selectedIcon else unselectedIcon,
                 contentDescription = label,
                 tint = iconTint,
             )
@@ -192,18 +192,9 @@ private val NAV_COLOR_SPEC = tween<Color>(durationMillis = 220, easing = FastOut
 @Composable
 private fun PrimaryActionFab(action: FabAction?) {
     if (action == null) return
-    val transition = rememberInfiniteTransition(label = "fab-spin")
-    val angle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = -360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "fab-spin-angle",
-    )
+    val working = action.working
     FloatingActionButton(
-        onClick = action.onClick,
+        onClick = { if (working) action.onCancel?.invoke() else action.onClick() },
         shape = RoundedCornerShape(Radius.lg),
         containerColor = MaterialTheme.colorScheme.inverseSurface,
         contentColor = MaterialTheme.colorScheme.inverseOnSurface,
@@ -215,9 +206,8 @@ private fun PrimaryActionFab(action: FabAction?) {
         ),
     ) {
         Icon(
-            imageVector = Icons.Filled.PlayArrow,
-            contentDescription = "Re-run alarm plan",
-            modifier = if (action.spinning) Modifier.rotate(angle) else Modifier,
+            imageVector = if (working) Icons.Outlined.Square else Icons.Outlined.PlayArrow,
+            contentDescription = if (working) "Cancel" else "Run alarm plan",
         )
     }
 }
