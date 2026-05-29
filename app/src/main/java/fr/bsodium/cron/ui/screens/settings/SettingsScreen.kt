@@ -103,6 +103,10 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 
             Section(label = "Account") {
                 val context = LocalContext.current
+                DisplayNameRow(
+                    name = state.displayName,
+                    onSave = viewModel::setDisplayName,
+                )
                 GoogleSignInRow(
                     photoUrl = state.displayPhotoUrl,
                     displayName = state.displayName,
@@ -110,10 +114,6 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                     error = state.signInError,
                     onSignIn = { viewModel.signInWithGoogle(context) },
                     onSignOut = viewModel::signOut,
-                )
-                DisplayNameRow(
-                    name = state.displayName,
-                    onSave = viewModel::setDisplayName,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -338,7 +338,7 @@ private fun DisplayNameRow(
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             // Match TextButton content padding so the value aligns with the
-            // Sign in / Clear buttons in the rows above and below.
+            // Sign in / Clear buttons in the rows below.
             modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
         )
     }

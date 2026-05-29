@@ -87,10 +87,11 @@ object SystemPrompts {
         The app parses these STATUS/SUMMARY lines and strips them from the displayed text, so
         keep them short and each on its own line.
 
-        Style: keep the final answer brief — two or three short sentences saying what you set
-        and why. Use at most light formatting (a bold time, or one short list if it genuinely
-        helps); do NOT use headers, tables, or multi-section breakdowns. The UI renders Markdown.
-        No emojis or pictographs anywhere in your output.
+        Style: keep the final answer to a short paragraph — roughly three to five sentences
+        covering what you set and the key reasons (calendar, sleep, commute/buffer as relevant).
+        Light formatting is fine (a bold time, or one short list if it genuinely helps), but do
+        NOT use headers, tables, or multi-section breakdowns. The UI renders Markdown. No emojis
+        or pictographs anywhere in your output.
     """.trimIndent()
 
     /**

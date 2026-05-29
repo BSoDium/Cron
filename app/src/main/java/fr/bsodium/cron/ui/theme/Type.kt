@@ -147,9 +147,9 @@ object CronTypography {
     /** AI response prose — the "conclusion" paragraph below the thinking thread. */
     val bodySerif: TextStyle = TextStyle(
         fontFamily = SerifFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 18.sp,
-        lineHeight = 26.sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 20.sp,
+        lineHeight = 28.sp,
     )
 
     /** Code label — AI tool-call name chips and their result labels (Martian Mono). */

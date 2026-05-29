@@ -1,7 +1,10 @@
+@file:OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+
 package fr.bsodium.cron.ui.theme
 
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
@@ -87,10 +90,15 @@ val CodeFontFamily: FontFamily = FontFamily(
 
 /**
  * Serif face for the AI assistant's final response prose — EB Garamond. Sets the
- * "conclusion" apart from the sans-serif thinking content.
+ * "conclusion" apart from the sans-serif thinking content. EB Garamond is variable, so the
+ * bundled file is registered at each weight via its `wght` axis (no synthesis / no waiting on
+ * the network for bold), with the downloadable entry as a fallback.
  */
 val SerifFontFamily: FontFamily = FontFamily(
-    Font(R.font.eb_garamond),
+    Font(R.font.eb_garamond, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.eb_garamond, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.eb_garamond, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.eb_garamond, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
     Font(googleFont = EbGaramond, fontProvider = Provider),
 )
 

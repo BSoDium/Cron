@@ -164,8 +164,10 @@ private fun CountdownStack(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    // Iceland (readable retro mono) rather than Major Mono Display, whose art-deco H/M glyphs
+    // are hard to read at this size; the hero clock keeps the LCD face.
     val smallLcd = TightTextStyle.copy(
-        fontFamily = LcdFontFamily,
+        fontFamily = MonoFontFamily,
         fontSize = 24.sp,
         lineHeight = 26.sp,
     )
