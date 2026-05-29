@@ -161,7 +161,7 @@ object CronTypography {
     )
 
     /** Smaller code label — tool-call name chips and result labels in the thinking timeline. */
-    val labelMonoSmall: TextStyle = labelMono.copy(fontSize = 12.sp, lineHeight = 16.sp)
+    val labelMonoSmall: TextStyle = labelMono.copy(fontSize = 11.sp, lineHeight = 15.sp)
 }
 
 /**

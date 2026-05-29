@@ -1,10 +1,12 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +17,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -51,10 +52,14 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mikepenz.markdown.compose.components.MarkdownComponentModel
 import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.compose.elements.MarkdownBulletList
 import com.mikepenz.markdown.compose.elements.MarkdownHeader
+import com.mikepenz.markdown.compose.elements.MarkdownOrderedList
 import com.mikepenz.markdown.compose.elements.MarkdownParagraph
+import com.mikepenz.markdown.compose.elements.listDepth
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
@@ -113,23 +118,17 @@ private fun ThinkingDisclosure(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val canExpand = process.isNotEmpty()
-    // Pill button: transparent when collapsed; a subtly lighter fill when open,
-    // the same colour the timeline rule uses so the thread reads as emerging
-    // from the pill. The start padding keeps the rounded fill off the text, and
-    // the matching negative offset pulls the whole pill left so the summary text
-    // lands on the thread's content edge — flush with the response below — while
-    // the fill bleeds into the screen-side gutter. Only the timeline stays indented.
+    // Full-width square bar: transparent when collapsed, a subtly lighter fill when open
+    // (the timeline rule colour, so the thread reads as emerging from it). No corner radius
+    // and no start padding, so the summary text sits on the thread's content edge — flush
+    // with the response below. Only the timeline stays indented.
     Row(
         modifier = Modifier
-            .offset(x = -Spacing.lg)
-            .clip(Radius.full)
+            .fillMaxWidth()
             .let { if (canExpand) it.clickable { expanded = !expanded } else it }
-            .background(
-                if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
-                Radius.full,
-            )
+            .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
             .heightIn(min = 48.dp)
-            .padding(start = Spacing.lg, top = Spacing.sm, end = Spacing.md, bottom = Spacing.sm),
+            .padding(top = Spacing.sm, end = Spacing.md, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
@@ -139,7 +138,7 @@ private fun ThinkingDisclosure(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.weight(1f),
         )
         if (inProgress) {
             CircularProgressIndicator(
@@ -155,7 +154,11 @@ private fun ThinkingDisclosure(
             )
         }
     }
-    AnimatedVisibility(visible = expanded && canExpand) {
+    AnimatedVisibility(
+        visible = expanded && canExpand,
+        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+    ) {
         TimelineColumn {
             process.forEachIndexed { i, item ->
                 val isFirst = i == 0
@@ -369,8 +372,8 @@ private fun ResponseBody(text: String) {
 /**
  * Themed markdown renderer. The thinking area passes `serif = false` (sans
  * everything); the final response passes `serif = true` (serif body *and*
- * headers). Tables render through [CronMarkdownTable] — a full-grid,
- * horizontally scrollable, borders-only table.
+ * headers). Tables render through [CronMarkdownTable] — an editorial,
+ * weighted-column table with horizontal rules only.
  */
 @Composable
 private fun MarkdownBlock(
@@ -393,6 +396,12 @@ private fun MarkdownBlock(
     )
     val serifize: (TextStyle) -> TextStyle =
         { if (serif) it.copy(fontFamily = SerifFontFamily) else it }
+    // Martian Mono reads larger than the sans/serif at the same size, so drop code a notch.
+    val codeStyle = bodyStyle.copy(
+        fontFamily = CodeFontFamily,
+        color = onSurface,
+        fontSize = (bodyStyle.fontSize.value * 0.85f).sp,
+    )
     val typography = markdownTypography(
         h1 = serifize(MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
         h2 = serifize(MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
@@ -406,8 +415,8 @@ private fun MarkdownBlock(
         list = bodyStyle,
         ordered = bodyStyle,
         quote = bodyStyle.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
-        code = bodyStyle.copy(fontFamily = CodeFontFamily, color = onSurface),
-        inlineCode = bodyStyle.copy(fontFamily = CodeFontFamily, color = onSurface),
+        code = codeStyle,
+        inlineCode = codeStyle,
         textLink = androidx.compose.ui.text.TextLinkStyles(
             style = androidx.compose.ui.text.SpanStyle(color = MaterialTheme.colorScheme.primary),
         ),
@@ -436,6 +445,25 @@ private fun MarkdownBlock(
             heading4 = { model -> SpacedHeader(model, typography.h4, HEADING_GAP[3]) },
             heading5 = { model -> SpacedHeader(model, typography.h5, HEADING_GAP[4]) },
             heading6 = { model -> SpacedHeader(model, typography.h6, HEADING_GAP[5]) },
+            // Widen the gap between the bullet/number marker and the list text.
+            unorderedList = { model ->
+                MarkdownBulletList(
+                    content = model.content,
+                    node = model.node,
+                    style = bodyStyle,
+                    depth = model.listDepth,
+                    markerModifier = { Modifier.padding(end = LIST_MARKER_GAP) },
+                )
+            },
+            orderedList = { model ->
+                MarkdownOrderedList(
+                    content = model.content,
+                    node = model.node,
+                    style = bodyStyle,
+                    depth = model.listDepth,
+                    markerModifier = { Modifier.padding(end = LIST_MARKER_GAP) },
+                )
+            },
             table = { model -> CronMarkdownTable(model, bodyStyle) },
         ),
         modifier = modifier,
@@ -457,6 +485,10 @@ private val HEADING_GAP = listOf(
 )
 private val MD_BLOCK_GAP = Spacing.xs
 private val MD_PARA_BELOW = Spacing.xs
+private val LIST_MARKER_GAP = Spacing.sm
+// Bounds for content-proportional table columns, so no column dominates or collapses.
+private val TABLE_COL_MIN = 64.dp
+private val TABLE_COL_MAX = 200.dp
 
 @Composable
 private fun SpacedHeader(model: MarkdownComponentModel, style: TextStyle, gap: HeadingGap) {
@@ -466,9 +498,9 @@ private fun SpacedHeader(model: MarkdownComponentModel, style: TextStyle, gap: H
 }
 
 /**
- * Full-grid, borders-only, horizontally scrollable table. Parses the GFM table
- * source from the AST node range, sizes each column to its widest cell (so wide
- * tables scroll rather than wrap), and outlines every cell on all four sides.
+ * Editorial table: bold header, a rule under the header and subtle rules between rows, no
+ * vertical lines and no doubled borders. Columns are weighted by their widest cell so they
+ * stay content-proportional and the text wraps to fit the available width.
  */
 @Composable
 private fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextStyle) {
@@ -478,38 +510,42 @@ private fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextStyl
     val rows = remember(source) { parseGfmTable(source) }
     if (rows.isEmpty()) return
 
-    val border = MaterialTheme.colorScheme.outlineVariant
+    val headerLine = MaterialTheme.colorScheme.outlineVariant
+    val rowLine = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
     val headerStyle = cellStyle.copy(fontWeight = FontWeight.SemiBold)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val numCols = rows.maxOf { it.size }
-    val colWidths = remember(rows, headerStyle) {
+    // Weight columns by measured content width, but clamp into a band so a long-sentence
+    // column can't dominate (squeezing its neighbours to per-character wrapping) and a short
+    // one can't collapse.
+    val minColPx = with(density) { TABLE_COL_MIN.toPx() }
+    val maxColPx = with(density) { TABLE_COL_MAX.toPx() }
+    val colWeights = remember(rows, headerStyle, minColPx, maxColPx) {
         (0 until numCols).map { c ->
-            val widest = rows.maxOf { row ->
+            rows.maxOf { row ->
                 measurer.measure(AnnotatedString(row.getOrElse(c) { "" }), headerStyle).size.width
-            }
-            with(density) { widest.toDp() } + Spacing.sm * 2 + Spacing.xs
+            }.toFloat().coerceIn(minColPx, maxColPx)
         }
     }
 
-    Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         rows.forEachIndexed { r, row ->
-            Row {
+            Row(modifier = Modifier.fillMaxWidth()) {
                 (0 until numCols).forEach { c ->
                     Box(
                         modifier = Modifier
-                            .width(colWidths[c])
-                            .border(1.dp, border)
-                            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                            .weight(colWeights[c])
+                            .padding(end = Spacing.md, top = Spacing.sm, bottom = Spacing.sm),
                     ) {
                         Text(
                             text = row.getOrElse(c) { "" },
                             style = if (r == 0) headerStyle else cellStyle,
-                            maxLines = 1,
                         )
                     }
                 }
             }
+            HorizontalDivider(color = if (r == 0) headerLine else rowLine)
         }
     }
 }

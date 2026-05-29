@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -94,7 +97,18 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
 
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val listState = rememberLazyListState()
+    // The alarm card (item 1) is pinned once the greeting (item 0) scrolls off; only then
+    // does it need the status-bar safe-area inset, so it parks below the bar without leaving
+    // a permanent gap under the greeting at rest. NB: the `>= 1` threshold assumes "greeting"
+    // is item 0 and the sticky "alarm" is item 1 — bump it if any item is added before "alarm".
+    val pinned by remember { derivedStateOf { listState.firstVisibleItemIndex >= 1 } }
+    val stickyTopInset by animateDpAsState(
+        targetValue = if (pinned) statusInsetTop else 0.dp,
+        label = "sticky-top-inset",
+    )
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = Spacing.xl,
@@ -111,17 +125,16 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                 photoUrl = uiState.greetingPhotoUrl,
             )
         }
-        // Wrap the card in an opaque background so the greeting doesn't bleed
-        // through the rounded card's transparent corners during sticky transit.
-        // The top inset is the safe area: when the header pins it parks below the
-        // status bar instead of sliding under it. The background fills the strip
-        // behind it, and EdgeFades softens the seam against the status bar.
+        // Opaque page-bg wrapper so content scrolling behind the pinned card is fully
+        // occluded (full width — matching the full-width summary bar below — reads as a clean
+        // header band, and nothing leaks into the status-bar safe area). The top inset applies
+        // only when pinned, parking the card below the status bar; EdgeFades softens the seam.
         stickyHeader(key = "alarm") {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.background)
-                    .padding(top = statusInsetTop + Spacing.xs, bottom = Spacing.xs),
+                    .padding(top = stickyTopInset + Spacing.xs, bottom = Spacing.xs),
             ) {
                 NextAlarmCard(
                     dateLabel = uiState.dateLabel,
