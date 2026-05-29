@@ -44,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -98,22 +100,20 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listState = rememberLazyListState()
-    // The alarm card (item 1) is pinned once the greeting (item 0) scrolls off; only then
-    // does it need the status-bar safe-area inset, so it parks below the bar without leaving
-    // a permanent gap under the greeting at rest. NB: the `>= 1` threshold assumes "greeting"
-    // is item 0 and the sticky "alarm" is item 1 — bump it if any item is added before "alarm".
+    // Inset the whole list below the status bar so the sticky alarm header pins just below the
+    // bar (sticky headers ignore contentPadding) — giving a constant greeting↔card gap with no
+    // per-pin animation. `pinned` (greeting at item 0 scrolled off) only gates the card shadow;
+    // bump the `>= 1` threshold if any item is ever added before the sticky "alarm" (index 1).
     val pinned by remember { derivedStateOf { listState.firstVisibleItemIndex >= 1 } }
-    val stickyTopInset by animateDpAsState(
-        targetValue = if (pinned) statusInsetTop else 0.dp,
-        label = "sticky-top-inset",
-    )
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = statusInsetTop + Spacing.sm),
         contentPadding = PaddingValues(
             start = Spacing.xl,
             end = Spacing.xl,
-            top = statusInsetTop + Spacing.xxl,
+            top = Spacing.lg,
             bottom = navInsetBottom + Spacing.navBarClearance,
         ),
         verticalArrangement = Arrangement.spacedBy(Spacing.xl),
@@ -125,23 +125,17 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                 photoUrl = uiState.greetingPhotoUrl,
             )
         }
-        // Opaque page-bg wrapper so content scrolling behind the pinned card is fully
-        // occluded (full width — matching the full-width summary bar below — reads as a clean
-        // header band, and nothing leaks into the status-bar safe area). The top inset applies
-        // only when pinned, parking the card below the status bar; EdgeFades softens the seam.
+        // The rounded card is the only occluder — no wider borderless wrapper. When pinned it
+        // casts a soft background-coloured gradient over the content sliding under it.
         stickyHeader(key = "alarm") {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(top = stickyTopInset + Spacing.xs, bottom = Spacing.xs),
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 NextAlarmCard(
                     dateLabel = uiState.dateLabel,
                     alarmTime = uiState.sessionDisplay?.alarmTime,
                     sleepDurationLabel = uiState.sleepStats?.durationLabel,
                     sleepSegments = uiState.sleepStats?.segments.orEmpty(),
                 )
+                StickyScrim(visible = pinned)
             }
         }
         item(key = "thread") {
@@ -169,6 +163,23 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
             }
         }
     }
+}
+
+/**
+ * Soft background-coloured scrim below the sticky alarm card: it grows in only while the card is
+ * pinned, dissolving content sliding beneath it into the page background instead of a hard cut.
+ * Collapses to zero height at rest, so it adds no gap below the card when inactive.
+ */
+@Composable
+private fun StickyScrim(visible: Boolean) {
+    val background = MaterialTheme.colorScheme.background
+    val height by animateDpAsState(targetValue = if (visible) Spacing.md else 0.dp, label = "sticky-scrim")
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(Brush.verticalGradient(listOf(background, Color.Transparent))),
+    )
 }
 
 /**
