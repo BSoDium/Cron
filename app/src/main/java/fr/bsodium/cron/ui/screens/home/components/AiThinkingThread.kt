@@ -157,14 +157,16 @@ private fun ThinkingDisclosure(
     }
     AnimatedVisibility(visible = expanded && canExpand) {
         TimelineColumn {
-            process.forEach { item ->
+            process.forEachIndexed { i, item ->
+                val isFirst = i == 0
+                val isLast = !isComplete && i == process.lastIndex
                 when (item) {
-                    is ProcessItem.Reasoning -> ProcessTextRow(item.text)
-                    is ProcessItem.Narration -> ProcessTextRow(item.text)
-                    is ProcessItem.Tool -> ToolStepRow(item)
+                    is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
+                    is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
+                    is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
                 }
             }
-            if (isComplete) DoneRow()
+            if (isComplete) DoneRow(isFirst = process.isEmpty(), isLast = true)
         }
     }
 }
@@ -185,8 +187,13 @@ private fun stepFirstLineHeight(): Dp {
 }
 
 @Composable
-private fun ProcessTextRow(text: String) {
-    TimelineRow(firstLineHeight = stepFirstLineHeight(), icon = { ThinkingIcon() }) {
+private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
+    TimelineRow(
+        firstLineHeight = stepFirstLineHeight(),
+        isFirst = isFirst,
+        isLast = isLast,
+        icon = { ThinkingIcon() },
+    ) {
         MarkdownBlock(
             text = text,
             bodyStyle = MaterialTheme.typography.bodyMedium.copy(
@@ -206,6 +213,8 @@ private fun TimelineColumn(content: @Composable () -> Unit) {
 @Composable
 private fun TimelineRow(
     firstLineHeight: Dp,
+    isFirst: Boolean,
+    isLast: Boolean,
     icon: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -217,19 +226,28 @@ private fun TimelineRow(
     // contentTopPad + firstLine/2, so its top inset is that minus half the disc.
     val discTop = (TIMELINE_CONTENT_VPAD + (firstLineHeight - ICON_MASK_SIZE) / 2)
         .coerceAtLeast(0.dp)
+    val iconCenter = discTop + ICON_MASK_SIZE / 2
+    // Cap the connector at the endpoints so it runs from the first node's centre to
+    // the last node's centre rather than leaking past them.
+    val ruleExtent = when {
+        isFirst && isLast -> Modifier.height(0.dp)
+        isFirst -> Modifier.fillMaxHeight().padding(top = iconCenter)
+        isLast -> Modifier.height(iconCenter)
+        else -> Modifier.fillMaxHeight()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min),
     ) {
-        // Gutter: a full-height rule, with the step icon in a page-coloured disc
+        // Gutter: the connector rule, with the step icon in a page-coloured disc
         // that masks the rule, leaving a clean gap around it.
         Box(modifier = Modifier.width(GUTTER_WIDTH)) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .width(2.dp)
-                    .fillMaxHeight()
+                    .then(ruleExtent)
                     .background(ruleColor),
             )
             if (icon != null) {
@@ -254,15 +272,20 @@ private fun TimelineRow(
 }
 
 @Composable
-private fun ToolStepRow(step: ProcessItem.Tool) {
-    TimelineRow(firstLineHeight = stepFirstLineHeight(), icon = {
-        Icon(
-            imageVector = Icons.Outlined.Build,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(STEP_ICON_SIZE),
-        )
-    }) {
+private fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boolean) {
+    TimelineRow(
+        firstLineHeight = stepFirstLineHeight(),
+        isFirst = isFirst,
+        isLast = isLast,
+        icon = {
+            Icon(
+                imageVector = Icons.Outlined.Build,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(STEP_ICON_SIZE),
+            )
+        },
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -313,8 +336,12 @@ private fun ToolStepRow(step: ProcessItem.Tool) {
 }
 
 @Composable
-private fun DoneRow() {
-    TimelineRow(firstLineHeight = stepFirstLineHeight(), icon = {
+private fun DoneRow(isFirst: Boolean, isLast: Boolean) {
+    TimelineRow(
+        firstLineHeight = stepFirstLineHeight(),
+        isFirst = isFirst,
+        isLast = isLast,
+        icon = {
         Icon(
             imageVector = Icons.Rounded.Check,
             contentDescription = null,
