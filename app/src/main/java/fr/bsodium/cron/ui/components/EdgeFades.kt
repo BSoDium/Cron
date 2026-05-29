@@ -34,7 +34,7 @@ fun EdgeFades(modifier: Modifier = Modifier) {
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .height(statusTop + Spacing.lg)
+                .height(statusTop)
                 .background(Brush.verticalGradient(listOf(background, Color.Transparent))),
         )
         Box(

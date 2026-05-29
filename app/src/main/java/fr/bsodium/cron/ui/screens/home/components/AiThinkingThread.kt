@@ -23,9 +23,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.AlarmOff
+import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Commute
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -43,6 +51,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -50,6 +60,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -109,6 +120,23 @@ private val ICON_MASK_SIZE = 24.dp
 // kept at sm so a clear segment of the timeline rule shows between icon discs.
 private val TIMELINE_CONTENT_VPAD = Spacing.sm
 
+/**
+ * Draws content [bleed] wider on each side than its slot — overflowing the parent's horizontal
+ * content padding out to the screen edges — while still reporting the slot width to the parent
+ * so siblings are unaffected. Compensate with extra start/end padding to keep inner content put.
+ */
+private fun Modifier.bleedHorizontally(bleed: Dp): Modifier = layout { measurable, constraints ->
+    // Only meaningful under a bounded-width parent (our LazyColumn item); if width is unbounded
+    // there's nothing to bleed into, so measure and place normally.
+    if (constraints.maxWidth == Constraints.Infinity) {
+        val placeable = measurable.measure(constraints)
+        return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }
+    val bleedPx = bleed.roundToPx()
+    val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + bleedPx * 2))
+    layout(constraints.maxWidth, placeable.height) { placeable.place(-bleedPx, 0) }
+}
+
 @Composable
 private fun ThinkingDisclosure(
     summary: String?,
@@ -118,17 +146,19 @@ private fun ThinkingDisclosure(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val canExpand = process.isNotEmpty()
-    // Full-width square bar: transparent when collapsed, a subtly lighter fill when open
-    // (the timeline rule colour, so the thread reads as emerging from it). No corner radius
-    // and no start padding, so the summary text sits on the thread's content edge — flush
-    // with the response below. Only the timeline stays indented.
+    // Full-bleed square bar: transparent when collapsed, a subtly lighter fill when open (the
+    // timeline rule colour, so the thread reads as emerging from it). It bleeds past the screen-
+    // side content padding (Spacing.xl) to hug both edges; the compensating start/end padding
+    // keeps the summary text on the content edge (flush with the response) and the chevron in
+    // place. Only the timeline stays indented.
     Row(
         modifier = Modifier
+            .bleedHorizontally(Spacing.xl)
             .fillMaxWidth()
             .let { if (canExpand) it.clickable { expanded = !expanded } else it }
             .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
             .heightIn(min = 48.dp)
-            .padding(top = Spacing.sm, end = Spacing.md, bottom = Spacing.sm),
+            .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.md + Spacing.xl, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
@@ -274,6 +304,19 @@ private fun TimelineRow(
     }
 }
 
+/** Outlined icon for each tool's operation; wrench for anything unmapped. */
+private fun toolIcon(name: String): ImageVector = when (name) {
+    "read_calendar" -> Icons.Outlined.CalendarMonth
+    "set_alarm" -> Icons.Outlined.Alarm
+    "cancel_alarm" -> Icons.Outlined.AlarmOff
+    "estimate_commute", "estimate_commute_multi_mode" -> Icons.Outlined.Commute
+    "geocode_address" -> Icons.Outlined.LocationOn
+    "notify_warning" -> Icons.Outlined.WarningAmber
+    "send_brief" -> Icons.AutoMirrored.Outlined.Article
+    "do_nothing" -> Icons.Outlined.Bedtime
+    else -> Icons.Outlined.Build
+}
+
 @Composable
 private fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boolean) {
     TimelineRow(
@@ -282,7 +325,7 @@ private fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boolea
         isLast = isLast,
         icon = {
             Icon(
-                imageVector = Icons.Outlined.Build,
+                imageVector = toolIcon(step.name),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(STEP_ICON_SIZE),
