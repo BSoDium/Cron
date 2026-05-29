@@ -146,17 +146,17 @@ private fun ThinkingDisclosure(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val canExpand = process.isNotEmpty()
-    // Full-bleed square bar: transparent when collapsed, a subtly lighter fill when open (the
-    // timeline rule colour, so the thread reads as emerging from it). It bleeds past the screen-
-    // side content padding (Spacing.xl) to hug both edges; the compensating start/end padding
-    // keeps the summary text on the content edge (flush with the response) and the chevron in
-    // place. Only the timeline stays indented.
+    // Full-bleed square bar: transparent when collapsed, a quiet fill when open (a step below
+    // the alarm card so it stays secondary to it). It bleeds past the screen-side content
+    // padding (Spacing.xl) to hug both edges; the compensating start/end padding keeps the
+    // summary text on the content edge (flush with the response) and the chevron in place.
+    // Only the timeline stays indented.
     Row(
         modifier = Modifier
             .bleedHorizontally(Spacing.xl)
             .fillMaxWidth()
             .let { if (canExpand) it.clickable { expanded = !expanded } else it }
-            .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
+            .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent)
             .heightIn(min = 48.dp)
             .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.md + Spacing.xl, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
@@ -251,7 +251,7 @@ private fun TimelineRow(
     icon: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    // The rule shares the open-pill colour so the thread looks continuous with it.
+    // Low-emphasis connector tone with enough contrast for a 2dp line against the page.
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val maskColor = MaterialTheme.colorScheme.background
     // Centre the icon disc on the content's FIRST line (not the whole row, which

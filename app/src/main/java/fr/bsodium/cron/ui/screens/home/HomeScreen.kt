@@ -5,10 +5,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -46,9 +47,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -64,7 +69,6 @@ import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     val uiState by viewModel.uiState.collectAsState()
@@ -100,86 +104,130 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listState = rememberLazyListState()
-    // Inset the whole list below the status bar so the sticky alarm header pins just below the
-    // bar (sticky headers ignore contentPadding) — giving a constant greeting↔card gap with no
-    // per-pin animation. `pinned` (greeting at item 0 scrolled off) only gates the card shadow;
-    // bump the `>= 1` threshold if any item is ever added before the sticky "alarm" (index 1).
-    val pinned by remember { derivedStateOf { listState.firstVisibleItemIndex >= 1 } }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = statusInsetTop + Spacing.sm),
-        contentPadding = PaddingValues(
-            start = Spacing.xl,
-            end = Spacing.xl,
-            top = Spacing.lg,
-            bottom = navInsetBottom + Spacing.navBarClearance,
-        ),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xl),
-    ) {
-        item(key = "greeting") {
-            GreetingHeader(
-                prefix = uiState.greetingPrefix,
-                name = uiState.greetingName,
-                photoUrl = uiState.greetingPhotoUrl,
+    val density = LocalDensity.current
+    // The alarm card behaves like CSS `position: sticky; top: statusBar + gap`: the list scrolls
+    // edge-to-edge under the status bar while the card flows then sticks just below it. It's an
+    // overlay, not a stickyHeader (which pins at y=0 and can't take a top offset without a rest
+    // gap or pin jump); an invisible "alarm-spacer" holds the card's place in the list flow.
+    var cardHeightPx by remember { mutableStateOf(0) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = Spacing.xl,
+                end = Spacing.xl,
+                top = statusInsetTop + Spacing.xxl,
+                bottom = navInsetBottom + Spacing.navBarClearance,
+            ),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xl),
+        ) {
+            item(key = "greeting") {
+                GreetingHeader(
+                    prefix = uiState.greetingPrefix,
+                    name = uiState.greetingName,
+                    photoUrl = uiState.greetingPhotoUrl,
+                )
+            }
+            // Reserves the alarm card's flow space; the card itself is the StickyAlarm overlay.
+            item(key = "alarm-spacer") {
+                Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
+            }
+            item(key = "thread") {
+                val thread = uiState.aiThread
+                if (thread != null) {
+                    AiThinkingThread(thread)
+                } else {
+                    EmptyPlanState(
+                        onRun = viewModel::retryAiPlan,
+                        isRunning = uiState.isRetrying,
+                    )
+                }
+            }
+            if (!hasNotificationPermission) {
+                item(key = "notif-permission") {
+                    NotificationPermissionRow(
+                        onEnable = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                }
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
+        StickyAlarm(
+            listState = listState,
+            safeTop = statusInsetTop + Spacing.sm,
+            cardHeightPx = cardHeightPx,
+            onHeightChanged = { cardHeightPx = it },
+        ) {
+            NextAlarmCard(
+                dateLabel = uiState.dateLabel,
+                alarmTime = uiState.sessionDisplay?.alarmTime,
+                sleepDurationLabel = uiState.sleepStats?.durationLabel,
+                sleepSegments = uiState.sleepStats?.segments.orEmpty(),
             )
-        }
-        // The rounded card is the only occluder — no wider borderless wrapper. When pinned it
-        // casts a soft background-coloured gradient over the content sliding under it.
-        stickyHeader(key = "alarm") {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                NextAlarmCard(
-                    dateLabel = uiState.dateLabel,
-                    alarmTime = uiState.sessionDisplay?.alarmTime,
-                    sleepDurationLabel = uiState.sleepStats?.durationLabel,
-                    sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-                )
-                StickyScrim(visible = pinned)
-            }
-        }
-        item(key = "thread") {
-            val thread = uiState.aiThread
-            if (thread != null) {
-                AiThinkingThread(thread)
-            } else {
-                EmptyPlanState(
-                    onRun = viewModel::retryAiPlan,
-                    isRunning = uiState.isRetrying,
-                )
-            }
-        }
-        if (!hasNotificationPermission) {
-            item(key = "notif-permission") {
-                NotificationPermissionRow(
-                    onEnable = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            }
-                        )
-                    },
-                )
-            }
         }
     }
 }
 
+private data class StickyAlarmState(val top: Int, val gradientAlpha: Float)
+
 /**
- * Soft background-coloured scrim below the sticky alarm card: it grows in only while the card is
- * pinned, dissolving content sliding beneath it into the page background instead of a hard cut.
- * Collapses to zero height at rest, so it adds no gap below the card when inactive.
+ * CSS-`sticky`-with-top-offset alarm card, rendered as an overlay over the list. It follows the
+ * flow position of the "alarm-spacer" item, then holds at [safeTop] (just below the status bar).
+ * When stuck, a full-width background→transparent gradient fades in behind it, dissolving content
+ * that slides under the card (and the full-bleed pill's edges) into the page background.
  */
 @Composable
-private fun StickyScrim(visible: Boolean) {
+private fun BoxScope.StickyAlarm(
+    listState: LazyListState,
+    safeTop: Dp,
+    cardHeightPx: Int,
+    onHeightChanged: (Int) -> Unit,
+    card: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    val safeTopPx = with(density) { safeTop.roundToPx() }
+    val fadePx = with(density) { Spacing.xxl.toPx() }
+    val state by remember(safeTopPx, fadePx) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            // Item offsets are content-relative; the on-screen top = offset - viewportStartOffset
+            // (viewportStartOffset is -beforeContentPadding). Null when the spacer has scrolled
+            // off the top → fully stuck (handled explicitly to avoid sentinel-int overflow).
+            val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
+                ?.let { it.offset - info.viewportStartOffset }
+            if (screenTop == null) {
+                StickyAlarmState(top = safeTopPx, gradientAlpha = 1f)
+            } else {
+                StickyAlarmState(
+                    top = maxOf(safeTopPx, screenTop),
+                    gradientAlpha = ((safeTopPx - screenTop) / fadePx).coerceIn(0f, 1f),
+                )
+            }
+        }
+    }
     val background = MaterialTheme.colorScheme.background
-    val height by animateDpAsState(targetValue = if (visible) Spacing.md else 0.dp, label = "sticky-scrim")
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(height)
+            .height(with(density) { (safeTopPx + cardHeightPx).toDp() })
+            .graphicsLayer { alpha = state.gradientAlpha }
             .background(Brush.verticalGradient(listOf(background, Color.Transparent))),
     )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { translationY = state.top.toFloat() }
+            .padding(horizontal = Spacing.xl)
+            .onSizeChanged { if (it.height != cardHeightPx) onHeightChanged(it.height) },
+    ) { card() }
 }
 
 /**
