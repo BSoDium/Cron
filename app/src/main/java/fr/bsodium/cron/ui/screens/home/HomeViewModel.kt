@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
 import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
@@ -32,7 +33,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
@@ -69,6 +69,8 @@ data class AiThreadUi(
     val process: List<ProcessItem>,
     val response: String?,
     val isComplete: Boolean,
+    /** Wall-clock seconds the turn took, once complete — shown as "Thought for Xs". */
+    val durationSeconds: Int? = null,
 )
 
 /** One ordered step of the assistant's thinking process, shown inside the collapsible. */
@@ -147,30 +149,56 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * [fr.bsodium.cron.receiver.EveningPlanReceiver] also performs — those are
      * scheduling concerns owned by the receiver, not a manual user trigger.)
      */
-    fun retryAiPlan() {
+    init {
+        // Drive the "working" flag off the real WorkManager turn rather than a fixed delay:
+        // a tap optimistically sets it true; this clears it once the turn reaches a terminal
+        // state (succeeded / failed / cancelled).
         viewModelScope.launch {
-            _isRetrying.value = true
-            try {
-                withContext(Dispatchers.IO) {
-                    val current = db.sessionDao().findCurrent()
-                    if (current != null) {
-                        repository.triggerAiTurn(current.id)
-                    } else {
-                        val tz = TimeZone.currentSystemDefault()
-                        val location = locationProvider.acquireForEveningPlan()
-                        val event = SessionEvent(
-                            trigger = TriggerType.EveningPlan,
-                            timestamp = Clock.System.now(),
-                            data = EventData.EveningPlan(timezone = tz.id, location = location),
-                        )
-                        SessionFsm(getApplication(), repository).onEvent(event)
+            sessionFlow.map { it?.id }.distinctUntilChanged()
+                .flatMapLatest { id ->
+                    if (id == null) flowOf(emptyList<WorkInfo>()) else repository.observeAiTurnWork(id)
+                }
+                .collect { infos ->
+                    when {
+                        infos.any { !it.state.isFinished } -> _isRetrying.value = true
+                        infos.isNotEmpty() -> _isRetrying.value = false
                     }
                 }
-                // No tight signal for "AI turn done" yet; spin briefly so the user sees
-                // the tap registered. New messages will stream in via aiThreadFlow.
-                kotlinx.coroutines.delay(2_500)
-            } finally {
-                _isRetrying.value = false
+        }
+    }
+
+    fun retryAiPlan() {
+        _isRetrying.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = db.sessionDao().findCurrent()
+            if (current != null) {
+                repository.triggerAiTurn(current.id)
+            } else {
+                val tz = TimeZone.currentSystemDefault()
+                val location = locationProvider.acquireForEveningPlan()
+                val event = SessionEvent(
+                    trigger = TriggerType.EveningPlan,
+                    timestamp = Clock.System.now(),
+                    data = EventData.EveningPlan(timezone = tz.id, location = location),
+                )
+                SessionFsm(getApplication(), repository).onEvent(event)
+            }
+        }
+    }
+
+    /**
+     * Interrupts the running AI turn. If no alarm was set, reverts the latest turn so the
+     * thinking thread disappears and the home screen returns to its empty state.
+     */
+    fun cancelAiPlan() {
+        _isRetrying.value = false
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = db.sessionDao().findCurrent() ?: return@launch
+            repository.cancelAiTurn(current.id)
+            if (current.toDisplayState()?.alarmTime == null) {
+                db.aiMessageDao().maxTurnIndex(current.id)?.let { turn ->
+                    db.aiMessageDao().deleteByTurn(current.id, turn)
+                }
             }
         }
     }
@@ -296,6 +324,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .filterIsInstance<ContentBlock.ToolUse>()
             .all { toolResults.containsKey(it.id) }
 
+        val turnRows = rows.filter { it.turnIndex == latestTurn }
+        val durationSeconds = if (isComplete && turnRows.isNotEmpty()) {
+            ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
+        } else {
+            null
+        }
+
         // Pill preview: the model's gerund while working, its past-tense summary once done.
         // Fall back to the first line of reasoning if the model skipped the directives.
         val fallback = process
@@ -314,6 +349,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             process = process,
             response = response,
             isComplete = isComplete,
+            durationSeconds = durationSeconds,
         )
     }
 

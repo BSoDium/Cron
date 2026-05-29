@@ -96,6 +96,7 @@ val CodeFontFamily: FontFamily = FontFamily(
  */
 val SerifFontFamily: FontFamily = FontFamily(
     Font(R.font.eb_garamond, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.eb_garamond, weight = FontWeight(450), variationSettings = FontVariation.Settings(FontVariation.weight(450))),
     Font(R.font.eb_garamond, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
     Font(R.font.eb_garamond, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
     Font(R.font.eb_garamond, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
