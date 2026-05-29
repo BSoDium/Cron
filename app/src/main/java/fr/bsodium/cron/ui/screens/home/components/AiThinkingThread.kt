@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -48,9 +49,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.compose.components.MarkdownComponentModel
 import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.compose.elements.MarkdownHeader
+import com.mikepenz.markdown.compose.elements.MarkdownParagraph
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
@@ -58,8 +62,8 @@ import com.mikepenz.markdown.model.markdownPadding
 import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
+import fr.bsodium.cron.ui.theme.CodeFontFamily
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.MonoFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.SerifFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
@@ -96,6 +100,9 @@ fun AiThinkingThread(thread: AiThreadUi, modifier: Modifier = Modifier) {
 private val GUTTER_WIDTH = 28.dp
 private val STEP_ICON_SIZE = 16.dp
 private val ICON_MASK_SIZE = 24.dp
+// Vertical padding around each row's content. Doubles as the gap between steps —
+// kept at sm so a clear segment of the timeline rule shows between icon discs.
+private val TIMELINE_CONTENT_VPAD = Spacing.sm
 
 @Composable
 private fun ThinkingDisclosure(
@@ -108,9 +115,13 @@ private fun ThinkingDisclosure(
     val canExpand = process.isNotEmpty()
     // Pill button: transparent when collapsed; a subtly lighter fill when open,
     // the same colour the timeline rule uses so the thread reads as emerging
-    // from the pill. Bigger left padding gives the text button-like breathing room.
+    // from the pill. The start padding keeps the rounded fill off the text, and
+    // the matching negative offset pulls the whole pill left so the summary text
+    // lands on the thread's content edge — flush with the response below — while
+    // the fill bleeds into the screen-side gutter. Only the timeline stays indented.
     Row(
         modifier = Modifier
+            .offset(x = -Spacing.lg)
             .clip(Radius.full)
             .let { if (canExpand) it.clickable { expanded = !expanded } else it }
             .background(
@@ -166,9 +177,16 @@ private fun ThinkingIcon() = Icon(
     modifier = Modifier.size(STEP_ICON_SIZE),
 )
 
+/** Line height of a step's first line, used to centre its icon on that line. */
+@Composable
+private fun stepFirstLineHeight(): Dp {
+    val density = LocalDensity.current
+    return with(density) { MaterialTheme.typography.bodyMedium.lineHeight.toDp() }
+}
+
 @Composable
 private fun ProcessTextRow(text: String) {
-    TimelineRow(icon = { ThinkingIcon() }) {
+    TimelineRow(firstLineHeight = stepFirstLineHeight(), icon = { ThinkingIcon() }) {
         MarkdownBlock(
             text = text,
             bodyStyle = MaterialTheme.typography.bodyMedium.copy(
@@ -187,19 +205,25 @@ private fun TimelineColumn(content: @Composable () -> Unit) {
 
 @Composable
 private fun TimelineRow(
+    firstLineHeight: Dp,
     icon: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     // The rule shares the open-pill colour so the thread looks continuous with it.
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val maskColor = MaterialTheme.colorScheme.background
+    // Centre the icon disc on the content's FIRST line (not the whole row, which
+    // drifts to the middle of multi-line reasoning): disc centre =
+    // contentTopPad + firstLine/2, so its top inset is that minus half the disc.
+    val discTop = (TIMELINE_CONTENT_VPAD + (firstLineHeight - ICON_MASK_SIZE) / 2)
+        .coerceAtLeast(0.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min),
     ) {
-        // Gutter: a full-height rule, with the step icon centered on the row in a
-        // page-coloured disc that masks the rule, leaving a clean gap around it.
+        // Gutter: a full-height rule, with the step icon in a page-coloured disc
+        // that masks the rule, leaving a clean gap around it.
         Box(modifier = Modifier.width(GUTTER_WIDTH)) {
             Box(
                 modifier = Modifier
@@ -211,7 +235,8 @@ private fun TimelineRow(
             if (icon != null) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.Center)
+                        .align(Alignment.TopCenter)
+                        .padding(top = discTop)
                         .size(ICON_MASK_SIZE)
                         .clip(CircleShape)
                         .background(maskColor),
@@ -223,16 +248,16 @@ private fun TimelineRow(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .padding(top = Spacing.xs, bottom = Spacing.xs, end = Spacing.md),
+                .padding(top = TIMELINE_CONTENT_VPAD, bottom = TIMELINE_CONTENT_VPAD, end = Spacing.md),
         ) { content() }
     }
 }
 
 @Composable
 private fun ToolStepRow(step: ProcessItem.Tool) {
-    TimelineRow(icon = {
+    TimelineRow(firstLineHeight = stepFirstLineHeight(), icon = {
         Icon(
-            imageVector = Icons.Rounded.Build,
+            imageVector = Icons.Outlined.Build,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(STEP_ICON_SIZE),
@@ -289,7 +314,7 @@ private fun ToolStepRow(step: ProcessItem.Tool) {
 
 @Composable
 private fun DoneRow() {
-    TimelineRow(icon = {
+    TimelineRow(firstLineHeight = stepFirstLineHeight(), icon = {
         Icon(
             imageVector = Icons.Rounded.Check,
             contentDescription = null,
@@ -354,8 +379,8 @@ private fun MarkdownBlock(
         list = bodyStyle,
         ordered = bodyStyle,
         quote = bodyStyle.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
-        code = bodyStyle.copy(fontFamily = MonoFontFamily, color = onSurface),
-        inlineCode = bodyStyle.copy(fontFamily = MonoFontFamily, color = onSurface),
+        code = bodyStyle.copy(fontFamily = CodeFontFamily, color = onSurface),
+        inlineCode = bodyStyle.copy(fontFamily = CodeFontFamily, color = onSurface),
         textLink = androidx.compose.ui.text.TextLinkStyles(
             style = androidx.compose.ui.text.SpanStyle(color = MaterialTheme.colorScheme.primary),
         ),
@@ -364,13 +389,53 @@ private fun MarkdownBlock(
         content = text,
         colors = colors,
         typography = typography,
-        // Tighter than before — paragraphs/headers no longer feel too airy.
-        padding = markdownPadding(block = Spacing.md),
+        // The library drops a uniform `block` spacer after every block, so keep it
+        // at the tight floor gap and let paragraphs/headers own their own rhythm:
+        // paragraphs add a bottom gap; headers add a roomy break above and a
+        // below-gap that shrinks with level so deep headers hug the text they head.
+        padding = markdownPadding(
+            block = MD_BLOCK_GAP,
+            listItemTop = Spacing.xs,
+            listItemBottom = Spacing.xs,
+            listIndent = Spacing.lg,
+        ),
         components = markdownComponents(
+            paragraph = { model ->
+                MarkdownParagraph(model.content, model.node, Modifier.padding(bottom = MD_PARA_BELOW), bodyStyle)
+            },
+            heading1 = { model -> SpacedHeader(model, typography.h1, HEADING_GAP[0]) },
+            heading2 = { model -> SpacedHeader(model, typography.h2, HEADING_GAP[1]) },
+            heading3 = { model -> SpacedHeader(model, typography.h3, HEADING_GAP[2]) },
+            heading4 = { model -> SpacedHeader(model, typography.h4, HEADING_GAP[3]) },
+            heading5 = { model -> SpacedHeader(model, typography.h5, HEADING_GAP[4]) },
+            heading6 = { model -> SpacedHeader(model, typography.h6, HEADING_GAP[5]) },
             table = { model -> CronMarkdownTable(model, bodyStyle) },
         ),
         modifier = modifier,
     )
+}
+
+/** Per-level header spacing: a section break above, a tighter gap below. */
+private class HeadingGap(val top: Dp, val bottom: Dp)
+
+// h1 roomiest, shrinking to h6 which nearly touches its following text. Below-gaps
+// stack on top of MD_BLOCK_GAP; the top-gaps separate a header from prior content.
+private val HEADING_GAP = listOf(
+    HeadingGap(Spacing.md, Spacing.sm),                          // h1 — 12 / 8
+    HeadingGap(Spacing.sm + Spacing.xxs, Spacing.xs + Spacing.xxs), // h2 — 10 / 6
+    HeadingGap(Spacing.sm, Spacing.xs),                          // h3 — 8 / 4
+    HeadingGap(Spacing.xs + Spacing.xxs, Spacing.xxs),           // h4 — 6 / 2
+    HeadingGap(Spacing.xs, Spacing.xxs),                         // h5 — 4 / 2
+    HeadingGap(Spacing.xs, 0.dp),                                // h6 — 4 / 0
+)
+private val MD_BLOCK_GAP = Spacing.xs
+private val MD_PARA_BELOW = Spacing.xs
+
+@Composable
+private fun SpacedHeader(model: MarkdownComponentModel, style: TextStyle, gap: HeadingGap) {
+    Box(modifier = Modifier.padding(top = gap.top, bottom = gap.bottom)) {
+        MarkdownHeader(model.content, model.node, style)
+    }
 }
 
 /**

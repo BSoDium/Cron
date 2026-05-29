@@ -122,7 +122,7 @@ val Typography: Typography = Typography(
 /**
  * App-specific Typography roles that live outside the Material scale because
  * they bind to brand fonts (`DisplayFontFamily`, `SerifFontFamily`,
- * `MonoFontFamily`) rather than the expressive sans. Use these wherever a
+ * `MonoFontFamily`, `CodeFontFamily`) rather than the expressive sans. Use these wherever a
  * `TextStyle.copy(fontFamily = ...)` would otherwise be repeated.
  */
 object CronTypography {
@@ -152,15 +152,15 @@ object CronTypography {
         lineHeight = 22.sp,
     )
 
-    /** Small mono label — sleep stage names, tool-step chips, timeline timestamps. */
+    /** Code label — AI tool-call name chips and their result labels (Martian Mono). */
     val labelMono: TextStyle = TextStyle(
-        fontFamily = MonoFontFamily,
-        fontWeight = FontWeight.Medium,
+        fontFamily = CodeFontFamily,
+        fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 18.sp,
     )
 
-    /** Smaller mono — tool-call name chips and their result labels in the thinking timeline. */
+    /** Smaller code label — tool-call name chips and result labels in the thinking timeline. */
     val labelMonoSmall: TextStyle = labelMono.copy(fontSize = 12.sp, lineHeight = 16.sp)
 }
 

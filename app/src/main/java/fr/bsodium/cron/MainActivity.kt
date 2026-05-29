@@ -8,7 +8,10 @@ import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -22,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.ui.components.CronFloatingNav
+import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
@@ -110,7 +114,10 @@ class MainActivity : ComponentActivity() {
                     // Content draws edge-to-edge, under the status bar and the
                     // transparent area around the floating nav pill. Each screen
                     // folds the status-bar inset into its own top content padding
-                    // and carries bottom contentPadding for the nav pill.
+                    // and carries bottom contentPadding for the nav pill. EdgeFades
+                    // overlays soft top/bottom scrims so content dissolves into the
+                    // background under the status bar and behind the nav pill.
+                    Box(modifier = Modifier.fillMaxSize()) {
                     NavHost(
                         navController = navController,
                         startDestination = startDestination,
@@ -153,6 +160,8 @@ class MainActivity : ComponentActivity() {
                         ) {
                             SettingsScreen(viewModel = viewModel<SettingsViewModel>())
                         }
+                    }
+                        EdgeFades()
                     }
                 }
             }
