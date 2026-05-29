@@ -59,6 +59,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -119,6 +120,14 @@ private val ICON_MASK_SIZE = 24.dp
 // Vertical padding around each row's content. Doubles as the gap between steps —
 // kept at sm so a clear segment of the timeline rule shows between icon discs.
 private val TIMELINE_CONTENT_VPAD = Spacing.sm
+
+// Centre the glyph within its line box (the default trims the first line's top leading and
+// seats the glyph high), so the first line's optical centre lands at lineHeight/2 — where the
+// gutter icon disc is positioned.
+private val STEP_LINE_HEIGHT = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Center,
+    trim = LineHeightStyle.Trim.None,
+)
 
 /**
  * Draws content [bleed] wider on each side than its slot — overflowing the parent's horizontal
@@ -239,6 +248,7 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
                 text = shown,
                 bodyStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeightStyle = STEP_LINE_HEIGHT,
                 ),
                 serif = false,
             )
@@ -370,7 +380,7 @@ private fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boolea
             ) {
                 Text(
                     text = "Calling",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeightStyle = STEP_LINE_HEIGHT),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Surface(
@@ -424,7 +434,7 @@ private fun DoneRow(isFirst: Boolean, isLast: Boolean) {
     }) {
         Text(
             text = "Done",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeightStyle = STEP_LINE_HEIGHT),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

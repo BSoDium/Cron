@@ -156,9 +156,11 @@ private fun RowScope.NavSlot(
     onNavigate: (String) -> Unit,
 ) {
     val selected = currentRoute == route
-    val targetContainer = if (selected) MaterialTheme.colorScheme.secondaryContainer
+    // Selected tab is the inverted, high-contrast pair (matches the FAB) so it reads clearly
+    // against the surfaceContainer pill; unselected stays low-emphasis.
+    val targetContainer = if (selected) MaterialTheme.colorScheme.inverseSurface
         else MaterialTheme.colorScheme.surfaceContainer
-    val targetTint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+    val targetTint = if (selected) MaterialTheme.colorScheme.inverseOnSurface
         else MaterialTheme.colorScheme.onSurfaceVariant
     val container by animateColorAsState(targetContainer, animationSpec = NAV_COLOR_SPEC, label = "nav-container")
     val iconTint by animateColorAsState(targetTint, animationSpec = NAV_COLOR_SPEC, label = "nav-tint")
