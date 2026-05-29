@@ -30,7 +30,7 @@ private val MajorMonoDisplay = GoogleFont("Major Mono Display")
 private val Iceland = GoogleFont("Iceland")
 private val Vt323 = GoogleFont("VT323")
 private val MartianMono = GoogleFont("Martian Mono")
-private val Newsreader = GoogleFont("Newsreader")
+private val EbGaramond = GoogleFont("EB Garamond")
 private val SpaceGrotesk = GoogleFont("Space Grotesk")
 
 private val WEIGHTS = listOf(
@@ -86,12 +86,12 @@ val CodeFontFamily: FontFamily = FontFamily(
 )
 
 /**
- * Serif face for the AI assistant's final response prose. Sets the
+ * Serif face for the AI assistant's final response prose — EB Garamond. Sets the
  * "conclusion" apart from the sans-serif thinking content.
  */
 val SerifFontFamily: FontFamily = FontFamily(
-    Font(R.font.newsreader),
-    Font(googleFont = Newsreader, fontProvider = Provider),
+    Font(R.font.eb_garamond),
+    Font(googleFont = EbGaramond, fontProvider = Provider),
 )
 
 /**

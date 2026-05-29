@@ -214,12 +214,25 @@ private fun BoxScope.StickyAlarm(
         }
     }
     val background = MaterialTheme.colorScheme.background
+    // Solid background-colour from the top all the way down to the card's bottom, then a soft
+    // fade to transparent just below it — so nothing is visible above/behind the pinned card and
+    // content dissolves as it slides out the bottom.
+    val cardBottomPx = safeTopPx + cardHeightPx
+    val belowFadePx = with(density) { Spacing.xxxl.toPx() }
+    val totalPx = cardBottomPx + belowFadePx
+    val solidStop = if (totalPx > 0f) (cardBottomPx / totalPx).coerceIn(0f, 1f) else 1f
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(with(density) { (safeTopPx + cardHeightPx).toDp() })
+            .height(with(density) { totalPx.toDp() })
             .graphicsLayer { alpha = state.gradientAlpha }
-            .background(Brush.verticalGradient(listOf(background, Color.Transparent))),
+            .background(
+                Brush.verticalGradient(
+                    0f to background,
+                    solidStop to background,
+                    1f to Color.Transparent,
+                ),
+            ),
     )
     Box(
         modifier = Modifier
