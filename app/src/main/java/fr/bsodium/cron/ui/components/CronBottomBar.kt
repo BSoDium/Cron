@@ -9,9 +9,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -20,10 +23,12 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
@@ -39,6 +44,7 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -121,6 +127,8 @@ data class FabAction(
     val onClick: () -> Unit,
     val working: Boolean = false,
     val onCancel: (() -> Unit)? = null,
+    /** When set, an onboarding callout with this text points at the FAB (see [OnboardingTooltip]). */
+    val hint: String? = null,
 )
 
 @Composable
@@ -136,7 +144,7 @@ private fun NavPill(
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             NavSlot(currentRoute, "home", Icons.Filled.Home, Icons.Outlined.Home, "Home", onNavigate)
@@ -156,26 +164,29 @@ private fun RowScope.NavSlot(
     onNavigate: (String) -> Unit,
 ) {
     val selected = currentRoute == route
-    // Selected tab: a soft (not bright) raised shade with a filled icon; unselected stays
-    // low-emphasis with an outlined icon.
-    val targetContainer = if (selected) MaterialTheme.colorScheme.surfaceContainerHighest
-        else MaterialTheme.colorScheme.surfaceContainer
-    val targetTint = if (selected) MaterialTheme.colorScheme.onSurface
+    // Selected tab: a high-contrast dark circular indicator (the inverse surface, matching the
+    // FAB tone) with an inverted, filled icon — popping against the light pill. Unselected tabs
+    // are low-emphasis outlined icons directly on the pill.
+    val targetContainer = if (selected) MaterialTheme.colorScheme.inverseSurface else Color.Transparent
+    val targetTint = if (selected) MaterialTheme.colorScheme.inverseOnSurface
         else MaterialTheme.colorScheme.onSurfaceVariant
     val container by animateColorAsState(targetContainer, animationSpec = NAV_COLOR_SPEC, label = "nav-container")
     val iconTint by animateColorAsState(targetTint, animationSpec = NAV_COLOR_SPEC, label = "nav-tint")
-    Surface(
-        color = container,
-        shape = Radius.full,
+    Box(
         modifier = Modifier
-            .widthIn(min = 56.dp)
-            // Clip BEFORE clickable so the ripple respects the pill shape
-            // instead of bleeding into a square highlight.
+            // Square slot so the circular indicator nests with an equal margin on every side
+            // (x and y) inside the pill, rather than wider side gaps.
+            .size(48.dp)
+            // Clip BEFORE clickable so the ripple respects the slot shape.
             .clip(Radius.full)
             .clickable(enabled = !selected) { onNavigate(route) },
+        contentAlignment = Alignment.Center,
     ) {
         Box(
-            modifier = Modifier.size(width = 56.dp, height = 48.dp),
+            modifier = Modifier
+                .size(NAV_INDICATOR_SIZE)
+                .clip(CircleShape)
+                .background(container),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -188,6 +199,7 @@ private fun RowScope.NavSlot(
 }
 
 private val NAV_COLOR_SPEC = tween<Color>(durationMillis = 220, easing = FastOutSlowInEasing)
+private val NAV_INDICATOR_SIZE = 44.dp
 
 @Composable
 private fun PrimaryActionFab(action: FabAction?) {
@@ -208,6 +220,51 @@ private fun PrimaryActionFab(action: FabAction?) {
         Icon(
             imageVector = if (working) Icons.Outlined.Square else Icons.Outlined.PlayArrow,
             contentDescription = if (working) "Cancel" else "Run alarm plan",
+        )
+    }
+}
+
+// The play FAB's horizontal distance right of screen centre, derived from the centred nav row
+// (pill 164dp + 68dp FAB slot, FAB at the slot's far end). Device-width independent.
+private val FAB_CENTER_OFFSET = 88.dp
+
+// Downward-pointing triangle for the onboarding callout's tail.
+private val PointerDown = GenericShape { size, _ ->
+    moveTo(0f, 0f)
+    lineTo(size.width, 0f)
+    lineTo(size.width / 2f, size.height)
+    close()
+}
+
+/**
+ * Onboarding callout whose pointer sits over the play FAB. Render as the LAST child of the
+ * full-screen content [Box] — after [EdgeFades] — so the bottom scrim doesn't fade it out.
+ * [navBottom] is the navigation-bar inset so it clears the floating nav.
+ */
+@Composable
+fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .align(Alignment.BottomCenter)
+            .offset(x = FAB_CENTER_OFFSET)
+            .padding(bottom = navBottom + Spacing.navBarClearance - Spacing.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.inverseSurface,
+            shape = RoundedCornerShape(Radius.md),
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.inverseOnSurface,
+                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(width = 16.dp, height = 8.dp)
+                .background(MaterialTheme.colorScheme.inverseSurface, PointerDown),
         )
     }
 }

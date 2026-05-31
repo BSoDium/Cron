@@ -26,12 +26,14 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * One-shot location acquisition for the evening_plan event.
  *
- * Fallback chain:
- *  1. `lastLocation` if recent (< 2h old) → source: gps
- *  2. `getCurrentLocation(BALANCED)` with 10s timeout → source: gps
- *  3. Stored last-known from [PollCheckpointStore] → source: last_known
- *  4. Registered home address from [SettingsRepository] → source: home_address
- *  5. Nothing → source: unavailable
+ * Acquisition order (a CURRENT fix always beats a stale one — even if coarser — because the user
+ * may have just travelled, so a precise but stale fix can be in the wrong city):
+ *  1. `getCurrentLocation(HIGH_ACCURACY)` (precise) → source: gps
+ *  2. `getCurrentLocation(BALANCED_POWER)` (current, wifi/cell, coarser cap) → source: gps
+ *  3. `lastLocation` if recent (< 2h) → source: last_known
+ *  4. Stored last-known from [PollCheckpointStore] → source: last_known
+ *  5. Registered home address from [SettingsRepository] → source: home_address
+ *  6. Nothing → source: unavailable
  *
  * Every successful fix is written to [PollCheckpointStore] so that future
  * cold-start sessions have a fallback even if the backend is unreachable.
@@ -49,13 +51,12 @@ class LocationProvider(private val context: Context) {
 
         val fused = LocationServices.getFusedLocationProviderClient(context)
 
-        // Step 1: high-accuracy GPS fix — engages GPS chip for a precise fix.
-        // Always tried first; if the result is coarser than MAX_ACCURACY_METERS
-        // (cell-tower range), persistAndReturn returns null and we fall through.
-        val fresh = withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
+        // Step 1: high-accuracy GPS fix — engages the GPS chip for a precise fix. If it's coarser
+        // than MAX_ACCURACY_METERS, persistAndReturn returns null and we fall through.
+        val fresh = withTimeoutOrNull(20.seconds.inWholeMilliseconds) {
             val req = CurrentLocationRequest.Builder()
                 .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
-                .setDurationMillis(30.seconds.inWholeMilliseconds)
+                .setDurationMillis(20.seconds.inWholeMilliseconds)
                 .build()
             runCatching {
                 fused.getCurrentLocation(req, null).awaitNullable()
@@ -65,10 +66,26 @@ class LocationProvider(private val context: Context) {
             persistAndReturn(fresh, LocationSource.Gps, checkpoints)?.let { return it }
         }
 
-        // Step 2: fall back to lastLocation if fresh fix timed out
+        // Step 2: balanced-power CURRENT fix (wifi/cell — works indoors without a GPS lock). A
+        // current city-level fix beats a stale precise one elsewhere, so accept a coarser cap.
+        val coarse = withTimeoutOrNull(10.seconds.inWholeMilliseconds) {
+            val req = CurrentLocationRequest.Builder()
+                .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+                .setDurationMillis(10.seconds.inWholeMilliseconds)
+                .build()
+            runCatching {
+                fused.getCurrentLocation(req, null).awaitNullable()
+            }.getOrNull()
+        }
+        if (coarse != null) {
+            persistAndReturn(coarse, LocationSource.Gps, checkpoints, COARSE_MAX_ACCURACY_METERS)?.let { return it }
+        }
+
+        // Step 3: a recent last-known fix — labelled LastKnown (it is NOT a fresh fix), so the
+        // prompt treats it with appropriate caution rather than as a confident current position.
         val last = runCatching { fused.lastLocation.awaitNullable() }.getOrNull()
         if (last != null && isRecent(last, maxAge = 2.hours)) {
-            persistAndReturn(last, LocationSource.Gps, checkpoints)?.let { return it }
+            persistAndReturn(last, LocationSource.LastKnown, checkpoints)?.let { return it }
         }
 
         return fallback(checkpoints, settings, reason = "no_fresh_fix")
@@ -78,10 +95,12 @@ class LocationProvider(private val context: Context) {
         location: Location,
         source: LocationSource,
         checkpoints: PollCheckpointStore,
+        maxAccuracyMeters: Float = MAX_ACCURACY_METERS,
     ): LocationPayload? {
-        // Reject fixes coarser than 500 m — those are cell-tower-only positions and
-        // will misplace the user by kilometres (e.g. Ivry → Nation/Bastille).
-        if (location.accuracy > MAX_ACCURACY_METERS) return null
+        // Reject fixes coarser than the cap — a precise fix is gated at 500 m (cell-tower-only
+        // positions misplace by kilometres); the balanced current fix uses a looser cap since a
+        // current city-level position is still far better than a stale precise one elsewhere.
+        if (location.accuracy > maxAccuracyMeters) return null
         val capturedAt = Instant.fromEpochMilliseconds(location.time)
         checkpoints.setLastLocationFix(location.latitude, location.longitude, capturedAt)
         return LocationPayload(
@@ -135,6 +154,9 @@ class LocationProvider(private val context: Context) {
 
     companion object {
         private const val MAX_ACCURACY_METERS = 500f
+        // Looser cap for a balanced-power CURRENT fix: city-level accuracy is acceptable when the
+        // alternative is a stale fix in the wrong city (commute origin only needs the right area).
+        private const val COARSE_MAX_ACCURACY_METERS = 5000f
     }
 
     private fun isRecent(location: Location, maxAge: kotlin.time.Duration): Boolean =

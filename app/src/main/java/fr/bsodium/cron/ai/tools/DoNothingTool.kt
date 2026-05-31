@@ -42,10 +42,16 @@ class DoNothingTool(
         val reason = input.jsonObject["reason"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
             ?: return ToolResult("""{"error":"reason is required"}""", isError = true)
 
+        // "No change" means keep the armed alarm. The alarm time lives only in currentInstruction,
+        // so carry it (and the wake window) forward — otherwise the home card blanks out.
+        val prior = repository.findById(sessionId)?.currentInstruction
         repository.updateInstruction(
             sessionId,
             Instruction(
                 action = ActionType.DoNothing,
+                alarmTime = prior?.alarmTime,
+                wakeWindowStart = prior?.wakeWindowStart,
+                wakeWindowEnd = prior?.wakeWindowEnd,
                 reason = reason,
                 issuedAt = Clock.System.now(),
             ),

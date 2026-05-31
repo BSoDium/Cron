@@ -132,7 +132,9 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
     val mm = alarmTime?.let { String.format(Locale.US, "%02d", it.minute) } ?: "00"
     val base = MaterialTheme.colorScheme.onSurface
     val digitColor = if (pending) base.copy(alpha = 0.22f) else base
-    val countdownColor = if (pending) base.copy(alpha = 0.16f) else base.copy(alpha = 0.6f)
+    // Match the dimmed-digit alpha when pending so the "00H/00M" placeholder reads as a deliberate
+    // grayed twin of the "00:00" digits; a touch brighter than the digits once a real time shows.
+    val countdownColor = if (pending) base.copy(alpha = 0.22f) else base.copy(alpha = 0.6f)
 
     val lcdStyle = TightTextStyle.copy(
         fontFamily = LcdFontFamily,
@@ -179,7 +181,8 @@ private fun CountdownStack(
         fontSize = 24.sp,
         lineHeight = 26.sp,
     )
-    val (top, bottom) = if (countdown == null) "——H" to "——M"
+    // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
+    val (top, bottom) = if (countdown == null) "00H" to "00M"
     else String.format(Locale.US, "%dH", countdown.hours) to
         String.format(Locale.US, "%dM", countdown.minutes)
     Column(modifier = modifier) {

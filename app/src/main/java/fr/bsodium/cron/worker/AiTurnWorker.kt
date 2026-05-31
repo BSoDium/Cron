@@ -189,7 +189,8 @@ class AiTurnWorker(
         tz: TimeZone,
     ): String {
         val plan = session.plan
-        val eveningEvent = session.events.firstOrNull { it.trigger == TriggerType.EveningPlan }
+        // Latest evening-plan event, so a manual replan's freshly-captured location wins.
+        val eveningEvent = session.events.lastOrNull { it.trigger == TriggerType.EveningPlan }
         val location = (eveningEvent?.data as? EventData.EveningPlan)?.location
 
         return buildString {
@@ -199,12 +200,12 @@ class AiTurnWorker(
             appendLine("- Morning date: ${session.date}")
             appendLine("- Hard latest (never exceed): ${plan.hardLatest}")
             appendLine("- Wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
-            appendLine("- Minimum commute buffer: ${plan.commuteBufferMinutes} min")
-            appendLine("- Personal preparation buffer: ${plan.preparationBufferMinutes} min")
+            appendLine("- Travel buffer (minimum commute floor, NOT prep): ${plan.commuteBufferMinutes} min")
+            appendLine("- Morning preparation time (getting ready, separate from travel): ${plan.preparationBufferMinutes} min")
             appendLine("- Free day wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
             appendLine()
             if (location != null) {
-                appendLine("## Current location (captured at session start)")
+                appendLine("## Current location")
                 appendLine("- Latitude: ${location.lat}, Longitude: ${location.lng}")
                 appendLine("- Source: ${location.source.name.lowercase()}")
                 appendLine("- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}")

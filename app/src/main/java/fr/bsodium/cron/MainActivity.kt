@@ -9,7 +9,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
@@ -27,6 +30,7 @@ import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.ui.components.CronFloatingNav
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
+import fr.bsodium.cron.ui.components.OnboardingTooltip
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
 import fr.bsodium.cron.ui.screens.home.HomeScreen
@@ -162,6 +166,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                         EdgeFades()
+                        // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the
+                        // bottom scrim doesn't fade it out; HomeScreen requests it via FabAction.hint.
+                        if (currentRoute == "home") {
+                            val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                            fabRegistry.action?.hint?.let { OnboardingTooltip(navBottom = navBottom, text = it) }
+                        }
                     }
                 }
             }

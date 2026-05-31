@@ -1,15 +1,18 @@
 package fr.bsodium.cron.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalTime
 
 private val Context.dataStore by preferencesDataStore(name = "cron_settings")
@@ -67,28 +70,42 @@ class SettingsRepository(private val context: Context) {
         prefs[DISPLAY_PHOTO_URL]?.takeIf { it.isNotBlank() }
     }
 
+    /** Epoch-ms of the last change to a plan-affecting setting; 0 if never changed. The home
+     *  screen compares this against the active session's last AI call to offer a re-plan. */
+    val settingsUpdatedAt: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[SETTINGS_UPDATED_AT] ?: 0L
+    }
+
     suspend fun setEveningTriggerLocalTime(time: LocalTime) =
-        context.dataStore.edit { it[EVENING_TRIGGER] = time.toString() }
+        editPlanAffecting { it[EVENING_TRIGGER] = time.toString() }
 
     suspend fun setHardLatestDefault(time: LocalTime) =
-        context.dataStore.edit { it[HARD_LATEST_DEFAULT] = time.toString() }
+        editPlanAffecting { it[HARD_LATEST_DEFAULT] = time.toString() }
 
     suspend fun setFreeDayWakeWindow(start: LocalTime, end: LocalTime) =
-        context.dataStore.edit {
+        editPlanAffecting {
             it[FREE_DAY_WAKE_START] = start.toString()
             it[FREE_DAY_WAKE_END] = end.toString()
         }
 
     suspend fun setCommuteBufferMinutes(minutes: Int) =
-        context.dataStore.edit { it[COMMUTE_BUFFER] = minutes }
+        editPlanAffecting { it[COMMUTE_BUFFER] = minutes }
 
     suspend fun setPreparationBufferMinutes(minutes: Int) =
-        context.dataStore.edit { it[PREPARATION_BUFFER] = minutes }
+        editPlanAffecting { it[PREPARATION_BUFFER] = minutes }
 
     suspend fun setHomeAddress(lat: Double, lng: Double) =
-        context.dataStore.edit {
+        editPlanAffecting {
             it[HOME_LAT] = lat.toString()
             it[HOME_LNG] = lng.toString()
+        }
+
+    /** Writes a plan-affecting preference and stamps [SETTINGS_UPDATED_AT] in the same atomic
+     *  edit, so a single observe of the timestamp covers every such change. */
+    private suspend fun editPlanAffecting(block: (MutablePreferences) -> Unit) =
+        context.dataStore.edit {
+            block(it)
+            it[SETTINGS_UPDATED_AT] = Clock.System.now().toEpochMilliseconds()
         }
 
     suspend fun setOnboardingComplete() =
@@ -130,5 +147,6 @@ class SettingsRepository(private val context: Context) {
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val DISPLAY_PHOTO_URL = stringPreferencesKey("display_photo_url")
+        val SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
     }
 }
