@@ -5,6 +5,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +32,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +50,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -51,6 +61,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,12 +86,16 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
     }
-    LaunchedEffect(uiState.isRetrying, fabRegistry) {
+    // Show the onboarding callout (rendered above EdgeFades in MainActivity) only in the loaded,
+    // no-plan, idle state — it hides the moment the user taps the FAB.
+    val showOnboardingHint = uiState.initialized && uiState.aiThread == null && !uiState.isRetrying
+    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
         fabRegistry.set(
             FabAction(
                 onClick = viewModel::retryAiPlan,
                 working = uiState.isRetrying,
                 onCancel = viewModel::cancelAiPlan,
+                hint = if (showOnboardingHint) "Click here to start" else null,
             )
         )
     }
@@ -126,8 +141,11 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (uiState.aiThread == null) {
-            // First-run / no-plan: a simple Column so the onboarding centres in the empty space
-            // between the alarm card and the nav bar. The play FAB is the call to action.
+            // First-run / no-plan OR still loading: a simple Column so the onboarding centres in
+            // the empty space between the alarm card and the nav bar. The hint + arrow only render
+            // once `initialized` is true, so they never flash over an existing plan on cold start.
+            // The play FAB is the call to action.
+            val showOnboarding = uiState.initialized
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -145,21 +163,18 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                     photoUrl = uiState.greetingPhotoUrl,
                 )
                 card()
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    OnboardingHint()
+                // Bias the hint toward the upper third so "Let's get started" sits near eye height
+                // rather than floating in the dead-centre of the gap.
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = BiasAlignment(0f, -0.4f),
+                ) {
+                    if (showOnboarding) OnboardingHint()
                 }
                 if (!hasNotificationPermission) NotificationPermissionRow(onEnable = onNotifEnable)
             }
-            // Hand-drawn arrow pointing down at the play FAB.
-            Icon(
-                painter = painterResource(R.drawable.ic_onboarding_arrow),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = Spacing.xl, bottom = navInsetBottom + Spacing.navBarClearance)
-                    .size(width = 96.dp, height = 120.dp),
-            )
+            // The onboarding callout that points at the play FAB is rendered in MainActivity,
+            // layered above EdgeFades (via FabAction.hint) so the bottom scrim doesn't fade it.
         } else {
             // The alarm card behaves like CSS `position: sticky; top: statusBar + gap`: the list
             // scrolls edge-to-edge under the status bar while the card flows then sticks just below
@@ -190,7 +205,7 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                     Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
                 }
                 item(key = "thread") {
-                    uiState.aiThread?.let { AiThinkingThread(it) }
+                    uiState.aiThread?.let { AiThinkingThread(it, isRunning = uiState.isRetrying) }
                 }
                 if (!hasNotificationPermission) {
                     item(key = "notif-permission") {
@@ -205,6 +220,64 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                 onHeightChanged = { cardHeightPx = it },
                 card = card,
             )
+        }
+
+        // Floats just above the nav when a plan-affecting setting changed since the last plan.
+        AnimatedVisibility(
+            visible = uiState.settingsChangedSincePlan,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(
+                    start = Spacing.lg,
+                    end = Spacing.lg,
+                    bottom = navInsetBottom + Spacing.navBarClearance,
+                ),
+        ) {
+            SettingsChangedPill(
+                onRewrite = {
+                    viewModel.retryAiPlan()
+                    viewModel.dismissSettingsReminder()
+                },
+                onDismiss = viewModel::dismissSettingsReminder,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsChangedPill(
+    onRewrite: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = Radius.full,
+        tonalElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = Spacing.xl, end = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Settings updated",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRewrite) { Text("Replan alarm") }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Dismiss",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -277,8 +350,8 @@ private fun BoxScope.StickyAlarm(
 }
 
 /**
- * First-run onboarding: the app mark as an illustration, a serif invitation, and a line
- * explaining what a plan needs. The play FAB (pointed at by a hand-drawn arrow) is the CTA.
+ * First-run onboarding: an illustration, a serif invitation, and a line explaining what a plan
+ * needs. The play FAB (pointed at by the onboarding callout) is the CTA.
  */
 @Composable
 private fun OnboardingHint(modifier: Modifier = Modifier) {
@@ -286,11 +359,10 @@ private fun OnboardingHint(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_launcher_monochrome),
+        Image(
+            painter = painterResource(R.drawable.ic_onboarding_illustration),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.size(96.dp),
+            modifier = Modifier.size(200.dp),
         )
         Spacer(Modifier.height(Spacing.lg))
         Text(

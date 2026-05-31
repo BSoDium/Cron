@@ -104,6 +104,41 @@ class SessionFsm(
         return session
     }
 
+    /**
+     * Re-reads plan-affecting settings into the session's frozen plan so a manual replan honours
+     * changes made after bootstrap (e.g. the user edited their preparation time). Re-arms the
+     * hard-latest floor only if it moved. No-ops if nothing plan-affecting changed.
+     */
+    suspend fun refreshPlanFromSettings(sessionId: String) = withContext(Dispatchers.IO) {
+        val session = repository.findById(sessionId) ?: return@withContext
+        val settings = SettingsRepository(context)
+        val refreshed = session.plan.copy(
+            hardLatest = settings.currentHardLatestDefault(),
+            wakeWindowStart = settings.freeDayWakeStart.first(),
+            wakeWindowEnd = settings.freeDayWakeEnd.first(),
+            commuteBufferMinutes = settings.commuteBufferMinutes.first(),
+            preparationBufferMinutes = settings.preparationBufferMinutes.first(),
+            generatedAt = Clock.System.now(),
+        )
+        // generatedAt always differs, so compare the five settings-derived fields explicitly.
+        val unchanged = refreshed.hardLatest == session.plan.hardLatest &&
+            refreshed.wakeWindowStart == session.plan.wakeWindowStart &&
+            refreshed.wakeWindowEnd == session.plan.wakeWindowEnd &&
+            refreshed.commuteBufferMinutes == session.plan.commuteBufferMinutes &&
+            refreshed.preparationBufferMinutes == session.plan.preparationBufferMinutes
+        if (unchanged) return@withContext
+        repository.updatePlan(sessionId, refreshed)
+        if (refreshed.hardLatest != session.plan.hardLatest) {
+            hardLatestScheduler.arm(
+                hardLatest = refreshed.hardLatest,
+                sessionDate = session.date,
+                timezone = TimeZone.of(session.timezone),
+                sessionId = sessionId,
+            )
+        }
+        Log.i(TAG, "Session $sessionId plan refreshed from settings (prep=${refreshed.preparationBufferMinutes}, commute=${refreshed.commuteBufferMinutes})")
+    }
+
     // ---------------------------------------------------------------------------
     // State transitions
     // ---------------------------------------------------------------------------

@@ -115,6 +115,14 @@ class SessionRepository(private val context: Context) {
         ))
     }
 
+    suspend fun updatePlan(sessionId: String, plan: DayPlan) {
+        val entity = db.sessionDao().findById(sessionId) ?: return
+        db.sessionDao().update(entity.copy(
+            planJson = SessionJson.encodeToString(plan),
+            updatedAt = Clock.System.now().toEpochMilliseconds(),
+        ))
+    }
+
     suspend fun updateInstruction(sessionId: String, instruction: Instruction) {
         val entity = db.sessionDao().findById(sessionId) ?: return
         val now = Clock.System.now().toEpochMilliseconds()

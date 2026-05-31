@@ -56,6 +56,11 @@ data class HomeUiState(
     val sleepStats: SleepStatsUi? = null,
     val aiThread: AiThreadUi? = null,
     val isRetrying: Boolean = false,
+    /** False until the backing flows have produced their first value — gates the onboarding so it
+     *  doesn't flash over an existing plan during the cold-start load. */
+    val initialized: Boolean = false,
+    /** A plan-affecting setting changed since the last plan was written — offers a re-run. */
+    val settingsChangedSincePlan: Boolean = false,
 )
 
 data class SleepStatsUi(
@@ -68,8 +73,7 @@ data class AiThreadUi(
     val summary: String?,
     val process: List<ProcessItem>,
     val response: String?,
-    val isComplete: Boolean,
-    /** Wall-clock seconds the turn took, once complete — shown as "Thought for Xs". */
+    /** Wall-clock seconds the turn took — shown as "Thought for Xs" once settled. */
     val durationSeconds: Int? = null,
 )
 
@@ -82,6 +86,8 @@ sealed interface ProcessItem {
         val isComplete: Boolean,
         /** Short result summary (e.g. "12 events"), shown in place of a checkmark. */
         val contextLabel: String? = null,
+        /** The tool returned an error result — shown as a warning glyph instead of a check. */
+        val isError: Boolean = false,
     ) : ProcessItem
 }
 
@@ -120,14 +126,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         name to url
     }
 
+    /** Epoch-ms the user last dismissed the "settings changed" reminder this process. */
+    private val _dismissedSettingsAt = MutableStateFlow(0L)
+
+    /** True when a plan-affecting setting changed after the last AI call and the reminder hasn't
+     *  been dismissed since. Gated on an existing plan at the combine site. */
+    private val settingsChangedFlow = combine(
+        sessionFlow.map { it?.lastAiCallAt ?: 0L },
+        settings.settingsUpdatedAt,
+        _dismissedSettingsAt,
+    ) { lastAiCallAt, settingsAt, dismissedAt ->
+        settingsAt > lastAiCallAt && settingsAt > dismissedAt
+    }
+
+    private val statusFlow = combine(_isRetrying, settingsChangedFlow) { retrying, settingsChanged ->
+        retrying to settingsChanged
+    }
+
     val uiState: StateFlow<HomeUiState> = combine(
         sessionFlow.map { it?.toDisplayState() },
         sleepStatsFlow,
         aiThreadFlow,
         profileFlow,
-        _isRetrying,
-    ) { session, sleepStats, thread, profile, retrying ->
+        statusFlow,
+    ) { session, sleepStats, thread, profile, status ->
         val (displayName, photoUrl) = profile
+        val (retrying, settingsChanged) = status
         HomeUiState(
             sessionDisplay = session,
             greetingPrefix = greetingPrefix(),
@@ -137,8 +161,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             sleepStats = sleepStats,
             aiThread = thread,
             isRetrying = retrying,
+            // combine() only emits once every source has produced a value, so reaching here means
+            // the backing flows have loaded — distinguishes "no plan" from "not loaded yet".
+            initialized = true,
+            settingsChangedSincePlan = settingsChanged && thread != null,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+
+    /** Hide the "settings changed" reminder until the next plan-affecting change. */
+    fun dismissSettingsReminder() {
+        _dismissedSettingsAt.value = Clock.System.now().toEpochMilliseconds()
+    }
 
     /**
      * Re-runs the AI alarm prediction for the active session, or bootstraps a
@@ -170,18 +203,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun retryAiPlan() {
         _isRetrying.value = true
         viewModelScope.launch(Dispatchers.IO) {
+            // A manual replan always captures a FRESH foreground fix — the user may have moved since
+            // the session was created, and reusing the stored origin would replan from the wrong place.
+            val tz = TimeZone.currentSystemDefault()
+            val location = locationProvider.acquireForEveningPlan()
+            val event = SessionEvent(
+                trigger = TriggerType.EveningPlan,
+                timestamp = Clock.System.now(),
+                data = EventData.EveningPlan(timezone = tz.id, location = location),
+            )
+            val fsm = SessionFsm(getApplication(), repository)
             val current = db.sessionDao().findCurrent()
             if (current != null) {
+                // Append the fresh evening-plan event (latest wins in the worker), pull in any
+                // plan-affecting setting changed since bootstrap, then re-run the turn.
+                repository.appendEvent(current.id, event)
+                fsm.refreshPlanFromSettings(current.id)
                 repository.triggerAiTurn(current.id)
             } else {
-                val tz = TimeZone.currentSystemDefault()
-                val location = locationProvider.acquireForEveningPlan()
-                val event = SessionEvent(
-                    trigger = TriggerType.EveningPlan,
-                    timestamp = Clock.System.now(),
-                    data = EventData.EveningPlan(timezone = tz.id, location = location),
-                )
-                SessionFsm(getApplication(), repository).onEvent(event)
+                fsm.onEvent(event)
             }
         }
     }
@@ -258,7 +298,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             summary = "Thinking…",
             process = emptyList(),
             response = null,
-            isComplete = false,
         )
 
         val blocks = assistantRows.flatMap { decodeBlocks(it.contentJson) }
@@ -307,6 +346,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         contextLabel = result
                             ?.takeIf { it.is_error != true }
                             ?.let { summarizeToolResult(block.name, it.content) },
+                        isError = result?.is_error == true,
                     )
                 }
                 is ContentBlock.ToolResult -> null
@@ -320,19 +360,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .let(::stripLeadingRule)
             .takeIf { it.isNotBlank() }
 
-        val isComplete = response != null && blocks
+        // A no-op turn (do_nothing) ends with no trailing text, so the answer would be blank.
+        // Fall back to the model's SUMMARY line, then the do_nothing reason, so the card still
+        // explains the decision instead of sitting empty.
+        val doNothingReason = blocks
             .filterIsInstance<ContentBlock.ToolUse>()
-            .all { toolResults.containsKey(it.id) }
+            .firstOrNull { it.name == "do_nothing" }
+            ?.let { tool ->
+                runCatching { tool.input.jsonObject["reason"]?.jsonPrimitive?.content }
+                    .onFailure { Log.w(TAG, "read do_nothing reason failed", it) }
+                    .getOrNull()
+            }
+            ?.takeIf { it.isNotBlank() }
+        val answer = response ?: summaryLine ?: doNothingReason
 
+        // Wall-clock span of the latest turn; shown once the turn settles (driven by the
+        // WorkManager signal in the UI, not by whether an answer exists).
         val turnRows = rows.filter { it.turnIndex == latestTurn }
-        val durationSeconds = if (isComplete && turnRows.isNotEmpty()) {
+        val durationSeconds = if (turnRows.isNotEmpty()) {
             ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
         } else {
             null
         }
 
-        // Pill preview: the model's gerund while working, its past-tense summary once done.
-        // Fall back to the first line of reasoning if the model skipped the directives.
+        // Pill preview: the model's gerund while working, its past-tense summary once an answer
+        // exists. Fall back to the first line of reasoning if the model skipped the directives.
         val fallback = process
             .firstNotNullOfOrNull { (it as? ProcessItem.Reasoning)?.text ?: (it as? ProcessItem.Narration)?.text }
             ?.lineSequence()
@@ -340,15 +392,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             ?.take(80)
         val liveStatus = statuses.lastOrNull()
         val summary =
-            if (isComplete) summaryLine ?: liveStatus ?: fallback
+            if (answer != null) summaryLine ?: liveStatus ?: fallback
             else liveStatus ?: summaryLine ?: fallback
 
         return AiThreadUi(
             turnIndex = latestTurn,
             summary = summary,
             process = process,
-            response = response,
-            isComplete = isComplete,
+            response = answer,
             durationSeconds = durationSeconds,
         )
     }

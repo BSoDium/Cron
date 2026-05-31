@@ -1,19 +1,18 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -27,23 +26,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.AlarmOff
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Commute
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,13 +53,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -68,6 +72,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -104,14 +109,15 @@ import fr.bsodium.cron.ui.theme.Spacing
  *   {serif response body, full markdown}              ← final answer, always shown
  */
 @Composable
-fun AiThinkingThread(thread: AiThreadUi, modifier: Modifier = Modifier) {
+fun AiThinkingThread(thread: AiThreadUi, isRunning: Boolean, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth()) {
-        val inProgress = !thread.isComplete && thread.response == null
+        // The turn's settled/running state is the real WorkManager signal, not whether a text
+        // response exists — a do_nothing turn finishes with no response and must still settle.
+        val inProgress = isRunning
         if (thread.process.isNotEmpty() || inProgress) {
             ThinkingDisclosure(
                 summary = thread.summary,
                 process = thread.process,
-                isComplete = thread.isComplete,
                 inProgress = inProgress,
                 durationSeconds = thread.durationSeconds,
             )
@@ -124,6 +130,7 @@ fun AiThinkingThread(thread: AiThreadUi, modifier: Modifier = Modifier) {
 }
 
 private val GUTTER_WIDTH = 28.dp
+private val TIMELINE_RULE_WIDTH = 2.dp
 private val STEP_ICON_SIZE = 16.dp
 private val ICON_MASK_SIZE = 24.dp
 // Vertical padding around each row's content. Doubles as the gap between steps —
@@ -159,7 +166,6 @@ private fun Modifier.bleedHorizontally(bleed: Dp): Modifier = layout { measurabl
 private fun ThinkingDisclosure(
     summary: String?,
     process: List<ProcessItem>,
-    isComplete: Boolean,
     inProgress: Boolean,
     durationSeconds: Int?,
 ) {
@@ -210,7 +216,7 @@ private fun ThinkingDisclosure(
             )
             if (canExpand) {
                 Icon(
-                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -225,14 +231,14 @@ private fun ThinkingDisclosure(
         TimelineColumn {
             process.forEachIndexed { i, item ->
                 val isFirst = i == 0
-                val isLast = !isComplete && i == process.lastIndex
+                val isLast = inProgress && i == process.lastIndex
                 when (item) {
                     is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
                     is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
                     is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
                 }
             }
-            if (isComplete) DoneRow(isFirst = process.isEmpty(), isLast = true)
+            if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
         }
     }
 }
@@ -300,9 +306,6 @@ private fun stepFirstLineHeight(): Dp {
 private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
     var expanded by rememberSaveable(text) { mutableStateOf(false) }
     val collapsible = text.length > REASONING_COLLAPSE_CHARS
-    val collapsed = remember(text) {
-        text.take(REASONING_COLLAPSE_CHARS).substringBeforeLast(' ').trimEnd()
-    }
     val bodyStyle = MaterialTheme.typography.bodyMedium.copy(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         lineHeightStyle = STEP_LINE_HEIGHT,
@@ -314,27 +317,21 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
         icon = { ThinkingIcon() },
     ) {
         Column {
-            AnimatedContent(
-                targetState = expanded || !collapsible,
-                transitionSpec = { (fadeIn() togetherWith fadeOut()).using(SizeTransform(clip = false)) },
-                label = "reasoning-expand",
-            ) { showFull ->
-                // Collapsed text dissolves into the page near "See more"; the fade replaces a "…".
-                MarkdownBlock(
-                    text = if (showFull) text else collapsed,
-                    bodyStyle = bodyStyle,
-                    serif = false,
-                    modifier = if (showFull) Modifier else Modifier.fadeBottom(REASONING_FADE_HEIGHT),
-                )
-            }
+            // The full markdown is always rendered (parsed once — never blanks on toggle); collapsing
+            // just clips an animated height, so expand/collapse glides instead of jumping.
             if (collapsible) {
+                ClippedReveal(expanded = expanded, collapsedHeight = reasoningCollapsedHeight()) {
+                    MarkdownBlock(text = text, bodyStyle = bodyStyle, serif = false)
+                }
+                // Snug transparent pill — ripple only on press. minimumInteractiveComponentSize keeps
+                // the touch target at 48dp while the visible pill stays compact.
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(Radius.sm))
+                        .minimumInteractiveComponentSize()
+                        .clip(Radius.full)
                         .clickable { expanded = !expanded }
-                        .heightIn(min = 48.dp)
-                        .padding(horizontal = Spacing.xs),
-                    contentAlignment = Alignment.CenterStart,
+                        .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = if (expanded) "See less" else "See more",
@@ -342,13 +339,55 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
+            } else {
+                MarkdownBlock(text = text, bodyStyle = bodyStyle, serif = false)
             }
         }
     }
 }
 
 private const val REASONING_COLLAPSE_CHARS = 280
-private val REASONING_FADE_HEIGHT = Spacing.xl
+private const val REASONING_COLLAPSED_LINES = 6
+// Taller fade band → a softer, more gradual dissolve into "See more" (was Spacing.xl, too abrupt).
+private val REASONING_FADE_HEIGHT = 48.dp
+private val REASONING_HEIGHT_SPEC = tween<Int>(durationMillis = 200, easing = FastOutSlowInEasing)
+
+/** Collapsed clamp height for a long reasoning block — about [REASONING_COLLAPSED_LINES] lines. */
+@Composable
+private fun reasoningCollapsedHeight(): Dp {
+    val density = LocalDensity.current
+    val lineHeight = MaterialTheme.typography.bodyMedium.lineHeight
+    return with(density) { lineHeight.toDp() } * REASONING_COLLAPSED_LINES
+}
+
+/**
+ * Renders [content] at full height but reports an animated, clamped height: expanding/collapsing
+ * clips the bottom rather than swapping the text, so the markdown is parsed once and the motion is
+ * smooth both ways. Top-anchored — the top stays put while the bottom reveals/clips — with a soft
+ * [fadeBottom] edge while content remains below the fold.
+ */
+@Composable
+private fun ClippedReveal(
+    expanded: Boolean,
+    collapsedHeight: Dp,
+    content: @Composable () -> Unit,
+) {
+    val collapsedPx = with(LocalDensity.current) { collapsedHeight.roundToPx() }
+    var fullPx by remember { mutableStateOf(0) }
+    val target = if (expanded) fullPx else minOf(collapsedPx, fullPx)
+    val animatedPx by animateIntAsState(target, REASONING_HEIGHT_SPEC, label = "reasoning-reveal")
+    val fading = fullPx > 0 && animatedPx < fullPx
+    SubcomposeLayout(
+        modifier = Modifier
+            .clipToBounds()
+            .then(if (fading) Modifier.fadeBottom(REASONING_FADE_HEIGHT) else Modifier),
+    ) { constraints ->
+        val placeable = subcompose(Unit, content).first().measure(constraints.copy(minHeight = 0))
+        if (placeable.height != fullPx) fullPx = placeable.height
+        val h = if (fullPx == 0) placeable.height else animatedPx.coerceIn(0, placeable.height)
+        layout(placeable.width, h) { placeable.place(0, 0) }
+    }
+}
 
 /**
  * Fades the bottom [height] of the content to transparent — a soft truncation edge. Renders to an
@@ -392,47 +431,53 @@ private fun TimelineRow(
     val discTop = (TIMELINE_CONTENT_VPAD + (firstLineHeight - ICON_MASK_SIZE) / 2)
         .coerceAtLeast(0.dp)
     val iconCenter = discTop + ICON_MASK_SIZE / 2
-    // Cap the connector at the endpoints so it runs from the first node's centre to
-    // the last node's centre rather than leaking past them.
-    val ruleExtent = when {
-        isFirst && isLast -> Modifier.height(0.dp)
-        isFirst -> Modifier.fillMaxHeight().padding(top = iconCenter)
-        isLast -> Modifier.height(iconCenter)
-        else -> Modifier.fillMaxHeight()
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-    ) {
-        // Gutter: the connector rule, with the step icon in a page-coloured disc
-        // that masks the rule, leaving a clean gap around it.
-        Box(modifier = Modifier.width(GUTTER_WIDTH)) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        // Content drives the row height. No IntrinsicSize.Min here, so an animating-height child
+        // (see ClippedReveal) can actually resize the row instead of being snapped to full.
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Spacer(Modifier.width(GUTTER_WIDTH))
+            Spacer(Modifier.width(Spacing.sm))
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .width(2.dp)
-                    .then(ruleExtent)
-                    .background(ruleColor),
-            )
-            if (icon != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = discTop)
-                        .size(ICON_MASK_SIZE)
-                        .clip(CircleShape)
-                        .background(maskColor),
-                    contentAlignment = Alignment.Center,
-                ) { icon() }
+                    .weight(1f)
+                    .padding(top = TIMELINE_CONTENT_VPAD, bottom = TIMELINE_CONTENT_VPAD, end = Spacing.md),
+            ) { content() }
+        }
+        // Gutter overlay: matchParentSize reads the content-driven height (it doesn't drive it), so
+        // the connector rule and the masking icon disc track the content as it animates.
+        Box(modifier = Modifier.matchParentSize()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .width(GUTTER_WIDTH)
+                    .fillMaxHeight()
+                    // Draw the rule centred in the gutter, capped at the first/last node's centre.
+                    .drawBehind {
+                        if (isFirst && isLast) return@drawBehind
+                        val cx = size.width / 2f
+                        val top = if (isFirst) iconCenter.toPx() else 0f
+                        val bottom = if (isLast) iconCenter.toPx() else size.height
+                        drawLine(
+                            color = ruleColor,
+                            start = Offset(cx, top),
+                            end = Offset(cx, bottom),
+                            strokeWidth = TIMELINE_RULE_WIDTH.toPx(),
+                        )
+                    },
+            ) {
+                if (icon != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = discTop)
+                            .size(ICON_MASK_SIZE)
+                            .clip(CircleShape)
+                            .background(maskColor),
+                        contentAlignment = Alignment.Center,
+                    ) { icon() }
+                }
             }
         }
-        Spacer(Modifier.width(Spacing.sm))
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .padding(top = TIMELINE_CONTENT_VPAD, bottom = TIMELINE_CONTENT_VPAD, end = Spacing.md),
-        ) { content() }
     }
 }
 
@@ -441,7 +486,7 @@ private fun toolIcon(name: String): ImageVector = when (name) {
     "read_calendar" -> Icons.Outlined.CalendarMonth
     "set_alarm" -> Icons.Outlined.Alarm
     "cancel_alarm" -> Icons.Outlined.AlarmOff
-    "estimate_commute", "estimate_commute_multi_mode" -> Icons.Outlined.Commute
+    "estimate_commute", "estimate_commute_multi_mode" -> Icons.Outlined.DirectionsCar
     "geocode_address" -> Icons.Outlined.LocationOn
     "notify_warning" -> Icons.Outlined.WarningAmber
     "send_brief" -> Icons.AutoMirrored.Outlined.Article
@@ -467,47 +512,57 @@ private fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boolea
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            // "Calling" + name pill take their natural width (priority); the name pill never
+            // char-wraps. The result takes the remaining space and ellipsizes (e.g. long addresses).
+            Text(
+                text = "Calling",
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeightStyle = STEP_LINE_HEIGHT),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(Radius.sm),
             ) {
                 Text(
-                    text = "Calling",
-                    style = MaterialTheme.typography.bodyMedium.copy(lineHeightStyle = STEP_LINE_HEIGHT),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = step.name,
+                    style = CronTypography.labelMonoSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.dp),
                 )
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(Radius.sm),
-                ) {
-                    Text(
-                        text = step.name,
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                when {
+                    !step.isComplete -> CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 1.5.dp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    step.isError -> Icon(
+                        imageVector = Icons.Outlined.WarningAmber,
+                        contentDescription = "Failed",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(STEP_ICON_SIZE),
+                    )
+                    step.contextLabel != null -> Text(
+                        text = step.contextLabel,
                         style = CronTypography.labelMonoSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.End,
+                    )
+                    else -> Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = "Done",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(STEP_ICON_SIZE),
                     )
                 }
-            }
-            Spacer(Modifier.width(Spacing.sm))
-            when {
-                !step.isComplete -> CircularProgressIndicator(
-                    modifier = Modifier.size(14.dp),
-                    strokeWidth = 1.5.dp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                step.contextLabel != null -> Text(
-                    text = step.contextLabel,
-                    style = CronTypography.labelMonoSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                else -> Icon(
-                    imageVector = Icons.Rounded.Check,
-                    contentDescription = "Done",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(STEP_ICON_SIZE),
-                )
             }
         }
     }
@@ -521,7 +576,7 @@ private fun DoneRow(isFirst: Boolean, isLast: Boolean) {
         isLast = isLast,
         icon = {
         Icon(
-            imageVector = Icons.Rounded.Check,
+            imageVector = Icons.Outlined.Check,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(STEP_ICON_SIZE),
