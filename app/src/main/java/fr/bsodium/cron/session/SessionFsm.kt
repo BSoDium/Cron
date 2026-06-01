@@ -44,7 +44,12 @@ class SessionFsm(
      * session exists and the event cannot bootstrap one.
      */
     suspend fun onEvent(event: SessionEvent): String? = withContext(Dispatchers.IO) {
-        val session = repository.findCurrent()
+        var current = repository.findCurrent()
+        // A fresh evening plan for a new morning supersedes any session left unfinished from a prior day.
+        if (event.trigger == TriggerType.EveningPlan && current != null && supersedeIfStale(current, event)) {
+            current = null
+        }
+        val session = current
             ?: if (event.trigger == TriggerType.EveningPlan) {
                 bootstrapSession(event) ?: return@withContext null
             } else {
@@ -102,6 +107,58 @@ class SessionFsm(
         )
         Log.i(TAG, "Session ${session.id} created for $date, hard-latest=${plan.hardLatest}")
         return session
+    }
+
+    /**
+     * Re-reads plan-affecting settings into the session's frozen plan so a manual replan honours
+     * changes made after bootstrap (e.g. the user edited their preparation time). Re-arms the
+     * hard-latest floor only if it moved. No-ops if nothing plan-affecting changed.
+     */
+    suspend fun refreshPlanFromSettings(sessionId: String) = withContext(Dispatchers.IO) {
+        val session = repository.findById(sessionId) ?: return@withContext
+        val settings = SettingsRepository(context)
+        val refreshed = session.plan.copy(
+            hardLatest = settings.currentHardLatestDefault(),
+            wakeWindowStart = settings.freeDayWakeStart.first(),
+            wakeWindowEnd = settings.freeDayWakeEnd.first(),
+            commuteBufferMinutes = settings.commuteBufferMinutes.first(),
+            preparationBufferMinutes = settings.preparationBufferMinutes.first(),
+            generatedAt = Clock.System.now(),
+        )
+        // generatedAt always differs, so compare the five settings-derived fields explicitly.
+        val unchanged = refreshed.hardLatest == session.plan.hardLatest &&
+            refreshed.wakeWindowStart == session.plan.wakeWindowStart &&
+            refreshed.wakeWindowEnd == session.plan.wakeWindowEnd &&
+            refreshed.commuteBufferMinutes == session.plan.commuteBufferMinutes &&
+            refreshed.preparationBufferMinutes == session.plan.preparationBufferMinutes
+        if (unchanged) return@withContext
+        repository.updatePlan(sessionId, refreshed)
+        if (refreshed.hardLatest != session.plan.hardLatest) {
+            hardLatestScheduler.arm(
+                hardLatest = refreshed.hardLatest,
+                sessionDate = session.date,
+                timezone = TimeZone.of(session.timezone),
+                sessionId = sessionId,
+            )
+        }
+        Log.i(TAG, "Session $sessionId plan refreshed from settings (prep=${refreshed.preparationBufferMinutes}, commute=${refreshed.commuteBufferMinutes})")
+    }
+
+    /**
+     * If the current session targets a different morning than this evening plan, it never completed
+     * (e.g. the alarm was never dismissed). Mark it Complete and clear its alarms so tonight starts
+     * fresh. We deliberately do NOT stop the service here — it's the live FGS bootstrapping the new
+     * session; the same-night re-plan case (matching date) is left untouched as a legitimate replan.
+     */
+    private suspend fun supersedeIfStale(current: SleepSession, eveningPlanEvent: SessionEvent): Boolean {
+        val data = eveningPlanEvent.data as? EventData.EveningPlan ?: return false
+        val morning = SessionRepository.morningDate(eveningPlanEvent.timestamp, TimeZone.of(data.timezone))
+        if (current.date == morning) return false
+        repository.updateStatus(current.id, SessionStatus.Complete)
+        alarmScheduler.cancel(current.date)
+        hardLatestScheduler.clear(current.date)
+        Log.i(TAG, "Superseded stale session ${current.id} (date=${current.date}) for morning $morning")
+        return true
     }
 
     // ---------------------------------------------------------------------------

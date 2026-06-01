@@ -1,5 +1,8 @@
 package fr.bsodium.cron.ui.screens.settings
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.WindowInsets
@@ -17,7 +19,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -27,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,8 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.health.connect.client.PermissionController
+import fr.bsodium.cron.permissions.SystemPermissions
+import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
 import fr.bsodium.cron.ui.components.ScreenTitle
 import fr.bsodium.cron.ui.components.SectionLabel
 import fr.bsodium.cron.ui.theme.Spacing
@@ -101,16 +107,11 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 )
             }
 
+            Section(label = "Reliability") {
+                ReliabilitySettings()
+            }
+
             Section(label = "Account") {
-                val context = LocalContext.current
-                GoogleSignInRow(
-                    photoUrl = state.displayPhotoUrl,
-                    displayName = state.displayName,
-                    isSigningIn = state.isSigningIn,
-                    error = state.signInError,
-                    onSignIn = { viewModel.signInWithGoogle(context) },
-                    onSignOut = viewModel::signOut,
-                )
                 DisplayNameRow(
                     name = state.displayName,
                     onSave = viewModel::setDisplayName,
@@ -149,8 +150,138 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 }
             }
 
+            Section(label = "About") {
+                val uriHandler = LocalUriHandler.current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { uriHandler.openUri("https://storyset.com/food") },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Credits",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        Text(
+                            text = "Food illustrations by Storyset",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "View",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(40.dp))
         }
+}
+
+@Composable
+private fun ReliabilitySettings() {
+    val context = LocalContext.current
+    val reader = remember { SleepStageReader(context) }
+    val hcAvailable = remember { reader.availability() == SleepStageReader.Availability.Available }
+
+    var bgLocation by remember { mutableStateOf(SystemPermissions.hasBackgroundLocation(context)) }
+    var battery by remember { mutableStateOf(SystemPermissions.isIgnoringBatteryOptimizations(context)) }
+    var exactAlarms by remember { mutableStateOf(SystemPermissions.canScheduleExactAlarms(context)) }
+    var hcConnected by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { hcConnected = reader.hasSleepPermission() }
+
+    val bgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        bgLocation = SystemPermissions.hasBackgroundLocation(context)
+    }
+    // Returning from a system settings screen re-checks the two that can't report a result directly.
+    val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        battery = SystemPermissions.isIgnoringBatteryOptimizations(context)
+        exactAlarms = SystemPermissions.canScheduleExactAlarms(context)
+    }
+    val hcLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted -> hcConnected = granted.containsAll(reader.requiredPermissions) }
+
+    ActionRow(
+        title = "Background location",
+        subtitle = "Refresh your location for the nightly plan while the app is closed",
+        done = bgLocation,
+        actionLabel = "Allow",
+        enabled = SystemPermissions.hasForegroundLocation(context),
+        onClick = { bgLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) },
+    )
+    ActionRow(
+        title = "Battery optimization",
+        subtitle = "Let Cron run overnight without being killed",
+        done = battery,
+        actionLabel = "Disable",
+        enabled = true,
+        onClick = { settingsLauncher.launch(SystemPermissions.batteryOptimizationIntent(context)) },
+    )
+    ActionRow(
+        title = "Exact alarms",
+        subtitle = "Fire the alarm at the precise planned time",
+        done = exactAlarms,
+        actionLabel = "Allow",
+        enabled = true,
+        onClick = { settingsLauncher.launch(SystemPermissions.exactAlarmSettingsIntent(context)) },
+    )
+    ActionRow(
+        title = "Health Connect",
+        subtitle = if (hcAvailable) "Use wearable sleep stages for smarter wake timing"
+            else "Install Health Connect to use wearable sleep data",
+        done = hcConnected,
+        actionLabel = "Connect",
+        enabled = hcAvailable,
+        onClick = { hcLauncher.launch(reader.requiredPermissions) },
+    )
+}
+
+@Composable
+private fun ActionRow(
+    title: String,
+    subtitle: String,
+    done: Boolean,
+    actionLabel: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (done) {
+            Text(
+                text = "Enabled",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            )
+        } else {
+            TextButton(onClick = onClick, enabled = enabled) {
+                Text(actionLabel, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
 }
 
 @Composable
@@ -256,58 +387,6 @@ private fun BufferSlider(
 }
 
 @Composable
-private fun GoogleSignInRow(
-    photoUrl: String?,
-    displayName: String?,
-    isSigningIn: Boolean,
-    error: String?,
-    onSignIn: () -> Unit,
-    onSignOut: () -> Unit,
-) {
-    val signedIn = !photoUrl.isNullOrBlank()
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Google profile",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Text(
-                text = when {
-                    signedIn && !displayName.isNullOrBlank() -> "Signed in as $displayName"
-                    signedIn -> "Signed in"
-                    else -> "Use your Google account for name + avatar"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            error?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-        when {
-            isSigningIn -> CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp,
-            )
-            signedIn -> TextButton(onClick = onSignOut) {
-                Text("Sign out", color = MaterialTheme.colorScheme.primary)
-            }
-            else -> TextButton(onClick = onSignIn) {
-                Text("Sign in", color = MaterialTheme.colorScheme.primary)
-            }
-        }
-    }
-}
-
-@Composable
 private fun DisplayNameRow(
     name: String?,
     onSave: (String) -> Unit,
@@ -338,7 +417,7 @@ private fun DisplayNameRow(
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             // Match TextButton content padding so the value aligns with the
-            // Sign in / Clear buttons in the rows above and below.
+            // Sign in / Clear buttons in the rows below.
             modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
         )
     }

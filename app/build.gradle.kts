@@ -65,12 +65,6 @@ android {
             "GOOGLE_ROUTES_API_KEY",
             "\"${localProps.getProperty("GOOGLE_ROUTES_API_KEY", "")}\""
         )
-        // OAuth 2.0 Web client ID for Sign in with Google via Credential Manager.
-        buildConfigField(
-            "String",
-            "GOOGLE_WEB_CLIENT_ID",
-            "\"${localProps.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\""
-        )
     }
 
     signingConfigs {
@@ -156,11 +150,6 @@ dependencies {
     // Image loading (for route map in debug card)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
-
-    // Sign-in with Google via Credential Manager
-    implementation(libs.androidx.credentials)
-    implementation(libs.androidx.credentials.play.services.auth)
-    implementation(libs.googleid)
 
     // Markdown rendering for AI thinking / response bodies
     implementation(libs.markdown.renderer.m3)

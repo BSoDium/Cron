@@ -24,6 +24,9 @@ interface AiMessageDao {
     @Query("SELECT MAX(turnIndex) FROM ai_messages WHERE sessionId = :sessionId")
     suspend fun maxTurnIndex(sessionId: String): Int?
 
+    @Query("DELETE FROM ai_messages WHERE sessionId = :sessionId AND turnIndex = :turnIndex")
+    suspend fun deleteByTurn(sessionId: String, turnIndex: Int)
+
     @Query("SELECT * FROM ai_messages WHERE sessionId = :sessionId ORDER BY id ASC")
     suspend fun findBySession(sessionId: String): List<AiMessageEntity>
 

@@ -6,6 +6,7 @@ import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.SessionJson
@@ -17,6 +18,7 @@ import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSession
 import fr.bsodium.cron.worker.AiTurnWorker
+import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
@@ -54,7 +56,9 @@ class SessionRepository(private val context: Context) {
             createdAt = now,
             updatedAt = now,
         )
-        db.sessionDao().insert(session.toEntity())
+        // insertOrReplace so a completed session already on this date (e.g. a same-day re-plan)
+        // doesn't trip the UNIQUE(date) ABORT constraint.
+        db.sessionDao().insertOrReplace(session.toEntity())
         return session
     }
 
@@ -95,10 +99,28 @@ class SessionRepository(private val context: Context) {
         )
     }
 
+    /** Cancels the in-flight AI turn for [sessionId], if any. */
+    fun cancelAiTurn(sessionId: String) {
+        WorkManager.getInstance(context).cancelUniqueWork("${AiTurnWorker.WORK_PREFIX}$sessionId")
+    }
+
+    /** Live WorkInfo for the session's AI turn — drives the home "working" indicator. */
+    fun observeAiTurnWork(sessionId: String): Flow<List<WorkInfo>> =
+        WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWorkFlow("${AiTurnWorker.WORK_PREFIX}$sessionId")
+
     suspend fun updateStatus(sessionId: String, status: SessionStatus) {
         val entity = db.sessionDao().findById(sessionId) ?: return
         db.sessionDao().update(entity.copy(
             status = status.name,
+            updatedAt = Clock.System.now().toEpochMilliseconds(),
+        ))
+    }
+
+    suspend fun updatePlan(sessionId: String, plan: DayPlan) {
+        val entity = db.sessionDao().findById(sessionId) ?: return
+        db.sessionDao().update(entity.copy(
+            planJson = SessionJson.encodeToString(plan),
             updatedAt = Clock.System.now().toEpochMilliseconds(),
         ))
     }

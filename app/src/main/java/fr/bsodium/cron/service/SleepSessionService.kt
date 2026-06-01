@@ -1,5 +1,6 @@
 package fr.bsodium.cron.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,25 +8,31 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.R
+import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.sensors.ActivityRecognitionMonitor
 import fr.bsodium.cron.sensors.DebugSensorEventSink
 import fr.bsodium.cron.sensors.SensorEventSink
 import fr.bsodium.cron.sensors.ScreenStateMonitor
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
+import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
 
 /**
  * Long-running foreground service that hosts dynamically-registered
@@ -77,8 +84,12 @@ class SleepSessionService : Service() {
                 return START_NOT_STICKY
             }
         }
+        val eveningPlan = intent?.action == ACTION_EVENING_PLAN
         ensureNotificationChannel()
-        startForegroundWithSpecialUse()
+        // Run as a location-typed FGS for the evening plan so the in-service location fetch is
+        // "in use" (fresh + unthrottled) with only foreground permission. A sticky restart (null
+        // intent) resumes monitoring only — it must NOT re-fire the plan.
+        startForegroundService(includeLocation = eveningPlan)
 
         if (screenStateMonitor == null) {
             screenStateMonitor = ScreenStateMonitor(applicationContext, fsmSink, serviceScope).also { it.start() }
@@ -87,9 +98,40 @@ class SleepSessionService : Service() {
             activityRecognitionMonitor = ActivityRecognitionMonitor(applicationContext, fsmSink, serviceScope).also { it.start() }
         }
 
+        if (eveningPlan) {
+            val tzId = intent.getStringExtra(EXTRA_TIMEZONE) ?: TimeZone.currentSystemDefault().id
+            serviceScope.launch { runEveningPlan(tzId) }
+        }
+
         Log.i(TAG, "SleepSessionService started")
         return START_STICKY
     }
+
+    /**
+     * Captures a fresh location (this service is a running location FGS, so [LocationProvider]'s
+     * `getCurrentLocation` is "in use" and unthrottled) and emits the evening_plan event that
+     * creates the session and kicks the first AI turn.
+     */
+    private suspend fun runEveningPlan(tzId: String) {
+        try {
+            val location = LocationProvider(applicationContext).acquireForEveningPlan()
+            val event = SessionEvent(
+                trigger = TriggerType.EveningPlan,
+                timestamp = Clock.System.now(),
+                data = EventData.EveningPlan(timezone = tzId, location = location),
+            )
+            SessionFsm(applicationContext, SessionRepository(applicationContext)).onEvent(event)
+            Log.i(TAG, "Evening plan session started (location_source=${location.source})")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Evening plan setup failed", t)
+        }
+    }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
 
     private fun stop() {
         screenStateMonitor?.stop()
@@ -110,14 +152,15 @@ class SleepSessionService : Service() {
         super.onDestroy()
     }
 
-    private fun startForegroundWithSpecialUse() {
+    private fun startForegroundService(includeLocation: Boolean) {
         val notif = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
-            startForeground(
-                NOTIFICATION_ID,
-                notif,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-            )
+            // Only add the location type when permission is granted — API 34 throws otherwise.
+            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            if (includeLocation && hasLocationPermission()) {
+                type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            }
+            startForeground(NOTIFICATION_ID, notif, type)
         } else {
             startForeground(NOTIFICATION_ID, notif)
         }
@@ -170,10 +213,19 @@ class SleepSessionService : Service() {
         const val NOTIFICATION_ID = 9010
         const val ACTION_STOP = "fr.bsodium.cron.SLEEP_SESSION_STOP"
         const val ACTION_REARM = "fr.bsodium.cron.SLEEP_SESSION_REARM"
+        const val ACTION_EVENING_PLAN = "fr.bsodium.cron.SLEEP_SESSION_EVENING_PLAN"
+        const val EXTRA_TIMEZONE = "timezone"
         private const val TAG = "SleepSessionService"
 
         fun startIntent(context: Context): Intent =
             Intent(context, SleepSessionService::class.java)
+
+        /** Starts the service to capture a fresh location (in-FGS) and bootstrap the evening plan. */
+        fun eveningPlanIntent(context: Context, timezoneId: String): Intent =
+            Intent(context, SleepSessionService::class.java).apply {
+                action = ACTION_EVENING_PLAN
+                putExtra(EXTRA_TIMEZONE, timezoneId)
+            }
 
         fun stopIntent(context: Context): Intent =
             Intent(context, SleepSessionService::class.java).apply { action = ACTION_STOP }

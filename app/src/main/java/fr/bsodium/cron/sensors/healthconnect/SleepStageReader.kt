@@ -46,6 +46,13 @@ class SleepStageReader(private val context: Context) {
         else -> Availability.NotInstalled
     }
 
+    /** Whether the sleep read permission is currently granted (false if HC is unavailable). */
+    suspend fun hasSleepPermission(): Boolean {
+        if (availability() != Availability.Available) return false
+        val granted = HealthConnectClient.getOrCreate(context).permissionController.getGrantedPermissions()
+        return granted.containsAll(requiredPermissions)
+    }
+
     /**
      * Read all sleep-stage segments overlapping [start..now], emitting a
      * [SessionEvent] per stage segment to [emit]. Returns the latest

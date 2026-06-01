@@ -5,15 +5,17 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,12 +26,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,37 +44,60 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
+import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
     val uiState by viewModel.uiState.collectAsState()
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, spinning = false))
+        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
     }
-    LaunchedEffect(uiState.isRetrying, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, spinning = uiState.isRetrying))
+    // Show the onboarding callout (rendered above EdgeFades in MainActivity) only in the loaded,
+    // no-plan, idle state — it hides the moment the user taps the FAB.
+    val showOnboardingHint = uiState.initialized && uiState.aiThread == null && !uiState.isRetrying
+    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
+        fabRegistry.set(
+            FabAction(
+                onClick = viewModel::retryAiPlan,
+                working = uiState.isRetrying,
+                onCancel = viewModel::cancelAiPlan,
+                hint = if (showOnboardingHint) "Click here to start" else null,
+            )
+        )
     }
 
     val context = LocalContext.current
@@ -94,103 +123,263 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
 
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = Spacing.xl,
-            end = Spacing.xl,
-            top = statusInsetTop + Spacing.xxl,
-            bottom = navInsetBottom + Spacing.navBarClearance,
-        ),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xl),
-    ) {
-        item(key = "greeting") {
-            GreetingHeader(
-                prefix = uiState.greetingPrefix,
-                name = uiState.greetingName,
-                photoUrl = uiState.greetingPhotoUrl,
+    val onNotifEnable = {
+        context.startActivity(
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            }
+        )
+    }
+    val card: @Composable () -> Unit = {
+        NextAlarmCard(
+            dateLabel = uiState.dateLabel,
+            alarmTime = uiState.sessionDisplay?.alarmTime,
+            sleepDurationLabel = uiState.sleepStats?.durationLabel,
+            sleepSegments = uiState.sleepStats?.segments.orEmpty(),
+        )
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (uiState.aiThread == null) {
+            // First-run / no-plan OR still loading: a simple Column so the onboarding centres in
+            // the empty space between the alarm card and the nav bar. The hint + arrow only render
+            // once `initialized` is true, so they never flash over an existing plan on cold start.
+            // The play FAB is the call to action.
+            val showOnboarding = uiState.initialized
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        start = Spacing.xl,
+                        end = Spacing.xl,
+                        top = statusInsetTop + Spacing.xxl,
+                        bottom = navInsetBottom + Spacing.navBarClearance,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xl),
+            ) {
+                GreetingHeader(
+                    prefix = uiState.greetingPrefix,
+                    name = uiState.greetingName,
+                )
+                card()
+                // Bias the hint toward the upper third so "Let's get started" sits near eye height
+                // rather than floating in the dead-centre of the gap.
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = BiasAlignment(0f, -0.4f),
+                ) {
+                    if (showOnboarding) OnboardingHint()
+                }
+                if (!hasNotificationPermission) NotificationPermissionRow(onEnable = onNotifEnable)
+            }
+            // The onboarding callout that points at the play FAB is rendered in MainActivity,
+            // layered above EdgeFades (via FabAction.hint) so the bottom scrim doesn't fade it.
+        } else {
+            // The alarm card behaves like CSS `position: sticky; top: statusBar + gap`: the list
+            // scrolls edge-to-edge under the status bar while the card flows then sticks just below
+            // it. It's an overlay, not a stickyHeader (which pins at y=0 and can't take a top
+            // offset without a rest gap or pin jump); an "alarm-spacer" holds its place in flow.
+            val listState = rememberLazyListState()
+            val density = LocalDensity.current
+            var cardHeightPx by remember { mutableStateOf(0) }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = Spacing.xl,
+                    end = Spacing.xl,
+                    top = statusInsetTop + Spacing.xxl,
+                    bottom = navInsetBottom + Spacing.navBarClearance,
+                ),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xl),
+            ) {
+                item(key = "greeting") {
+                    GreetingHeader(
+                        prefix = uiState.greetingPrefix,
+                        name = uiState.greetingName,
+                    )
+                }
+                item(key = "alarm-spacer") {
+                    Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
+                }
+                item(key = "thread") {
+                    uiState.aiThread?.let { AiThinkingThread(it, isRunning = uiState.isRetrying) }
+                }
+                if (!hasNotificationPermission) {
+                    item(key = "notif-permission") {
+                        NotificationPermissionRow(onEnable = onNotifEnable)
+                    }
+                }
+            }
+            StickyAlarm(
+                listState = listState,
+                safeTop = statusInsetTop + Spacing.sm,
+                cardHeightPx = cardHeightPx,
+                onHeightChanged = { cardHeightPx = it },
+                card = card,
             )
         }
-        // Wrap the card in an opaque background so the greeting doesn't bleed
-        // through the rounded card's transparent corners during sticky transit.
-        stickyHeader(key = "alarm") {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(vertical = Spacing.xs),
-            ) {
-                NextAlarmCard(
-                    dateLabel = uiState.dateLabel,
-                    alarmTime = uiState.sessionDisplay?.alarmTime,
-                    sleepDurationLabel = uiState.sleepStats?.durationLabel,
-                    sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-                )
-            }
+
+        // Floats just above the nav when a plan-affecting setting changed since the last plan.
+        AnimatedVisibility(
+            visible = uiState.settingsChangedSincePlan,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(
+                    start = Spacing.lg,
+                    end = Spacing.lg,
+                    bottom = navInsetBottom + Spacing.navBarClearance,
+                ),
+        ) {
+            SettingsChangedPill(
+                onRewrite = {
+                    viewModel.retryAiPlan()
+                    viewModel.dismissSettingsReminder()
+                },
+                onDismiss = viewModel::dismissSettingsReminder,
+            )
         }
-        item(key = "thread") {
-            val thread = uiState.aiThread
-            if (thread != null) {
-                AiThinkingThread(thread)
-            } else {
-                EmptyPlanIndicator()
-            }
-        }
-        if (!hasNotificationPermission) {
-            item(key = "notif-permission") {
-                NotificationPermissionRow(
-                    onEnable = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            }
-                        )
-                    },
+    }
+}
+
+@Composable
+private fun SettingsChangedPill(
+    onRewrite: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = Radius.full,
+        tonalElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = Spacing.xl, end = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Settings updated",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRewrite) { Text("Replan alarm") }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Dismiss",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
     }
 }
 
+private data class StickyAlarmState(val top: Int, val gradientAlpha: Float)
+
 /**
- * Pulsing chevron tucked under the alarm card, pointing toward the play FAB
- * at the bottom-right. Replaces the previous prose hint.
+ * CSS-`sticky`-with-top-offset alarm card, rendered as an overlay over the list. It follows the
+ * flow position of the "alarm-spacer" item, then holds at [safeTop] (just below the status bar).
+ * When stuck, a full-width background→transparent gradient fades in behind it, dissolving content
+ * that slides under the card (and the full-bleed pill's edges) into the page background.
  */
 @Composable
-private fun EmptyPlanIndicator(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "empty-plan-hint")
-    val alpha by transition.animateFloat(
-        initialValue = 0.45f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "empty-plan-alpha",
-    )
-    val drift by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "empty-plan-drift",
+private fun BoxScope.StickyAlarm(
+    listState: LazyListState,
+    safeTop: Dp,
+    cardHeightPx: Int,
+    onHeightChanged: (Int) -> Unit,
+    card: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    val safeTopPx = with(density) { safeTop.roundToPx() }
+    val fadePx = with(density) { Spacing.xxl.toPx() }
+    val state by remember(safeTopPx, fadePx) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            // Item offsets are content-relative; the on-screen top = offset - viewportStartOffset
+            // (viewportStartOffset is -beforeContentPadding). Null when the spacer has scrolled
+            // off the top → fully stuck (handled explicitly to avoid sentinel-int overflow).
+            val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
+                ?.let { it.offset - info.viewportStartOffset }
+            if (screenTop == null) {
+                StickyAlarmState(top = safeTopPx, gradientAlpha = 1f)
+            } else {
+                StickyAlarmState(
+                    top = maxOf(safeTopPx, screenTop),
+                    gradientAlpha = ((safeTopPx - screenTop) / fadePx).coerceIn(0f, 1f),
+                )
+            }
+        }
+    }
+    val background = MaterialTheme.colorScheme.background
+    // Solid background-colour from the top all the way down to the card's bottom, then a soft
+    // fade to transparent just below it — so nothing is visible above/behind the pinned card and
+    // content dissolves as it slides out the bottom.
+    val cardBottomPx = safeTopPx + cardHeightPx
+    val belowFadePx = with(density) { Spacing.xxxl.toPx() }
+    val totalPx = cardBottomPx + belowFadePx
+    val solidStop = if (totalPx > 0f) (cardBottomPx / totalPx).coerceIn(0f, 1f) else 1f
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(with(density) { totalPx.toDp() })
+            .graphicsLayer { alpha = state.gradientAlpha }
+            .background(
+                Brush.verticalGradient(
+                    0f to background,
+                    solidStop to background,
+                    1f to Color.Transparent,
+                ),
+            ),
     )
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(top = Spacing.xs, end = Spacing.sm),
-        contentAlignment = Alignment.CenterEnd,
+            .graphicsLayer { translationY = state.top.toFloat() }
+            .padding(horizontal = Spacing.xl)
+            .onSizeChanged { if (it.height != cardHeightPx) onHeightChanged(it.height) },
+    ) { card() }
+}
+
+/**
+ * First-run onboarding: an illustration, a serif invitation, and a line explaining what a plan
+ * needs. The play FAB (pointed at by the onboarding callout) is the CTA.
+ */
+@Composable
+private fun OnboardingHint(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            imageVector = Icons.Filled.KeyboardDoubleArrowDown,
-            contentDescription = "Tap the play button to plan",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.graphicsLayer {
-                this.alpha = alpha
-                translationY = drift
-            },
+        Image(
+            painter = painterResource(R.drawable.ic_onboarding_illustration),
+            contentDescription = null,
+            modifier = Modifier.size(200.dp),
+        )
+        Spacer(Modifier.height(Spacing.lg))
+        Text(
+            text = "Let's get started",
+            style = CronTypography.bodySerif.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 30.sp,
+                lineHeight = 36.sp,
+            ),
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(Spacing.sm))
+        Text(
+            text = "Cron reads your calendar and last night's sleep to pick the " +
+                "smartest wake-up time. Run it to plan your morning.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }
