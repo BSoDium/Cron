@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.Data
 import androidx.work.WorkInfo
 import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.calendar.requestCalendarSync
@@ -22,6 +23,7 @@ import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.settings.SettingsRepository
+import fr.bsodium.cron.worker.AiTurnWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,7 +63,16 @@ data class HomeUiState(
     val initialized: Boolean = false,
     /** A plan-affecting setting changed since the last plan was written — offers a re-run. */
     val settingsChangedSincePlan: Boolean = false,
+    /** The latest AI turn failed (and hasn't been dismissed) — surfaces a dismissible banner. */
+    val aiFailure: AiTurnFailure? = null,
 )
+
+/** Why the most recent AI turn ended without updating the plan, for the home failure banner. */
+sealed interface AiTurnFailure {
+    data class BudgetExhausted(val used: Int, val limit: Int) : AiTurnFailure
+    data object MissingApiKey : AiTurnFailure
+    data class Generic(val reason: String?) : AiTurnFailure
+}
 
 data class SleepStatsUi(
     val durationLabel: String,
@@ -101,6 +112,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isRetrying = MutableStateFlow(false)
 
+    /** Failure parsed from the latest FAILED turn; null while idle, running, or once dismissed. */
+    private val _aiFailure = MutableStateFlow<AiTurnFailure?>(null)
+
+    /** id of the most-recent FAILED turn surfaced, and the one the user dismissed — WorkManager keeps
+     *  re-emitting a terminal FAILED WorkInfo, so dismissal keys on its id to avoid resurrection. A new
+     *  enqueue (REPLACE) gets a fresh id, so a genuinely new failure still shows. */
+    private val _lastFailedId = MutableStateFlow<String?>(null)
+    private val _dismissedFailureId = MutableStateFlow<String?>(null)
+
     /** Latest session entity; many derived streams hang off this. */
     private val sessionFlow = db.sessionDao().observeLatest()
 
@@ -135,8 +155,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         settingsAt > lastAiCallAt && settingsAt > dismissedAt
     }
 
-    private val statusFlow = combine(_isRetrying, settingsChangedFlow) { retrying, settingsChanged ->
-        retrying to settingsChanged
+    private val statusFlow = combine(
+        _isRetrying,
+        settingsChangedFlow,
+        _aiFailure,
+    ) { retrying, settingsChanged, failure ->
+        HomeStatus(isRetrying = retrying, settingsChanged = settingsChanged, failure = failure)
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -146,7 +170,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         settings.displayName,
         statusFlow,
     ) { session, sleepStats, thread, displayName, status ->
-        val (retrying, settingsChanged) = status
         HomeUiState(
             sessionDisplay = session,
             greetingPrefix = greetingPrefix(),
@@ -154,11 +177,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             dateLabel = formatDateLabel(session),
             sleepStats = sleepStats,
             aiThread = thread,
-            isRetrying = retrying,
+            isRetrying = status.isRetrying,
             // combine() only emits once every source has produced a value, so reaching here means
             // the backing flows have loaded — distinguishes "no plan" from "not loaded yet".
             initialized = true,
-            settingsChangedSincePlan = settingsChanged && thread != null,
+            settingsChangedSincePlan = status.settingsChanged && thread != null,
+            aiFailure = status.failure,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -177,8 +201,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * scheduling concerns owned by the receiver, not a manual user trigger.)
      */
     init {
-        // Drive the "working" flag off the real WorkManager turn, not a fixed delay: a tap sets it
-        // true optimistically; this clears it when the turn reaches a terminal state.
+        // Drive the "working" flag and the failure banner off the real WorkManager turn, not a fixed
+        // delay: a tap sets isRetrying true optimistically; this clears it when the turn reaches a
+        // terminal state, and surfaces the failure reason a FAILED turn carries in its output data.
         viewModelScope.launch {
             sessionFlow.map { it?.id }.distinctUntilChanged()
                 .flatMapLatest { id ->
@@ -189,8 +214,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         infos.any { !it.state.isFinished } -> _isRetrying.value = true
                         infos.isNotEmpty() -> _isRetrying.value = false
                     }
+
+                    val failed = infos.firstOrNull { it.state == WorkInfo.State.FAILED }
+                    _aiFailure.value = when {
+                        // A turn is running/queued — hide any stale failure from the previous attempt.
+                        infos.any { !it.state.isFinished } -> null
+                        failed == null -> null
+                        failed.id.toString() == _dismissedFailureId.value -> null
+                        else -> {
+                            _lastFailedId.value = failed.id.toString()
+                            failed.outputData.toAiTurnFailure()
+                        }
+                    }
                 }
         }
+    }
+
+    /** Hide the AI failure banner until the next distinct turn fails (keyed on the failed work's id). */
+    fun dismissAiFailure() {
+        _dismissedFailureId.value = _lastFailedId.value
+        _aiFailure.value = null
     }
 
     fun retryAiPlan() {
@@ -393,6 +436,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /** Maps an [AiTurnWorker] failure's output data to a UI failure. Unknown/absent reasons (open input
+     *  — future worker reasons) fall through to [AiTurnFailure.Generic]. */
+    private fun Data.toAiTurnFailure(): AiTurnFailure = when (getString(AiTurnWorker.KEY_REASON)) {
+        AiTurnWorker.REASON_BUDGET -> AiTurnFailure.BudgetExhausted(
+            used = getInt(AiTurnWorker.KEY_USED, 0),
+            limit = getInt(AiTurnWorker.KEY_LIMIT, 0),
+        )
+        AiTurnWorker.REASON_NO_API_KEY -> AiTurnFailure.MissingApiKey
+        else -> AiTurnFailure.Generic(getString(AiTurnWorker.KEY_REASON))
+    }
+
     private fun decodeBlocks(json: String): List<ContentBlock> = runCatching {
         SessionJson.decodeFromString<List<ContentBlock>>(json)
     }
@@ -449,6 +503,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         const val TAG = "HomeViewModel"
     }
 }
+
+/** The three transient status signals folded into one combine source to keep uiState's arity at 5. */
+private data class HomeStatus(
+    val isRetrying: Boolean,
+    val settingsChanged: Boolean,
+    val failure: AiTurnFailure?,
+)
 
 // Hoisted so they compile once, not on every buildAiThread call.
 private val LEADING_RULE = Regex("([-*_])\\1{2,}")

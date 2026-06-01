@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -23,12 +24,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,26 +40,48 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.permissions.SystemPermissions
 import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
 import fr.bsodium.cron.ui.components.ScreenTitle
 import fr.bsodium.cron.ui.components.SectionLabel
+import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import java.util.Locale
 import kotlinx.datetime.LocalTime
 
 private val DIALOG_FIELD_MIN_HEIGHT = 120.dp
+private val BUDGET_ROW_MIN_HEIGHT = 48.dp
+
+/** Daily AI token-cap presets shown in the budget dialog; 0 means unlimited (cap disabled). */
+private val BUDGET_PRESETS = listOf(100_000, 250_000, 500_000, 0)
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel) {
     val state by viewModel.uiState.collectAsState()
     val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
+    // Token spend is read from SharedPreferences, not observed — refresh it whenever the screen resumes
+    // (e.g. after a turn ran while the app was backgrounded) so the "used today" figure stays current.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshUsage()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(
         modifier = Modifier
@@ -115,6 +140,11 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 CustomInstructionsRow(
                     instructions = state.userInstructions,
                     onSave = viewModel::setUserInstructions,
+                )
+                DailyBudgetRow(
+                    limit = state.dailyTokenLimit,
+                    usedToday = state.tokensUsedToday,
+                    onSelect = viewModel::setDailyTokenLimit,
                 )
             }
 
@@ -525,6 +555,93 @@ private fun CustomInstructionsRow(
                 TextButton(onClick = { showDialog = false }) { Text("Cancel") }
             },
         )
+    }
+}
+
+@Composable
+private fun DailyBudgetRow(
+    limit: Int,
+    usedToday: Int,
+    onSelect: (Int) -> Unit,
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showDialog = true },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Daily AI budget",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = String.format(Locale.US, "%,d used today", usedToday),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = formatTokenLimit(limit),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        )
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Daily AI budget") },
+            text = {
+                Column {
+                    BUDGET_PRESETS.forEach { preset ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(Radius.sm))
+                                .clickable {
+                                    onSelect(preset)
+                                    showDialog = false
+                                }
+                                .heightIn(min = BUDGET_ROW_MIN_HEIGHT),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = preset == limit,
+                                onClick = {
+                                    onSelect(preset)
+                                    showDialog = false
+                                },
+                            )
+                            Text(
+                                text = formatTokenLimit(preset),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+/** "250,000 tokens" for a finite cap, "Unlimited" when disabled (0 or less). */
+private fun formatTokenLimit(tokens: Int): String =
+    if (tokens <= 0) "Unlimited" else String.format(Locale.US, "%,d tokens", tokens)
+
+@Preview
+@Composable
+private fun DailyBudgetRowPreview() {
+    CronTheme {
+        DailyBudgetRow(limit = 250_000, usedToday = 12_480, onSelect = {})
     }
 }
 
