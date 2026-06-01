@@ -31,8 +31,7 @@ class EveningPlanReceiver : BroadcastReceiver() {
             try {
                 // Re-arm for tomorrow before doing anything else.
                 EveningPlanScheduler(context).armNext()
-                // The exact-alarm broadcast is allowed to start a foreground service from the
-                // background; the service does the location capture + event itself.
+                // An exact-alarm broadcast may start a foreground service from the background.
                 val tz = TimeZone.currentSystemDefault().id
                 context.startForegroundService(SleepSessionService.eveningPlanIntent(context, tz))
                 Log.i(TAG, "Evening plan service started")

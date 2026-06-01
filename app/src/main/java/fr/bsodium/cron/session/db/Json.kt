@@ -11,7 +11,6 @@ val SessionJson: Json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
     explicitNulls = false
-    // No global classDiscriminator — kotlinx default is "type", which matches the
-    // Anthropic wire format for ContentBlock. EventData overrides via
-    // @JsonClassDiscriminator("kind").
+    // No global classDiscriminator: kotlinx's default "type" matches the Anthropic ContentBlock
+    // wire format; EventData overrides it via @JsonClassDiscriminator("kind").
 }

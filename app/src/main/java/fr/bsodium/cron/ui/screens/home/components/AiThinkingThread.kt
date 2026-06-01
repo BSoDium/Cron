@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -113,8 +114,7 @@ import fr.bsodium.cron.ui.theme.Spacing
 @Composable
 fun AiThinkingThread(thread: AiThreadUi, isRunning: Boolean, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth()) {
-        // The turn's settled/running state is the real WorkManager signal, not whether a text
-        // response exists — a do_nothing turn finishes with no response and must still settle.
+        // Settled/running is the WorkManager signal, not response presence — a do_nothing turn settles with none.
         val inProgress = isRunning
         if (thread.process.isNotEmpty() || inProgress) {
             ThinkingDisclosure(
@@ -135,13 +135,13 @@ private val GUTTER_WIDTH = 28.dp
 private val TIMELINE_RULE_WIDTH = 2.dp
 private val STEP_ICON_SIZE = 16.dp
 private val ICON_MASK_SIZE = 24.dp
-// Vertical padding around each row's content. Doubles as the gap between steps —
-// kept at sm so a clear segment of the timeline rule shows between icon discs.
+private val SPINNER_SIZE = 14.dp
+private val SPINNER_STROKE = 1.5.dp
+private val ROW_MIN_HEIGHT = 48.dp
+/** Row content padding; doubles as the inter-step gap (sm keeps the timeline rule visible between discs). */
 private val TIMELINE_CONTENT_VPAD = Spacing.sm
 
-// Centre the glyph within its line box (the default trims the first line's top leading and
-// seats the glyph high), so the first line's optical centre lands at lineHeight/2 — where the
-// gutter icon disc is positioned.
+/** Centre the glyph in its line box so the first line's optical centre lands at lineHeight/2 (where the gutter disc sits). */
 private val STEP_LINE_HEIGHT = LineHeightStyle(
     alignment = LineHeightStyle.Alignment.Center,
     trim = LineHeightStyle.Trim.None,
@@ -174,18 +174,15 @@ private fun ThinkingDisclosure(
 ) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     val canExpand = process.isNotEmpty()
-    // Full-bleed square bar: transparent when collapsed, a quiet fill when open (a step below
-    // the alarm card so it stays secondary to it). It bleeds past the screen-side content
-    // padding (Spacing.xl) to hug both edges; the compensating start/end padding keeps the
-    // summary text on the content edge (flush with the response) and the chevron in place.
-    // Only the timeline stays indented.
+    // Full-bleed bar: transparent collapsed, a quiet fill when open. It bleeds past the side content
+    // padding (Spacing.xl) to hug both edges; compensating start/end padding keeps the summary text and chevron in place.
     Row(
         modifier = Modifier
             .bleedHorizontally(Spacing.xl)
             .fillMaxWidth()
             .let { if (canExpand) it.clickable { expanded = !expanded } else it }
             .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent)
-            .heightIn(min = 48.dp)
+            .heightIn(min = ROW_MIN_HEIGHT)
             .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.md + Spacing.xl, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
@@ -201,8 +198,8 @@ private fun ThinkingDisclosure(
                 modifier = Modifier.weight(1f),
             )
             CircularProgressIndicator(
-                modifier = Modifier.size(14.dp),
-                strokeWidth = 1.5.dp,
+                modifier = Modifier.size(SPINNER_SIZE),
+                strokeWidth = SPINNER_STROKE,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -330,9 +327,8 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
                 // the touch target at 48dp while the visible pill stays compact.
                 Box(
                     modifier = Modifier
-                        // No start padding so the label's left edge sits on the reasoning-text
-                        // column; end padding keeps the ripple a pill. The 48dp touch target is
-                        // preserved by minimumInteractiveComponentSize.
+                        // No start padding so the label aligns with the reasoning-text column; the
+                        // 48dp touch target is preserved by minimumInteractiveComponentSize.
                         .minimumInteractiveComponentSize()
                         .clip(Radius.full)
                         .clickable { expanded = !expanded }
@@ -392,7 +388,7 @@ private fun ClippedReveal(
     content: @Composable () -> Unit,
 ) {
     val collapsedPx = with(LocalDensity.current) { collapsedHeight.roundToPx() }
-    var fullPx by remember { mutableStateOf(0) }
+    var fullPx by remember { mutableIntStateOf(0) }
     val target = if (expanded) fullPx else minOf(collapsedPx, fullPx)
     val animatedPx by animateIntAsState(target, REASONING_HEIGHT_SPEC, label = "reasoning-reveal")
     val fading = fullPx > 0 && animatedPx < fullPx
@@ -444,8 +440,7 @@ private fun TimelineRow(
     // Low-emphasis connector tone with enough contrast for a 2dp line against the page.
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val maskColor = MaterialTheme.colorScheme.background
-    // Centre the icon disc on the content's FIRST line (not the whole row, which
-    // drifts to the middle of multi-line reasoning): disc centre =
+    // Centre the disc on the content's FIRST line (not the whole multi-line row): disc centre =
     // contentTopPad + firstLine/2, so its top inset is that minus half the disc.
     val discTop = (TIMELINE_CONTENT_VPAD + (firstLineHeight - ICON_MASK_SIZE) / 2)
         .coerceAtLeast(0.dp)
@@ -557,8 +552,8 @@ private fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boolea
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                 when {
                     !step.isComplete -> CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        strokeWidth = 1.5.dp,
+                        modifier = Modifier.size(SPINNER_SIZE),
+                        strokeWidth = SPINNER_STROKE,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     step.isError -> Icon(
@@ -673,10 +668,8 @@ private fun MarkdownBlock(
         content = text,
         colors = colors,
         typography = typography,
-        // The library drops a uniform `block` spacer after every block, so keep it
-        // at the tight floor gap and let paragraphs/headers own their own rhythm:
-        // paragraphs add a bottom gap; headers add a roomy break above and a
-        // below-gap that shrinks with level so deep headers hug the text they head.
+        // The library adds a uniform `block` spacer after every block; keep it at the tight floor
+        // and let paragraphs/headers own their rhythm (headers get a roomy break above).
         padding = markdownPadding(
             block = MD_BLOCK_GAP,
             listItemTop = Spacing.xs,
@@ -764,9 +757,8 @@ private fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextStyl
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val numCols = rows.maxOf { it.size }
-    // Weight columns by measured content width, but clamp into a band so a long-sentence
-    // column can't dominate (squeezing its neighbours to per-character wrapping) and a short
-    // one can't collapse.
+    // Weight columns by measured width, clamped into a band so a long column can't dominate
+    // (squeezing neighbours to per-character wrapping) and a short one can't collapse.
     val minColPx = with(density) { TABLE_COL_MIN.toPx() }
     val maxColPx = with(density) { TABLE_COL_MAX.toPx() }
     val colWeights = remember(rows, headerStyle, minColPx, maxColPx) {

@@ -151,9 +151,8 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
         }
     }
     val pending = alarmTime == null
-    // Roll the digits up from 0 with an easeOut only when the alarm VALUE changes (incl. the first
-    // time it appears). The animated value is rememberSaveable (minutes-of-day), so re-opening the app
-    // or switching tabs with an unchanged value shows the digits at rest instead of re-rolling.
+    // Roll digits up from 0 (easeOut) only when the alarm VALUE changes. The animated key is
+    // rememberSaveable, so reopening or switching tabs with an unchanged value shows digits at rest.
     val valueKey = alarmTime?.let { it.hour * 60 + it.minute }
     var animatedKey by rememberSaveable { mutableStateOf<Int?>(null) }
     val progressAnim = remember { Animatable(if (valueKey == null || valueKey == animatedKey) 1f else 0f) }
@@ -175,8 +174,7 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
         else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
     val base = MaterialTheme.colorScheme.onSurface
     val digitColor = if (pending) base.copy(alpha = 0.22f) else base
-    // Match the dimmed-digit alpha when pending so the "00H/00M" placeholder reads as a deliberate
-    // grayed twin of the "00:00" digits; a touch brighter than the digits once a real time shows.
+    // Pending: match the dimmed-digit alpha so "00H/00M" reads as a deliberate grayed twin; brighter once a real time shows.
     val countdownColor = if (pending) base.copy(alpha = 0.22f) else base.copy(alpha = 0.6f)
 
     val lcdStyle = TightTextStyle.copy(
@@ -201,7 +199,7 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
             countdown = countdown,
             progress = progress,
             color = countdownColor,
-            modifier = Modifier.padding(start = 6.dp, top = 6.dp),
+            modifier = Modifier.padding(start = Spacing.xs + Spacing.xxs, top = Spacing.xs + Spacing.xxs),
         )
     }
 }
@@ -221,8 +219,7 @@ private fun CountdownStack(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
-    // Space Grotesk (the date-label face) — geometric and legible, pairs with the LCD digits
-    // without Major Mono Display's hard-to-read art-deco H/M.
+    // Space Grotesk pairs with the LCD digits — legible, unlike Major Mono Display's art-deco H/M.
     val smallLcd = TightTextStyle.copy(
         fontFamily = DisplayFontFamily,
         fontSize = 24.sp,
@@ -253,10 +250,15 @@ private fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
     return HoursMinutes(hours = totalMinutes / 60, minutes = totalMinutes % 60)
 }
 
+private val COLON_WIDTH = 8.dp
+private val COLON_HEIGHT = 56.dp
+private val TIMELINE_HEIGHT = 82.dp
+private val TICK_BAR_HEIGHT = 20.dp
+
 /** Two small filled dots stacked vertically — replaces the chunky Major Mono colon. */
 @Composable
 private fun ColonSeparator(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(width = 8.dp, height = 56.dp)) {
+    Canvas(modifier = modifier.size(width = COLON_WIDTH, height = COLON_HEIGHT)) {
         drawColonDot(color, yFraction = 0.35f)
         drawColonDot(color, yFraction = 0.65f)
     }
@@ -339,22 +341,21 @@ private fun SleepTimeline(
         shape = RoundedCornerShape(Radius.lg),
         modifier = modifier
             .fillMaxWidth()
-            .height(82.dp),
+            .height(TIMELINE_HEIGHT),
     ) {
         val tStart = segments.first().start
         val tEnd = segments.last().end
         val totalSpanMs = (tEnd - tStart).inWholeMilliseconds.coerceAtLeast(1)
         val tz = TimeZone.currentSystemDefault()
 
-        // Pick two anchor segments for the labels — longest two by duration,
-        // sorted chronologically so the left label is earlier than the right.
+        // Two anchor segments for labels: the longest two by duration, sorted chronologically (left earlier).
         val labelled = segments
             .sortedByDescending { (it.end - it.start).inWholeMilliseconds }
             .take(2)
             .sortedBy { it.start }
             .ifEmpty { listOf(segments.first()) }
 
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm + Spacing.xxs)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = if (labelled.size == 1) Arrangement.Start else Arrangement.SpaceBetween,
@@ -373,7 +374,7 @@ private fun SleepTimeline(
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(20.dp),
+                    .height(TICK_BAR_HEIGHT),
             ) {
                 val w = size.width
                 val h = size.height

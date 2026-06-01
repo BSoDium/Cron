@@ -177,9 +177,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * scheduling concerns owned by the receiver, not a manual user trigger.)
      */
     init {
-        // Drive the "working" flag off the real WorkManager turn rather than a fixed delay:
-        // a tap optimistically sets it true; this clears it once the turn reaches a terminal
-        // state (succeeded / failed / cancelled).
+        // Drive the "working" flag off the real WorkManager turn, not a fixed delay: a tap sets it
+        // true optimistically; this clears it when the turn reaches a terminal state.
         viewModelScope.launch {
             sessionFlow.map { it?.id }.distinctUntilChanged()
                 .flatMapLatest { id ->
@@ -197,11 +196,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun retryAiPlan() {
         _isRetrying.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            // Nudge a calendar sync up front so a freshly-added event reaches the provider by read
-            // time; the location fetch + AI round-trip below give it time to land.
+            // Nudge a calendar sync up front; the location fetch + AI round-trip below give it time to land.
             requestCalendarSync()
-            // A manual replan always captures a FRESH foreground fix — the user may have moved since
-            // the session was created, and reusing the stored origin would replan from the wrong place.
+            // Manual replan captures a FRESH foreground fix — the user may have moved since the session began.
             val tz = TimeZone.currentSystemDefault()
             val location = locationProvider.acquireForEveningPlan()
             val event = SessionEvent(
@@ -303,9 +300,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .filterIsInstance<ContentBlock.ToolResult>()
             .associateBy { it.tool_use_id }
 
-        // Model-authored pill labels: the prompt asks for "STATUS: <gerund>" lines while
-        // working and a leading "SUMMARY: <past tense>" on the answer. Pull them out of the
-        // text in order and strip them so they never render in the timeline or response.
+        // Model-authored pill labels: "STATUS: <gerund>" while working, leading "SUMMARY: <past>" on
+        // the answer. Pull them out in order and strip them so they never render.
         val statuses = mutableListOf<String>()
         var summaryLine: String? = null
         fun stripDirectives(text: String): String {
@@ -323,10 +319,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return kept.toString().trim()
         }
 
-        // The final answer is the trailing run of Text blocks — those after the
-        // last non-text block (a tool call or reasoning). Text emitted before or
-        // between tool calls is narration that belongs to the thinking process,
-        // not the output, so collapsing the disclosure hides it.
+        // The answer is the trailing run of Text blocks (after the last tool/reasoning block); text
+        // emitted earlier is thinking-process narration, not output.
         val answerStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
 
         val process = blocks.take(answerStart).mapNotNull { block ->
@@ -357,9 +351,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .let(::stripLeadingRule)
             .takeIf { it.isNotBlank() }
 
-        // A no-op turn (do_nothing) ends with no trailing text, so the answer would be blank.
-        // Fall back to the model's SUMMARY line, then the do_nothing reason, so the card still
-        // explains the decision instead of sitting empty.
+        // A do_nothing turn ends with no trailing text; fall back to the SUMMARY line, then the
+        // do_nothing reason, so the card still explains the decision.
         val doNothingReason = blocks
             .filterIsInstance<ContentBlock.ToolUse>()
             .firstOrNull { it.name == "do_nothing" }
@@ -371,8 +364,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             ?.takeIf { it.isNotBlank() }
         val answer = response ?: summaryLine ?: doNothingReason
 
-        // Wall-clock span of the latest turn; shown once the turn settles (driven by the
-        // WorkManager signal in the UI, not by whether an answer exists).
+        // Wall-clock span of the latest turn; shown once the turn settles (UI drives this off WorkManager).
         val turnRows = rows.filter { it.turnIndex == latestTurn }
         val durationSeconds = if (turnRows.isNotEmpty()) {
             ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
@@ -380,8 +372,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             null
         }
 
-        // Pill preview: the model's gerund while working, its past-tense summary once an answer
-        // exists. Fall back to the first line of reasoning if the model skipped the directives.
+        // Pill preview: gerund while working, past-tense summary once answered; falls back to the
+        // first reasoning line if the model skipped the directives.
         val fallback = process
             .firstNotNullOfOrNull { (it as? ProcessItem.Reasoning)?.text ?: (it as? ProcessItem.Narration)?.text }
             ?.lineSequence()

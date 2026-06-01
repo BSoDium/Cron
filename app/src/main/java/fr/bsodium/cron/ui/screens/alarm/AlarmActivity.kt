@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,10 +49,17 @@ import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.receiver.AlarmReceiver
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.ExpressiveFontFamily
+import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
+import java.util.Locale
 import kotlin.math.roundToInt
+
+private val THUMB_SIZE = 52.dp
+private val THUMB_INSET = 6.dp
+private val TRACK_HEIGHT = 64.dp
 
 class AlarmActivity : ComponentActivity() {
 
@@ -120,7 +126,7 @@ private fun AlarmScreen(
     LaunchedEffect(Unit) {
         while (true) {
             val t = LocalTime.now()
-            timeText = "%02d:%02d".format(t.hour, t.minute)
+            timeText = String.format(Locale.US, "%02d:%02d", t.hour, t.minute)
             delay(1_000)
         }
     }
@@ -133,7 +139,7 @@ private fun AlarmScreen(
         Column(
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(
                 text = timeText,
@@ -145,7 +151,7 @@ private fun AlarmScreen(
                     fontFeatureSettings = "tnum",
                 ),
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(Spacing.xs))
             Text(
                 text = label,
                 style = MaterialTheme.typography.titleMedium,
@@ -156,8 +162,8 @@ private fun AlarmScreen(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(horizontal = 32.dp, vertical = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = Spacing.xxxl, vertical = Spacing.xxxl + Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             SlideToActTrack(
                 label = "Slide to snooze",
@@ -184,8 +190,8 @@ private fun SlideToActTrack(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    val thumbSizePx = with(density) { 52.dp.toPx() }
-    val insetPx = with(density) { 6.dp.toPx() }
+    val thumbSizePx = with(density) { THUMB_SIZE.toPx() }
+    val insetPx = with(density) { THUMB_INSET.toPx() }
 
     var trackWidthPx by remember { mutableStateOf(0f) }
     val maxOffset = (trackWidthPx - thumbSizePx - 2 * insetPx).coerceAtLeast(0f)
@@ -202,8 +208,8 @@ private fun SlideToActTrack(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(64.dp)
-            .background(onPrimary.copy(alpha = 0.15f), RoundedCornerShape(50))
+            .height(TRACK_HEIGHT)
+            .background(onPrimary.copy(alpha = 0.15f), Radius.full)
             .onSizeChanged { trackWidthPx = it.width.toFloat() },
     ) {
         Text(
@@ -217,7 +223,7 @@ private fun SlideToActTrack(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .offset { IntOffset((insetPx + thumbAnim.value).roundToInt(), 0) }
-                .size(52.dp)
+                .size(THUMB_SIZE)
                 .background(thumbColor, CircleShape)
                 .draggable(
                     orientation = Orientation.Horizontal,
