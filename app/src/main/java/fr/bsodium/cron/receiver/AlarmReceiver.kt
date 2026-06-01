@@ -42,6 +42,7 @@ class AlarmReceiver : BroadcastReceiver() {
         const val EXTRA_SNOOZE_COUNT = "extra_snooze_count"
 
         const val CHANNEL_ID = "cron_alarm_channel"
+        val ALARM_VIBRATION_PATTERN = longArrayOf(0, 500, 200, 500, 200, 500)
         const val NOTIFICATION_ID = 9001
 
         private const val TAG = "AlarmReceiver"
@@ -106,7 +107,7 @@ class AlarmReceiver : BroadcastReceiver() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setSound(alarmSound)
-            .setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+            .setVibrate(ALARM_VIBRATION_PATTERN)
             .setAutoCancel(false)
             .setOngoing(true)
             .setContentIntent(fullScreenPendingIntent)
@@ -219,7 +220,7 @@ class AlarmReceiver : BroadcastReceiver() {
             ).apply {
                 description = "Alarm notifications from Cron"
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
+                vibrationPattern = ALARM_VIBRATION_PATTERN
                 setSound(alarmSound, audioAttributes)
                 setBypassDnd(true)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC

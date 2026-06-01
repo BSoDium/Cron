@@ -22,7 +22,6 @@ import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.settings.SettingsRepository
-import fr.bsodium.cron.ui.components.SessionDisplayState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

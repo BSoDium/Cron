@@ -141,10 +141,6 @@ class AiTurnWorker(
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // Tool registry
-    // ---------------------------------------------------------------------------
-
     private fun buildToolRegistry(session: SleepSession, apiKey: String): ToolRegistry {
         val tools = mutableListOf<Tool>()
         tools.add(ReadCalendarTool(CalendarReader(applicationContext.contentResolver)))
@@ -173,10 +169,6 @@ class AiTurnWorker(
 
         return ToolRegistry(tools)
     }
-
-    // ---------------------------------------------------------------------------
-    // User message construction
-    // ---------------------------------------------------------------------------
 
     private suspend fun buildUserMessage(session: SleepSession, isEveningPlan: Boolean): String {
         val now = Clock.System.now()
@@ -285,10 +277,6 @@ class AiTurnWorker(
             appendLine("Decide what the alarm system should do. Call set_alarm if you want to adjust the wake time. If the current alarm is already optimal, respond with a brief explanation and do not call any tool.")
         }
     }
-
-    // ---------------------------------------------------------------------------
-    // Debug-only planning notification
-    // ---------------------------------------------------------------------------
 
     private suspend fun postPlanningNotification(sessionId: String) {
         val updated = repository.findById(sessionId) ?: return

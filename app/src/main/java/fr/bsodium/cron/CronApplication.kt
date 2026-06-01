@@ -85,7 +85,7 @@ class CronApplication : Application() {
         ).apply {
             description = "Wake-up alarm notifications scheduled by Cron"
             enableVibration(true)
-            vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
+            vibrationPattern = AlarmReceiver.ALARM_VIBRATION_PATTERN
             setSound(alarmSound, audioAttributes)
             setBypassDnd(true)
             lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC

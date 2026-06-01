@@ -38,6 +38,19 @@ These rules exist because LLM passes have repeatedly violated them. Follow them 
 - `runCatching { ... }.getOrNull()` is fine for tolerant parsing, but always chain `.onFailure { Log.w(TAG, "msg", it) }` first so production failures are diagnosable. Silent swallowing is a debugging trap.
 - Don't add `try/catch` or null checks for conditions that *cannot* happen given the function's contract. Validate at module boundaries (DB rows, network responses, user input) — trust internal callers.
 
+## Kotlin style
+
+- **`val` first.** Default to `val`; keep any `var` a confined, private implementation detail. Never return `MutableList`/`MutableMap` from a public signature — expose immutable `List`/`Map` and build with `buildList`/`buildString`. Surface evolving state as a read-only `StateFlow`, not a public mutable field.
+- **Closed sets are `sealed` or `enum`, matched by an exhaustive `when` with no `else`** — adding a variant should be a compile error, not a silent fall-through (see `ProcessItem`, `EventData`, `SessionStatus`, `ContentBlock`). Use `else` only for genuinely open input (e.g. an unknown tool name → wrench icon) and say so in a comment.
+- **No `!!`.** Restructure so the value is non-null, or assert at a boundary with `requireNotNull(x) { "why" }` / `checkNotNull` for a diagnosable message. Don't write `pendingIntent(create = true)!!`.
+- **Expression bodies for one-liners** (`fun isArmed(...) = … != null`) — the repo norm for setters, predicates, and mappers.
+- **Smallest visibility, `private` by default.** File-scoped constants (dp, ms, `Regex`, `AnimationSpec`, vibration patterns) live as top-level `private const val`/`private val`, not in a `companion object` — reserve the companion for class-associated keys/factories (DAO/DataStore keys, `Instruction.doNothing`). No bare magic numbers or literal arrays inline.
+- **Named arguments for booleans and adjacent same-type params** (`create = true`, `serif = false`, the `HomeUiState(...)` fields) so a call site reads without opening the signature. Trailing commas on multi-line argument and parameter lists.
+- **Scope functions with intent:** `apply` to configure a builder (Intent, prefs editor), `also` for a side-effect, `let` for a null-safe transform. Don't nest them into an unreadable chain.
+- **Extension functions to adapt or decorate types** — db `toEntity`/`toModel`, `SleepSession.sleepSegments()`, `Modifier.bleedHorizontally(...)`; keep them `private` when file-local.
+- **`kotlinx.datetime` for domain/time logic** (`Instant`/`LocalDate`/`LocalTime`/`TimeZone`/`Clock`). Reserve `java.time` for the UI formatters that need `DateTimeFormatter`, converting with `toJavaLocalDate()`.
+- **String templates over concatenation.** Prefer `as?` (and handle null) over unchecked `as` on app-owned types; an unavoidable `getSystemService(...) as X` for an Android system service is the one accepted cast.
+
 ## Comments & files
 
 - Default to writing no comment. Add one only when the *why* is non-obvious (a workaround for a specific bug, a hidden invariant, a constraint from an external system). Don't restate what the code does — clean names and whitespace explain far more than prose.
