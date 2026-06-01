@@ -90,9 +90,8 @@ class AiTurnWorker(
         }
 
         val turnIndex = (db.aiMessageDao().maxTurnIndex(sessionId) ?: -1) + 1
-        // A manual replan appends a fresh EveningPlan event on purpose, so it runs the full
-        // EVENING_PLAN + Sonnet pass. Automatic overnight replans append *sensor* events, so the
-        // latest trigger is not EveningPlan and they stay on OVERNIGHT_REPLAN + Haiku.
+        // A manual replan re-appends an EveningPlan event (→ Sonnet); sensor-driven overnight
+        // replans leave the latest trigger ≠ EveningPlan, so they stay on Haiku.
         val isEveningPlan = session.events.lastOrNull()?.trigger == TriggerType.EveningPlan
 
         val model = if (isEveningPlan) TurnRunner.MODEL_SONNET else TurnRunner.MODEL_HAIKU
@@ -100,8 +99,7 @@ class AiTurnWorker(
 
         val tools = buildToolRegistry(session, apiKey)
         val client = AnthropicClient(apiKeyProvider = { apiKey })
-        // Anthropic requires max_tokens > thinking.budget_tokens, so widen the
-        // ceiling on evening_plan turns to leave room for the visible response.
+        // Anthropic requires max_tokens > thinking budget, so widen the ceiling on evening_plan turns.
         val thinking = if (isEveningPlan) ThinkingConfig(budgetTokens = THINKING_BUDGET) else null
         val maxTokens = if (isEveningPlan) THINKING_BUDGET + 2048 else 2048
         val runner = TurnRunner(

@@ -33,6 +33,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.theme.Spacing
+
+private val GATE_ICON_SIZE = 64.dp
 
 /**
  * Gates the main content behind required permissions.
@@ -81,18 +84,18 @@ fun PermissionGate(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(Spacing.xxxl),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = Icons.Outlined.CalendarMonth,
             contentDescription = null,
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier.size(GATE_ICON_SIZE),
             tint = MaterialTheme.colorScheme.primary
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxl))
 
         Text(
             text = "Calendar access needed",
@@ -100,7 +103,7 @@ fun PermissionGate(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
 
         Text(
             text = "Cron needs to read your calendar to automatically schedule wake-up alarms before your first event each day.",
@@ -109,17 +112,17 @@ fun PermissionGate(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxxl))
 
         if (!hasRequestedOnce) {
             Button(
                 onClick = {
-                    val permissions = mutableListOf(
-                        Manifest.permission.READ_CALENDAR,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    )
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                    val permissions = buildList {
+                        add(Manifest.permission.READ_CALENDAR)
+                        add(Manifest.permission.ACCESS_COARSE_LOCATION)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            add(Manifest.permission.POST_NOTIFICATIONS)
+                        }
                     }
                     permissionLauncher.launch(permissions.toTypedArray())
                 }
@@ -135,7 +138,7 @@ fun PermissionGate(
                 color = MaterialTheme.colorScheme.error
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.lg))
 
             OutlinedButton(
                 onClick = {

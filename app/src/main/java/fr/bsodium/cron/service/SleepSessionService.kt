@@ -62,8 +62,7 @@ class SleepSessionService : Service() {
             } catch (t: Throwable) {
                 Log.e(TAG, "FSM error on sensor event ${event.trigger}", t)
             }
-            // Keep ActivityRecognitionMonitor in sync with sleep state so it only
-            // emits MidSleepActivity events while the user is actually asleep.
+            // Keep ActivityRecognitionMonitor in sync with sleep state (emit only while asleep).
             when (event.trigger) {
                 TriggerType.SleepOnset        -> activityRecognitionMonitor?.onSleepOnset()
                 TriggerType.OutOfBedConfirmed -> activityRecognitionMonitor?.onWake()
@@ -87,9 +86,8 @@ class SleepSessionService : Service() {
         }
         val eveningPlan = intent?.action == ACTION_EVENING_PLAN
         ensureNotificationChannel()
-        // Run as a location-typed FGS for the evening plan so the in-service location fetch is
-        // "in use" (fresh + unthrottled) with only foreground permission. A sticky restart (null
-        // intent) resumes monitoring only — it must NOT re-fire the plan.
+        // Location-typed FGS so the in-service fetch counts as "in use" (fresh, unthrottled) on
+        // foreground permission alone. A sticky restart (null intent) resumes monitoring only — never re-fires the plan.
         startForegroundService(includeLocation = eveningPlan)
 
         if (screenStateMonitor == null) {

@@ -46,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -86,8 +87,7 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
     }
-    // Show the onboarding callout (rendered above EdgeFades in MainActivity) only in the loaded,
-    // no-plan, idle state — it hides the moment the user taps the FAB.
+    // Onboarding callout (rendered above EdgeFades in MainActivity): only in the loaded, no-plan, idle state.
     val showOnboardingHint = uiState.initialized && uiState.aiThread == null && !uiState.isRetrying
     LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
         fabRegistry.set(
@@ -141,10 +141,8 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (uiState.aiThread == null) {
-            // First-run / no-plan OR still loading: a simple Column so the onboarding centres in
-            // the empty space between the alarm card and the nav bar. The hint + arrow only render
-            // once `initialized` is true, so they never flash over an existing plan on cold start.
-            // The play FAB is the call to action.
+            // First-run / no-plan / loading: a simple centred Column. The hint + arrow render only
+            // once `initialized`, so they never flash over an existing plan on cold start.
             val showOnboarding = uiState.initialized
             Column(
                 modifier = Modifier
@@ -175,13 +173,12 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
             // The onboarding callout that points at the play FAB is rendered in MainActivity,
             // layered above EdgeFades (via FabAction.hint) so the bottom scrim doesn't fade it.
         } else {
-            // The alarm card behaves like CSS `position: sticky; top: statusBar + gap`: the list
-            // scrolls edge-to-edge under the status bar while the card flows then sticks just below
-            // it. It's an overlay, not a stickyHeader (which pins at y=0 and can't take a top
-            // offset without a rest gap or pin jump); an "alarm-spacer" holds its place in flow.
+            // The alarm card acts like CSS `position: sticky` (top = statusBar + gap): the list scrolls
+            // under the status bar while the card sticks just below it. It's an overlay, not a
+            // stickyHeader (which pins at y=0 and can't take a top offset); an "alarm-spacer" holds its flow slot.
             val listState = rememberLazyListState()
             val density = LocalDensity.current
-            var cardHeightPx by remember { mutableStateOf(0) }
+            var cardHeightPx by remember { mutableIntStateOf(0) }
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -302,9 +299,8 @@ private fun BoxScope.StickyAlarm(
     val state by remember(safeTopPx, fadePx) {
         derivedStateOf {
             val info = listState.layoutInfo
-            // Item offsets are content-relative; the on-screen top = offset - viewportStartOffset
-            // (viewportStartOffset is -beforeContentPadding). Null when the spacer has scrolled
-            // off the top → fully stuck (handled explicitly to avoid sentinel-int overflow).
+            // On-screen top = item offset − viewportStartOffset (= −beforeContentPadding). Null once
+            // the spacer scrolls off the top → fully stuck (handled explicitly to avoid int overflow).
             val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
                 ?.let { it.offset - info.viewportStartOffset }
             if (screenTop == null) {
@@ -318,9 +314,7 @@ private fun BoxScope.StickyAlarm(
         }
     }
     val background = MaterialTheme.colorScheme.background
-    // Solid background-colour from the top all the way down to the card's bottom, then a soft
-    // fade to transparent just below it — so nothing is visible above/behind the pinned card and
-    // content dissolves as it slides out the bottom.
+    // Solid bg down to the card bottom, then a short fade below so content dissolves as it scrolls under.
     val cardBottomPx = safeTopPx + cardHeightPx
     val belowFadePx = with(density) { Spacing.xxxl.toPx() }
     val totalPx = cardBottomPx + belowFadePx

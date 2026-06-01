@@ -106,7 +106,7 @@ private fun FabSlot(fabAction: FabAction?) {
     Box(
         modifier = Modifier
             .width(width)
-            .height(56.dp),
+            .height(FAB_SLOT_HEIGHT),
         contentAlignment = Alignment.CenterEnd,
     ) {
         AnimatedVisibility(
@@ -120,6 +120,8 @@ private fun FabSlot(fabAction: FabAction?) {
 }
 
 private val FAB_SLOT_WIDTH = 68.dp // 56dp FAB + 12dp leading gap
+private val FAB_SLOT_HEIGHT = 56.dp
+private val NAV_SLOT_SIZE = 48.dp
 private val FAB_SLOT_SPEC = tween<Dp>(durationMillis = 200, easing = FastOutSlowInEasing)
 // A pronounced grow-from-centre + fade so the FAB pops rather than slides in.
 private val FAB_ENTER =
@@ -147,7 +149,7 @@ private fun NavPill(
         shadowElevation = 0.dp,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = Spacing.xs + Spacing.xxs, vertical = Spacing.xs + Spacing.xxs),
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -168,8 +170,7 @@ private fun RowScope.NavSlot(
     onNavigate: (String) -> Unit,
 ) {
     val selected = currentRoute == route
-    // Selected tab: a filled circular indicator in the dynamic accent (primary) with an onPrimary
-    // icon, matching the FAB. Unselected tabs are low-emphasis outlined icons directly on the pill.
+    // Selected: filled accent indicator (matches the FAB); unselected: outlined icon on the pill.
     val targetContainer = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
     val targetTint = if (selected) MaterialTheme.colorScheme.onPrimary
         else MaterialTheme.colorScheme.onSurfaceVariant
@@ -180,7 +181,7 @@ private fun RowScope.NavSlot(
         modifier = Modifier
             // Square slot so the circular indicator nests with an equal margin on every side
             // (x and y) inside the pill, rather than wider side gaps.
-            .size(48.dp)
+            .size(NAV_SLOT_SIZE)
             // Clip BEFORE clickable so the ripple respects the slot shape.
             .clip(Radius.full)
             .clickable(enabled = !selected) {
@@ -243,6 +244,8 @@ private fun PrimaryActionFab(action: FabAction?) {
 // The play FAB's horizontal distance right of screen centre, derived from the centred nav row
 // (pill 164dp + 68dp FAB slot, FAB at the slot's far end). Device-width independent.
 private val FAB_CENTER_OFFSET = 88.dp
+private val POINTER_WIDTH = 16.dp
+private val POINTER_HEIGHT = 8.dp
 
 // Downward-pointing triangle for the onboarding callout's tail.
 private val PointerDown = GenericShape { size, _ ->
@@ -279,7 +282,7 @@ fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier =
         }
         Box(
             modifier = Modifier
-                .size(width = 16.dp, height = 8.dp)
+                .size(width = POINTER_WIDTH, height = POINTER_HEIGHT)
                 .background(MaterialTheme.colorScheme.primary, PointerDown),
         )
     }
