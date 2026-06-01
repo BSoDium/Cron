@@ -70,8 +70,10 @@ class FabRegistry {
 
 class MainActivity : ComponentActivity() {
 
-    // The Scaffold padding is intentionally unused: content draws edge-to-edge and
-    // each screen folds the status-bar / nav insets into its own content padding.
+    /**
+     * The Scaffold padding is intentionally unused: content draws edge-to-edge and each screen
+     * folds the status-bar / nav insets into its own content padding.
+     */
     @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -115,12 +117,8 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                 ) { _ ->
-                    // Content draws edge-to-edge, under the status bar and the
-                    // transparent area around the floating nav pill. Each screen
-                    // folds the status-bar inset into its own top content padding
-                    // and carries bottom contentPadding for the nav pill. EdgeFades
-                    // overlays soft top/bottom scrims so content dissolves into the
-                    // background under the status bar and behind the nav pill.
+                    // Edge-to-edge: each screen folds the status-bar inset into its own top padding and
+                    // carries bottom padding for the nav pill; EdgeFades overlays soft top/bottom scrims.
                     Box(modifier = Modifier.fillMaxSize()) {
                     NavHost(
                         navController = navController,

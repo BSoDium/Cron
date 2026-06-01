@@ -47,7 +47,10 @@ import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
 import fr.bsodium.cron.ui.components.ScreenTitle
 import fr.bsodium.cron.ui.components.SectionLabel
 import fr.bsodium.cron.ui.theme.Spacing
+import java.util.Locale
 import kotlinx.datetime.LocalTime
+
+private val DIALOG_FIELD_MIN_HEIGHT = 120.dp
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel) {
@@ -188,7 +191,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(Spacing.xxxl + Spacing.sm))
         }
 }
 
@@ -297,10 +300,10 @@ private fun Section(
     label: String,
     content: @Composable () -> Unit,
 ) {
-    Spacer(modifier = Modifier.height(28.dp))
+    Spacer(modifier = Modifier.height(Spacing.xxl + Spacing.xs))
     SectionLabel(text = label)
-    Spacer(modifier = Modifier.height(14.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    Spacer(modifier = Modifier.height(Spacing.md + Spacing.xxs))
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xl)) {
         content()
     }
 }
@@ -333,7 +336,7 @@ private fun TimePickerRow(
             )
         }
         Text(
-            text = "%02d:%02d".format(time.hour, time.minute),
+            text = String.format(Locale.US, "%02d:%02d", time.hour, time.minute),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
@@ -383,7 +386,7 @@ private fun BufferSlider(
                 fontWeight = FontWeight.SemiBold,
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Spacing.sm))
         Slider(
             value = value.toFloat(),
             onValueChange = { onChange(it.toInt()) },
@@ -507,7 +510,7 @@ private fun CustomInstructionsRow(
                     label = { Text("Tell Cron how to plan your wake-ups") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 120.dp),
+                        .heightIn(min = DIALOG_FIELD_MIN_HEIGHT),
                 )
             },
             confirmButton = {
