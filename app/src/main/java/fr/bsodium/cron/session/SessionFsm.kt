@@ -163,13 +163,13 @@ class SessionFsm(
             TriggerType.SleepOnset -> when (session.status) {
                 SessionStatus.Planning, SessionStatus.Monitoring -> SessionStatus.Monitoring
                 SessionStatus.Awake -> SessionStatus.ReMonitoring
-                else -> session.status
+                else -> session.status // already past monitoring: no change
             }
             TriggerType.OutOfBedConfirmed -> when (session.status) {
                 SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
-                else -> session.status
+                else -> session.status // only Monitoring/ReMonitoring wake to Awake
             }
-            else -> session.status
+            else -> session.status // other triggers don't change status
         }
 
     private fun onStatusChange(session: SleepSession, newStatus: SessionStatus) {
@@ -184,7 +184,7 @@ class SessionFsm(
                 context.startService(SleepSessionService.stopIntent(context))
                 Log.i(TAG, "Session ${session.id} complete — alarms cleared, service stopped")
             }
-            else -> {}
+            else -> {} // Planning/Monitoring/ReMonitoring: no status-change side effect
         }
     }
 

@@ -17,7 +17,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 import java.util.Locale
+
+private val PILL_VPAD = 5.dp
+private val DOT_SIZE = 7.dp
 
 /**
  * Uppercase, tracked-out, muted label used as the only "header"
@@ -55,14 +59,14 @@ fun PillBadge(
         modifier = modifier,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = PILL_VPAD),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs + Spacing.xxs),
         ) {
             if (leadingDot != null) {
                 Box(
                     modifier = Modifier
-                        .size(7.dp)
+                        .size(DOT_SIZE)
                         .background(leadingDot, CircleShape),
                 )
             }

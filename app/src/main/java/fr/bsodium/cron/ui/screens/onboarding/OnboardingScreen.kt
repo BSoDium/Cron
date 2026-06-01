@@ -39,6 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import fr.bsodium.cron.permissions.SystemPermissions
 import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
+import fr.bsodium.cron.ui.theme.Spacing
+
+private val WELCOME_ICON_SIZE = 72.dp
+private val DONE_ICON_SIZE = 64.dp
 
 @Composable
 fun OnboardingScreen(
@@ -55,16 +59,16 @@ fun OnboardingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 32.dp),
+                .padding(horizontal = Spacing.xxxl),
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.lg))
 
             if (state.step != OnboardingStep.Done) {
                 LinearProgressIndicator(
                     progress = { stepIndex.toFloat() / totalSteps },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(Spacing.xxxl))
             }
 
             when (state.step) {
@@ -101,23 +105,23 @@ private fun WelcomeStep(onNext: () -> Unit) {
         Icon(
             imageVector = Icons.Outlined.Alarm,
             contentDescription = null,
-            modifier = Modifier.size(72.dp),
+            modifier = Modifier.size(WELCOME_ICON_SIZE),
             tint = MaterialTheme.colorScheme.primary,
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxl))
         Text(
             text = "Meet Cron",
             style = MaterialTheme.typography.headlineLarge,
             textAlign = TextAlign.Center,
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Spacing.lg))
         Text(
             text = "Cron watches your calendar and sleep patterns overnight, then wakes you at the ideal moment before your first appointment — automatically planned by Claude.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxxl + Spacing.sm))
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
             Text("Get started")
         }
@@ -134,13 +138,13 @@ private fun NameStep(
         verticalArrangement = Arrangement.Center,
     ) {
         Text("What should Cron call you?", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
         Text(
             text = "Your name appears in the morning greeting. Stored on this device only.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxl))
 
         OutlinedTextField(
             value = state.displayNameInput,
@@ -151,7 +155,7 @@ private fun NameStep(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Spacing.lg))
         Button(
             onClick = viewModel::saveDisplayName,
             enabled = state.displayNameInput.isNotBlank(),
@@ -172,13 +176,13 @@ private fun ApiKeyStep(
         verticalArrangement = Arrangement.Center,
     ) {
         Text("Anthropic API key", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
         Text(
             text = "Cron uses Claude to plan your alarm. Paste your API key below — it's stored encrypted on this device and never leaves it.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxl))
 
         OutlinedTextField(
             value = state.apiKeyInput,
@@ -192,7 +196,7 @@ private fun ApiKeyStep(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Spacing.lg))
         Button(
             onClick = viewModel::saveApiKey,
             enabled = state.apiKeyInput.isNotBlank(),
@@ -230,7 +234,7 @@ private fun PermissionsStep(
         verticalArrangement = Arrangement.Center,
     ) {
         Text("Permissions", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
         Text(
             text = "Cron needs the following to work:\n\n" +
                 "• Calendar — to read tomorrow's appointments\n" +
@@ -240,14 +244,14 @@ private fun PermissionsStep(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxl))
         Button(
             onClick = { launcher.launch(permissions.toTypedArray()) },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Grant permissions")
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Spacing.sm))
         TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
             Text("Skip for now")
         }
@@ -278,14 +282,14 @@ private fun ReliabilityStep(onContinue: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text("Reliable overnight", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
         Text(
             text = "These let Cron refresh your location and run the plan while you sleep — without " +
                 "opening the app. All optional, and you can change them later in Settings.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxl))
 
         ReliabilityButton(
             title = if (bgLocationGranted) "Background location enabled" else "Allow location all the time",
@@ -294,7 +298,7 @@ private fun ReliabilityStep(onContinue: () -> Unit) {
             enabled = SystemPermissions.hasForegroundLocation(context),
             onClick = { bgLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) },
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
         ReliabilityButton(
             title = if (batteryExempt) "Battery optimization off" else "Ignore battery optimization",
             subtitle = "Stops the system from killing the overnight tracker.",
@@ -302,7 +306,7 @@ private fun ReliabilityStep(onContinue: () -> Unit) {
             enabled = true,
             onClick = { batteryLauncher.launch(SystemPermissions.batteryOptimizationIntent(context)) },
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
         ReliabilityButton(
             title = if (hcConnected) "Sleep data connected" else "Connect sleep data",
             subtitle = "Use wearable sleep stages (Health Connect) for smarter wake timing.",
@@ -311,7 +315,7 @@ private fun ReliabilityStep(onContinue: () -> Unit) {
             onClick = { hcLauncher.launch(reader.requiredPermissions) },
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxl + Spacing.xs))
         Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
             Text("Continue")
         }
@@ -340,7 +344,7 @@ private fun ReliabilityButton(
             )
         }
         if (done) {
-            Spacer(modifier = Modifier.size(8.dp))
+            Spacer(modifier = Modifier.size(Spacing.sm))
             Icon(
                 imageVector = Icons.Outlined.Check,
                 contentDescription = null,
@@ -360,23 +364,23 @@ private fun DoneStep(onFinish: () -> Unit) {
         Icon(
             imageVector = Icons.Outlined.Alarm,
             contentDescription = null,
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier.size(DONE_ICON_SIZE),
             tint = MaterialTheme.colorScheme.primary,
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxl))
         Text(
             text = "You're all set",
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
         Text(
             text = "Cron will plan your first alarm tonight. You'll see the session status on the home screen.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(Spacing.xxxl + Spacing.sm))
         Button(onClick = onFinish, modifier = Modifier.fillMaxWidth()) {
             Text("Go to home")
         }
