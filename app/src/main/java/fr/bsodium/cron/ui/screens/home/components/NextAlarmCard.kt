@@ -3,8 +3,8 @@ package fr.bsodium.cron.ui.screens.home.components
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -134,21 +135,28 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
         }
     }
     val pending = alarmTime == null
-    // Roll the digits up from 0 with an easeOut the first time a real time appears (once — not on the
-    // per-minute countdown tick). At progress == 1 the displayed value equals the target, so later
-    // ticks/replans update instantly with no re-roll.
-    var revealed by remember { mutableStateOf(false) }
-    LaunchedEffect(pending) { if (!pending) revealed = true }
-    val progress by animateFloatAsState(
-        targetValue = if (revealed) 1f else 0f,
-        animationSpec = tween(durationMillis = LCD_REVEAL_MILLIS, easing = EaseOutCubic),
-        label = "lcd-reveal",
-    )
+    // Roll the digits up from 0 with an easeOut only when the alarm VALUE changes (incl. the first
+    // time it appears). The animated value is rememberSaveable (minutes-of-day), so re-opening the app
+    // or switching tabs with an unchanged value shows the digits at rest instead of re-rolling.
+    val valueKey = alarmTime?.let { it.hour * 60 + it.minute }
+    var animatedKey by rememberSaveable { mutableStateOf<Int?>(null) }
+    val progressAnim = remember { Animatable(if (valueKey == null || valueKey == animatedKey) 1f else 0f) }
+    LaunchedEffect(valueKey) {
+        if (valueKey == null) return@LaunchedEffect
+        if (valueKey != animatedKey) {
+            progressAnim.snapTo(0f)
+            progressAnim.animateTo(1f, tween(durationMillis = LCD_REVEAL_MILLIS, easing = EaseOutCubic))
+            animatedKey = valueKey
+        } else {
+            progressAnim.snapTo(1f)
+        }
+    }
+    val progress = progressAnim.value
     // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
     val hh = if (pending) "00"
-        else String.format(Locale.US, "%02d", ((alarmTime?.hour ?: 0) * progress).roundToInt())
+        else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
     val mm = if (pending) "00"
-        else String.format(Locale.US, "%02d", ((alarmTime?.minute ?: 0) * progress).roundToInt())
+        else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
     val base = MaterialTheme.colorScheme.onSurface
     val digitColor = if (pending) base.copy(alpha = 0.22f) else base
     // Match the dimmed-digit alpha when pending so the "00H/00M" placeholder reads as a deliberate
@@ -330,7 +338,7 @@ private fun SleepTimeline(
             .sortedBy { it.start }
             .ifEmpty { listOf(segments.first()) }
 
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = if (labelled.size == 1) Arrangement.Start else Arrangement.SpaceBetween,

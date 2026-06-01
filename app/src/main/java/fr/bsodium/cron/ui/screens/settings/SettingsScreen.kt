@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -104,6 +105,13 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                     description = "Shower, breakfast, getting dressed",
                     value = state.preparationBufferMinutes,
                     onChange = viewModel::setPreparationBuffer,
+                )
+            }
+
+            Section(label = "Assistant") {
+                CustomInstructionsRow(
+                    instructions = state.userInstructions,
+                    onSave = viewModel::setUserInstructions,
                 )
             }
 
@@ -442,6 +450,72 @@ private fun DisplayNameRow(
                         showDialog = false
                     },
                     enabled = draft.isNotBlank(),
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun CustomInstructionsRow(
+    instructions: String?,
+    onSave: (String) -> Unit,
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showDialog = true },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Custom instructions",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = "Extra guidance sent to the planner every time",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = if (!instructions.isNullOrBlank()) "Set" else "—",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (!instructions.isNullOrBlank()) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        )
+    }
+
+    if (showDialog) {
+        var draft by remember { mutableStateOf(instructions.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Custom instructions") },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    minLines = 3,
+                    maxLines = 8,
+                    label = { Text("Tell Cron how to plan your wake-ups") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 120.dp),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onSave(draft.trim())
+                        showDialog = false
+                    },
                 ) { Text("Save") }
             },
             dismissButton = {

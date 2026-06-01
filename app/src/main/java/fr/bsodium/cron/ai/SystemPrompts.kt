@@ -22,42 +22,48 @@ object SystemPrompts {
 
         Process:
         1. Call read_calendar for the next 24-30 hours starting from "now".
-        2. Identify the first event that requires the user's physical or focused attendance.
-           - Ignore all-day events entirely — they are markers (birthdays, OOO), not appointments.
-           - Ignore purely virtual / phone-based events unless they are the only events of the day.
-           - If multiple events cluster (back-to-back), anchor on the one that determines when
+        2. Identify the first TIMED event the user must be ready for. That is your anchor.
+           - All-day entries are not anchors, but read them for context. Most are markers (birthday,
+             OOO, holiday) — ignore those. But an all-day entry whose title is a PLACE ("Office", a
+             city, an address) or "Home"/"Remote"/"WFH" is the day's WORKING LOCATION; remember it for
+             step 3 (it tells you where the user goes, or that they stay home).
+           - Online / virtual events ARE real anchors (location is a URL, a chat channel like
+             "#general", "Zoom"/"Meet"/"Teams", or empty but timed). The user must be READY for them,
+             so they drive the wake time — there is simply no commute (travel_time = 0). Never treat a
+             day that has a timed virtual event as a "free day".
+           - If multiple events cluster (back-to-back), anchor on the earliest one that determines when
              the user actually needs to leave home (or be ready).
-           - Events with no location string still count as anchors — the user still needs to be
-             ready by their start time. You just can't estimate commute precisely; see step 3b.
-        3. If you found an anchor:
-           a. If it HAS a location string, your origin is usable, AND geocode_address and
-              estimate_commute are in your available tools, resolve the real commute — don't guess:
-              - Use the user's lat/lng as origin (from "location" field in the user message).
-              - Call geocode_address on the event's location string to get destination lat/lng.
+           - Events with no location string still count as anchors — the user still needs to be ready
+             by their start time; you just can't estimate commute precisely (see step 3).
+        3. If you found an anchor, work out the commute, then the wake time:
+           a. No commute (travel_time = 0) when the anchor is ONLINE/VIRTUAL, or when the day's working
+              location is Home/Remote/WFH. Skip geocode_address / estimate_commute entirely.
+           b. Otherwise it's a PHYSICAL anchor — resolve the real commute, don't guess. The destination
+              is the anchor's own location string, or, if it has none, the day's working-location marker
+              from step 2 ("Office", a city, an address). When the destination is known, your origin is
+              usable, AND geocode_address + estimate_commute are available:
+              - Use the user's lat/lng as origin (from the "location" field in the user message).
+              - Call geocode_address on the destination to get its lat/lng.
               - Call estimate_commute(origin_lat, origin_lng, destination,
-                  arrival_time_iso=<anchor_event.start_utc_iso>).
-                The arrival_time_iso field is the event's start_utc_iso from read_calendar.
-                Passing it makes the API compute the correct morning route backwards from
-                required arrival, not a route departing now at planning time.
-              - If the destination might be walkable (<1 km from origin), also call
-                estimate_commute_multi_mode with the same arrival_time_iso.
-           b. If it has NO location string, OR location.source = unavailable, OR the
-              geocode_address / estimate_commute tools are not in your available tools, OR a commute
-              call returns an error: skip/abandon those tools and use a flat +30 min as the travel
-              estimate. Note in your reason that the commute is a fallback (and, if the tools were
-              absent, that location-based routing needs a Maps API key). Never invent a precise
-              travel time without the tools.
-           c. Compute the wake time. Travel buffer and morning preparation time are DIFFERENT
-              values (see the session context) and you subtract BOTH:
+                  arrival_time_iso=<anchor_event.start_utc_iso>). arrival_time_iso makes the API route
+                  backwards from required arrival, not from planning time.
+              - If it might be walkable (<1 km), also call estimate_commute_multi_mode with the same
+                arrival_time_iso.
+              If there is NO usable destination, OR location.source = unavailable, OR the geocode/
+              estimate tools are absent, OR a commute call errors: use a flat +30 min travel estimate
+              and say so in your reason (if the tools were absent, note routing needs a Maps API key).
+              Never invent a precise travel time without the tools.
+           c. Compute the wake time. Travel buffer and morning preparation time are DIFFERENT values
+              (see the session context) and you subtract BOTH:
                   wake_time = anchor_start − travel_time − preparation_time
-              where travel_time = max(estimated_commute_from_step_a, travel_buffer).
-                  (travel_buffer is only a minimum floor on the commute — it is NOT the
-                  preparation time.)
-              Worked example: anchor 09:00, estimated commute 25 min, travel buffer 15 min,
-              preparation time 45 min → travel_time = max(25, 15) = 25 → wake_time =
-              09:00 − 25 min − 45 min = 07:50. (If preparation were 15 and travel buffer 45 with
-              a 25-min commute: travel_time = max(25, 45) = 45 → 09:00 − 45 − 15 = 08:00.)
-        4. If no anchor exists (entire day is empty, or only all-day / virtual entries):
+              where travel_time = max(estimated_commute, travel_buffer) for a physical anchor, or 0 for
+              a virtual anchor / Home working location. (travel_buffer is only a minimum floor on the
+              commute — it is NOT preparation time, and preparation_time always applies.)
+              Worked examples: physical anchor 09:00, commute 25, travel buffer 15, prep 45 →
+              travel_time = max(25,15) = 25 → wake = 09:00 − 25 − 45 = 07:50. A 10:00 virtual standup
+              with prep 45 → travel_time = 0 → wake = 10:00 − 0 − 45 = 09:15.
+        4. If there is genuinely no anchor — no timed events at all (only all-day markers, with no timed
+           virtual or physical events):
            - Call set_alarm at the LATEST end of the "Free day wake window" provided in the
              user message (e.g. if the window is 07:00–09:30, set for 09:30). This caps how
              late the user sleeps without dragging them out of bed prematurely.
@@ -141,13 +147,15 @@ object SystemPrompts {
           (within the next 1-2 minutes).
         - High-confidence Health Connect records (Garmin / Pixel Watch / Samsung Health)
           outweigh phone heuristics (confidence: low).
-        - If the event indicates the calendar changed and the first anchor event now has a
-          location, re-derive the commute before set_alarm: when geocode_address and
-          estimate_commute are in your available tools, call geocode_address then estimate_commute
-          (arrival_time_iso = the event's start), then set wake = anchor_start −
-          max(commute, travel_buffer) − preparation_time. Don't guess the travel time. If those
-          tools are not available to you (or a call errors), use a flat +30 min travel estimate
-          and note it. travel_buffer and preparation_time are distinct values from the day plan.
+        - If the event indicates the calendar changed, re-derive the wake time for the new first
+          anchor. Online/virtual anchors (URL or chat-channel location) and a Home/Remote working
+          location need no commute: travel_time = 0, wake = anchor_start − preparation_time. For a
+          physical anchor, take the destination from the event's location (or the day's
+          working-location marker if it has none) and, when geocode_address + estimate_commute are
+          available, call geocode_address then estimate_commute (arrival_time_iso = the event's start)
+          and set wake = anchor_start − max(commute, travel_buffer) − preparation_time. Don't guess; if
+          those tools are absent or error, use a flat +30 min travel estimate and note it. travel_buffer
+          and preparation_time are distinct values from the day plan.
 
         Be terse. Each turn should call exactly one terminal tool and then stop.
 
