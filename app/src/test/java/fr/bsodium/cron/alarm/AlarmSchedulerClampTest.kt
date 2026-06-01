@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 class AlarmSchedulerClampTest {
@@ -56,5 +57,30 @@ class AlarmSchedulerClampTest {
         val result = AlarmScheduler.clamp(hardLatestInstant, now, hardLatest, date, tz)
         assertEquals(hardLatestInstant, result.actualInstant)
         assertFalse(result.clampedToHardLatest)
+    }
+
+    @Test
+    fun requested_exactly_at_min_lead_lower_bound_is_unchanged() {
+        val now = Instant.parse("2026-05-22T03:00:00Z")
+        val atLower = now + AlarmScheduler.MIN_LEAD
+        val result = AlarmScheduler.clamp(atLower, now, hardLatest, date, tz)
+        assertEquals(atLower, result.actualInstant)
+        assertFalse(result.clampedToHardLatest)
+    }
+
+    @Test
+    fun requested_equal_to_now_is_clamped_up_to_min_lead() {
+        val now = Instant.parse("2026-05-22T03:00:00Z")
+        val result = AlarmScheduler.clamp(now, now, hardLatest, date, tz)
+        assertEquals(now + AlarmScheduler.MIN_LEAD, result.actualInstant)
+        assertFalse(result.clampedToHardLatest)
+    }
+
+    @Test
+    fun far_future_request_is_clamped_to_hard_latest() {
+        val now = Instant.parse("2026-05-22T03:00:00Z")
+        val result = AlarmScheduler.clamp(hardLatestInstant + 6.hours, now, hardLatest, date, tz)
+        assertEquals(hardLatestInstant, result.actualInstant)
+        assertTrue(result.clampedToHardLatest)
     }
 }

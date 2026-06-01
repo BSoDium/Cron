@@ -25,10 +25,12 @@ data class SettingsUiState(
     val userInstructions: String? = null,
 )
 
-class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+class SettingsViewModel @JvmOverloads constructor(
+    application: Application,
+    private val secureStore: SecureKeyStore = SecureKeyStore(application),
+) : AndroidViewModel(application) {
 
     private val repo = SettingsRepository(application)
-    private val secureStore = SecureKeyStore(application)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         repo.eveningTriggerLocalTime,
