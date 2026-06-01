@@ -88,6 +88,9 @@ class AiTurnWorker(
         }
 
         val turnIndex = (db.aiMessageDao().maxTurnIndex(sessionId) ?: -1) + 1
+        // A manual replan appends a fresh EveningPlan event on purpose, so it runs the full
+        // EVENING_PLAN + Sonnet pass. Automatic overnight replans append *sensor* events, so the
+        // latest trigger is not EveningPlan and they stay on OVERNIGHT_REPLAN + Haiku.
         val isEveningPlan = session.events.lastOrNull()?.trigger == TriggerType.EveningPlan
 
         val model = if (isEveningPlan) TurnRunner.MODEL_SONNET else TurnRunner.MODEL_HAIKU
@@ -189,7 +192,8 @@ class AiTurnWorker(
         tz: TimeZone,
     ): String {
         val plan = session.plan
-        val eveningEvent = session.events.firstOrNull { it.trigger == TriggerType.EveningPlan }
+        // Latest evening-plan event, so a manual replan's freshly-captured location wins.
+        val eveningEvent = session.events.lastOrNull { it.trigger == TriggerType.EveningPlan }
         val location = (eveningEvent?.data as? EventData.EveningPlan)?.location
 
         return buildString {
@@ -199,12 +203,12 @@ class AiTurnWorker(
             appendLine("- Morning date: ${session.date}")
             appendLine("- Hard latest (never exceed): ${plan.hardLatest}")
             appendLine("- Wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
-            appendLine("- Minimum commute buffer: ${plan.commuteBufferMinutes} min")
-            appendLine("- Personal preparation buffer: ${plan.preparationBufferMinutes} min")
+            appendLine("- Travel buffer (minimum commute floor, NOT prep): ${plan.commuteBufferMinutes} min")
+            appendLine("- Morning preparation time (getting ready, separate from travel): ${plan.preparationBufferMinutes} min")
             appendLine("- Free day wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
             appendLine()
             if (location != null) {
-                appendLine("## Current location (captured at session start)")
+                appendLine("## Current location")
                 appendLine("- Latitude: ${location.lat}, Longitude: ${location.lng}")
                 appendLine("- Source: ${location.source.name.lowercase()}")
                 appendLine("- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}")

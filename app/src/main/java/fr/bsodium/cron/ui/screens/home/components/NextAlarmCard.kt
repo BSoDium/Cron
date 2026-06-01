@@ -3,6 +3,10 @@ package fr.bsodium.cron.ui.screens.home.components
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,9 +21,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -37,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.components.PillBadge
 import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.DisplayFontFamily
 import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.MonoFontFamily
 import fr.bsodium.cron.ui.theme.Radius
@@ -52,6 +60,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun NextAlarmCard(
@@ -67,8 +76,16 @@ fun NextAlarmCard(
         shape = RoundedCornerShape(Radius.xl),
         tonalElevation = 6.dp,
         shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(modifier = Modifier.padding(Spacing.xxl)) {
+        Column(
+            modifier = Modifier.padding(
+                start = Spacing.xxxl,
+                top = Spacing.xxl,
+                end = Spacing.xxl,
+                bottom = Spacing.xxl,
+            ),
+        ) {
             AlignedFirstGlyph(
                 text = dateLabel.ifBlank { "—" },
                 color = MaterialTheme.colorScheme.onSurface,
@@ -117,12 +134,26 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
         }
     }
     val pending = alarmTime == null
+    // Roll the digits up from 0 with an easeOut the first time a real time appears (once — not on the
+    // per-minute countdown tick). At progress == 1 the displayed value equals the target, so later
+    // ticks/replans update instantly with no re-roll.
+    var revealed by remember { mutableStateOf(false) }
+    LaunchedEffect(pending) { if (!pending) revealed = true }
+    val progress by animateFloatAsState(
+        targetValue = if (revealed) 1f else 0f,
+        animationSpec = tween(durationMillis = LCD_REVEAL_MILLIS, easing = EaseOutCubic),
+        label = "lcd-reveal",
+    )
     // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
-    val hh = alarmTime?.let { String.format(Locale.US, "%02d", it.hour) } ?: "00"
-    val mm = alarmTime?.let { String.format(Locale.US, "%02d", it.minute) } ?: "00"
+    val hh = if (pending) "00"
+        else String.format(Locale.US, "%02d", ((alarmTime?.hour ?: 0) * progress).roundToInt())
+    val mm = if (pending) "00"
+        else String.format(Locale.US, "%02d", ((alarmTime?.minute ?: 0) * progress).roundToInt())
     val base = MaterialTheme.colorScheme.onSurface
     val digitColor = if (pending) base.copy(alpha = 0.22f) else base
-    val countdownColor = if (pending) base.copy(alpha = 0.16f) else base.copy(alpha = 0.6f)
+    // Match the dimmed-digit alpha when pending so the "00H/00M" placeholder reads as a deliberate
+    // grayed twin of the "00:00" digits; a touch brighter than the digits once a real time shows.
+    val countdownColor = if (pending) base.copy(alpha = 0.22f) else base.copy(alpha = 0.6f)
 
     val lcdStyle = TightTextStyle.copy(
         fontFamily = LcdFontFamily,
@@ -144,6 +175,7 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
         Text(text = mm, color = digitColor, style = lcdStyle, maxLines = 1, softWrap = false)
         CountdownStack(
             countdown = countdown,
+            progress = progress,
             color = countdownColor,
             modifier = Modifier.padding(start = 6.dp, top = 6.dp),
         )
@@ -152,6 +184,8 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
 
 private data class HoursMinutes(val hours: Long, val minutes: Long)
 
+private const val LCD_REVEAL_MILLIS = 700
+
 /**
  * Two-line LCD stack ("8H" / "12M") showing time remaining until the alarm.
  * Renders dim placeholders when no alarm is set.
@@ -159,17 +193,21 @@ private data class HoursMinutes(val hours: Long, val minutes: Long)
 @Composable
 private fun CountdownStack(
     countdown: HoursMinutes?,
+    progress: Float,
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    // Space Grotesk (the date-label face) — geometric and legible, pairs with the LCD digits
+    // without Major Mono Display's hard-to-read art-deco H/M.
     val smallLcd = TightTextStyle.copy(
-        fontFamily = LcdFontFamily,
+        fontFamily = DisplayFontFamily,
         fontSize = 24.sp,
         lineHeight = 26.sp,
     )
-    val (top, bottom) = if (countdown == null) "——H" to "——M"
-    else String.format(Locale.US, "%dH", countdown.hours) to
-        String.format(Locale.US, "%dM", countdown.minutes)
+    // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
+    val (top, bottom) = if (countdown == null) "00H" to "00M"
+    else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
+        String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
     Column(modifier = modifier) {
         Text(text = top, color = color, style = smallLcd, maxLines = 1, softWrap = false)
         Text(text = bottom, color = color, style = smallLcd, maxLines = 1, softWrap = false)

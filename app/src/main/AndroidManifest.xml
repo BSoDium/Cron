@@ -5,7 +5,9 @@
     <!-- Calendar reading -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
 
-    <!-- Exact alarms via setAlarmClock (exempt from SCHEDULE_EXACT_ALARM on 12+) -->
+    <!-- Exact alarms (setAlarmClock for the wake alarm, setExactAndAllowWhileIdle for the evening
+         trigger). USE_EXACT_ALARM covers alarm-clock apps, exempting us from the SCHEDULE_EXACT_ALARM
+         user grant on 12+. -->
     <uses-permission
         android:name="android.permission.USE_EXACT_ALARM"
         tools:ignore="ExactAlarmPolicy" />
@@ -31,6 +33,9 @@
     <!-- Coarse location for travel time origin (city-block accuracy is sufficient) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Background location: the once-nightly plan refreshes the origin while the app is closed.
+         A location-typed FGS started from the background can only access location with this grant. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Activity Recognition (transition API for out-of-bed detection) -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
@@ -38,6 +43,7 @@
     <!-- Foreground service for hosting dynamic sensor receivers overnight -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <!-- Battery optimization exemption for reliable overnight tracking -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -70,7 +76,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Health Connect opens this for the permission rationale on Android 13 and below. -->
+            <intent-filter>
+                <action android:name="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
         </activity>
+
+        <!-- Health Connect rationale entry point on Android 14+ (VIEW_PERMISSION_USAGE). -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Full-screen lock-screen alarm UI -->
         <activity
@@ -124,7 +146,7 @@
         <service
             android:name=".service.SleepSessionService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse|location">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="overnight sleep stage monitoring for adaptive alarm" />

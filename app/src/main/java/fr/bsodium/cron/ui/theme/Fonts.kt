@@ -1,7 +1,10 @@
+@file:OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+
 package fr.bsodium.cron.ui.theme
 
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
@@ -29,7 +32,8 @@ private val RobotoFlex = GoogleFont("Roboto Flex")
 private val MajorMonoDisplay = GoogleFont("Major Mono Display")
 private val Iceland = GoogleFont("Iceland")
 private val Vt323 = GoogleFont("VT323")
-private val Newsreader = GoogleFont("Newsreader")
+private val MartianMono = GoogleFont("Martian Mono")
+private val EbGaramond = GoogleFont("EB Garamond")
 private val SpaceGrotesk = GoogleFont("Space Grotesk")
 
 private val WEIGHTS = listOf(
@@ -73,12 +77,30 @@ val MonoFontFamily: FontFamily = FontFamily(
 )
 
 /**
- * Serif face for the AI assistant's final response prose. Sets the
- * "conclusion" apart from the sans-serif thinking content.
+ * Real code face for the AI thinking thread — tool-call name chips, result
+ * labels, and markdown code spans. Martian Mono is a clean monospace (variable,
+ * so it can sit light at small sizes) that replaces the retro [MonoFontFamily],
+ * which stays on the LCD clock card and sleep timeline. Bundled .ttf resolves
+ * first; downloadable Google Font is the network fallback.
+ */
+val CodeFontFamily: FontFamily = FontFamily(
+    Font(R.font.martian_mono),
+    Font(googleFont = MartianMono, fontProvider = Provider),
+)
+
+/**
+ * Serif face for the AI assistant's final response prose — EB Garamond. Sets the
+ * "conclusion" apart from the sans-serif thinking content. EB Garamond is variable, so the
+ * bundled file is registered at each weight via its `wght` axis (no synthesis / no waiting on
+ * the network for bold), with the downloadable entry as a fallback.
  */
 val SerifFontFamily: FontFamily = FontFamily(
-    Font(R.font.newsreader),
-    Font(googleFont = Newsreader, fontProvider = Provider),
+    Font(R.font.eb_garamond, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.eb_garamond, weight = FontWeight(450), variationSettings = FontVariation.Settings(FontVariation.weight(450))),
+    Font(R.font.eb_garamond, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.eb_garamond, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.eb_garamond, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+    Font(googleFont = EbGaramond, fontProvider = Provider),
 )
 
 /**

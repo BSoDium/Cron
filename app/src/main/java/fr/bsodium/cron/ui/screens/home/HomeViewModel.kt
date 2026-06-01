@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
 import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
@@ -32,7 +33,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
@@ -51,11 +51,15 @@ data class HomeUiState(
     val sessionDisplay: SessionDisplayState? = null,
     val greetingPrefix: String = "Welcome",
     val greetingName: String? = null,
-    val greetingPhotoUrl: String? = null,
     val dateLabel: String = "",
     val sleepStats: SleepStatsUi? = null,
     val aiThread: AiThreadUi? = null,
     val isRetrying: Boolean = false,
+    /** False until the backing flows have produced their first value — gates the onboarding so it
+     *  doesn't flash over an existing plan during the cold-start load. */
+    val initialized: Boolean = false,
+    /** A plan-affecting setting changed since the last plan was written — offers a re-run. */
+    val settingsChangedSincePlan: Boolean = false,
 )
 
 data class SleepStatsUi(
@@ -68,7 +72,8 @@ data class AiThreadUi(
     val summary: String?,
     val process: List<ProcessItem>,
     val response: String?,
-    val isComplete: Boolean,
+    /** Wall-clock seconds the turn took — shown as "Thought for Xs" once settled. */
+    val durationSeconds: Int? = null,
 )
 
 /** One ordered step of the assistant's thinking process, shown inside the collapsible. */
@@ -80,6 +85,8 @@ sealed interface ProcessItem {
         val isComplete: Boolean,
         /** Short result summary (e.g. "12 events"), shown in place of a checkmark. */
         val contextLabel: String? = null,
+        /** The tool returned an error result — shown as a warning glyph instead of a check. */
+        val isError: Boolean = false,
     ) : ProcessItem
 }
 
@@ -114,29 +121,50 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else db.aiMessageDao().observeBySession(id).map { rows -> buildAiThread(rows) }
         }
 
-    private val profileFlow = combine(settings.displayName, settings.displayPhotoUrl) { name, url ->
-        name to url
+    /** Epoch-ms the user last dismissed the "settings changed" reminder this process. */
+    private val _dismissedSettingsAt = MutableStateFlow(0L)
+
+    /** True when a plan-affecting setting changed after the last AI call and the reminder hasn't
+     *  been dismissed since. Gated on an existing plan at the combine site. */
+    private val settingsChangedFlow = combine(
+        sessionFlow.map { it?.lastAiCallAt ?: 0L },
+        settings.settingsUpdatedAt,
+        _dismissedSettingsAt,
+    ) { lastAiCallAt, settingsAt, dismissedAt ->
+        settingsAt > lastAiCallAt && settingsAt > dismissedAt
+    }
+
+    private val statusFlow = combine(_isRetrying, settingsChangedFlow) { retrying, settingsChanged ->
+        retrying to settingsChanged
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
         sessionFlow.map { it?.toDisplayState() },
         sleepStatsFlow,
         aiThreadFlow,
-        profileFlow,
-        _isRetrying,
-    ) { session, sleepStats, thread, profile, retrying ->
-        val (displayName, photoUrl) = profile
+        settings.displayName,
+        statusFlow,
+    ) { session, sleepStats, thread, displayName, status ->
+        val (retrying, settingsChanged) = status
         HomeUiState(
             sessionDisplay = session,
             greetingPrefix = greetingPrefix(),
             greetingName = displayName,
-            greetingPhotoUrl = photoUrl,
             dateLabel = formatDateLabel(),
             sleepStats = sleepStats,
             aiThread = thread,
             isRetrying = retrying,
+            // combine() only emits once every source has produced a value, so reaching here means
+            // the backing flows have loaded — distinguishes "no plan" from "not loaded yet".
+            initialized = true,
+            settingsChangedSincePlan = settingsChanged && thread != null,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+
+    /** Hide the "settings changed" reminder until the next plan-affecting change. */
+    fun dismissSettingsReminder() {
+        _dismissedSettingsAt.value = Clock.System.now().toEpochMilliseconds()
+    }
 
     /**
      * Re-runs the AI alarm prediction for the active session, or bootstraps a
@@ -147,30 +175,63 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * [fr.bsodium.cron.receiver.EveningPlanReceiver] also performs — those are
      * scheduling concerns owned by the receiver, not a manual user trigger.)
      */
-    fun retryAiPlan() {
+    init {
+        // Drive the "working" flag off the real WorkManager turn rather than a fixed delay:
+        // a tap optimistically sets it true; this clears it once the turn reaches a terminal
+        // state (succeeded / failed / cancelled).
         viewModelScope.launch {
-            _isRetrying.value = true
-            try {
-                withContext(Dispatchers.IO) {
-                    val current = db.sessionDao().findCurrent()
-                    if (current != null) {
-                        repository.triggerAiTurn(current.id)
-                    } else {
-                        val tz = TimeZone.currentSystemDefault()
-                        val location = locationProvider.acquireForEveningPlan()
-                        val event = SessionEvent(
-                            trigger = TriggerType.EveningPlan,
-                            timestamp = Clock.System.now(),
-                            data = EventData.EveningPlan(timezone = tz.id, location = location),
-                        )
-                        SessionFsm(getApplication(), repository).onEvent(event)
+            sessionFlow.map { it?.id }.distinctUntilChanged()
+                .flatMapLatest { id ->
+                    if (id == null) flowOf(emptyList<WorkInfo>()) else repository.observeAiTurnWork(id)
+                }
+                .collect { infos ->
+                    when {
+                        infos.any { !it.state.isFinished } -> _isRetrying.value = true
+                        infos.isNotEmpty() -> _isRetrying.value = false
                     }
                 }
-                // No tight signal for "AI turn done" yet; spin briefly so the user sees
-                // the tap registered. New messages will stream in via aiThreadFlow.
-                kotlinx.coroutines.delay(2_500)
-            } finally {
-                _isRetrying.value = false
+        }
+    }
+
+    fun retryAiPlan() {
+        _isRetrying.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            // A manual replan always captures a FRESH foreground fix — the user may have moved since
+            // the session was created, and reusing the stored origin would replan from the wrong place.
+            val tz = TimeZone.currentSystemDefault()
+            val location = locationProvider.acquireForEveningPlan()
+            val event = SessionEvent(
+                trigger = TriggerType.EveningPlan,
+                timestamp = Clock.System.now(),
+                data = EventData.EveningPlan(timezone = tz.id, location = location),
+            )
+            val fsm = SessionFsm(getApplication(), repository)
+            val current = db.sessionDao().findCurrent()
+            if (current != null) {
+                // Append the fresh evening-plan event (latest wins in the worker), pull in any
+                // plan-affecting setting changed since bootstrap, then re-run the turn.
+                repository.appendEvent(current.id, event)
+                fsm.refreshPlanFromSettings(current.id)
+                repository.triggerAiTurn(current.id)
+            } else {
+                fsm.onEvent(event)
+            }
+        }
+    }
+
+    /**
+     * Interrupts the running AI turn. If no alarm was set, reverts the latest turn so the
+     * thinking thread disappears and the home screen returns to its empty state.
+     */
+    fun cancelAiPlan() {
+        _isRetrying.value = false
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = db.sessionDao().findCurrent() ?: return@launch
+            repository.cancelAiTurn(current.id)
+            if (current.toDisplayState()?.alarmTime == null) {
+                db.aiMessageDao().maxTurnIndex(current.id)?.let { turn ->
+                    db.aiMessageDao().deleteByTurn(current.id, turn)
+                }
             }
         }
     }
@@ -230,7 +291,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             summary = "Thinking…",
             process = emptyList(),
             response = null,
-            isComplete = false,
         )
 
         val blocks = assistantRows.flatMap { decodeBlocks(it.contentJson) }
@@ -239,23 +299,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .filterIsInstance<ContentBlock.ToolResult>()
             .associateBy { it.tool_use_id }
 
+        // Model-authored pill labels: the prompt asks for "STATUS: <gerund>" lines while
+        // working and a leading "SUMMARY: <past tense>" on the answer. Pull them out of the
+        // text in order and strip them so they never render in the timeline or response.
+        val statuses = mutableListOf<String>()
+        var summaryLine: String? = null
+        fun stripDirectives(text: String): String {
+            val kept = StringBuilder()
+            text.lineSequence().forEach { line ->
+                val trimmed = line.trim()
+                val status = STATUS_LINE.matchEntire(trimmed)
+                val summary = SUMMARY_LINE.matchEntire(trimmed)
+                when {
+                    status != null -> status.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { statuses += it }
+                    summary != null -> summary.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { summaryLine = it }
+                    else -> kept.appendLine(line)
+                }
+            }
+            return kept.toString().trim()
+        }
+
         // The final answer is the trailing run of Text blocks — those after the
         // last non-text block (a tool call or reasoning). Text emitted before or
         // between tool calls is narration that belongs to the thinking process,
         // not the output, so collapsing the disclosure hides it.
         val answerStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
-        val response = blocks.drop(answerStart)
-            .filterIsInstance<ContentBlock.Text>()
-            .joinToString(separator = "\n\n") { it.text }
-            .let(::stripLeadingRule)
-            .takeIf { it.isNotBlank() }
 
         val process = blocks.take(answerStart).mapNotNull { block ->
             when (block) {
                 is ContentBlock.Thinking ->
                     block.thinking.takeIf { it.isNotBlank() }?.let { ProcessItem.Reasoning(it) }
                 is ContentBlock.Text ->
-                    block.text.takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
+                    stripDirectives(block.text).takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
                 is ContentBlock.ToolUse -> {
                     val result = toolResults[block.id]
                     ProcessItem.Tool(
@@ -264,29 +339,61 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         contextLabel = result
                             ?.takeIf { it.is_error != true }
                             ?.let { summarizeToolResult(block.name, it.content) },
+                        isError = result?.is_error == true,
                     )
                 }
                 is ContentBlock.ToolResult -> null
             }
         }
 
-        // Summary is a tiny disclosure preview for the process, not a copy of the
-        // response — that would duplicate text already shown below.
-        val summary = process
+        val response = blocks.drop(answerStart)
+            .filterIsInstance<ContentBlock.Text>()
+            .joinToString(separator = "\n\n") { it.text }
+            .let(::stripDirectives)
+            .let(::stripLeadingRule)
+            .takeIf { it.isNotBlank() }
+
+        // A no-op turn (do_nothing) ends with no trailing text, so the answer would be blank.
+        // Fall back to the model's SUMMARY line, then the do_nothing reason, so the card still
+        // explains the decision instead of sitting empty.
+        val doNothingReason = blocks
+            .filterIsInstance<ContentBlock.ToolUse>()
+            .firstOrNull { it.name == "do_nothing" }
+            ?.let { tool ->
+                runCatching { tool.input.jsonObject["reason"]?.jsonPrimitive?.content }
+                    .onFailure { Log.w(TAG, "read do_nothing reason failed", it) }
+                    .getOrNull()
+            }
+            ?.takeIf { it.isNotBlank() }
+        val answer = response ?: summaryLine ?: doNothingReason
+
+        // Wall-clock span of the latest turn; shown once the turn settles (driven by the
+        // WorkManager signal in the UI, not by whether an answer exists).
+        val turnRows = rows.filter { it.turnIndex == latestTurn }
+        val durationSeconds = if (turnRows.isNotEmpty()) {
+            ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
+        } else {
+            null
+        }
+
+        // Pill preview: the model's gerund while working, its past-tense summary once an answer
+        // exists. Fall back to the first line of reasoning if the model skipped the directives.
+        val fallback = process
             .firstNotNullOfOrNull { (it as? ProcessItem.Reasoning)?.text ?: (it as? ProcessItem.Narration)?.text }
             ?.lineSequence()
             ?.firstOrNull { it.isNotBlank() }
             ?.take(80)
-        val isComplete = response != null && blocks
-            .filterIsInstance<ContentBlock.ToolUse>()
-            .all { toolResults.containsKey(it.id) }
+        val liveStatus = statuses.lastOrNull()
+        val summary =
+            if (answer != null) summaryLine ?: liveStatus ?: fallback
+            else liveStatus ?: summaryLine ?: fallback
 
         return AiThreadUi(
             turnIndex = latestTurn,
             summary = summary,
             process = process,
-            response = response,
-            isComplete = isComplete,
+            response = answer,
+            durationSeconds = durationSeconds,
         )
     }
 
@@ -300,7 +407,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun stripLeadingRule(text: String): String {
         val lines = text.trimStart().lines()
         val first = lines.firstOrNull()?.trim().orEmpty()
-        return if (first.matches(Regex("([-*_])\\1{2,}"))) {
+        return if (first.matches(LEADING_RULE)) {
             lines.drop(1).joinToString("\n").trimStart()
         } else {
             text
@@ -345,3 +452,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         const val TAG = "HomeViewModel"
     }
 }
+
+// Hoisted so they compile once, not on every buildAiThread call.
+private val LEADING_RULE = Regex("([-*_])\\1{2,}")
+private val STATUS_LINE = Regex("(?i)^STATUS:\\s*(.*)$")
+private val SUMMARY_LINE = Regex("(?i)^SUMMARY:\\s*(.*)$")
