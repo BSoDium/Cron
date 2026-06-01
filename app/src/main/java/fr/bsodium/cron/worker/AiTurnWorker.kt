@@ -88,6 +88,9 @@ class AiTurnWorker(
         }
 
         val turnIndex = (db.aiMessageDao().maxTurnIndex(sessionId) ?: -1) + 1
+        // A manual replan appends a fresh EveningPlan event on purpose, so it runs the full
+        // EVENING_PLAN + Sonnet pass. Automatic overnight replans append *sensor* events, so the
+        // latest trigger is not EveningPlan and they stay on OVERNIGHT_REPLAN + Haiku.
         val isEveningPlan = session.events.lastOrNull()?.trigger == TriggerType.EveningPlan
 
         val model = if (isEveningPlan) TurnRunner.MODEL_SONNET else TurnRunner.MODEL_HAIKU

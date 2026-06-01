@@ -56,7 +56,9 @@ class SessionRepository(private val context: Context) {
             createdAt = now,
             updatedAt = now,
         )
-        db.sessionDao().insert(session.toEntity())
+        // insertOrReplace so a completed session already on this date (e.g. a same-day re-plan)
+        // doesn't trip the UNIQUE(date) ABORT constraint.
+        db.sessionDao().insertOrReplace(session.toEntity())
         return session
     }
 

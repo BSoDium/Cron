@@ -4,7 +4,6 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
 import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.receiver.AlarmReceiver
@@ -36,9 +35,6 @@ class AlarmScheduler(private val context: Context) {
 
     private val alarmManager: AlarmManager =
         context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-    fun canScheduleExactAlarms(): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) alarmManager.canScheduleExactAlarms() else true
 
     /**
      * Schedule (or replace) the AI alarm.

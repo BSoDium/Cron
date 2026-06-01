@@ -32,9 +32,14 @@ jobs:
         run: |
           echo "GOOGLE_ROUTES_API_KEY=${{ secrets.GOOGLE_ROUTES_API_KEY }}" > local.properties
 
+      - name: Decode signing keystore
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > android_keystore.jks
+
       - name: Build release APK
         env:
-            RELEASE_KEYSTORE_PATH: android_keystore.jks
+            # Absolute path: app/build.gradle.kts resolves file() against the :app module dir,
+            # but the decode step writes to the workspace root.
+            RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/android_keystore.jks
             RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
             RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
             RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
