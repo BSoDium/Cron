@@ -52,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.Radius
@@ -172,6 +174,7 @@ private fun RowScope.NavSlot(
         else MaterialTheme.colorScheme.onSurfaceVariant
     val container by animateColorAsState(targetContainer, animationSpec = NAV_COLOR_SPEC, label = "nav-container")
     val iconTint by animateColorAsState(targetTint, animationSpec = NAV_COLOR_SPEC, label = "nav-tint")
+    val haptics = LocalHapticFeedback.current
     Box(
         modifier = Modifier
             // Square slot so the circular indicator nests with an equal margin on every side
@@ -179,7 +182,10 @@ private fun RowScope.NavSlot(
             .size(48.dp)
             // Clip BEFORE clickable so the ripple respects the slot shape.
             .clip(Radius.full)
-            .clickable(enabled = !selected) { onNavigate(route) },
+            .clickable(enabled = !selected) {
+                haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
+                onNavigate(route)
+            },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -205,8 +211,17 @@ private val NAV_INDICATOR_SIZE = 44.dp
 private fun PrimaryActionFab(action: FabAction?) {
     if (action == null) return
     val working = action.working
+    val haptics = LocalHapticFeedback.current
     FloatingActionButton(
-        onClick = { if (working) action.onCancel?.invoke() else action.onClick() },
+        onClick = {
+            if (working) {
+                haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                action.onCancel?.invoke()
+            } else {
+                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                action.onClick()
+            }
+        },
         shape = RoundedCornerShape(Radius.lg),
         containerColor = MaterialTheme.colorScheme.inverseSurface,
         contentColor = MaterialTheme.colorScheme.inverseOnSurface,

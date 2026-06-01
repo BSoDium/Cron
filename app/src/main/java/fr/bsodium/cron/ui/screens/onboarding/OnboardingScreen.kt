@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -27,12 +27,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.health.connect.client.PermissionController
+import fr.bsodium.cron.permissions.SystemPermissions
+import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
 
 @Composable
 fun OnboardingScreen(
@@ -75,6 +81,7 @@ fun OnboardingScreen(
                         viewModel.advance()
                     },
                 )
+                OnboardingStep.Reliability -> ReliabilityStep(onContinue = viewModel::advance)
                 OnboardingStep.Done -> DoneStep(onFinish = {
                     viewModel.complete()
                     onComplete()
@@ -122,7 +129,6 @@ private fun NameStep(
     state: OnboardingUiState,
     viewModel: OnboardingViewModel,
 ) {
-    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -136,32 +142,6 @@ private fun NameStep(
         )
         Spacer(modifier = Modifier.height(24.dp))
 
-        OutlinedButton(
-            onClick = { viewModel.signInWithGoogle(context) },
-            enabled = !state.isSigningIn,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            if (state.isSigningIn) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                )
-                Spacer(modifier = Modifier.size(12.dp))
-                Text("Signing in…")
-            } else {
-                Text("Sign in with Google")
-            }
-        }
-        state.signInError?.let {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = state.displayNameInput,
             onValueChange = viewModel::onDisplayNameChanged,
@@ -270,6 +250,102 @@ private fun PermissionsStep(
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
             Text("Skip for now")
+        }
+    }
+}
+
+@Composable
+private fun ReliabilityStep(onContinue: () -> Unit) {
+    val context = LocalContext.current
+    val reader = remember { SleepStageReader(context) }
+
+    var bgLocationGranted by remember { mutableStateOf(SystemPermissions.hasBackgroundLocation(context)) }
+    var batteryExempt by remember { mutableStateOf(SystemPermissions.isIgnoringBatteryOptimizations(context)) }
+    var hcConnected by remember { mutableStateOf(false) }
+
+    val bgLocationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { bgLocationGranted = SystemPermissions.hasBackgroundLocation(context) }
+    val batteryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { batteryExempt = SystemPermissions.isIgnoringBatteryOptimizations(context) }
+    val hcLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted -> hcConnected = granted.containsAll(reader.requiredPermissions) }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("Reliable overnight", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "These let Cron refresh your location and run the plan while you sleep — without " +
+                "opening the app. All optional, and you can change them later in Settings.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        ReliabilityButton(
+            title = if (bgLocationGranted) "Background location enabled" else "Allow location all the time",
+            subtitle = "Refreshes your commute origin overnight. Tap, then pick \"Allow all the time\".",
+            done = bgLocationGranted,
+            enabled = SystemPermissions.hasForegroundLocation(context),
+            onClick = { bgLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) },
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        ReliabilityButton(
+            title = if (batteryExempt) "Battery optimization off" else "Ignore battery optimization",
+            subtitle = "Stops the system from killing the overnight tracker.",
+            done = batteryExempt,
+            enabled = true,
+            onClick = { batteryLauncher.launch(SystemPermissions.batteryOptimizationIntent(context)) },
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        ReliabilityButton(
+            title = if (hcConnected) "Sleep data connected" else "Connect sleep data",
+            subtitle = "Use wearable sleep stages (Health Connect) for smarter wake timing.",
+            done = hcConnected,
+            enabled = reader.availability() == SleepStageReader.Availability.Available,
+            onClick = { hcLauncher.launch(reader.requiredPermissions) },
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+        Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
+            Text("Continue")
+        }
+    }
+}
+
+@Composable
+private fun ReliabilityButton(
+    title: String,
+    subtitle: String,
+    done: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled && !done,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (done) {
+            Spacer(modifier = Modifier.size(8.dp))
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

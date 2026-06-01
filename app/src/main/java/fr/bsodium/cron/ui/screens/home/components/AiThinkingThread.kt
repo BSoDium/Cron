@@ -327,10 +327,13 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
                 // the touch target at 48dp while the visible pill stays compact.
                 Box(
                     modifier = Modifier
+                        // No start padding so the label's left edge sits on the reasoning-text
+                        // column; end padding keeps the ripple a pill. The 48dp touch target is
+                        // preserved by minimumInteractiveComponentSize.
                         .minimumInteractiveComponentSize()
                         .clip(Radius.full)
                         .clickable { expanded = !expanded }
-                        .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                        .padding(end = Spacing.md, top = Spacing.xs, bottom = Spacing.xs),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -532,7 +535,7 @@ private fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boolea
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xxs),
                 )
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {

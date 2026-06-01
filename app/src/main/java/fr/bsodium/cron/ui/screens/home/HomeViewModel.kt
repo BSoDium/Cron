@@ -51,7 +51,6 @@ data class HomeUiState(
     val sessionDisplay: SessionDisplayState? = null,
     val greetingPrefix: String = "Welcome",
     val greetingName: String? = null,
-    val greetingPhotoUrl: String? = null,
     val dateLabel: String = "",
     val sleepStats: SleepStatsUi? = null,
     val aiThread: AiThreadUi? = null,
@@ -122,10 +121,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else db.aiMessageDao().observeBySession(id).map { rows -> buildAiThread(rows) }
         }
 
-    private val profileFlow = combine(settings.displayName, settings.displayPhotoUrl) { name, url ->
-        name to url
-    }
-
     /** Epoch-ms the user last dismissed the "settings changed" reminder this process. */
     private val _dismissedSettingsAt = MutableStateFlow(0L)
 
@@ -147,16 +142,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         sessionFlow.map { it?.toDisplayState() },
         sleepStatsFlow,
         aiThreadFlow,
-        profileFlow,
+        settings.displayName,
         statusFlow,
-    ) { session, sleepStats, thread, profile, status ->
-        val (displayName, photoUrl) = profile
+    ) { session, sleepStats, thread, displayName, status ->
         val (retrying, settingsChanged) = status
         HomeUiState(
             sessionDisplay = session,
             greetingPrefix = greetingPrefix(),
             greetingName = displayName,
-            greetingPhotoUrl = photoUrl,
             dateLabel = formatDateLabel(),
             sleepStats = sleepStats,
             aiThread = thread,

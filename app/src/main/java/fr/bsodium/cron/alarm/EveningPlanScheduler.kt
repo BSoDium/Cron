@@ -19,10 +19,10 @@ import kotlinx.datetime.toLocalDateTime
 /**
  * Arms the daily "start sleep session" trigger.
  *
- * Uses [AlarmManager.setAlarmClock] which:
- *  - is exempt from Doze,
- *  - is exempt from the SCHEDULE_EXACT_ALARM permission grant requirement
- *    (USE_EXACT_ALARM covers alarm-clock apps).
+ * Uses [AlarmManager.setExactAndAllowWhileIdle] — exact and Doze-exempt, but (unlike setAlarmClock)
+ * it does not surface a system alarm-clock indicator, which is correct for a silent background
+ * planning trigger rather than a user-facing wake alarm. Exact scheduling is authorised by the
+ * manifest's USE_EXACT_ALARM (this is an alarm-clock app), so no SCHEDULE_EXACT_ALARM grant is needed.
  *
  * Re-armed by:
  *  - [fr.bsodium.cron.receiver.BootReceiver] on `ACTION_BOOT_COMPLETED`

@@ -160,7 +160,6 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                 GreetingHeader(
                     prefix = uiState.greetingPrefix,
                     name = uiState.greetingName,
-                    photoUrl = uiState.greetingPhotoUrl,
                 )
                 card()
                 // Bias the hint toward the upper third so "Let's get started" sits near eye height
@@ -198,7 +197,6 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                     GreetingHeader(
                         prefix = uiState.greetingPrefix,
                         name = uiState.greetingName,
-                        photoUrl = uiState.greetingPhotoUrl,
                     )
                 }
                 item(key = "alarm-spacer") {

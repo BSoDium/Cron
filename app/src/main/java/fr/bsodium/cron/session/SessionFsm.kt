@@ -44,7 +44,12 @@ class SessionFsm(
      * session exists and the event cannot bootstrap one.
      */
     suspend fun onEvent(event: SessionEvent): String? = withContext(Dispatchers.IO) {
-        val session = repository.findCurrent()
+        var current = repository.findCurrent()
+        // A fresh evening plan for a new morning supersedes any session left unfinished from a prior day.
+        if (event.trigger == TriggerType.EveningPlan && current != null && supersedeIfStale(current, event)) {
+            current = null
+        }
+        val session = current
             ?: if (event.trigger == TriggerType.EveningPlan) {
                 bootstrapSession(event) ?: return@withContext null
             } else {
@@ -137,6 +142,23 @@ class SessionFsm(
             )
         }
         Log.i(TAG, "Session $sessionId plan refreshed from settings (prep=${refreshed.preparationBufferMinutes}, commute=${refreshed.commuteBufferMinutes})")
+    }
+
+    /**
+     * If the current session targets a different morning than this evening plan, it never completed
+     * (e.g. the alarm was never dismissed). Mark it Complete and clear its alarms so tonight starts
+     * fresh. We deliberately do NOT stop the service here — it's the live FGS bootstrapping the new
+     * session; the same-night re-plan case (matching date) is left untouched as a legitimate replan.
+     */
+    private suspend fun supersedeIfStale(current: SleepSession, eveningPlanEvent: SessionEvent): Boolean {
+        val data = eveningPlanEvent.data as? EventData.EveningPlan ?: return false
+        val morning = SessionRepository.morningDate(eveningPlanEvent.timestamp, TimeZone.of(data.timezone))
+        if (current.date == morning) return false
+        repository.updateStatus(current.id, SessionStatus.Complete)
+        alarmScheduler.cancel(current.date)
+        hardLatestScheduler.clear(current.date)
+        Log.i(TAG, "Superseded stale session ${current.id} (date=${current.date}) for morning $morning")
+        return true
     }
 
     // ---------------------------------------------------------------------------
