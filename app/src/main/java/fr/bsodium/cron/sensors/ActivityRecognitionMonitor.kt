@@ -104,6 +104,7 @@ class ActivityRecognitionMonitor(
             }
         }
         runCatching { context.unregisterReceiver(receiver) }
+            .onFailure { Log.w(TAG, "unregisterReceiver failed", it) }
         pendingIntent = null
         Log.i(TAG, "ActivityRecognitionMonitor stopped")
     }

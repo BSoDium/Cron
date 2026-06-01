@@ -73,6 +73,7 @@ class ScreenStateMonitor(
 
     fun stop() {
         runCatching { context.unregisterReceiver(receiver) }
+            .onFailure { Log.w(TAG, "unregisterReceiver failed", it) }
         pendingOnset?.cancel()
         Log.i(TAG, "ScreenStateMonitor stopped")
     }

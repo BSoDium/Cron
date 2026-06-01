@@ -39,7 +39,7 @@ class RoutesClient(
                 put("destination", JSONObject().put("address", destinationAddress))
                 put("travelMode", mode.name)
                 if (mode == TravelMode.TRANSIT && arrivalTimeEpochMs != null) {
-                    put("arrivalTime", java.time.Instant.ofEpochMilli(arrivalTimeEpochMs).toString())
+                    put("arrivalTime", kotlinx.datetime.Instant.fromEpochMilliseconds(arrivalTimeEpochMs).toString())
                 }
             }
 

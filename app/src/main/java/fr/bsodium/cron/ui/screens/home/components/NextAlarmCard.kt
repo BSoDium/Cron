@@ -194,7 +194,7 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
             color = digitColor,
             modifier = Modifier
                 .align(Alignment.CenterVertically)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = Spacing.sm),
         )
         Text(text = mm, color = digitColor, style = lcdStyle, maxLines = 1, softWrap = false)
         CountdownStack(
@@ -369,7 +369,7 @@ private fun SleepTimeline(
                     )
                 }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -402,7 +402,7 @@ private fun SleepTimeline(
                     )
                 }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = if (labelled.size == 1) Arrangement.Start else Arrangement.SpaceBetween,

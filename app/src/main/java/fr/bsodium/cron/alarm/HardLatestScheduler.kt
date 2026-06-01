@@ -37,7 +37,9 @@ class HardLatestScheduler(private val context: Context) {
             hardLatest.hour, hardLatest.minute, hardLatest.second, hardLatest.nanosecond,
         ).toInstant(timezone)
 
-        val pi = pendingIntent(sessionDate, sessionId, create = true)!!
+        val pi = requireNotNull(pendingIntent(sessionDate, sessionId, create = true)) {
+            "Hard-latest PendingIntent is non-null when create = true"
+        }
         alarmManager.setAlarmClock(
             AlarmManager.AlarmClockInfo(target.toEpochMilliseconds(), showIntent()),
             pi,

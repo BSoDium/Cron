@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.LocationServices
@@ -60,7 +61,7 @@ class LocationProvider(private val context: Context) {
                 .build()
             runCatching {
                 fused.getCurrentLocation(req, null).awaitNullable()
-            }.getOrNull()
+            }.onFailure { Log.w(TAG, "getCurrentLocation failed", it) }.getOrNull()
         }
         if (fresh != null) {
             persistAndReturn(fresh, LocationSource.Gps, checkpoints)?.let { return it }
@@ -75,7 +76,7 @@ class LocationProvider(private val context: Context) {
                 .build()
             runCatching {
                 fused.getCurrentLocation(req, null).awaitNullable()
-            }.getOrNull()
+            }.onFailure { Log.w(TAG, "getCurrentLocation failed", it) }.getOrNull()
         }
         if (coarse != null) {
             persistAndReturn(coarse, LocationSource.Gps, checkpoints, COARSE_MAX_ACCURACY_METERS)?.let { return it }
@@ -83,7 +84,8 @@ class LocationProvider(private val context: Context) {
 
         // Step 3: a recent last-known fix — labelled LastKnown (it is NOT a fresh fix), so the
         // prompt treats it with appropriate caution rather than as a confident current position.
-        val last = runCatching { fused.lastLocation.awaitNullable() }.getOrNull()
+        val last = runCatching { fused.lastLocation.awaitNullable() }
+            .onFailure { Log.w(TAG, "lastLocation failed", it) }.getOrNull()
         if (last != null && isRecent(last, maxAge = 2.hours)) {
             persistAndReturn(last, LocationSource.LastKnown, checkpoints)?.let { return it }
         }
@@ -153,6 +155,7 @@ class LocationProvider(private val context: Context) {
     }
 
     companion object {
+        private const val TAG = "LocationProvider"
         private const val MAX_ACCURACY_METERS = 500f
         // Looser cap for a balanced-power CURRENT fix: city-level accuracy is acceptable when the
         // alternative is a stale fix in the wrong city (commute origin only needs the right area).
