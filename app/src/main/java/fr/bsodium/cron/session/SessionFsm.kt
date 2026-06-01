@@ -77,10 +77,6 @@ class SessionFsm(
         session.id
     }
 
-    // ---------------------------------------------------------------------------
-    // Session bootstrap
-    // ---------------------------------------------------------------------------
-
     private suspend fun bootstrapSession(eveningPlanEvent: SessionEvent): SleepSession? {
         val data = eveningPlanEvent.data as? EventData.EveningPlan ?: return null
         val tz = TimeZone.of(data.timezone)
@@ -161,10 +157,6 @@ class SessionFsm(
         return true
     }
 
-    // ---------------------------------------------------------------------------
-    // State transitions
-    // ---------------------------------------------------------------------------
-
     private fun transition(session: SleepSession, event: SessionEvent): SessionStatus =
         when (event.trigger) {
             TriggerType.AlarmDismissed -> SessionStatus.Complete
@@ -196,22 +188,15 @@ class SessionFsm(
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // AI trigger policy
-    // ---------------------------------------------------------------------------
-
     private fun shouldTriggerAi(trigger: TriggerType, newStatus: SessionStatus): Boolean {
         if (newStatus == SessionStatus.Complete) return false
         return trigger in AI_TRIGGERS
     }
 
-    // ---------------------------------------------------------------------------
-    // Snooze escalation (called from AlarmReceiver, bypasses the main onEvent path)
-    // ---------------------------------------------------------------------------
-
     /**
-     * Handle an alarm snooze. Returns true if AI was triggered for a replan,
-     * false if snooze count ≥ 3 bypassed AI and scheduled now + 5 min directly.
+     * Handle an alarm snooze, called from AlarmReceiver and bypassing the main
+     * onEvent path. Returns true if AI was triggered for a replan, false if
+     * snooze count ≥ 3 bypassed AI and scheduled now + 5 min directly.
      */
     suspend fun onSnooze(sessionId: String, event: SessionEvent): Boolean =
         withContext(Dispatchers.IO) {

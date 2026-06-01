@@ -56,7 +56,9 @@ class AlarmScheduler(private val context: Context) {
     ): ClampedSchedule {
         val plan = clamp(requested, Clock.System.now(), hardLatest, sessionDate, timezone)
 
-        val pi = aiPendingIntent(sessionDate, label, sessionId, create = true)!!
+        val pi = requireNotNull(aiPendingIntent(sessionDate, label, sessionId, create = true)) {
+            "AI alarm PendingIntent is non-null when create = true"
+        }
         alarmManager.setAlarmClock(
             AlarmManager.AlarmClockInfo(plan.actualInstant.toEpochMilliseconds(), showIntent()),
             pi,

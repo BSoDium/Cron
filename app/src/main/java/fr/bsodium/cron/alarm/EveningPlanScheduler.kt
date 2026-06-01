@@ -52,7 +52,7 @@ class EveningPlanScheduler(
         alarmManager.setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             targetInstant.toEpochMilliseconds(),
-            pendingIntent(create = true)!!,
+            requireNotNull(pendingIntent(create = true)) { "Evening-plan PendingIntent is non-null when create = true" },
         )
     }
 

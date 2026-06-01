@@ -86,9 +86,9 @@ class MainActivity : ComponentActivity() {
                 val onboardingDone: Boolean? by produceState<Boolean?>(initialValue = null) {
                     value = settings.onboardingComplete.first()
                 }
-                onboardingDone ?: return@CronTheme
+                val done = onboardingDone ?: return@CronTheme
 
-                val startDestination = if (onboardingDone!! && secureStore.hasAnthropicKey()) "home" else "onboarding"
+                val startDestination = if (done && secureStore.hasAnthropicKey()) "home" else "onboarding"
                 val navController = rememberNavController()
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = backStackEntry?.destination?.route
