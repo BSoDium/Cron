@@ -65,6 +65,11 @@ class SettingsRepository(private val context: Context) {
         prefs[DISPLAY_NAME]?.takeIf { it.isNotBlank() }
     }
 
+    /** Free-text instructions the user gives the planning assistant; injected into every AI turn. */
+    val userInstructions: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[USER_INSTRUCTIONS]?.takeIf { it.isNotBlank() }
+    }
+
     /** Epoch-ms of the last change to a plan-affecting setting; 0 if never changed. The home
      *  screen compares this against the active session's last AI call to offer a re-plan. */
     val settingsUpdatedAt: Flow<Long> = context.dataStore.data.map { prefs ->
@@ -109,6 +114,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDisplayName(name: String) =
         context.dataStore.edit { it[DISPLAY_NAME] = name.trim() }
 
+    /** Plain edit (not plan-affecting): editing instructions shouldn't raise the "replan?" pill. */
+    suspend fun setUserInstructions(text: String) =
+        context.dataStore.edit { it[USER_INSTRUCTIONS] = text.trim() }
+
+    suspend fun currentUserInstructions(): String? = userInstructions.first()
+
     /** One-shot read for use from broadcast receivers and one-shot workers. */
     suspend fun currentEveningTriggerLocalTime(): LocalTime = eveningTriggerLocalTime.first()
     suspend fun currentHardLatestDefault(): LocalTime = hardLatestDefault.first()
@@ -129,6 +140,7 @@ class SettingsRepository(private val context: Context) {
         val HOME_LNG = stringPreferencesKey("home_address_lng")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
+        val USER_INSTRUCTIONS = stringPreferencesKey("user_instructions")
         val SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
     }
 }

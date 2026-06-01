@@ -22,6 +22,7 @@ data class SettingsUiState(
     val preparationBufferMinutes: Int = 15,
     val hasApiKey: Boolean = false,
     val displayName: String? = null,
+    val userInstructions: String? = null,
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,6 +49,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         state.copy(preparationBufferMinutes = prepBuffer)
     }.combine(repo.displayName) { state, name ->
         state.copy(displayName = name)
+    }.combine(repo.userInstructions) { state, instructions ->
+        state.copy(userInstructions = instructions)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setEveningTrigger(time: LocalTime) {
@@ -79,5 +82,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setDisplayName(name: String) {
         viewModelScope.launch { repo.setDisplayName(name) }
+    }
+
+    fun setUserInstructions(text: String) {
+        viewModelScope.launch { repo.setUserInstructions(text) }
     }
 }

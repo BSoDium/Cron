@@ -48,11 +48,12 @@ class ReadCalendarTool(private val reader: CalendarReader) : Tool {
     override val definition: ToolDefinition = ToolDefinition(
         name = NAME,
         description = """
-            Read the user's calendar events between two timestamps. Use this to
-            determine the user's appointments and identify the next anchor event
-            that requires physical presence at a specific location. Skip all-day
-            events (they are markers, not appointments) and virtual/phone-based
-            events when reasoning about commute timing.
+            Read the user's calendar events between two timestamps to find the next anchor the
+            user must be ready for. Online/virtual events (location is a URL, a chat channel, or
+            empty but timed) are real anchors but need no commute. All-day entries are not anchors:
+            most are markers (birthday, OOO), but one whose title is a place ("Office", a city, an
+            address) or Home/Remote indicates the day's working location — use it as the commute
+            destination for a physical anchor that lacks its own location.
         """.trimIndent(),
         input_schema = toolSchema(
             "start_iso" to JsonObject(

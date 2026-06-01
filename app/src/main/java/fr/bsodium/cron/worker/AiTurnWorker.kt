@@ -39,6 +39,7 @@ import fr.bsodium.cron.session.model.SleepSession
 import fr.bsodium.cron.session.model.SignalConfidence
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.settings.SecureKeyStore
+import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.travel.GeocodingClient
 import fr.bsodium.cron.travel.RoutesClient
 import kotlinx.datetime.Clock
@@ -64,6 +65,7 @@ class AiTurnWorker(
 
     private val repository = SessionRepository(applicationContext)
     private val db = CronDatabase.get(applicationContext)
+    private val settingsRepository = SettingsRepository(applicationContext)
 
     override suspend fun doWork(): Result {
         val sessionId = inputData.getString(KEY_SESSION_ID)
@@ -176,20 +178,21 @@ class AiTurnWorker(
     // User message construction
     // ---------------------------------------------------------------------------
 
-    private fun buildUserMessage(session: SleepSession, isEveningPlan: Boolean): String {
+    private suspend fun buildUserMessage(session: SleepSession, isEveningPlan: Boolean): String {
         val now = Clock.System.now()
         val tz = TimeZone.of(session.timezone)
         val localNow = now.toLocalDateTime(tz)
-        val plan = session.plan
+        val instructions = settingsRepository.currentUserInstructions()
 
-        return if (isEveningPlan) buildEveningPlanMessage(session, localNow, tz)
-        else buildOvernightReplanMessage(session, localNow)
+        return if (isEveningPlan) buildEveningPlanMessage(session, localNow, tz, instructions)
+        else buildOvernightReplanMessage(session, localNow, instructions)
     }
 
     private fun buildEveningPlanMessage(
         session: SleepSession,
         localNow: kotlinx.datetime.LocalDateTime,
         tz: TimeZone,
+        userInstructions: String?,
     ): String {
         val plan = session.plan
         // Latest evening-plan event, so a manual replan's freshly-captured location wins.
@@ -218,8 +221,18 @@ class AiTurnWorker(
                 appendLine("- Source: unavailable — apply a flat +30 min buffer and mention it in the reason")
             }
             appendLine()
+            appendUserInstructions(userInstructions)
             appendLine("Plan tomorrow's alarm. Follow the process in your system prompt: read calendar, identify anchor event, estimate commute if applicable, then call set_alarm.")
         }
+    }
+
+    /** Appends the user's standing custom instructions, when set, as a labelled block. */
+    private fun StringBuilder.appendUserInstructions(text: String?) {
+        if (text.isNullOrBlank()) return
+        appendLine("## User instructions")
+        appendLine("Standing instructions from the user — honour them unless they'd push the alarm past the hard latest:")
+        appendLine(text)
+        appendLine()
     }
 
     private fun isPhoneOnlyMode(session: SleepSession): Boolean {
@@ -234,6 +247,7 @@ class AiTurnWorker(
     private fun buildOvernightReplanMessage(
         session: SleepSession,
         localNow: kotlinx.datetime.LocalDateTime,
+        userInstructions: String?,
     ): String {
         val plan = session.plan
         val instr = session.currentInstruction
@@ -267,6 +281,7 @@ class AiTurnWorker(
                 appendLine("[${last.timestamp}] ${last.trigger.name}: ${summarizeEventData(last)}")
             }
             appendLine()
+            appendUserInstructions(userInstructions)
             appendLine("Decide what the alarm system should do. Call set_alarm if you want to adjust the wake time. If the current alarm is already optimal, respond with a brief explanation and do not call any tool.")
         }
     }
