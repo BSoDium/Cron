@@ -2,7 +2,9 @@ package fr.bsodium.cron.calendar
 
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.os.Bundle
 import android.provider.CalendarContract
+import android.util.Log
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 
@@ -45,7 +47,7 @@ class CalendarReader(private val contentResolver: ContentResolver) {
             null
         } ?: return emptyList()
 
-        return cursor.use { c ->
+        val events = cursor.use { c ->
             buildList {
                 while (c.moveToNext()) {
                     add(
@@ -62,9 +64,12 @@ class CalendarReader(private val contentResolver: ContentResolver) {
                 }
             }
         }
+        Log.i(TAG, "read ${events.size} events in [$from .. $to]: ${events.map { it.title }}")
+        return events
     }
 
     private companion object {
+        const val TAG = "CalendarReader"
         val PROJECTION = arrayOf(
             CalendarContract.Instances.EVENT_ID,
             CalendarContract.Instances.TITLE,
@@ -82,4 +87,17 @@ class CalendarReader(private val contentResolver: ContentResolver) {
         const val COL_CALENDAR_ID = 5
         const val COL_LOCATION = 6
     }
+}
+
+/**
+ * Best-effort nudge for the system to pull fresh calendar data before a planning read. Non-blocking;
+ * the replan's own latency (location fetch + AI round-trip) usually covers the sync. A null account
+ * syncs every account registered for the calendar authority.
+ */
+fun requestCalendarSync() {
+    val extras = Bundle().apply {
+        putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true)
+        putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true)
+    }
+    ContentResolver.requestSync(null, CalendarContract.AUTHORITY, extras)
 }
