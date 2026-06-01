@@ -17,6 +17,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.R
+import fr.bsodium.cron.calendar.requestCalendarSync
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.sensors.ActivityRecognitionMonitor
 import fr.bsodium.cron.sensors.DebugSensorEventSink
@@ -114,6 +115,8 @@ class SleepSessionService : Service() {
      */
     private suspend fun runEveningPlan(tzId: String) {
         try {
+            // Pull fresh calendar data before the read; the location fetch below gives it time.
+            requestCalendarSync()
             val location = LocationProvider(applicationContext).acquireForEveningPlan()
             val event = SessionEvent(
                 trigger = TriggerType.EveningPlan,

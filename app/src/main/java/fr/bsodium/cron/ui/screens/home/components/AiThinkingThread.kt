@@ -74,6 +74,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -93,6 +94,7 @@ import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CodeFontFamily
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.SerifFontFamily
@@ -168,8 +170,9 @@ private fun ThinkingDisclosure(
     process: List<ProcessItem>,
     inProgress: Boolean,
     durationSeconds: Int?,
+    initiallyExpanded: Boolean = false,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     val canExpand = process.isNotEmpty()
     // Full-bleed square bar: transparent when collapsed, a quiet fill when open (a step below
     // the alarm card so it stays secondary to it). It bleeds past the screen-side content
@@ -333,14 +336,25 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
                         .minimumInteractiveComponentSize()
                         .clip(Radius.full)
                         .clickable { expanded = !expanded }
-                        .padding(end = Spacing.md, top = Spacing.xs, bottom = Spacing.xs),
+                        .padding(start = Spacing.xs, end = Spacing.sm, top = Spacing.xs, bottom = Spacing.xs),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = if (expanded) "See less" else "See more",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(STEP_ICON_SIZE),
+                        )
+                        Text(
+                            text = if (expanded) "See less" else "See more",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             } else {
                 MarkdownBlock(text = text, bodyStyle = bodyStyle, serif = false)
@@ -351,6 +365,8 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
 
 private const val REASONING_COLLAPSE_CHARS = 280
 private const val REASONING_COLLAPSED_LINES = 6
+/** Martian Mono reads larger than the sans/serif at the same size, so code renders below body size. */
+private const val CODE_FONT_SCALE = 0.78f
 // Taller fade band → a softer, more gradual dissolve into "See more" (was Spacing.xl, too abrupt).
 private val REASONING_FADE_HEIGHT = 48.dp
 private val REASONING_HEIGHT_SPEC = tween<Int>(durationMillis = 200, easing = FastOutSlowInEasing)
@@ -629,11 +645,10 @@ private fun MarkdownBlock(
     )
     val serifize: (TextStyle) -> TextStyle =
         { if (serif) it.copy(fontFamily = SerifFontFamily) else it }
-    // Martian Mono reads larger than the sans/serif at the same size, so drop code a notch.
     val codeStyle = bodyStyle.copy(
         fontFamily = CodeFontFamily,
         color = onSurface,
-        fontSize = (bodyStyle.fontSize.value * 0.85f).sp,
+        fontSize = (bodyStyle.fontSize.value * CODE_FONT_SCALE).sp,
     )
     val typography = markdownTypography(
         h1 = serifize(MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
@@ -807,3 +822,76 @@ private fun stripInlineMarks(s: String): String = s
     .replace(MD_BOLD_ALT, "$1")
     .replace(MD_ITALIC, "$1")
     .replace(MD_INLINE_CODE, "$1")
+
+/** Representative thread for previews: a long (collapsible) reasoning block, a few tool steps, and a
+ *  markdown response with bold + inline code. */
+private val PREVIEW_THREAD = AiThreadUi(
+    turnIndex = 0,
+    summary = "Setting your alarm",
+    process = listOf(
+        ProcessItem.Reasoning(
+            "Let me read the calendar for the next 24-30 hours and find the first event you must be " +
+                "ready for. All-day markers like **Office** or a city set the day's working location; a " +
+                "virtual `#stand-up` is a real anchor with no commute. I subtract the travel buffer and " +
+                "`preparation_time` from the anchor, then nudge into a light-sleep window.",
+        ),
+        ProcessItem.Tool(name = "read_calendar", isComplete = true, contextLabel = "6 events"),
+        ProcessItem.Tool(name = "estimate_commute_multi_mode", isComplete = true, contextLabel = "13 min"),
+        ProcessItem.Tool(name = "set_alarm", isComplete = true, contextLabel = "set for 06:40"),
+    ),
+    response = "Set a **6:40** alarm so you make your 9:00 stand-up.\n\n" +
+        "Your first anchor is at the office, about a 25 min drive. I took the commute plus 45 min of " +
+        "`preparation_time` off the start, then landed on a light-sleep moment just before.",
+    durationSeconds = 15,
+)
+
+@Preview(showBackground = true, name = "Thread — settled")
+@Composable
+private fun AiThinkingThreadPreview() {
+    CronTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            AiThinkingThread(
+                thread = PREVIEW_THREAD,
+                isRunning = false,
+                modifier = Modifier.padding(Spacing.xl),
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Disclosure — expanded")
+@Composable
+private fun ThinkingDisclosureExpandedPreview() {
+    CronTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Column(modifier = Modifier.padding(horizontal = Spacing.xl, vertical = Spacing.xl)) {
+                ThinkingDisclosure(
+                    summary = PREVIEW_THREAD.summary,
+                    process = PREVIEW_THREAD.process,
+                    inProgress = false,
+                    durationSeconds = PREVIEW_THREAD.durationSeconds,
+                    initiallyExpanded = true,
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Thread — running")
+@Composable
+private fun AiThinkingThreadRunningPreview() {
+    CronTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            AiThinkingThread(
+                thread = AiThreadUi(
+                    turnIndex = 0,
+                    summary = "Reading your calendar",
+                    process = listOf(ProcessItem.Tool(name = "read_calendar", isComplete = false)),
+                    response = null,
+                ),
+                isRunning = true,
+                modifier = Modifier.padding(Spacing.xl),
+            )
+        }
+    }
+}

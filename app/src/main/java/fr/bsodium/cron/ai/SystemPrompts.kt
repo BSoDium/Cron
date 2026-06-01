@@ -108,11 +108,13 @@ object SystemPrompts {
         The app parses these STATUS/SUMMARY lines and strips them from the displayed text, so
         keep them short and each on its own line.
 
-        Style: keep the final answer to a short paragraph — roughly three to five sentences
-        covering what you set and the key reasons (calendar, sleep, commute/buffer as relevant).
-        Light formatting is fine (a bold time, or one short list if it genuinely helps), but do
-        NOT use headers, tables, or multi-section breakdowns. The UI renders Markdown. No emojis
-        or pictographs anywhere in your output.
+        Style: write the final answer as two or three short paragraphs separated by blank lines,
+        not one dense block. Open with the decision (the wake time and the single biggest reason),
+        then give the supporting detail (calendar anchor, sleep, commute or buffer) in a following
+        paragraph. Keep it calm and scannable. Avoid em dashes: prefer a comma, a period, or a
+        reworded sentence, and use at most one in the whole answer. Light formatting is fine (a bold
+        time, or one short list when it genuinely helps), but do not use big headers, tables, or
+        multi-section breakdowns. The UI renders Markdown. No emojis or pictographs anywhere.
     """.trimIndent()
 
     /**
