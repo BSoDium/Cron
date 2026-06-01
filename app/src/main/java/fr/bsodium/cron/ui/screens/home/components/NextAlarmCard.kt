@@ -40,10 +40,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.components.PillBadge
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.DisplayFontFamily
 import fr.bsodium.cron.ui.theme.LcdFontFamily
@@ -122,6 +124,20 @@ fun NextAlarmCard(
                 SleepTimeline(segments = sleepSegments)
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun NextAlarmCardPreview() {
+    CronTheme {
+        NextAlarmCard(
+            dateLabel = "Monday 1",
+            alarmTime = LocalTime(6, 40),
+            sleepDurationLabel = null,
+            sleepSegments = emptyList(),
+            modifier = Modifier.padding(Spacing.xl),
+        )
     }
 }
 

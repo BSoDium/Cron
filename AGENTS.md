@@ -25,6 +25,7 @@ These rules exist because LLM passes have repeatedly violated them. Follow them 
 - `Modifier.padding(...)` overloads don't mix: `start/top/end/bottom` and `horizontal/vertical` are separate overloads, so `padding(start = …, vertical = …)` does not compile. Pick one set. (This broke a build.)
 - Inner clickable rows must hit a minimum 48dp touch target. Don't ship a 44dp pill because it "looks right" — bump the inner box; the visual radius will absorb it.
 - Apply `Modifier.clip(shape)` **before** `.clickable(...)` so the ripple respects the shape. Putting `clickable` first gives you a square highlight on a rounded surface.
+- Provide a `@Preview` for any non-trivial or reusable composable — **mandatory for important components** (cards, the nav/FAB, the thinking thread, each screen's key pieces). Keep the preview `private`, wrap it in `CronTheme`, and feed representative sample data so it renders without a device. A component you can't preview without real DB/network data is a sign its rendering should be split from its data-loading.
 
 ## Coroutines & lifecycle
 
@@ -39,7 +40,9 @@ These rules exist because LLM passes have repeatedly violated them. Follow them 
 
 ## Comments & files
 
-- Default to writing no comment. Add one only when the *why* is non-obvious (a workaround for a specific bug, a hidden invariant, a constraint from an external system). Don't restate what the code does.
+- Default to writing no comment. Add one only when the *why* is non-obvious (a workaround for a specific bug, a hidden invariant, a constraint from an external system). Don't restate what the code does — clean names and whitespace explain far more than prose.
+- No back-to-back `//` paragraph comments above a declaration. Several `//` lines forming a paragraph should become a single `/** … */` KDoc placed **immediately above** the declaration: KDoc flows into IDE quick-docs and hover; stacked `//` lines do not. (A single inline `//` explaining one line *inside* a function body is fine.)
+- No section-banner comments (`// ──── Foo ────`, `// ---- Foo ----`, `/* ===== Foo ===== */`). They're a code smell that signals a file is doing too much. **Split into atomic files instead** — one file, one responsibility — rather than partitioning one file with banners.
 - Don't add a multi-paragraph KDoc block to a private composable describing what it renders — the name and signature already say that. One short line max.
 - Don't leave `// TODO`, `// for now`, or hand-tuned magic numbers without a measurement-based replacement plan. The pattern of `Modifier.offset(x = (-6).dp) // compensate for X` has been removed from this repo (see `AlignedFirstGlyph` in `NextAlarmCard.kt` for the proper measurement-based approach); don't reintroduce it.
 

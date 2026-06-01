@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import fr.bsodium.cron.ai.wire.ContentBlock
+import fr.bsodium.cron.calendar.requestCalendarSync
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
@@ -37,6 +38,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -150,7 +152,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             sessionDisplay = session,
             greetingPrefix = greetingPrefix(),
             greetingName = displayName,
-            dateLabel = formatDateLabel(),
+            dateLabel = formatDateLabel(session),
             sleepStats = sleepStats,
             aiThread = thread,
             isRetrying = retrying,
@@ -196,6 +198,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun retryAiPlan() {
         _isRetrying.value = true
         viewModelScope.launch(Dispatchers.IO) {
+            // Nudge a calendar sync up front so a freshly-added event reaches the provider by read
+            // time; the location fetch + AI round-trip below give it time to land.
+            requestCalendarSync()
             // A manual replan always captures a FRESH foreground fix — the user may have moved since
             // the session was created, and reusing the stored origin would replan from the wrong place.
             val tz = TimeZone.currentSystemDefault()
@@ -434,10 +439,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.onFailure { Log.w(TAG, "summarize tool result failed for $name", it) }.getOrNull()
 
-    private fun formatDateLabel(): String {
-        val today = JavaLocalDate.now()
-        // Mockup shows "Tuesday 17"; en-US locale gives the day-of-week, numeric day.
-        return today.format(DateTimeFormatter.ofPattern("EEEE d", Locale.getDefault()))
+    /** The card header reads the date the alarm fires (the session's morning), falling back to today
+     *  when idle. Format "EEEE d" (e.g. "Tuesday 2"); locale-default for human-language weekday names. */
+    private fun formatDateLabel(session: SessionDisplayState?): String {
+        val date = session?.sessionDate?.toJavaLocalDate() ?: JavaLocalDate.now()
+        return date.format(DateTimeFormatter.ofPattern("EEEE d", Locale.getDefault()))
     }
 
     private fun formatDuration(d: Duration): String {
