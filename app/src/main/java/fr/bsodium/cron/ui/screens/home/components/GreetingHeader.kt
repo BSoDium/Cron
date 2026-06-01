@@ -9,6 +9,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.tooling.preview.Preview
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 
 /**
@@ -36,4 +38,12 @@ fun GreetingHeader(
         style = CronTypography.pageTitle,
         color = MaterialTheme.colorScheme.onBackground,
     )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun GreetingHeaderPreview() {
+    CronTheme {
+        GreetingHeader(prefix = "Good morning", name = "Elliot")
+    }
 }

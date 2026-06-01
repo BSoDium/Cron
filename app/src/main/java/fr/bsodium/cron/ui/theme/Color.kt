@@ -17,10 +17,6 @@ import androidx.compose.ui.graphics.Color
 private val FallbackAccent = Color(0xFFB4A89A)
 private val FallbackOnAccent = Color(0xFF1A1714)
 
-// ---------------------------------------------------------------------------
-// Dark fallback palette
-// ---------------------------------------------------------------------------
-
 private val DarkBackground = Color(0xFF0A0A0A)
 private val DarkSurface = Color(0xFF131316)
 private val DarkSurfaceContainerLow = Color(0xFF111114)
@@ -60,10 +56,6 @@ val FallbackDarkColors = darkColorScheme(
     errorContainer = Color(0xFF3D1310),
     onErrorContainer = Color(0xFFFFB4AB),
 )
-
-// ---------------------------------------------------------------------------
-// Light fallback palette
-// ---------------------------------------------------------------------------
 
 private val LightBackground = Color(0xFFF8F5F0)
 private val LightSurface = Color(0xFFFFFFFF)
