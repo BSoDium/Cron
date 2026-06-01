@@ -12,10 +12,6 @@ import androidx.compose.ui.graphics.Color
  * On Android 12+ the runtime palette is sourced from
  * `dynamicLightColorScheme(context)` / `dynamicDarkColorScheme(context)` —
  * see [CronTheme].
- *
- * The `inverseSurface` / `inverseOnSurface` slots are explicitly populated on
- * both palettes so the high-contrast alarm card (white-on-dark or dark-on-light)
- * reads correctly in either mode regardless of which scheme is in use.
  */
 
 private val FallbackAccent = Color(0xFFB4A89A)
@@ -58,8 +54,6 @@ val FallbackDarkColors = darkColorScheme(
     surfaceContainerHigh = DarkSurfaceContainerHigh,
     outline = DarkOutline,
     outlineVariant = DarkOutline,
-    inverseSurface = Color(0xFFF2F2F2),
-    inverseOnSurface = Color(0xFF0A0A0A),
     inversePrimary = FallbackAccent,
     error = Color(0xFFFF6B5A),
     onError = Color(0xFF141414),
@@ -104,8 +98,6 @@ val FallbackLightColors = lightColorScheme(
     surfaceContainerHigh = LightSurfaceContainerHigh,
     outline = LightOutline,
     outlineVariant = LightOutline,
-    inverseSurface = Color(0xFF0A0A0A),
-    inverseOnSurface = Color(0xFFF2F2F2),
     inversePrimary = FallbackAccent,
     error = Color(0xFFD14638),
     onError = Color.White,

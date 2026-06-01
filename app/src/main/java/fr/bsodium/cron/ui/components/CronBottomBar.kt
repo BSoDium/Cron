@@ -54,8 +54,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -166,11 +168,10 @@ private fun RowScope.NavSlot(
     onNavigate: (String) -> Unit,
 ) {
     val selected = currentRoute == route
-    // Selected tab: a high-contrast dark circular indicator (the inverse surface, matching the
-    // FAB tone) with an inverted, filled icon — popping against the light pill. Unselected tabs
-    // are low-emphasis outlined icons directly on the pill.
-    val targetContainer = if (selected) MaterialTheme.colorScheme.inverseSurface else Color.Transparent
-    val targetTint = if (selected) MaterialTheme.colorScheme.inverseOnSurface
+    // Selected tab: a filled circular indicator in the dynamic accent (primary) with an onPrimary
+    // icon, matching the FAB. Unselected tabs are low-emphasis outlined icons directly on the pill.
+    val targetContainer = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val targetTint = if (selected) MaterialTheme.colorScheme.onPrimary
         else MaterialTheme.colorScheme.onSurfaceVariant
     val container by animateColorAsState(targetContainer, animationSpec = NAV_COLOR_SPEC, label = "nav-container")
     val iconTint by animateColorAsState(targetTint, animationSpec = NAV_COLOR_SPEC, label = "nav-tint")
@@ -223,8 +224,8 @@ private fun PrimaryActionFab(action: FabAction?) {
             }
         },
         shape = RoundedCornerShape(Radius.lg),
-        containerColor = MaterialTheme.colorScheme.inverseSurface,
-        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
         elevation = FloatingActionButtonDefaults.elevation(
             defaultElevation = 0.dp,
             pressedElevation = 0.dp,
@@ -266,20 +267,32 @@ fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier =
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Surface(
-            color = MaterialTheme.colorScheme.inverseSurface,
+            color = MaterialTheme.colorScheme.primary,
             shape = RoundedCornerShape(Radius.md),
         ) {
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.inverseOnSurface,
+                color = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
             )
         }
         Box(
             modifier = Modifier
                 .size(width = 16.dp, height = 8.dp)
-                .background(MaterialTheme.colorScheme.inverseSurface, PointerDown),
+                .background(MaterialTheme.colorScheme.primary, PointerDown),
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CronFloatingNavPreview() {
+    CronTheme {
+        CronFloatingNav(
+            currentRoute = "home",
+            onNavigate = {},
+            fabAction = FabAction(onClick = {}),
         )
     }
 }
