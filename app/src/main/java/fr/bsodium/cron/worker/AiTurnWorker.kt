@@ -8,6 +8,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import fr.bsodium.cron.BuildConfig
 import fr.bsodium.cron.CronApplication
 import fr.bsodium.cron.MainActivity
@@ -80,13 +81,15 @@ class AiTurnWorker(
         val apiKey = SecureKeyStore(applicationContext).anthropicApiKey
         if (apiKey.isNullOrBlank()) {
             Log.w(TAG, "Anthropic API key not set — skipping AI turn for $sessionId")
-            return Result.failure()
+            return Result.failure(workDataOf(KEY_REASON to REASON_NO_API_KEY))
         }
 
         val budget = BudgetStore(applicationContext)
-        if (!budget.hasHeadroom()) {
-            Log.w(TAG, "Daily token budget exhausted (${budget.usedToday()} used); skipping turn for $sessionId")
-            return Result.failure()
+        val limit = settingsRepository.currentDailyTokenLimit()
+        if (!budget.hasHeadroom(limit)) {
+            val used = budget.usedToday()
+            Log.w(TAG, "Daily token budget exhausted ($used / $limit); skipping turn for $sessionId")
+            return Result.failure(workDataOf(KEY_REASON to REASON_BUDGET, KEY_USED to used, KEY_LIMIT to limit))
         }
 
         val turnIndex = (db.aiMessageDao().maxTurnIndex(sessionId) ?: -1) + 1
@@ -129,10 +132,10 @@ class AiTurnWorker(
             Result.success()
         } catch (e: AnthropicClient.MissingApiKeyException) {
             Log.e(TAG, "Missing API key during turn", e)
-            Result.failure()
+            Result.failure(workDataOf(KEY_REASON to REASON_NO_API_KEY))
         } catch (e: AnthropicClient.AnthropicHttpException) {
             Log.e(TAG, "Anthropic HTTP ${e.code} during turn for $sessionId", e)
-            if (e.isRetryable) Result.retry() else Result.failure()
+            if (e.isRetryable) Result.retry() else Result.failure(workDataOf(KEY_REASON to REASON_HTTP))
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error during AI turn for $sessionId", e)
             Result.retry()
@@ -325,6 +328,15 @@ class AiTurnWorker(
     companion object {
         const val KEY_SESSION_ID = "session_id"
         const val WORK_PREFIX = "ai_turn_"
+
+        /** Failure output: why the turn was skipped, plus budget figures when relevant. Read by HomeViewModel. */
+        const val KEY_REASON = "reason"
+        const val KEY_USED = "used"
+        const val KEY_LIMIT = "limit"
+        const val REASON_BUDGET = "budget_exhausted"
+        const val REASON_NO_API_KEY = "no_api_key"
+        const val REASON_HTTP = "http_error"
+
         private const val TAG = "AiTurnWorker"
         private val PHONE_ONLY_THRESHOLD = 90.minutes
         private const val THINKING_BUDGET = 2_000
