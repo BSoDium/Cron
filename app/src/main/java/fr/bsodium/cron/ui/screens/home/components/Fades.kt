@@ -15,13 +15,15 @@ import androidx.compose.ui.unit.Dp
  * [BlendMode.DstIn] gradient erases only the destination's lower band; the gradient is opaque above
  * [height] from the bottom, so everything but that band is kept intact.
  */
-internal fun Modifier.fadeBottom(height: Dp): Modifier = this
+internal fun Modifier.fadeBottom(height: Dp, strength: Float = 1f): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
         drawRect(
+            // [strength] scales the erase: 1 → bottom fully transparent (full fade); 0 → opaque (no fade),
+            // so the band can be animated in as the collapse affordance appears.
             brush = Brush.verticalGradient(
-                colors = listOf(Color.Black, Color.Transparent),
+                colors = listOf(Color.Black, Color.Black.copy(alpha = 1f - strength)),
                 startY = size.height - height.toPx(),
                 endY = size.height,
             ),
