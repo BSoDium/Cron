@@ -19,6 +19,8 @@ data class AiThreadUi(
     val response: String?,
     /** Wall-clock seconds the turn took — shown as "Thought for Xs" once settled. */
     val durationSeconds: Int? = null,
+    /** True while this thread is being streamed live (vs. read back from the DB). Drives haptics. */
+    val isStreaming: Boolean = false,
 )
 
 /** One ordered step of the assistant's thinking process, shown inside the collapsible. */
@@ -42,21 +44,51 @@ sealed interface ProcessItem {
  */
 object AiThreadMapper {
 
+    /** DB path: decode the latest turn's rows, then map. The settled source of truth. */
     fun build(rows: List<AiMessageEntity>): AiThreadUi? {
         if (rows.isEmpty()) return null
         val latestTurn = rows.maxOf { it.turnIndex }
-        val assistantRows = rows.filter { it.turnIndex == latestTurn && it.role == "assistant" }
-        val userRows = rows.filter { it.turnIndex == latestTurn && it.role == "user" }
-        if (assistantRows.isEmpty()) return AiThreadUi(
+        val turnRows = rows.filter { it.turnIndex == latestTurn }
+        val assistantBlocks = turnRows.filter { it.role == "assistant" }.flatMap { decodeBlocks(it.contentJson) }
+        val toolResultBlocks = turnRows.filter { it.role == "user" }.flatMap { decodeBlocks(it.contentJson) }
+        if (assistantBlocks.isEmpty()) return AiThreadUi(
             turnIndex = latestTurn,
             summary = "Thinking…",
             process = emptyList(),
             response = null,
         )
+        val durationSeconds = ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
+        return buildFromBlocks(latestTurn, assistantBlocks, toolResultBlocks, durationSeconds, isStreaming = false)
+    }
 
-        val blocks = assistantRows.flatMap { decodeBlocks(it.contentJson) }
-        val toolResults = userRows
-            .flatMap { decodeBlocks(it.contentJson) }
+    /**
+     * Streaming path: the in-flight turn's blocks (assistant content + tool_result, interleaved) are
+     * already in hand. Produces the same [AiThreadUi] shape as [build] so the live last frame and the
+     * settled first frame render identically — no flicker at hand-off.
+     */
+    fun buildFromBlocks(turnIndex: Int, blocks: List<ContentBlock>): AiThreadUi {
+        val assistantBlocks = blocks.filterNot { it is ContentBlock.ToolResult }
+        val toolResultBlocks = blocks.filterIsInstance<ContentBlock.ToolResult>()
+        if (assistantBlocks.isEmpty()) return AiThreadUi(
+            turnIndex = turnIndex,
+            summary = "Thinking…",
+            process = emptyList(),
+            response = null,
+            isStreaming = true,
+        )
+        // "Thought for Xs" is a settled-only affordance — duration stays null while streaming.
+        return buildFromBlocks(turnIndex, assistantBlocks, toolResultBlocks, durationSeconds = null, isStreaming = true)
+    }
+
+    private fun buildFromBlocks(
+        turnIndex: Int,
+        assistantBlocks: List<ContentBlock>,
+        toolResultBlocks: List<ContentBlock>,
+        durationSeconds: Int?,
+        isStreaming: Boolean,
+    ): AiThreadUi {
+        val blocks = assistantBlocks
+        val toolResults = toolResultBlocks
             .filterIsInstance<ContentBlock.ToolResult>()
             .associateBy { it.tool_use_id }
 
@@ -124,14 +156,6 @@ object AiThreadMapper {
             ?.takeIf { it.isNotBlank() }
         val answer = response ?: summaryLine ?: doNothingReason
 
-        // Wall-clock span of the latest turn; shown once the turn settles (UI drives this off WorkManager).
-        val turnRows = rows.filter { it.turnIndex == latestTurn }
-        val durationSeconds = if (turnRows.isNotEmpty()) {
-            ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
-        } else {
-            null
-        }
-
         // Pill preview: gerund while working, past-tense summary once answered; falls back to the
         // first reasoning line if the model skipped the directives.
         val fallback = process
@@ -145,11 +169,12 @@ object AiThreadMapper {
             else liveStatus ?: summaryLine ?: fallback
 
         return AiThreadUi(
-            turnIndex = latestTurn,
+            turnIndex = turnIndex,
             summary = summary,
             process = process,
             response = answer,
             durationSeconds = durationSeconds,
+            isStreaming = isStreaming,
         )
     }
 

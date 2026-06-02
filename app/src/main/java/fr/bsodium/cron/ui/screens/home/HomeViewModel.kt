@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.Data
 import androidx.work.WorkInfo
+import fr.bsodium.cron.ai.StreamingTurnStore
 import fr.bsodium.cron.calendar.requestCalendarSync
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -103,13 +105,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else db.eventDao().observeBySession(id).map { events -> buildSleepStats(events) }
         }
 
-    /** Latest-turn AI message blocks — drives the thinking thread. */
+    /** Latest-turn AI thread — the live streaming partial overrides the settled DB state while a turn
+     *  for this session is in flight, so tokens render as they arrive. `.conflate()` bounds recomposition. */
     private val aiThreadFlow = sessionFlow
         .map { it?.id }
         .distinctUntilChanged()
         .flatMapLatest { id ->
-            if (id == null) flowOf(null)
-            else db.aiMessageDao().observeBySession(id).map { rows -> AiThreadMapper.build(rows) }
+            if (id == null) {
+                flowOf(null)
+            } else {
+                combine(db.aiMessageDao().observeBySession(id), StreamingTurnStore.active) { rows, streaming ->
+                    val partial = streaming?.takeIf { it.sessionId == id }
+                    if (partial != null) AiThreadMapper.buildFromBlocks(partial.turnIndex, partial.blocks)
+                    else AiThreadMapper.build(rows)
+                }.conflate()
+            }
         }
 
     /** Epoch-ms the user last dismissed the "settings changed" reminder this process. */
@@ -125,12 +135,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         settingsAt > lastAiCallAt && settingsAt > dismissedAt
     }
 
+    /** True while a turn for the active session is actively streaming — a real token-flow signal that
+     *  drives the spinner, rather than waiting on WorkManager's coarser terminal-state transition. */
+    private val streamingActiveFlow = combine(
+        sessionFlow.map { it?.id }.distinctUntilChanged(),
+        StreamingTurnStore.active,
+    ) { id, streaming -> id != null && streaming?.sessionId == id }
+
     private val statusFlow = combine(
         _isRetrying,
         settingsChangedFlow,
         _aiFailure,
-    ) { retrying, settingsChanged, failure ->
-        HomeStatus(isRetrying = retrying, settingsChanged = settingsChanged, failure = failure)
+        streamingActiveFlow,
+    ) { retrying, settingsChanged, failure, streaming ->
+        HomeStatus(isRetrying = retrying || streaming, settingsChanged = settingsChanged, failure = failure)
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
