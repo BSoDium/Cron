@@ -40,7 +40,7 @@ class HomeScreenSmokeTest {
         val fabRegistry = FabRegistry()
         composeTestRule.setContent {
             CronTheme {
-                HomeScreen(viewModel = viewModel, fabRegistry = fabRegistry)
+                HomeScreen(viewModel = viewModel, fabRegistry = fabRegistry, onNavigateToSettings = {})
             }
         }
         composeTestRule.onRoot().assertExists()
