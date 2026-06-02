@@ -110,4 +110,33 @@ class AiThreadMapperTest {
         assertNull(thread.response)
         assertTrue(thread.isStreaming)
     }
+
+    @Test
+    fun streaming_leading_narration_is_not_shown_as_the_answer() {
+        // A turn streams reasoning then prose narration before any tool call. The prose must stay in
+        // the thinking process, never flash as the answer (it has no SUMMARY marker yet).
+        val thread = AiThreadMapper.buildFromBlocks(
+            turnIndex = 0,
+            blocks = listOf(
+                ContentBlock.Thinking(thinking = "Considering the morning."),
+                ContentBlock.Text("I can see tomorrow's picture clearly — a packed morning."),
+            ),
+        )
+        assertNull(thread.response)
+        val narration = thread.process.filterIsInstance<ProcessItem.Narration>().single()
+        assertEquals("I can see tomorrow's picture clearly — a packed morning.", narration.text)
+    }
+
+    @Test
+    fun streaming_answer_is_revealed_once_marked_with_summary() {
+        val thread = AiThreadMapper.buildFromBlocks(
+            turnIndex = 0,
+            blocks = listOf(
+                ContentBlock.Thinking(thinking = "Considering the morning."),
+                ContentBlock.Text("SUMMARY: Set your alarm\n\nSet a 6:40 alarm so you make stand-up."),
+            ),
+        )
+        assertEquals("Set a 6:40 alarm so you make stand-up.", thread.response)
+        assertEquals("Set your alarm", thread.summary)
+    }
 }
