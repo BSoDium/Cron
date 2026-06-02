@@ -14,6 +14,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.home.AiThreadMapper
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
+import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ai.wire.ContentBlock
@@ -34,7 +35,9 @@ private fun StreamingInteractivePreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             var thread by remember { mutableStateOf<AiThreadUi?>(null) }
             LaunchedEffect(Unit) { StreamingSimulator.run { thread = it } }
-            thread?.let { AiThinkingThread(it, isRunning = true, modifier = Modifier.padding(Spacing.xl)) }
+            // Wrap in the reveal hook so the preview demonstrates the typewriter + directive-leak fix.
+            val revealed = rememberRevealedThread(thread)
+            revealed?.let { AiThinkingThread(it, isRunning = true, modifier = Modifier.padding(Spacing.xl)) }
         }
     }
 }
