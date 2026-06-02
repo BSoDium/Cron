@@ -52,8 +52,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -176,7 +174,7 @@ private fun RowScope.NavSlot(
         else MaterialTheme.colorScheme.onSurfaceVariant
     val container by animateColorAsState(targetContainer, animationSpec = NAV_COLOR_SPEC, label = "nav-container")
     val iconTint by animateColorAsState(targetTint, animationSpec = NAV_COLOR_SPEC, label = "nav-tint")
-    val haptics = LocalHapticFeedback.current
+    val haptics = rememberCronHaptics()
     Box(
         modifier = Modifier
             // Square slot so the circular indicator nests with an equal margin on every side
@@ -185,7 +183,7 @@ private fun RowScope.NavSlot(
             // Clip BEFORE clickable so the ripple respects the slot shape.
             .clip(Radius.full)
             .clickable(enabled = !selected) {
-                haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
+                haptics.contextClick()
                 onNavigate(route)
             },
         contentAlignment = Alignment.Center,
@@ -213,14 +211,14 @@ private val NAV_INDICATOR_SIZE = 44.dp
 private fun PrimaryActionFab(action: FabAction?) {
     if (action == null) return
     val working = action.working
-    val haptics = LocalHapticFeedback.current
+    val haptics = rememberCronHaptics()
     FloatingActionButton(
         onClick = {
             if (working) {
-                haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                haptics.reject()
                 action.onCancel?.invoke()
             } else {
-                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                haptics.confirm()
                 action.onClick()
             }
         },

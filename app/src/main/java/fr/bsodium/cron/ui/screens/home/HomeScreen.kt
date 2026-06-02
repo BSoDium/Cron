@@ -62,6 +62,7 @@ import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
+import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
 import fr.bsodium.cron.ui.theme.Spacing
 
 @Composable
@@ -71,6 +72,8 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    // Subtle haptic ticks as the assistant streams (gated by the user's preference). UI-less effect.
+    StreamingHaptics(thread = uiState.aiThread, enabled = uiState.hapticsEnabled)
     DisposableEffect(viewModel, fabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }

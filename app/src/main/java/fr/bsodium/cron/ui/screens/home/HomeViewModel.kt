@@ -60,6 +60,8 @@ data class HomeUiState(
     val settingsChangedSincePlan: Boolean = false,
     /** The latest AI turn failed (and hasn't been dismissed) — surfaces a dismissible banner. */
     val aiFailure: AiTurnFailure? = null,
+    /** User preference: fire subtle haptic ticks while the assistant streams. */
+    val hapticsEnabled: Boolean = true,
 )
 
 /** Why the most recent AI turn ended without updating the plan, for the home failure banner. */
@@ -147,8 +149,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         settingsChangedFlow,
         _aiFailure,
         streamingActiveFlow,
-    ) { retrying, settingsChanged, failure, streaming ->
-        HomeStatus(isRetrying = retrying || streaming, settingsChanged = settingsChanged, failure = failure)
+        settings.hapticsEnabled,
+    ) { retrying, settingsChanged, failure, streaming, haptics ->
+        HomeStatus(
+            isRetrying = retrying || streaming,
+            settingsChanged = settingsChanged,
+            failure = failure,
+            hapticsEnabled = haptics,
+        )
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -171,6 +179,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && thread != null,
             aiFailure = status.failure,
+            hapticsEnabled = status.hapticsEnabled,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -344,9 +353,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-/** The three transient status signals folded into one combine source to keep uiState's arity at 5. */
+/** The transient status signals folded into one combine source to keep uiState's arity at 5. */
 private data class HomeStatus(
     val isRetrying: Boolean,
     val settingsChanged: Boolean,
     val failure: AiTurnFailure?,
+    val hapticsEnabled: Boolean,
 )
