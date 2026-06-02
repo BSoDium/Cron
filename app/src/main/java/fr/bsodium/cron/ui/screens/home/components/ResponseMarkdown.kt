@@ -22,8 +22,10 @@ import com.mikepenz.markdown.compose.extendedspans.ExtendedSpans
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.mikepenz.markdown.model.markdownAnimations
 import com.mikepenz.markdown.model.markdownExtendedSpans
 import com.mikepenz.markdown.model.markdownPadding
+import com.mikepenz.markdown.model.rememberMarkdownState
 import fr.bsodium.cron.ui.theme.CodeFontFamily
 import fr.bsodium.cron.ui.theme.SerifFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
@@ -84,8 +86,12 @@ internal fun MarkdownBlock(
             style = androidx.compose.ui.text.SpanStyle(color = MaterialTheme.colorScheme.primary),
         ),
     )
+    // retainState keeps the last successful render on screen while the next parse runs off-thread, and
+    // immediate parses the first frame synchronously — together they kill the blank-flash the library
+    // otherwise shows on every content change (per streamed token) and on first compose (expand/load).
+    val markdownState = rememberMarkdownState(content = text, retainState = true, immediate = true)
     Markdown(
-        content = text,
+        markdownState = markdownState,
         colors = colors,
         typography = typography,
         // The library adds a uniform `block` spacer after every block; keep it at the tight floor
@@ -141,6 +147,9 @@ internal fun MarkdownBlock(
             },
             table = { model -> CronMarkdownTable(model, bodyStyle) },
         ),
+        // No-op the default animateContentSize(): per-segment height animation makes each streamed
+        // growth slide instead of appearing crisply, reading as laggy.
+        animations = markdownAnimations(animateTextSize = { this }),
         modifier = modifier,
     )
 }
