@@ -112,8 +112,13 @@ object AiThreadMapper {
         }
 
         // The answer is the trailing run of Text blocks (after the last tool/reasoning block); text
-        // emitted earlier is thinking-process narration, not output.
-        val answerStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
+        // emitted earlier is thinking-process narration. While streaming, hold the answer back until
+        // the model marks it with a SUMMARY line — otherwise leading narration prose (which only reads
+        // as narration once a tool follows it) flashes as the answer for a beat before jumping up.
+        val structuralStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
+        val answerStart =
+            if (isStreaming && !blocks.trailingTextHasSummary(structuralStart)) blocks.size
+            else structuralStart
 
         val process = blocks.take(answerStart).mapNotNull { block ->
             when (block) {
@@ -217,6 +222,13 @@ object AiThreadMapper {
 
     private const val TAG = "AiThreadMapper"
 }
+
+/** True if any Text block from [from] onward carries a `SUMMARY:` line — the model's "answer starts
+ *  here" marker, used to gate the streamed answer reveal. */
+private fun List<ContentBlock>.trailingTextHasSummary(from: Int): Boolean =
+    drop(from).filterIsInstance<ContentBlock.Text>().any { block ->
+        block.text.lineSequence().any { SUMMARY_LINE.matchEntire(it.trim()) != null }
+    }
 
 // Hoisted so they compile once, not on every build() call.
 private val LEADING_RULE = Regex("([-*_])\\1{2,}")
