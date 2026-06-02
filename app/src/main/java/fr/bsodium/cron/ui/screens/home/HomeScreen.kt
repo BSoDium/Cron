@@ -73,7 +73,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     // Subtle haptic ticks as the assistant streams (gated by the user's preference). UI-less effect.
-    StreamingHaptics(thread = uiState.aiThread, enabled = uiState.hapticsEnabled)
+    StreamingHaptics(enabled = uiState.hapticsEnabled)
     DisposableEffect(viewModel, fabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
