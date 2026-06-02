@@ -361,8 +361,9 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
 
 private const val REASONING_COLLAPSE_CHARS = 280
 private const val REASONING_COLLAPSED_LINES = 6
-/** Martian Mono reads larger than the sans/serif at the same size, so code renders below body size. */
-private const val CODE_FONT_SCALE = 0.78f
+/** Martian Mono's x-height + stroke read much larger than EB Garamond's delicate body, so inline/block
+ *  code is scaled well below the serif point size to sit flush with the surrounding prose. */
+private const val CODE_FONT_SCALE = 0.68f
 // Taller fade band → a softer, more gradual dissolve into "See more" (was Spacing.xl, too abrupt).
 private val REASONING_FADE_HEIGHT = 48.dp
 private val REASONING_HEIGHT_SPEC = tween<Int>(durationMillis = 200, easing = FastOutSlowInEasing)
