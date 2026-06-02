@@ -29,10 +29,12 @@ data class SettingsUiState(
     val tokensUsedToday: Int = 0,
 )
 
-class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+class SettingsViewModel @JvmOverloads constructor(
+    application: Application,
+    private val secureStore: SecureKeyStore = SecureKeyStore(application),
+) : AndroidViewModel(application) {
 
     private val repo = SettingsRepository(application)
-    private val secureStore = SecureKeyStore(application)
     private val budget = BudgetStore(application)
 
     /** Today's token spend. SharedPreferences-backed (not a Flow); refreshed on screen resume. */
