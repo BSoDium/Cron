@@ -70,4 +70,44 @@ class AiThreadMapperTest {
         assertTrue(tool.isComplete)
         assertFalse(tool.isError)
     }
+
+    @Test
+    fun streaming_blocks_render_identically_to_the_settled_rows() {
+        val thinking = ContentBlock.Thinking(thinking = "Reading the calendar first.")
+        val toolUse = ContentBlock.ToolUse(id = "t1", name = "set_alarm", input = SessionJson.parseToJsonElement("{}"))
+        val toolResult = ContentBlock.ToolResult(
+            tool_use_id = "t1",
+            content = "{\"alarm_time\":\"2026-05-22T06:40:00Z\"}",
+            is_error = false,
+        )
+        val answer = ContentBlock.Text("SUMMARY: Set your alarm\n\nSet a 6:40 alarm so you make stand-up.")
+
+        val settled = requireNotNull(
+            AiThreadMapper.build(
+                listOf(
+                    row(0, "user", ContentBlock.Text("plan it")),
+                    row(0, "assistant", thinking, toolUse, answer),
+                    row(0, "user", toolResult),
+                ),
+            ),
+        )
+        // committedBlocks order during streaming: assistant blocks, then the tool_result, then the answer.
+        val streamed = AiThreadMapper.buildFromBlocks(
+            turnIndex = 0,
+            blocks = listOf(thinking, toolUse, toolResult, answer),
+        )
+
+        assertTrue(streamed.isStreaming)
+        // Same summary/process/response — only the settled-only duration and the streaming flag differ.
+        assertEquals(settled.copy(durationSeconds = null, isStreaming = true), streamed)
+    }
+
+    @Test
+    fun a_streaming_turn_with_no_assistant_blocks_yet_shows_the_placeholder() {
+        val thread = AiThreadMapper.buildFromBlocks(turnIndex = 0, blocks = emptyList())
+        assertEquals("Thinking…", thread.summary)
+        assertTrue(thread.process.isEmpty())
+        assertNull(thread.response)
+        assertTrue(thread.isStreaming)
+    }
 }
