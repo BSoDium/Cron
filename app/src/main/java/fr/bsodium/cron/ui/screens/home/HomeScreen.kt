@@ -3,7 +3,6 @@ package fr.bsodium.cron.ui.screens.home
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
@@ -11,15 +10,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -28,20 +24,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -58,37 +45,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.ColorUtils
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.FabRegistry
-import fr.bsodium.cron.R
-import fr.bsodium.cron.ui.components.recolored
 import fr.bsodium.cron.ui.components.FabAction
+import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
-import fr.bsodium.cron.ui.theme.CronTheme
-import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
+import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
+import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
 import fr.bsodium.cron.ui.theme.Spacing
-import java.util.Locale
 
 @Composable
 fun HomeScreen(
@@ -276,42 +250,6 @@ fun HomeScreen(
     }
 }
 
-@Composable
-private fun SettingsChangedPill(
-    onRewrite: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = Radius.full,
-        tonalElevation = 2.dp,
-    ) {
-        Row(
-            modifier = Modifier.padding(start = Spacing.xl, end = Spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Settings updated",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onRewrite) { Text("Replan alarm") }
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Dismiss",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
 private data class StickyAlarmState(val top: Int, val gradientAlpha: Float)
 
 /**
@@ -374,186 +312,4 @@ private fun BoxScope.StickyAlarm(
             .padding(horizontal = Spacing.xl)
             .onSizeChanged { if (it.height != cardHeightPx) onHeightChanged(it.height) },
     ) { card() }
-}
-
-/**
- * First-run onboarding: an illustration, a serif invitation, and a line explaining what a plan
- * needs. The play FAB (pointed at by the onboarding callout) is the CTA.
- */
-@Composable
-private fun OnboardingHint(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        val scheme = MaterialTheme.colorScheme
-        val source = ImageVector.vectorResource(R.drawable.ic_onboarding_illustration)
-        // Tonal ramp around the dynamic accent: highlights blend toward white, shadows toward black so
-        // they stay lighter/darker than the body in both themes (Material role pairs would invert).
-        // Dark mode flips `primary` to a light pastel, and the fallback accent is itself low-chroma. Build the
-        // dark body in HSL — keep the accent hue, floor its saturation so the layers read as *tinted* (not grey),
-        // and set a deep lightness so they stay darker than the near-white frosting. Light mode is untouched.
-        val dark = isSystemInDarkTheme()
-        val body = if (dark) {
-            val hsl = FloatArray(3)
-            ColorUtils.colorToHSL(scheme.primary.toArgb(), hsl)
-            Color.hsl(hsl[0], hsl[1].coerceAtLeast(CAKE_DARK_SAT_FLOOR), CAKE_DARK_BODY_LIGHTNESS)
-        } else {
-            scheme.primary
-        }
-        val highlight = lerp(scheme.primary, Color.White, CAKE_HIGHLIGHT_TINT)
-        val accent = lerp(scheme.primary, Color.Black, CAKE_ACCENT_TINT)
-        val shadow = lerp(scheme.primary, Color.Black, CAKE_SHADOW_TINT)
-        val ground = scheme.surfaceVariant
-        val themedCake = remember(source, body, highlight, accent, shadow, ground) {
-            source.recolored { original ->
-                when (original) {
-                    CAKE_BODY -> body
-                    CAKE_HIGHLIGHT -> highlight
-                    CAKE_GROUND -> ground
-                    CAKE_ACCENT -> accent
-                    CAKE_SHADOW -> shadow
-                    else -> original
-                }
-            }
-        }
-        Image(
-            imageVector = themedCake,
-            contentDescription = null,
-            modifier = Modifier.size(200.dp),
-        )
-        Spacer(Modifier.height(Spacing.lg))
-        Text(
-            text = "Let's get started",
-            style = CronTypography.bodySerif.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 30.sp,
-                lineHeight = 36.sp,
-            ),
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(Spacing.sm))
-        Text(
-            text = "Cron reads your calendar and last night's sleep to pick the " +
-                "smartest wake-up time. Run it to plan your morning.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-/** Source fills of `ic_onboarding_illustration`, remapped onto `colorScheme` so the cake tracks Material You. */
-private val CAKE_BODY = Color(0xFF407BFF)
-private val CAKE_HIGHLIGHT = Color(0xFFFFFFFF)
-private val CAKE_GROUND = Color(0xFFF5F5F5)
-private val CAKE_ACCENT = Color(0xFF263238)
-private val CAKE_SHADOW = Color(0xFF000000)
-
-/** Blend fractions for the cake's tonal ramp: highlight toward white, accent/shadow toward black. */
-private const val CAKE_HIGHLIGHT_TINT = 0.82f
-private const val CAKE_ACCENT_TINT = 0.50f
-private const val CAKE_SHADOW_TINT = 0.60f
-
-/** Dark-theme only: the cake body uses the accent hue at this saturation floor + lightness, so the layers read
- *  as a deep *tinted* accent (not grey) while staying darker than the near-white frosting. */
-private const val CAKE_DARK_SAT_FLOOR = 0.45f
-private const val CAKE_DARK_BODY_LIGHTNESS = 0.35f
-
-@Preview(name = "Onboarding hint — light", showBackground = true)
-@Preview(name = "Onboarding hint — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-private fun OnboardingHintPreview() {
-    CronTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            OnboardingHint(Modifier.padding(Spacing.xxl))
-        }
-    }
-}
-
-@Composable
-private fun NotificationPermissionRow(onEnable: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(Radius.lg),
-        tonalElevation = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Notifications are off — Cron can't ring your alarm",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onEnable) { Text("Enable") }
-        }
-    }
-}
-
-@Composable
-private fun AiFailureBanner(
-    failure: AiTurnFailure,
-    onOpenSettings: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(Radius.lg),
-        tonalElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(start = Spacing.lg, top = Spacing.md, end = Spacing.xs)) {
-            Text(
-                text = failure.bannerMessage(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = { onOpenSettings(); onDismiss() }) { Text("Open settings") }
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun AiTurnFailure.bannerMessage(): String = when (this) {
-    is AiTurnFailure.BudgetExhausted -> String.format(
-        Locale.US,
-        "Daily AI budget reached (%,d / %,d tokens). Resets at midnight, or raise it in Settings.",
-        used,
-        limit,
-    )
-    AiTurnFailure.MissingApiKey -> "AI planning needs an Anthropic API key. Add one in Settings."
-    is AiTurnFailure.Generic ->
-        "Couldn't update your plan${reason?.let { " ($it)" }.orEmpty()}. Try again, or check Settings."
-}
-
-@Preview
-@Composable
-private fun AiFailureBannerPreview() {
-    CronTheme {
-        AiFailureBanner(
-            failure = AiTurnFailure.BudgetExhausted(used = 80_802, limit = 250_000),
-            onOpenSettings = {},
-            onDismiss = {},
-        )
-    }
 }
