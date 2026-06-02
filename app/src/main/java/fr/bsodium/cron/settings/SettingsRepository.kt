@@ -61,6 +61,11 @@ class SettingsRepository(private val context: Context) {
         prefs[ONBOARDING_COMPLETE] ?: false
     }
 
+    /** Whether subtle haptic ticks fire while the assistant streams its response. Defaults on. */
+    val hapticsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[HAPTICS_ENABLED] ?: true
+    }
+
     /** User-supplied display name shown in the home greeting. */
     val displayName: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[DISPLAY_NAME]?.takeIf { it.isNotBlank() }
@@ -117,6 +122,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setOnboardingComplete() =
         context.dataStore.edit { it[ONBOARDING_COMPLETE] = true }
 
+    /** Plain edit (not plan-affecting): a UX toggle, so it mustn't raise the "replan?" pill. */
+    suspend fun setHapticsEnabled(enabled: Boolean) =
+        context.dataStore.edit { it[HAPTICS_ENABLED] = enabled }
+
     suspend fun setDisplayName(name: String) =
         context.dataStore.edit { it[DISPLAY_NAME] = name.trim() }
 
@@ -150,6 +159,7 @@ class SettingsRepository(private val context: Context) {
         val HOME_LAT = stringPreferencesKey("home_address_lat")
         val HOME_LNG = stringPreferencesKey("home_address_lng")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
+        val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val USER_INSTRUCTIONS = stringPreferencesKey("user_instructions")
         val DAILY_TOKEN_LIMIT = intPreferencesKey("daily_token_limit")
