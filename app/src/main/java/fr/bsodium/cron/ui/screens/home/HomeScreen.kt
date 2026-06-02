@@ -62,6 +62,7 @@ import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
+import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
 import fr.bsodium.cron.ui.theme.Spacing
 
 @Composable
@@ -71,12 +72,14 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    // The displayed thread is the typewriter-revealed view of the streaming thread (whole when settled).
+    val displayThread = rememberRevealedThread(uiState.aiThread)
     DisposableEffect(viewModel, fabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
     }
     // Onboarding callout (rendered above EdgeFades in MainActivity): only in the loaded, no-plan, idle state.
-    val showOnboardingHint = uiState.initialized && uiState.aiThread == null && !uiState.isRetrying
+    val showOnboardingHint = uiState.initialized && displayThread == null && !uiState.isRetrying
     LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
         fabRegistry.set(
             FabAction(
@@ -128,7 +131,7 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (uiState.aiThread == null) {
+        if (displayThread == null) {
             // First-run / no-plan / loading: a simple centred Column. The hint + arrow render only
             // once `initialized`, so they never flash over an existing plan on cold start.
             val showOnboarding = uiState.initialized
@@ -188,7 +191,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
                 }
                 item(key = "thread") {
-                    uiState.aiThread?.let { AiThinkingThread(it, isRunning = uiState.isRetrying) }
+                    displayThread?.let { AiThinkingThread(it, isRunning = uiState.isRetrying) }
                 }
                 if (!hasNotificationPermission) {
                     item(key = "notif-permission") {

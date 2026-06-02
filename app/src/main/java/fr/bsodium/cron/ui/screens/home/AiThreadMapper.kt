@@ -97,7 +97,7 @@ object AiThreadMapper {
         val statuses = mutableListOf<String>()
         var summaryLine: String? = null
         fun stripDirectives(text: String): String {
-            val kept = StringBuilder()
+            val kept = mutableListOf<String>()
             text.lineSequence().forEach { line ->
                 val trimmed = line.trim()
                 val status = STATUS_LINE.matchEntire(trimmed)
@@ -105,10 +105,15 @@ object AiThreadMapper {
                 when {
                     status != null -> status.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { statuses += it }
                     summary != null -> summary.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { summaryLine = it }
-                    else -> kept.appendLine(line)
+                    else -> kept += line
                 }
             }
-            return kept.toString().trim()
+            // While streaming, a trailing line still typing out a directive ("STATU", "SUMMAR") hasn't
+            // matched the full STATUS:/SUMMARY: regex yet — drop it so the prefix never flashes.
+            if (isStreaming && kept.lastOrNull()?.let { isPartialDirectivePrefix(it.trim()) } == true) {
+                kept.removeAt(kept.lastIndex)
+            }
+            return kept.joinToString("\n").trim()
         }
 
         // The answer is the trailing run of Text blocks (after the last tool/reasoning block); text
@@ -229,6 +234,13 @@ private fun List<ContentBlock>.trailingTextHasSummary(from: Int): Boolean =
     drop(from).filterIsInstance<ContentBlock.Text>().any { block ->
         block.text.lineSequence().any { SUMMARY_LINE.matchEntire(it.trim()) != null }
     }
+
+/** True if [line] is a strict prefix of a directive keyword still being typed (e.g. "STATU", "SUMMAR"),
+ *  before its colon completes — so we can hold it back from display while streaming. */
+private fun isPartialDirectivePrefix(line: String): Boolean =
+    line.isNotEmpty() && DIRECTIVE_TOKENS.any { it.startsWith(line, ignoreCase = true) && line.length < it.length }
+
+private val DIRECTIVE_TOKENS = listOf("STATUS:", "SUMMARY:")
 
 // Hoisted so they compile once, not on every build() call.
 private val LEADING_RULE = Regex("([-*_])\\1{2,}")
