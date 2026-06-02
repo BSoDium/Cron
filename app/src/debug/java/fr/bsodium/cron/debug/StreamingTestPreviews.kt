@@ -20,12 +20,12 @@ import fr.bsodium.cron.ai.wire.ContentBlock
 import kotlinx.serialization.json.JsonObject
 
 /**
- * DEBUG-ONLY previews for iterating on the streaming render (flicker, trailing fade, classification)
- * in Android Studio — zero device, zero API spend.
+ * DEBUG-ONLY previews for iterating on the streaming render (flicker, narration-vs-answer
+ * classification) in Android Studio — zero device, zero API spend.
  *
  * Run [StreamingInteractivePreview] in the preview pane's *interactive* mode to watch tokens stream.
- * [StreamingMidFramePreview] is a static frame for quick visual checks (the fade snaps in since
- * isStreaming = true). Haptics can't fire in a preview — use StreamTestActivity on a device for those.
+ * [StreamingMidFramePreview] is a static mid-stream frame for quick visual checks. Haptics can't fire
+ * in a preview — they need a real device + planning run.
  */
 @Preview(showBackground = true, name = "Streaming — interactive (run interactive mode)")
 @Composable
@@ -39,7 +39,7 @@ private fun StreamingInteractivePreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Streaming — mid-answer frame (fade)")
+@Preview(showBackground = true, name = "Streaming — mid-answer frame")
 @Composable
 private fun StreamingMidFramePreview() {
     val thread = AiThreadMapper.buildFromBlocks(
