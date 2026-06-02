@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -87,9 +88,11 @@ import com.mikepenz.markdown.compose.elements.MarkdownHeader
 import com.mikepenz.markdown.compose.elements.MarkdownOrderedList
 import com.mikepenz.markdown.compose.elements.MarkdownParagraph
 import com.mikepenz.markdown.compose.elements.listDepth
+import com.mikepenz.markdown.compose.extendedspans.ExtendedSpans
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.mikepenz.markdown.model.markdownExtendedSpans
 import com.mikepenz.markdown.model.markdownPadding
 import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
@@ -327,6 +330,8 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
                 // the touch target at 48dp while the visible pill stays compact.
                 Box(
                     modifier = Modifier
+                        // Tuck the toggle up under the fade so the soft dissolve leads straight into it.
+                        .offset(y = -Spacing.md)
                         // No start padding so the label aligns with the reasoning-text column; the
                         // 48dp touch target is preserved by minimumInteractiveComponentSize.
                         .minimumInteractiveComponentSize()
@@ -361,11 +366,12 @@ private fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
 
 private const val REASONING_COLLAPSE_CHARS = 280
 private const val REASONING_COLLAPSED_LINES = 6
-/** Martian Mono's x-height + stroke read much larger than EB Garamond's delicate body, so inline/block
- *  code is scaled well below the serif point size to sit flush with the surrounding prose. */
+/** Martian Mono's x-height + stroke read much larger than the body face's, so inline/block code is scaled
+ *  below the body point size — but never below [CODE_MIN_SP], so the smaller sans/thinking code stays legible. */
 private const val CODE_FONT_SCALE = 0.68f
-// Taller fade band → a softer, more gradual dissolve into "See more" (was Spacing.xl, too abrupt).
-private val REASONING_FADE_HEIGHT = 48.dp
+private const val CODE_MIN_SP = 11f
+// Soft dissolve into "See more"; the band's height sets how gradual the fade reads.
+private val REASONING_FADE_HEIGHT = 56.dp
 private val REASONING_HEIGHT_SPEC = tween<Int>(durationMillis = 200, easing = FastOutSlowInEasing)
 
 /** Collapsed clamp height for a long reasoning block — about [REASONING_COLLAPSED_LINES] lines. */
@@ -390,7 +396,9 @@ private fun ClippedReveal(
 ) {
     val collapsedPx = with(LocalDensity.current) { collapsedHeight.roundToPx() }
     var fullPx by remember { mutableIntStateOf(0) }
-    val target = if (expanded) fullPx else minOf(collapsedPx, fullPx)
+    // Collapsed target is the constant collapsedPx (never `minOf(..., fullPx)` which is 0 before the first
+    // measure) — so animateIntAsState starts at the resting height and a static preview never catches it at 0.
+    val target = if (expanded) (if (fullPx > 0) fullPx else collapsedPx) else collapsedPx
     val animatedPx by animateIntAsState(target, REASONING_HEIGHT_SPEC, label = "reasoning-reveal")
     val fading = fullPx > 0 && animatedPx < fullPx
     SubcomposeLayout(
@@ -644,7 +652,7 @@ private fun MarkdownBlock(
     val codeStyle = bodyStyle.copy(
         fontFamily = CodeFontFamily,
         color = onSurface,
-        fontSize = (bodyStyle.fontSize.value * CODE_FONT_SCALE).sp,
+        fontSize = (bodyStyle.fontSize.value * CODE_FONT_SCALE).coerceAtLeast(CODE_MIN_SP).sp,
     )
     val typography = markdownTypography(
         h1 = serifize(MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold, color = onSurface)),
@@ -677,6 +685,20 @@ private fun MarkdownBlock(
             listItemBottom = Spacing.xs,
             listIndent = Spacing.lg,
         ),
+        // Draw the inline-code background as a rounded chip echoing the "Calling …" tool pill. The
+        // band is anchored to each line's baseline and sized from the code font, so it hugs the
+        // glyphs in both the serif response and the smaller sans thinking text.
+        extendedSpans = markdownExtendedSpans {
+            ExtendedSpans(
+                InlineCodeChipPainter(
+                    chipColor = surfaceHigh,
+                    cornerRadius = INLINE_CODE_CORNER,
+                    horizontalPadding = INLINE_CODE_PAD_H,
+                    aboveBaseline = (codeStyle.fontSize.value * INLINE_CODE_ASCENT_RATIO).sp,
+                    belowBaseline = (codeStyle.fontSize.value * INLINE_CODE_DESCENT_RATIO).sp,
+                ),
+            )
+        },
         components = markdownComponents(
             paragraph = { model ->
                 MarkdownParagraph(model.content, model.node, Modifier.padding(bottom = MD_PARA_BELOW), bodyStyle)
@@ -726,6 +748,15 @@ private val HEADING_GAP = listOf(
     HeadingGap(Spacing.xs, 0.dp),                                // h6 — 4 / 0
 )
 private val MD_BLOCK_GAP = Spacing.xxs
+// Inline-code chip, tuned to echo the "Calling …" tool pill (rounded). InlineCodeChipPainter trims
+// the renderer's injected CODE_SPAN spaces out of the drawn range, so we add our own horizontal gap.
+private val INLINE_CODE_CORNER = 6.sp
+private val INLINE_CODE_PAD_H = 4.sp
+// Band extents above/below the baseline, as a fraction of the code font size — so the chip hugs the
+// glyphs proportionally in both the serif and sans contexts. Descent runs deliberately past Martian
+// Mono's natural descender (~0.25em) for a little breathing room beneath the baseline.
+private const val INLINE_CODE_ASCENT_RATIO = 1.2f
+private const val INLINE_CODE_DESCENT_RATIO = 0.42f
 private val MD_PARA_BELOW = Spacing.xxs
 private val LIST_MARKER_GAP = Spacing.sm
 // Bounds for content-proportional table columns, so no column dominates or collapses.
