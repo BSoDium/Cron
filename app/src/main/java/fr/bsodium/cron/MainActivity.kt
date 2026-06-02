@@ -146,6 +146,16 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 viewModel = viewModel<HomeViewModel>(),
                                 fabRegistry = fabRegistry,
+                                onNavigateToSettings = {
+                                    navController.navigate("settings") {
+                                        popUpTo("home") {
+                                            saveState = true
+                                            inclusive = false
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
                             )
                         }
                         composable(
