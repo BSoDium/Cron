@@ -38,6 +38,9 @@ jobs:
     - name: Run lint checks
       run: ./gradlew lintDebug --stacktrace
 
+    - name: Check file length
+      run: ./gradlew :app:checkFileLength --stacktrace
+
     - name: Run unit tests
       run: ./gradlew testDebugUnitTest --stacktrace
 

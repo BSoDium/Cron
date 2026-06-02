@@ -181,3 +181,41 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
+/**
+ * Hard cap on Kotlin file length. A regression backstop, not the real rule: the real rule is
+ * "one file, one responsibility" (see AGENTS.md). Files that hit this are doing too much — split
+ * them into atomic files rather than suppressing. Detekt has no per-file line rule (LargeClass
+ * measures class bodies, and most large files here are top-level @Composable functions), so this
+ * focused task enforces it. Wired into `check` and run explicitly in CI.
+ */
+val maxKotlinFileLines = 500
+
+tasks.register("checkFileLength") {
+    group = "verification"
+    description = "Fails if any src/main Kotlin file exceeds $maxKotlinFileLines lines."
+    val mainSrc = layout.projectDirectory.dir("src/main")
+    val projectRoot = rootDir
+    doLast {
+        val ktFiles = mainSrc.asFile.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        val offenders = ktFiles
+            .mapNotNull { file ->
+                val lines = file.readLines().size
+                if (lines > maxKotlinFileLines) lines to file.relativeTo(projectRoot).path else null
+            }
+            .sortedByDescending { it.first }
+        logger.lifecycle(
+            "checkFileLength: scanned ${ktFiles.size} Kotlin files, " +
+                "largest ${ktFiles.maxOfOrNull { it.readLines().size } ?: 0} lines (cap $maxKotlinFileLines).",
+        )
+        if (offenders.isNotEmpty()) {
+            val report = offenders.joinToString("\n") { (lines, path) -> "  $lines  $path" }
+            throw GradleException(
+                "These Kotlin files exceed $maxKotlinFileLines lines — split into atomic files " +
+                    "(one file, one responsibility), don't suppress:\n$report",
+            )
+        }
+    }
+}
+
+tasks.named("check") { dependsOn("checkFileLength") }
