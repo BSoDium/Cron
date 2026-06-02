@@ -3,9 +3,11 @@ package fr.bsodium.cron.ui.screens.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.alarm.EveningPlanScheduler
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -23,12 +25,22 @@ data class SettingsUiState(
     val hasApiKey: Boolean = false,
     val displayName: String? = null,
     val userInstructions: String? = null,
+    val dailyTokenLimit: Int = BudgetStore.DEFAULT_DAILY_TOKEN_LIMIT,
+    val tokensUsedToday: Int = 0,
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repo = SettingsRepository(application)
     private val secureStore = SecureKeyStore(application)
+    private val budget = BudgetStore(application)
+
+    /** Today's token spend. SharedPreferences-backed (not a Flow); refreshed on screen resume. */
+    private val _tokensUsedToday = MutableStateFlow(0)
+
+    init {
+        refreshUsage()
+    }
 
     val uiState: StateFlow<SettingsUiState> = combine(
         repo.eveningTriggerLocalTime,
@@ -51,6 +63,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         state.copy(displayName = name)
     }.combine(repo.userInstructions) { state, instructions ->
         state.copy(userInstructions = instructions)
+    }.combine(repo.dailyTokenLimit) { state, limit ->
+        state.copy(dailyTokenLimit = limit)
+    }.combine(_tokensUsedToday) { state, used ->
+        state.copy(tokensUsedToday = used)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setEveningTrigger(time: LocalTime) {
@@ -86,5 +102,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setUserInstructions(text: String) {
         viewModelScope.launch { repo.setUserInstructions(text) }
+    }
+
+    fun setDailyTokenLimit(tokens: Int) {
+        viewModelScope.launch { repo.setDailyTokenLimit(tokens) }
+    }
+
+    /** Re-reads today's token spend; called when the Settings screen resumes. */
+    fun refreshUsage() {
+        _tokensUsedToday.value = budget.usedToday()
     }
 }

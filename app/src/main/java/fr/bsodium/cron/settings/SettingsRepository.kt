@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import fr.bsodium.cron.ai.BudgetStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -70,6 +71,11 @@ class SettingsRepository(private val context: Context) {
         prefs[USER_INSTRUCTIONS]?.takeIf { it.isNotBlank() }
     }
 
+    /** Daily AI token cap. Unset → the default cap; 0 (or less) means the user disabled it (unlimited). */
+    val dailyTokenLimit: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[DAILY_TOKEN_LIMIT] ?: BudgetStore.DEFAULT_DAILY_TOKEN_LIMIT
+    }
+
     /** Epoch-ms of the last change to a plan-affecting setting; 0 if never changed. The home
      *  screen compares this against the active session's last AI call to offer a re-plan. */
     val settingsUpdatedAt: Flow<Long> = context.dataStore.data.map { prefs ->
@@ -118,7 +124,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setUserInstructions(text: String) =
         context.dataStore.edit { it[USER_INSTRUCTIONS] = text.trim() }
 
+    /** Plain edit (not plan-affecting): the cap governs spend, not the plan, so it mustn't raise the pill. */
+    suspend fun setDailyTokenLimit(tokens: Int) =
+        context.dataStore.edit { it[DAILY_TOKEN_LIMIT] = tokens }
+
     suspend fun currentUserInstructions(): String? = userInstructions.first()
+    suspend fun currentDailyTokenLimit(): Int = dailyTokenLimit.first()
 
     /** One-shot read for use from broadcast receivers and one-shot workers. */
     suspend fun currentEveningTriggerLocalTime(): LocalTime = eveningTriggerLocalTime.first()
@@ -141,6 +152,7 @@ class SettingsRepository(private val context: Context) {
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val USER_INSTRUCTIONS = stringPreferencesKey("user_instructions")
+        val DAILY_TOKEN_LIMIT = intPreferencesKey("daily_token_limit")
         val SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
     }
 }

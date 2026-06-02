@@ -11,8 +11,9 @@ import kotlinx.datetime.toLocalDateTime
  * Per-day token budget for AI calls.
  *
  * SharedPreferences-backed counter keyed by local date. If the user's daily
- * spend exceeds [BudgetStore.maxDailyTokens], [AiTurnWorker] refuses to
- * start a new turn until the next day.
+ * spend reaches the configured cap, [AiTurnWorker] refuses to start a new turn
+ * until the next day. The cap is a user setting (see SettingsRepository); this
+ * store just accounts usage and answers [hasHeadroom] for whatever cap it's given.
  *
  * Counts both input + output tokens. Doesn't distinguish cached / uncached
  * input tokens — for a single-user app the precision isn't worth the
@@ -43,9 +44,10 @@ class BudgetStore(context: Context) {
             .apply()
     }
 
-    /** True when the daily limit hasn't been hit. Default 75k tokens/day. */
+    /** True when the daily cap hasn't been reached. A [maxDailyTokens] of 0 or less means
+     *  unlimited (the user disabled the cap), so headroom is always available. */
     fun hasHeadroom(maxDailyTokens: Int = DEFAULT_DAILY_TOKEN_LIMIT): Boolean =
-        usedToday() < maxDailyTokens
+        maxDailyTokens <= 0 || usedToday() < maxDailyTokens
 
     private fun currentLocalDate(): LocalDate =
         Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
@@ -56,10 +58,11 @@ class BudgetStore(context: Context) {
         private const val KEY_USED = "tokens_used"
 
         /**
-         * Default daily cap. With Haiku 4.5 input ~ $1/MTok, output ~ $5/MTok,
-         * 75k mixed tokens is roughly $0.20/day worst-case. The evening Sonnet
-         * call is the biggest single hit; overnight Haiku replans are cheap.
+         * Default daily cap, used until the user picks one. Sized to comfortably cover a normal
+         * day — the evening Sonnet plan plus its tool calls, a handful of overnight Haiku replans,
+         * and a few manual retries — so a single busy day never trips it. The user can raise it
+         * further, or disable the cap entirely, in Settings.
          */
-        const val DEFAULT_DAILY_TOKEN_LIMIT = 75_000
+        const val DEFAULT_DAILY_TOKEN_LIMIT = 250_000
     }
 }

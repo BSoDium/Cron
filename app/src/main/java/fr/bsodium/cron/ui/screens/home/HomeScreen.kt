@@ -63,6 +63,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,12 +77,18 @@ import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import java.util.Locale
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    fabRegistry: FabRegistry,
+    onNavigateToSettings: () -> Unit,
+) {
     val uiState by viewModel.uiState.collectAsState()
     DisposableEffect(viewModel, fabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
@@ -217,11 +224,9 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
             )
         }
 
-        // Floats just above the nav when a plan-affecting setting changed since the last plan.
-        AnimatedVisibility(
-            visible = uiState.settingsChangedSincePlan,
-            enter = fadeIn() + slideInVertically { it / 2 },
-            exit = fadeOut() + slideOutVertically { it / 2 },
+        // Floating callouts stack just above the nav: a turn-failure banner on top of the
+        // "settings changed" pill, so the two never overlap when both are visible.
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(
@@ -230,13 +235,36 @@ fun HomeScreen(viewModel: HomeViewModel, fabRegistry: FabRegistry) {
                     bottom = navInsetBottom + Spacing.navBarClearance,
                 ),
         ) {
-            SettingsChangedPill(
-                onRewrite = {
-                    viewModel.retryAiPlan()
-                    viewModel.dismissSettingsReminder()
-                },
-                onDismiss = viewModel::dismissSettingsReminder,
-            )
+            // Hold the last failure so it animates out cleanly after aiFailure clears on dismiss.
+            var lastFailure by remember { mutableStateOf<AiTurnFailure?>(null) }
+            LaunchedEffect(uiState.aiFailure) { uiState.aiFailure?.let { lastFailure = it } }
+            AnimatedVisibility(
+                visible = uiState.aiFailure != null,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
+            ) {
+                lastFailure?.let { failure ->
+                    AiFailureBanner(
+                        failure = failure,
+                        onOpenSettings = onNavigateToSettings,
+                        onDismiss = viewModel::dismissAiFailure,
+                        modifier = Modifier.padding(bottom = Spacing.sm),
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = uiState.settingsChangedSincePlan,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
+            ) {
+                SettingsChangedPill(
+                    onRewrite = {
+                        viewModel.retryAiPlan()
+                        viewModel.dismissSettingsReminder()
+                    },
+                    onDismiss = viewModel::dismissSettingsReminder,
+                )
+            }
         }
     }
 }
@@ -400,5 +428,66 @@ private fun NotificationPermissionRow(onEnable: () -> Unit, modifier: Modifier =
             )
             TextButton(onClick = onEnable) { Text("Enable") }
         }
+    }
+}
+
+@Composable
+private fun AiFailureBanner(
+    failure: AiTurnFailure,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = RoundedCornerShape(Radius.lg),
+        tonalElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(start = Spacing.lg, top = Spacing.md, end = Spacing.xs)) {
+            Text(
+                text = failure.bannerMessage(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { onOpenSettings(); onDismiss() }) { Text("Open settings") }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Dismiss",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun AiTurnFailure.bannerMessage(): String = when (this) {
+    is AiTurnFailure.BudgetExhausted -> String.format(
+        Locale.US,
+        "Daily AI budget reached (%,d / %,d tokens). Resets at midnight, or raise it in Settings.",
+        used,
+        limit,
+    )
+    AiTurnFailure.MissingApiKey -> "AI planning needs an Anthropic API key. Add one in Settings."
+    is AiTurnFailure.Generic ->
+        "Couldn't update your plan${reason?.let { " ($it)" }.orEmpty()}. Try again, or check Settings."
+}
+
+@Preview
+@Composable
+private fun AiFailureBannerPreview() {
+    CronTheme {
+        AiFailureBanner(
+            failure = AiTurnFailure.BudgetExhausted(used = 80_802, limit = 250_000),
+            onOpenSettings = {},
+            onDismiss = {},
+        )
     }
 }
