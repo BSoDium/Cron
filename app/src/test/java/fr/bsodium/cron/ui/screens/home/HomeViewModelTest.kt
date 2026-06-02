@@ -100,9 +100,15 @@ class HomeViewModelTest {
             var state = awaitItem()
             while (state.sessionDisplay == null) state = awaitItem()
 
-            // A turn for this session starts streaming.
+            // A turn for this session starts streaming. The answer is marked with SUMMARY (the model's
+            // convention) so the streamed text is revealed as the answer rather than held as narration.
             StreamingTurnStore.update(
-                StreamingTurn("s1", turnIndex = 0, blocks = listOf(ContentBlock.Text("Streaming answer…")), startedAtMs = 0L),
+                StreamingTurn(
+                    sessionId = "s1",
+                    turnIndex = 0,
+                    blocks = listOf(ContentBlock.Text("SUMMARY: Streaming\n\nStreaming answer…")),
+                    startedAtMs = 0L,
+                ),
             )
             while (state.aiThread?.response == null) state = awaitItem()
             val thread = requireNotNull(state.aiThread)
