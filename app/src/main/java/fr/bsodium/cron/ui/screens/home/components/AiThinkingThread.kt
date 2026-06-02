@@ -1,6 +1,9 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,6 +54,10 @@ private val ROW_MIN_HEIGHT = 48.dp
 internal val SPINNER_SIZE = 14.dp
 internal val SPINNER_STROKE = 1.5.dp
 
+// Soft fade at the response's growing bottom edge while streaming; dissolves to 0 once settled.
+private val RESPONSE_FADE_HEIGHT = 28.dp
+private val RESPONSE_FADE_SPEC = tween<Dp>(durationMillis = 220, easing = FastOutSlowInEasing)
+
 /**
  * Latest-turn AI thread:
  *
@@ -76,7 +83,16 @@ fun AiThinkingThread(thread: AiThreadUi, isRunning: Boolean, modifier: Modifier 
         }
         if (!thread.response.isNullOrBlank()) {
             Spacer(Modifier.height(Spacing.sm))
-            ResponseBody(thread.response)
+            // While streaming, new lines emerge through a soft bottom fade; it dissolves to 0 on settle.
+            val fade by animateDpAsState(
+                targetValue = if (thread.isStreaming) RESPONSE_FADE_HEIGHT else 0.dp,
+                animationSpec = RESPONSE_FADE_SPEC,
+                label = "response-fade",
+            )
+            ResponseBody(
+                text = thread.response,
+                modifier = if (fade > 0.dp) Modifier.fadeBottom(fade) else Modifier,
+            )
         }
     }
 }
@@ -222,11 +238,12 @@ private fun ToolStack(tools: List<ProcessItem.Tool>) {
 }
 
 @Composable
-private fun ResponseBody(text: String) {
+private fun ResponseBody(text: String, modifier: Modifier = Modifier) {
     MarkdownBlock(
         text = text,
         bodyStyle = CronTypography.bodySerif.copy(color = MaterialTheme.colorScheme.onSurface),
         serif = true,
+        modifier = modifier,
     )
 }
 
