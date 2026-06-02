@@ -23,6 +23,8 @@ data class MessagesRequest(
     val tool_choice: ToolChoice? = null,
     val temperature: Double? = null,
     val thinking: ThinkingConfig? = null,
+    /** Opt into SSE streaming. Omitted from the wire when null (explicitNulls = false). */
+    val stream: Boolean? = null,
 )
 
 @Serializable
