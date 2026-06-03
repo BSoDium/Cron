@@ -57,8 +57,42 @@ internal fun revealThread(thread: AiThreadUi, revealed: Int): AiThreadUi {
         }
     }
     val revealedResponse = thread.response?.takeIf { budget > 0 }?.take(budget)?.takeIf { it.isNotEmpty() }
-    return thread.copy(process = revealedProcess, response = revealedResponse)
+    // Auto-close a half-typed **/` at the streaming edge so a partial bold/code span renders live
+    // instead of flashing literal markers. The edge is the response if present, else the last text item.
+    return if (revealedResponse != null) {
+        thread.copy(process = revealedProcess, response = balanceInlineMarkers(revealedResponse))
+    } else {
+        thread.copy(process = revealedProcess.balanceLastText(), response = null)
+    }
 }
+
+/** Balance the inline markers of the last Reasoning/Narration item — the typewriter's streaming edge. */
+private fun List<ProcessItem>.balanceLastText(): List<ProcessItem> {
+    val idx = indexOfLast { it is ProcessItem.Reasoning || it is ProcessItem.Narration }
+    if (idx < 0) return this
+    val balanced = when (val item = this[idx]) {
+        is ProcessItem.Reasoning -> item.copy(text = balanceInlineMarkers(item.text))
+        is ProcessItem.Narration -> item.copy(text = balanceInlineMarkers(item.text))
+        is ProcessItem.Tool -> return this
+    }
+    return toMutableList().also { it[idx] = balanced }
+}
+
+/**
+ * Closes a dangling inline-markdown span at the reveal edge so the renderer never shows a half-typed
+ * `**`/`` ` `` as literal characters: an unclosed inline code gets a closing backtick; a trailing lone
+ * `*` (a half-typed bold closer) is dropped, then an unmatched `**` gets closed. Idempotent on complete,
+ * balanced text. Covers the dominant bold + inline-code cases; rarer `_`/`***`/`*`-in-math is tolerated.
+ */
+internal fun balanceInlineMarkers(text: String): String {
+    var t = text
+    if (t.count { it == '`' } % 2 == 1) t += "`"
+    if (t.takeLastWhile { it == '*' }.length % 2 == 1) t = t.dropLast(1)
+    if (BOLD_TOKEN.findAll(t).count() % 2 == 1) t += "**"
+    return t
+}
+
+private val BOLD_TOKEN = Regex("\\*\\*")
 
 /** Replace a text process item's text (Reasoning/Narration); no-op for Tool. */
 private fun ProcessItem.withText(text: String): ProcessItem = when (this) {
