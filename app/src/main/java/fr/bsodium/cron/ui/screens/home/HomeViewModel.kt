@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.Data
 import androidx.work.WorkInfo
+import fr.bsodium.cron.ai.StreamingTurnStore
 import fr.bsodium.cron.calendar.requestCalendarSync
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -58,6 +60,8 @@ data class HomeUiState(
     val settingsChangedSincePlan: Boolean = false,
     /** The latest AI turn failed (and hasn't been dismissed) — surfaces a dismissible banner. */
     val aiFailure: AiTurnFailure? = null,
+    /** User preference: fire subtle haptic ticks while the assistant streams. */
+    val hapticsEnabled: Boolean = true,
 )
 
 /** Why the most recent AI turn ended without updating the plan, for the home failure banner. */
@@ -103,13 +107,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else db.eventDao().observeBySession(id).map { events -> buildSleepStats(events) }
         }
 
-    /** Latest-turn AI message blocks — drives the thinking thread. */
+    /** Latest-turn AI thread — the live streaming partial overrides the settled DB state while a turn
+     *  for this session is in flight, so tokens render as they arrive. `.conflate()` bounds recomposition. */
     private val aiThreadFlow = sessionFlow
         .map { it?.id }
         .distinctUntilChanged()
         .flatMapLatest { id ->
-            if (id == null) flowOf(null)
-            else db.aiMessageDao().observeBySession(id).map { rows -> AiThreadMapper.build(rows) }
+            if (id == null) {
+                flowOf(null)
+            } else {
+                combine(db.aiMessageDao().observeBySession(id), StreamingTurnStore.active) { rows, streaming ->
+                    val partial = streaming?.takeIf { it.sessionId == id }
+                    if (partial != null) AiThreadMapper.buildFromBlocks(partial.turnIndex, partial.blocks)
+                    else AiThreadMapper.build(rows)
+                }.conflate()
+            }
         }
 
     /** Epoch-ms the user last dismissed the "settings changed" reminder this process. */
@@ -125,12 +137,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         settingsAt > lastAiCallAt && settingsAt > dismissedAt
     }
 
+    /** True while a turn for the active session is actively streaming — a real token-flow signal that
+     *  drives the spinner, rather than waiting on WorkManager's coarser terminal-state transition. */
+    private val streamingActiveFlow = combine(
+        sessionFlow.map { it?.id }.distinctUntilChanged(),
+        StreamingTurnStore.active,
+    ) { id, streaming -> id != null && streaming?.sessionId == id }
+
     private val statusFlow = combine(
         _isRetrying,
         settingsChangedFlow,
         _aiFailure,
-    ) { retrying, settingsChanged, failure ->
-        HomeStatus(isRetrying = retrying, settingsChanged = settingsChanged, failure = failure)
+        streamingActiveFlow,
+        settings.hapticsEnabled,
+    ) { retrying, settingsChanged, failure, streaming, haptics ->
+        HomeStatus(
+            isRetrying = retrying || streaming,
+            settingsChanged = settingsChanged,
+            failure = failure,
+            hapticsEnabled = haptics,
+        )
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -153,6 +179,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && thread != null,
             aiFailure = status.failure,
+            hapticsEnabled = status.hapticsEnabled,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -326,9 +353,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-/** The three transient status signals folded into one combine source to keep uiState's arity at 5. */
+/** The transient status signals folded into one combine source to keep uiState's arity at 5. */
 private data class HomeStatus(
     val isRetrying: Boolean,
     val settingsChanged: Boolean,
     val failure: AiTurnFailure?,
+    val hapticsEnabled: Boolean,
 )

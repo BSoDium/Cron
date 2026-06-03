@@ -46,6 +46,7 @@ import fr.bsodium.cron.ui.screens.settings.components.CustomInstructionsRow
 import fr.bsodium.cron.ui.screens.settings.components.DailyBudgetRow
 import fr.bsodium.cron.ui.screens.settings.components.DisplayNameRow
 import fr.bsodium.cron.ui.screens.settings.components.Section
+import fr.bsodium.cron.ui.screens.settings.components.SwitchRow
 import fr.bsodium.cron.ui.screens.settings.components.TimePickerRow
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -128,6 +129,12 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 limit = state.dailyTokenLimit,
                 usedToday = state.tokensUsedToday,
                 onSelect = viewModel::setDailyTokenLimit,
+            )
+            SwitchRow(
+                title = "Haptic feedback",
+                subtitle = "Subtle ticks while the assistant writes",
+                checked = state.hapticsEnabled,
+                onCheckedChange = viewModel::setHapticsEnabled,
             )
         }
 

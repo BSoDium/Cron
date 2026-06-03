@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -43,11 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.SubcomposeLayout
@@ -97,6 +93,13 @@ private fun stepFirstLineHeight(): Dp {
 internal fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
     var expanded by rememberSaveable(text) { mutableStateOf(false) }
     val collapsible = text.length > REASONING_COLLAPSE_CHARS
+    // When a growing block first crosses the collapse threshold, ease the fade + "See more" pill in
+    // instead of popping. Already-long blocks start at 1f (initial composition), so no spurious fade.
+    val affordance by animateFloatAsState(
+        targetValue = if (collapsible) 1f else 0f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "collapse-affordance",
+    )
     val bodyStyle = MaterialTheme.typography.bodyMedium.copy(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         lineHeightStyle = STEP_LINE_HEIGHT,
@@ -111,13 +114,18 @@ internal fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
             // The full markdown is always rendered (parsed once — never blanks on toggle); collapsing
             // just clips an animated height, so expand/collapse glides instead of jumping.
             if (collapsible) {
-                ClippedReveal(expanded = expanded, collapsedHeight = reasoningCollapsedHeight()) {
+                ClippedReveal(
+                    expanded = expanded,
+                    collapsedHeight = reasoningCollapsedHeight(),
+                    fadeStrength = affordance,
+                ) {
                     MarkdownBlock(text = text, bodyStyle = bodyStyle, serif = false)
                 }
                 // Snug transparent pill — ripple only on press. minimumInteractiveComponentSize keeps
                 // the touch target at 48dp while the visible pill stays compact.
                 Box(
                     modifier = Modifier
+                        .graphicsLayer { alpha = affordance } // fade the pill in with the gradient
                         // Tuck the toggle up under the fade so the soft dissolve leads straight into it.
                         .offset(x = -Spacing.xs, y = -Spacing.sm)
                         // No start padding so the label aligns with the reasoning-text column; the
@@ -170,6 +178,7 @@ private fun reasoningCollapsedHeight(): Dp {
 private fun ClippedReveal(
     expanded: Boolean,
     collapsedHeight: Dp,
+    fadeStrength: Float = 1f,
     content: @Composable () -> Unit,
 ) {
     val collapsedPx = with(LocalDensity.current) { collapsedHeight.roundToPx() }
@@ -182,7 +191,7 @@ private fun ClippedReveal(
     SubcomposeLayout(
         modifier = Modifier
             .clipToBounds()
-            .then(if (fading) Modifier.fadeBottom(REASONING_FADE_HEIGHT) else Modifier),
+            .then(if (fading) Modifier.fadeBottom(REASONING_FADE_HEIGHT, fadeStrength) else Modifier),
     ) { constraints ->
         val placeable = subcompose(Unit, content).first().measure(constraints.copy(minHeight = 0))
         if (placeable.height != fullPx) fullPx = placeable.height
@@ -190,25 +199,6 @@ private fun ClippedReveal(
         layout(placeable.width, h) { placeable.place(0, 0) }
     }
 }
-
-/**
- * Fades the bottom [height] of the content to transparent — a soft truncation edge. Renders to an
- * offscreen layer so the [BlendMode.DstIn] gradient erases only the destination's lower band; the
- * gradient is opaque above [height] from the bottom, so everything but that band is kept intact.
- */
-private fun Modifier.fadeBottom(height: Dp): Modifier = this
-    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(Color.Black, Color.Transparent),
-                startY = size.height - height.toPx(),
-                endY = size.height,
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-    }
 
 /** Outlined icon for each tool's operation; wrench for anything unmapped. */
 internal fun toolIcon(name: String): ImageVector = when (name) {

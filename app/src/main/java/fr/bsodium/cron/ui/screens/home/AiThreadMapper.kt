@@ -19,6 +19,8 @@ data class AiThreadUi(
     val response: String?,
     /** Wall-clock seconds the turn took — shown as "Thought for Xs" once settled. */
     val durationSeconds: Int? = null,
+    /** True while this thread is being streamed live (vs. read back from the DB). Drives haptics. */
+    val isStreaming: Boolean = false,
 )
 
 /** One ordered step of the assistant's thinking process, shown inside the collapsible. */
@@ -42,21 +44,51 @@ sealed interface ProcessItem {
  */
 object AiThreadMapper {
 
+    /** DB path: decode the latest turn's rows, then map. The settled source of truth. */
     fun build(rows: List<AiMessageEntity>): AiThreadUi? {
         if (rows.isEmpty()) return null
         val latestTurn = rows.maxOf { it.turnIndex }
-        val assistantRows = rows.filter { it.turnIndex == latestTurn && it.role == "assistant" }
-        val userRows = rows.filter { it.turnIndex == latestTurn && it.role == "user" }
-        if (assistantRows.isEmpty()) return AiThreadUi(
+        val turnRows = rows.filter { it.turnIndex == latestTurn }
+        val assistantBlocks = turnRows.filter { it.role == "assistant" }.flatMap { decodeBlocks(it.contentJson) }
+        val toolResultBlocks = turnRows.filter { it.role == "user" }.flatMap { decodeBlocks(it.contentJson) }
+        if (assistantBlocks.isEmpty()) return AiThreadUi(
             turnIndex = latestTurn,
             summary = "Thinking…",
             process = emptyList(),
             response = null,
         )
+        val durationSeconds = ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
+        return buildFromBlocks(latestTurn, assistantBlocks, toolResultBlocks, durationSeconds, isStreaming = false)
+    }
 
-        val blocks = assistantRows.flatMap { decodeBlocks(it.contentJson) }
-        val toolResults = userRows
-            .flatMap { decodeBlocks(it.contentJson) }
+    /**
+     * Streaming path: the in-flight turn's blocks (assistant content + tool_result, interleaved) are
+     * already in hand. Produces the same [AiThreadUi] shape as [build] so the live last frame and the
+     * settled first frame render identically — no flicker at hand-off.
+     */
+    fun buildFromBlocks(turnIndex: Int, blocks: List<ContentBlock>): AiThreadUi {
+        val assistantBlocks = blocks.filterNot { it is ContentBlock.ToolResult }
+        val toolResultBlocks = blocks.filterIsInstance<ContentBlock.ToolResult>()
+        if (assistantBlocks.isEmpty()) return AiThreadUi(
+            turnIndex = turnIndex,
+            summary = "Thinking…",
+            process = emptyList(),
+            response = null,
+            isStreaming = true,
+        )
+        // "Thought for Xs" is a settled-only affordance — duration stays null while streaming.
+        return buildFromBlocks(turnIndex, assistantBlocks, toolResultBlocks, durationSeconds = null, isStreaming = true)
+    }
+
+    private fun buildFromBlocks(
+        turnIndex: Int,
+        assistantBlocks: List<ContentBlock>,
+        toolResultBlocks: List<ContentBlock>,
+        durationSeconds: Int?,
+        isStreaming: Boolean,
+    ): AiThreadUi {
+        val blocks = assistantBlocks
+        val toolResults = toolResultBlocks
             .filterIsInstance<ContentBlock.ToolResult>()
             .associateBy { it.tool_use_id }
 
@@ -65,7 +97,7 @@ object AiThreadMapper {
         val statuses = mutableListOf<String>()
         var summaryLine: String? = null
         fun stripDirectives(text: String): String {
-            val kept = StringBuilder()
+            val kept = mutableListOf<String>()
             text.lineSequence().forEach { line ->
                 val trimmed = line.trim()
                 val status = STATUS_LINE.matchEntire(trimmed)
@@ -73,15 +105,25 @@ object AiThreadMapper {
                 when {
                     status != null -> status.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { statuses += it }
                     summary != null -> summary.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { summaryLine = it }
-                    else -> kept.appendLine(line)
+                    else -> kept += line
                 }
             }
-            return kept.toString().trim()
+            // While streaming, a trailing line still typing out a directive ("STATU", "SUMMAR") hasn't
+            // matched the full STATUS:/SUMMARY: regex yet — drop it so the prefix never flashes.
+            if (isStreaming && kept.lastOrNull()?.let { isPartialDirectivePrefix(it.trim()) } == true) {
+                kept.removeAt(kept.lastIndex)
+            }
+            return kept.joinToString("\n").trim()
         }
 
         // The answer is the trailing run of Text blocks (after the last tool/reasoning block); text
-        // emitted earlier is thinking-process narration, not output.
-        val answerStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
+        // emitted earlier is thinking-process narration. While streaming, hold the answer back until
+        // the model marks it with a SUMMARY line — otherwise leading narration prose (which only reads
+        // as narration once a tool follows it) flashes as the answer for a beat before jumping up.
+        val structuralStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
+        val answerStart =
+            if (isStreaming && !blocks.trailingTextHasSummary(structuralStart)) blocks.size
+            else structuralStart
 
         val process = blocks.take(answerStart).mapNotNull { block ->
             when (block) {
@@ -122,15 +164,10 @@ object AiThreadMapper {
                     .getOrNull()
             }
             ?.takeIf { it.isNotBlank() }
-        val answer = response ?: summaryLine ?: doNothingReason
-
-        // Wall-clock span of the latest turn; shown once the turn settles (UI drives this off WorkManager).
-        val turnRows = rows.filter { it.turnIndex == latestTurn }
-        val durationSeconds = if (turnRows.isNotEmpty()) {
-            ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
-        } else {
-            null
-        }
+        // While streaming, never let the SUMMARY (a pill label) or do_nothing reason stand in for the
+        // answer — that flashed the summary in the response area before the real body streamed in. Only
+        // fall back once settled (a do_nothing turn legitimately has no body).
+        val answer = response ?: if (isStreaming) null else (summaryLine ?: doNothingReason)
 
         // Pill preview: gerund while working, past-tense summary once answered; falls back to the
         // first reasoning line if the model skipped the directives.
@@ -145,11 +182,12 @@ object AiThreadMapper {
             else liveStatus ?: summaryLine ?: fallback
 
         return AiThreadUi(
-            turnIndex = latestTurn,
+            turnIndex = turnIndex,
             summary = summary,
             process = process,
             response = answer,
             durationSeconds = durationSeconds,
+            isStreaming = isStreaming,
         )
     }
 
@@ -192,6 +230,20 @@ object AiThreadMapper {
 
     private const val TAG = "AiThreadMapper"
 }
+
+/** True if any Text block from [from] onward carries a `SUMMARY:` line — the model's "answer starts
+ *  here" marker, used to gate the streamed answer reveal. */
+private fun List<ContentBlock>.trailingTextHasSummary(from: Int): Boolean =
+    drop(from).filterIsInstance<ContentBlock.Text>().any { block ->
+        block.text.lineSequence().any { SUMMARY_LINE.matchEntire(it.trim()) != null }
+    }
+
+/** True if [line] is a strict prefix of a directive keyword still being typed (e.g. "STATU", "SUMMAR"),
+ *  before its colon completes — so we can hold it back from display while streaming. */
+private fun isPartialDirectivePrefix(line: String): Boolean =
+    line.isNotEmpty() && DIRECTIVE_TOKENS.any { it.startsWith(line, ignoreCase = true) && line.length < it.length }
+
+private val DIRECTIVE_TOKENS = listOf("STATUS:", "SUMMARY:")
 
 // Hoisted so they compile once, not on every build() call.
 private val LEADING_RULE = Regex("([-*_])\\1{2,}")

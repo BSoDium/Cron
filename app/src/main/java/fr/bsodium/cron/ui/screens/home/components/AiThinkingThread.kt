@@ -1,10 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,8 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +28,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,10 +43,14 @@ import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlin.math.roundToInt
 
 private val ROW_MIN_HEIGHT = 48.dp
 internal val SPINNER_SIZE = 14.dp
 internal val SPINNER_STROKE = 1.5.dp
+
+// Soft edge on the partially-revealed timeline while peeking open via the pull gesture.
+private val PEEK_FADE_HEIGHT = 24.dp
 
 /**
  * Latest-turn AI thread:
@@ -62,7 +63,23 @@ internal val SPINNER_STROKE = 1.5.dp
  *   {serif response body, full markdown}              ← final answer, always shown
  */
 @Composable
-fun AiThinkingThread(thread: AiThreadUi, isRunning: Boolean, modifier: Modifier = Modifier) {
+fun AiThinkingThread(
+    thread: AiThreadUi,
+    isRunning: Boolean,
+    modifier: Modifier = Modifier,
+    // Controlled/uncontrolled: when [expanded] is null the disclosure manages its own state (previews,
+    // tests); HomeScreen hoists it so the pull gesture can drive it. [expandPx] peeks the timeline open
+    // by an absolute pixel height (1:1 with the drag); [onFullHeight] reports its measured full height.
+    expanded: Boolean? = null,
+    onExpandedChange: ((Boolean) -> Unit)? = null,
+    expandPx: Float = 0f,
+    onFullHeight: (Int) -> Unit = {},
+    // 0f = collapsed (chevron pointing right), 1f = fully open (chevron pointing down). Drives the
+    // pivot animation; tracked to the live reveal value so the chevron rotates with the drag.
+    expansionFraction: Float = 0f,
+) {
+    var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
+    val isExpanded = expanded ?: internalExpanded
     Column(modifier = modifier.fillMaxWidth()) {
         // Settled/running is the WorkManager signal, not response presence — a do_nothing turn settles with none.
         val inProgress = isRunning
@@ -72,6 +89,14 @@ fun AiThinkingThread(thread: AiThreadUi, isRunning: Boolean, modifier: Modifier 
                 process = thread.process,
                 inProgress = inProgress,
                 durationSeconds = thread.durationSeconds,
+                expanded = isExpanded,
+                onToggle = {
+                    val next = !isExpanded
+                    if (onExpandedChange != null) onExpandedChange(next) else internalExpanded = next
+                },
+                expandPx = expandPx,
+                onFullHeight = onFullHeight,
+                expansionFraction = expansionFraction,
             )
         }
         if (!thread.response.isNullOrBlank()) {
@@ -104,9 +129,12 @@ private fun ThinkingDisclosure(
     process: List<ProcessItem>,
     inProgress: Boolean,
     durationSeconds: Int?,
-    initiallyExpanded: Boolean = false,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    expandPx: Float = 0f,
+    onFullHeight: (Int) -> Unit = {},
+    expansionFraction: Float = 0f,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     val canExpand = process.isNotEmpty()
     // Full-bleed bar: transparent collapsed, a quiet fill when open. It bleeds past the side content
     // padding (Spacing.xl) to hug both edges; compensating start/end padding keeps the summary text and chevron in place.
@@ -114,10 +142,10 @@ private fun ThinkingDisclosure(
         modifier = Modifier
             .bleedHorizontally(Spacing.xl)
             .fillMaxWidth()
-            .let { if (canExpand) it.clickable { expanded = !expanded } else it }
+            .let { if (canExpand) it.clickable { onToggle() } else it }
             .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent)
             .heightIn(min = ROW_MIN_HEIGHT)
-            .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.md + Spacing.xl, bottom = Spacing.sm),
+            .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.xl, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
@@ -150,30 +178,60 @@ private fun ThinkingDisclosure(
             )
             if (canExpand) {
                 Icon(
-                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.graphicsLayer { rotationZ = expansionFraction * 90f },
                 )
             }
         }
     }
-    AnimatedVisibility(
-        visible = expanded && canExpand,
-        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
-        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
-    ) {
-        TimelineColumn {
-            process.forEachIndexed { i, item ->
-                val isFirst = i == 0
-                val isLast = inProgress && i == process.lastIndex
-                when (item) {
-                    is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
-                    is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
-                    is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
+    // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate the
+    // same value (owned by HomeScreen), so there's no second source to dip against. Fully expanded clips to
+    // Float.MAX_VALUE → the natural height, re-measured so a still-streaming timeline isn't cut. Settled
+    // turns always compose (at h=0 when collapsed) so the measured full height is ready for tap/pull.
+    val revealing = expanded || expandPx > 0f || !inProgress
+    if (canExpand && revealing) {
+        ExpandReveal(
+            targetPx = if (expanded) Float.MAX_VALUE else expandPx,
+            peeking = !expanded,
+            onFullHeight = onFullHeight,
+        ) {
+            TimelineColumn {
+                process.forEachIndexed { i, item ->
+                    val isFirst = i == 0
+                    val isLast = inProgress && i == process.lastIndex
+                    when (item) {
+                        is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
+                        is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
+                        is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
+                    }
                 }
+                if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
             }
-            if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
         }
+    }
+}
+
+/** Measures [content] at full height, reports that via [onFullHeight], and clips it top-anchored to
+ *  [targetPx] pixels (capped at full) — so a pull maps 1:1 to revealed pixels. [peeking] adds a soft
+ *  bottom edge while partially open. */
+@Composable
+private fun ExpandReveal(
+    targetPx: Float,
+    peeking: Boolean,
+    onFullHeight: (Int) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    SubcomposeLayout(
+        modifier = Modifier
+            .clipToBounds()
+            .then(if (peeking) Modifier.fadeBottom(PEEK_FADE_HEIGHT) else Modifier),
+    ) { constraints ->
+        val placeable = subcompose(Unit, content).first().measure(constraints.copy(minHeight = 0))
+        onFullHeight(placeable.height)
+        val h = targetPx.coerceIn(0f, placeable.height.toFloat()).roundToInt()
+        layout(placeable.width, h) { placeable.place(0, 0) }
     }
 }
 
@@ -277,7 +335,8 @@ private fun ThinkingDisclosureExpandedPreview() {
                     process = PREVIEW_THREAD.process,
                     inProgress = false,
                     durationSeconds = PREVIEW_THREAD.durationSeconds,
-                    initiallyExpanded = true,
+                    expanded = true,
+                    onToggle = {},
                 )
             }
         }
