@@ -29,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
@@ -136,78 +135,89 @@ private fun ThinkingDisclosure(
     expansionFraction: Float = 0f,
 ) {
     val canExpand = process.isNotEmpty()
-    // Full-bleed bar: transparent collapsed, a quiet fill when open. It bleeds past the side content
-    // padding (Spacing.xl) to hug both edges; compensating start/end padding keeps the summary text and chevron in place.
-    Row(
+    // Both header and timeline ride the same continuous progress so the whole disclosure lifts as one.
+    val openFraction = if (expanded) 1f else expansionFraction.coerceIn(0f, 1f)
+    // Full-bleed band over header + timeline: transparent collapsed, fading to a quiet fill as it opens.
+    // It bleeds past the side content padding (Spacing.xl) to hug both edges; the inner row/body re-inset
+    // by the same amount so the summary text, chevron, and timeline stay put.
+    Column(
         modifier = Modifier
             .bleedHorizontally(Spacing.xl)
             .fillMaxWidth()
-            .let { if (canExpand) it.clickable { onToggle() } else it }
-            .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent)
-            .heightIn(min = ROW_MIN_HEIGHT)
-            .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.xl, bottom = Spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = openFraction)),
     ) {
-        if (inProgress) {
-            // Live: the model's current gerund summary + a spinner.
-            Text(
-                text = summary ?: "Thinking…",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            CircularProgressIndicator(
-                modifier = Modifier.size(SPINNER_SIZE),
-                strokeWidth = SPINNER_STROKE,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            // Settled: an avatar-stack of the tools that ran + how long it took.
-            val tools = process.filterIsInstance<ProcessItem.Tool>()
-            if (tools.isNotEmpty()) ToolStack(tools)
-            Text(
-                text = thoughtForLabel(durationSeconds),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (canExpand) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.graphicsLayer { rotationZ = expansionFraction * 90f },
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .let { if (canExpand) it.clickable { onToggle() } else it }
+                .heightIn(min = ROW_MIN_HEIGHT)
+                .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.xl, bottom = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            if (inProgress) {
+                // Live: the model's current gerund summary + a spinner.
+                Text(
+                    text = summary ?: "Thinking…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                CircularProgressIndicator(
+                    modifier = Modifier.size(SPINNER_SIZE),
+                    strokeWidth = SPINNER_STROKE,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                // Settled: an avatar-stack of the tools that ran + how long it took.
+                val tools = process.filterIsInstance<ProcessItem.Tool>()
+                if (tools.isNotEmpty()) ToolStack(tools)
+                Text(
+                    text = thoughtForLabel(durationSeconds),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (canExpand) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
+                    )
+                }
             }
         }
-    }
-    // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate the
-    // same value (owned by HomeScreen), so there's no second source to dip against. Fully expanded clips to
-    // Float.MAX_VALUE → the natural height, re-measured so a still-streaming timeline isn't cut. Settled
-    // turns always compose (at h=0 when collapsed) so the measured full height is ready for tap/pull.
-    val revealing = expanded || expandPx > 0f || !inProgress
-    if (canExpand && revealing) {
-        ExpandReveal(
-            targetPx = if (expanded) Float.MAX_VALUE else expandPx,
-            peeking = !expanded,
-            onFullHeight = onFullHeight,
-        ) {
-            TimelineColumn {
-                process.forEachIndexed { i, item ->
-                    val isFirst = i == 0
-                    val isLast = inProgress && i == process.lastIndex
-                    when (item) {
-                        is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
-                        is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
-                        is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
+        // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate the
+        // same value (owned by HomeScreen), so there's no second source to dip against. Fully expanded clips to
+        // Float.MAX_VALUE → the natural height, re-measured so a still-streaming timeline isn't cut. Settled
+        // turns always compose (at h=0 when collapsed) so the measured full height is ready for tap/pull.
+        val revealing = expanded || expandPx > 0f || !inProgress
+        if (canExpand && revealing) {
+            // Re-inset by the bleed amount so the timeline aligns to the content margin, not the screen edge.
+            Box(modifier = Modifier.padding(horizontal = Spacing.xl)) {
+                ExpandReveal(
+                    targetPx = if (expanded) Float.MAX_VALUE else expandPx,
+                    peeking = !expanded,
+                    onFullHeight = onFullHeight,
+                ) {
+                    TimelineColumn {
+                        process.forEachIndexed { i, item ->
+                            val isFirst = i == 0
+                            val isLast = inProgress && i == process.lastIndex
+                            when (item) {
+                                is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
+                                is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
+                                is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
+                            }
+                        }
+                        if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
                     }
                 }
-                if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
             }
         }
     }
