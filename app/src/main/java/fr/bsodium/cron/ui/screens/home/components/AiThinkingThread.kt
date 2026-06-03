@@ -1,8 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,15 +43,12 @@ import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val ROW_MIN_HEIGHT = 48.dp
 internal val SPINNER_SIZE = 14.dp
 internal val SPINNER_STROKE = 1.5.dp
 
-// Tap/snap expand animation for the thinking timeline; the pull gesture overrides it manually.
-private val DISCLOSURE_EXPAND_SPEC = tween<Float>(durationMillis = 200, easing = FastOutSlowInEasing)
 // Soft edge on the partially-revealed timeline while peeking open via the pull gesture.
 private val PEEK_FADE_HEIGHT = 24.dp
 
@@ -74,10 +68,12 @@ fun AiThinkingThread(
     isRunning: Boolean,
     modifier: Modifier = Modifier,
     // Controlled/uncontrolled: when [expanded] is null the disclosure manages its own state (previews,
-    // tests); HomeScreen hoists it so the pull gesture can drive it. [expandFraction] peeks it open.
+    // tests); HomeScreen hoists it so the pull gesture can drive it. [expandPx] peeks the timeline open
+    // by an absolute pixel height (1:1 with the drag); [onFullHeight] reports its measured full height.
     expanded: Boolean? = null,
     onExpandedChange: ((Boolean) -> Unit)? = null,
-    expandFraction: Float = 0f,
+    expandPx: Float = 0f,
+    onFullHeight: (Int) -> Unit = {},
 ) {
     var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
     val isExpanded = expanded ?: internalExpanded
@@ -95,7 +91,8 @@ fun AiThinkingThread(
                     val next = !isExpanded
                     if (onExpandedChange != null) onExpandedChange(next) else internalExpanded = next
                 },
-                expandFraction = expandFraction,
+                expandPx = expandPx,
+                onFullHeight = onFullHeight,
             )
         }
         if (!thread.response.isNullOrBlank()) {
@@ -130,7 +127,8 @@ private fun ThinkingDisclosure(
     durationSeconds: Int?,
     expanded: Boolean,
     onToggle: () -> Unit,
-    expandFraction: Float = 0f,
+    expandPx: Float = 0f,
+    onFullHeight: (Int) -> Unit = {},
 ) {
     val canExpand = process.isNotEmpty()
     // Full-bleed bar: transparent collapsed, a quiet fill when open. It bleeds past the side content
@@ -182,16 +180,17 @@ private fun ThinkingDisclosure(
             }
         }
     }
-    // The timeline reveals to max(tap/snap animation, live pull fraction) so a drag peeks it open
-    // continuously and a tap (or snap past the pull threshold) animates it the rest of the way.
-    val expandedFraction by animateFloatAsState(
-        targetValue = if (expanded) 1f else 0f,
-        animationSpec = DISCLOSURE_EXPAND_SPEC,
-        label = "disclosure-expand",
-    )
-    val revealFraction = max(expandedFraction, expandFraction)
-    if (canExpand && revealFraction > 0f) {
-        ExpandReveal(fraction = revealFraction) {
+    // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate the
+    // same value (owned by HomeScreen), so there's no second source to dip against. Fully expanded clips to
+    // Float.MAX_VALUE → the natural height, re-measured so a still-streaming timeline isn't cut. Settled
+    // turns always compose (at h=0 when collapsed) so the measured full height is ready for tap/pull.
+    val revealing = expanded || expandPx > 0f || !inProgress
+    if (canExpand && revealing) {
+        ExpandReveal(
+            targetPx = if (expanded) Float.MAX_VALUE else expandPx,
+            peeking = !expanded,
+            onFullHeight = onFullHeight,
+        ) {
             TimelineColumn {
                 process.forEachIndexed { i, item ->
                     val isFirst = i == 0
@@ -208,18 +207,24 @@ private fun ThinkingDisclosure(
     }
 }
 
-/** Renders [content] at full height but clips it top-anchored to [fraction] of that height, with a soft
- *  bottom edge while partially revealed — the continuous unwrap driven by tap-snap or the pull gesture. */
+/** Measures [content] at full height, reports that via [onFullHeight], and clips it top-anchored to
+ *  [targetPx] pixels (capped at full) — so a pull maps 1:1 to revealed pixels. [peeking] adds a soft
+ *  bottom edge while partially open. */
 @Composable
-private fun ExpandReveal(fraction: Float, content: @Composable () -> Unit) {
-    val peeking = fraction < 1f
+private fun ExpandReveal(
+    targetPx: Float,
+    peeking: Boolean,
+    onFullHeight: (Int) -> Unit,
+    content: @Composable () -> Unit,
+) {
     SubcomposeLayout(
         modifier = Modifier
             .clipToBounds()
             .then(if (peeking) Modifier.fadeBottom(PEEK_FADE_HEIGHT) else Modifier),
     ) { constraints ->
         val placeable = subcompose(Unit, content).first().measure(constraints.copy(minHeight = 0))
-        val h = (placeable.height * fraction).roundToInt().coerceIn(0, placeable.height)
+        onFullHeight(placeable.height)
+        val h = targetPx.coerceIn(0f, placeable.height.toFloat()).roundToInt()
         layout(placeable.width, h) { placeable.place(0, 0) }
     }
 }
