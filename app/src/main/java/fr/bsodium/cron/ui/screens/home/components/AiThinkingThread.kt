@@ -1,10 +1,8 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +32,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,10 +46,17 @@ import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 private val ROW_MIN_HEIGHT = 48.dp
 internal val SPINNER_SIZE = 14.dp
 internal val SPINNER_STROKE = 1.5.dp
+
+// Tap/snap expand animation for the thinking timeline; the pull gesture overrides it manually.
+private val DISCLOSURE_EXPAND_SPEC = tween<Float>(durationMillis = 200, easing = FastOutSlowInEasing)
+// Soft edge on the partially-revealed timeline while peeking open via the pull gesture.
+private val PEEK_FADE_HEIGHT = 24.dp
 
 /**
  * Latest-turn AI thread:
@@ -62,7 +69,18 @@ internal val SPINNER_STROKE = 1.5.dp
  *   {serif response body, full markdown}              ← final answer, always shown
  */
 @Composable
-fun AiThinkingThread(thread: AiThreadUi, isRunning: Boolean, modifier: Modifier = Modifier) {
+fun AiThinkingThread(
+    thread: AiThreadUi,
+    isRunning: Boolean,
+    modifier: Modifier = Modifier,
+    // Controlled/uncontrolled: when [expanded] is null the disclosure manages its own state (previews,
+    // tests); HomeScreen hoists it so the pull gesture can drive it. [expandFraction] peeks it open.
+    expanded: Boolean? = null,
+    onExpandedChange: ((Boolean) -> Unit)? = null,
+    expandFraction: Float = 0f,
+) {
+    var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
+    val isExpanded = expanded ?: internalExpanded
     Column(modifier = modifier.fillMaxWidth()) {
         // Settled/running is the WorkManager signal, not response presence — a do_nothing turn settles with none.
         val inProgress = isRunning
@@ -72,6 +90,12 @@ fun AiThinkingThread(thread: AiThreadUi, isRunning: Boolean, modifier: Modifier 
                 process = thread.process,
                 inProgress = inProgress,
                 durationSeconds = thread.durationSeconds,
+                expanded = isExpanded,
+                onToggle = {
+                    val next = !isExpanded
+                    if (onExpandedChange != null) onExpandedChange(next) else internalExpanded = next
+                },
+                expandFraction = expandFraction,
             )
         }
         if (!thread.response.isNullOrBlank()) {
@@ -104,9 +128,10 @@ private fun ThinkingDisclosure(
     process: List<ProcessItem>,
     inProgress: Boolean,
     durationSeconds: Int?,
-    initiallyExpanded: Boolean = false,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    expandFraction: Float = 0f,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     val canExpand = process.isNotEmpty()
     // Full-bleed bar: transparent collapsed, a quiet fill when open. It bleeds past the side content
     // padding (Spacing.xl) to hug both edges; compensating start/end padding keeps the summary text and chevron in place.
@@ -114,7 +139,7 @@ private fun ThinkingDisclosure(
         modifier = Modifier
             .bleedHorizontally(Spacing.xl)
             .fillMaxWidth()
-            .let { if (canExpand) it.clickable { expanded = !expanded } else it }
+            .let { if (canExpand) it.clickable { onToggle() } else it }
             .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent)
             .heightIn(min = ROW_MIN_HEIGHT)
             .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.xl, bottom = Spacing.sm),
@@ -157,23 +182,45 @@ private fun ThinkingDisclosure(
             }
         }
     }
-    AnimatedVisibility(
-        visible = expanded && canExpand,
-        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
-        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
-    ) {
-        TimelineColumn {
-            process.forEachIndexed { i, item ->
-                val isFirst = i == 0
-                val isLast = inProgress && i == process.lastIndex
-                when (item) {
-                    is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
-                    is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
-                    is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
+    // The timeline reveals to max(tap/snap animation, live pull fraction) so a drag peeks it open
+    // continuously and a tap (or snap past the pull threshold) animates it the rest of the way.
+    val expandedFraction by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = DISCLOSURE_EXPAND_SPEC,
+        label = "disclosure-expand",
+    )
+    val revealFraction = max(expandedFraction, expandFraction)
+    if (canExpand && revealFraction > 0f) {
+        ExpandReveal(fraction = revealFraction) {
+            TimelineColumn {
+                process.forEachIndexed { i, item ->
+                    val isFirst = i == 0
+                    val isLast = inProgress && i == process.lastIndex
+                    when (item) {
+                        is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
+                        is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
+                        is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
+                    }
                 }
+                if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
             }
-            if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
         }
+    }
+}
+
+/** Renders [content] at full height but clips it top-anchored to [fraction] of that height, with a soft
+ *  bottom edge while partially revealed — the continuous unwrap driven by tap-snap or the pull gesture. */
+@Composable
+private fun ExpandReveal(fraction: Float, content: @Composable () -> Unit) {
+    val peeking = fraction < 1f
+    SubcomposeLayout(
+        modifier = Modifier
+            .clipToBounds()
+            .then(if (peeking) Modifier.fadeBottom(PEEK_FADE_HEIGHT) else Modifier),
+    ) { constraints ->
+        val placeable = subcompose(Unit, content).first().measure(constraints.copy(minHeight = 0))
+        val h = (placeable.height * fraction).roundToInt().coerceIn(0, placeable.height)
+        layout(placeable.width, h) { placeable.place(0, 0) }
     }
 }
 
@@ -277,7 +324,8 @@ private fun ThinkingDisclosureExpandedPreview() {
                     process = PREVIEW_THREAD.process,
                     inProgress = false,
                     durationSeconds = PREVIEW_THREAD.durationSeconds,
-                    initiallyExpanded = true,
+                    expanded = true,
+                    onToggle = {},
                 )
             }
         }
