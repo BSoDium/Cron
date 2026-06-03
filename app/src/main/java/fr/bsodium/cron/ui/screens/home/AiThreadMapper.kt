@@ -164,7 +164,10 @@ object AiThreadMapper {
                     .getOrNull()
             }
             ?.takeIf { it.isNotBlank() }
-        val answer = response ?: summaryLine ?: doNothingReason
+        // While streaming, never let the SUMMARY (a pill label) or do_nothing reason stand in for the
+        // answer — that flashed the summary in the response area before the real body streamed in. Only
+        // fall back once settled (a do_nothing turn legitimately has no body).
+        val answer = response ?: if (isStreaming) null else (summaryLine ?: doNothingReason)
 
         // Pill preview: gerund while working, past-tense summary once answered; falls back to the
         // first reasoning line if the model skipped the directives.

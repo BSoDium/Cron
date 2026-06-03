@@ -128,6 +128,21 @@ class AiThreadMapperTest {
     }
 
     @Test
+    fun streaming_summary_line_alone_is_the_pill_not_the_response() {
+        // The model has typed "SUMMARY: …" but not the answer body yet. The summary belongs in the pill;
+        // the response area must stay empty (no flash) until the body streams in.
+        val thread = AiThreadMapper.buildFromBlocks(
+            turnIndex = 0,
+            blocks = listOf(
+                ContentBlock.Thinking(thinking = "Deciding."),
+                ContentBlock.Text("SUMMARY: Set an 8:29 alarm so you have time"),
+            ),
+        )
+        assertNull(thread.response)
+        assertEquals("Set an 8:29 alarm so you have time", thread.summary)
+    }
+
+    @Test
     fun streaming_answer_is_revealed_once_marked_with_summary() {
         val thread = AiThreadMapper.buildFromBlocks(
             turnIndex = 0,
