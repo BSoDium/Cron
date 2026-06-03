@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -117,7 +117,7 @@ private fun ThinkingDisclosure(
             .let { if (canExpand) it.clickable { expanded = !expanded } else it }
             .background(if (expanded) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent)
             .heightIn(min = ROW_MIN_HEIGHT)
-            .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.md + Spacing.xl, bottom = Spacing.sm),
+            .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.xl, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
@@ -150,7 +150,7 @@ private fun ThinkingDisclosure(
             )
             if (canExpand) {
                 Icon(
-                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    imageVector = if (expanded) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
