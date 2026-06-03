@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -107,11 +108,11 @@ private fun ProcessItem.withText(text: String): ProcessItem = when (this) {
  */
 @Composable
 fun rememberRevealedThread(thread: AiThreadUi?): AiThreadUi? {
-    if (thread == null || !thread.isStreaming) return thread
-
-    val target = rememberUpdatedState(thread.revealableLength())
-    var revealed by remember(thread.turnIndex) { mutableIntStateOf(0) }
-    LaunchedEffect(thread.turnIndex) {
+    val streaming = thread != null && thread.isStreaming
+    val target = rememberUpdatedState(if (streaming) thread.revealableLength() else 0)
+    var revealed by remember(thread?.turnIndex) { mutableIntStateOf(0) }
+    LaunchedEffect(thread?.turnIndex, streaming) {
+        if (!streaming) return@LaunchedEffect
         while (true) {
             withFrameMillis { }
             val t = target.value
@@ -120,5 +121,27 @@ fun rememberRevealedThread(thread: AiThreadUi?): AiThreadUi? {
             }
         }
     }
-    return revealThread(thread, revealed)
+    val candidate = when {
+        thread == null -> null
+        !thread.isStreaming -> thread
+        else -> revealThread(thread, revealed)
+    }
+    // No-regress within a turn: hold the last thread that had an answer across the brief window where the
+    // store has cleared but observeBySession hasn't re-emitted the final row yet (or a retry dropped the
+    // streamed tail) — otherwise the thread flashes back to its early, answer-less state.
+    var lastShown by remember { mutableStateOf<AiThreadUi?>(null) }
+    return preferNonRegressed(lastShown, candidate).also { lastShown = it }
 }
+
+/** Keep [previous] over [candidate] when, within the same turn, the candidate lost the answer the
+ *  previous frame had — a transient stale read, not a real change. */
+internal fun preferNonRegressed(previous: AiThreadUi?, candidate: AiThreadUi?): AiThreadUi? =
+    if (
+        candidate != null && previous != null &&
+        candidate.turnIndex == previous.turnIndex &&
+        candidate.response.isNullOrBlank() && !previous.response.isNullOrBlank()
+    ) {
+        previous
+    } else {
+        candidate
+    }
