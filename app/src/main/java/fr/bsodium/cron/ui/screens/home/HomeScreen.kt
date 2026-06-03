@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -81,6 +82,9 @@ import fr.bsodium.cron.ui.theme.Spacing
 // below), and the rubber-band floor so the reveal still creeps near full instead of fully stalling.
 private const val THINKING_EXPAND_THRESHOLD = 0.4f
 private const val THINKING_PULL_RUBBER_FLOOR = 0.15f
+// Absolute cap on the release-to-expand pull distance, so a tall timeline (where 40% of full height
+// exceeds the screen) is still openable with a short drag.
+private val THINKING_EXPAND_TRIGGER_MAX = 120.dp
 
 @Composable
 fun HomeScreen(
@@ -199,12 +203,14 @@ fun HomeScreen(
             val thinkingFullPx = remember(displayThread.turnIndex) { mutableIntStateOf(0) }
             val canPull = rememberUpdatedState(displayThread.process.isNotEmpty() && !thinkingExpanded)
             val pullHaptics = rememberCronHaptics()
-            val pullConnection = remember(listState, reveal) {
+            val expandTriggerMaxPx = with(density) { THINKING_EXPAND_TRIGGER_MAX.toPx() }
+            val pullConnection = remember(listState, reveal, expandTriggerMaxPx) {
                 object : NestedScrollConnection {
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                         if (source != NestedScrollSource.UserInput) return Offset.Zero
-                        // Dragging up while a pull is open unwinds it (1:1) before the list scrolls.
-                        if (available.y < 0f && reveal.value > 0f) {
+                        // Dragging up while a partial peek is open unwinds it (1:1) before the list scrolls.
+                        // Skip once fully expanded, or the upward scroll is eaten instead of moving the list.
+                        if (available.y < 0f && reveal.value > 0f && !thinkingExpanded) {
                             val next = (reveal.value + available.y).coerceAtLeast(0f)
                             val consumed = next - reveal.value
                             scope.launch { reveal.snapTo(next) }
@@ -229,7 +235,8 @@ fun HomeScreen(
                     override suspend fun onPreFling(available: Velocity): Velocity {
                         if (reveal.value <= 0f) return Velocity.Zero
                         val full = thinkingFullPx.intValue
-                        if (full > 0 && reveal.value >= full * THINKING_EXPAND_THRESHOLD) {
+                        val trigger = minOf(full * THINKING_EXPAND_THRESHOLD, expandTriggerMaxPx)
+                        if (full > 0 && reveal.value >= trigger) {
                             reveal.animateTo(full.toFloat())
                             thinkingExpanded = true
                         } else {
