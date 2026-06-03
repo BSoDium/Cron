@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home
 
+import fr.bsodium.cron.ui.screens.home.components.balanceInlineMarkers
 import fr.bsodium.cron.ui.screens.home.components.revealThread
 import fr.bsodium.cron.ui.screens.home.components.revealableLength
 import org.junit.Assert.assertEquals
@@ -62,5 +63,19 @@ class StreamingRevealTest {
         assertEquals(thread, revealThread(thread, thread.revealableLength()))
         // and over-budget is clamped to the same
         assertEquals(thread, revealThread(thread, 999))
+    }
+
+    @Test
+    fun balance_inline_markers_closes_dangling_spans() {
+        assertEquals("the **cal**", balanceInlineMarkers("the **cal"))      // unclosed bold
+        assertEquals("**bold**", balanceInlineMarkers("**bold*"))           // half-typed closer
+        assertEquals("use `co`", balanceInlineMarkers("use `co"))           // unclosed inline code
+    }
+
+    @Test
+    fun balance_inline_markers_leaves_complete_text_untouched() {
+        assertEquals("the **cal**", balanceInlineMarkers("the **cal**"))
+        assertEquals("`code`", balanceInlineMarkers("`code`"))
+        assertEquals("plain text", balanceInlineMarkers("plain text"))
     }
 }
