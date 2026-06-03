@@ -6,8 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -37,10 +36,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -59,7 +58,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -67,6 +65,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.rememberCronHaptics
+import kotlinx.coroutines.launch
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
@@ -78,11 +77,10 @@ import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
 import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
 import fr.bsodium.cron.ui.theme.Spacing
 
-// Pull-to-expand feel: drag distance that maps to a full unwrap, drag→pull resistance, and the
-// release fraction past which it snaps open (springs back below). Feel-tuned.
-private val THINKING_PULL_DISTANCE = 140.dp
-private const val THINKING_PULL_RESISTANCE = 0.5f
-private const val THINKING_EXPAND_THRESHOLD = 0.45f
+// Pull-to-expand feel: the release fraction (of full height) past which it snaps open (springs back
+// below), and the rubber-band floor so the reveal still creeps near full instead of fully stalling.
+private const val THINKING_EXPAND_THRESHOLD = 0.4f
+private const val THINKING_PULL_RUBBER_FLOOR = 0.15f
 
 @Composable
 fun HomeScreen(
@@ -192,41 +190,51 @@ fun HomeScreen(
             val density = LocalDensity.current
             var cardHeightPx by remember { mutableIntStateOf(0) }
 
-            // Pull-to-expand: at the top of the list, an overscroll-down drag elastically unwraps the
-            // collapsed thinking. Hoist the disclosure's expand state so the gesture can drive it.
-            var thinkingExpanded by rememberSaveable(displayThread?.turnIndex) { mutableStateOf(false) }
-            val pull = remember { mutableFloatStateOf(0f) }
-            val pullDistancePx = with(density) { THINKING_PULL_DISTANCE.toPx() }
-            val pullFraction = (pull.floatValue / pullDistancePx).coerceIn(0f, 1f)
-            val canPull = rememberUpdatedState(
-                displayThread != null && displayThread.process.isNotEmpty() && !thinkingExpanded,
-            )
+            // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed
+            // thinking 1:1 with the finger. One reveal value (revealed pixels) drives the disclosure and
+            // the release/tap animation, so there's no second source to dip against. Reset per turn.
+            val scope = rememberCoroutineScope()
+            var thinkingExpanded by rememberSaveable(displayThread.turnIndex) { mutableStateOf(false) }
+            val reveal = remember(displayThread.turnIndex) { Animatable(0f) }
+            val thinkingFullPx = remember(displayThread.turnIndex) { mutableIntStateOf(0) }
+            val canPull = rememberUpdatedState(displayThread.process.isNotEmpty() && !thinkingExpanded)
             val pullHaptics = rememberCronHaptics()
-            val expandOnRelease = rememberUpdatedState { thinkingExpanded = true }
-            val pullConnection = remember(listState) {
+            val pullConnection = remember(listState, reveal) {
                 object : NestedScrollConnection {
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        if (source != NestedScrollSource.Drag) return Offset.Zero
-                        // Dragging up while a pull is open unwinds it before the list scrolls.
-                        if (available.y < 0f && pull.floatValue > 0f) {
-                            val next = (pull.floatValue + available.y).coerceAtLeast(0f)
-                            val consumed = next - pull.floatValue
-                            pull.floatValue = next
+                        if (source != NestedScrollSource.UserInput) return Offset.Zero
+                        // Dragging up while a pull is open unwinds it (1:1) before the list scrolls.
+                        if (available.y < 0f && reveal.value > 0f) {
+                            val next = (reveal.value + available.y).coerceAtLeast(0f)
+                            val consumed = next - reveal.value
+                            scope.launch { reveal.snapTo(next) }
                             return Offset(0f, consumed)
                         }
-                        // At the top, dragging down on a collapsible, collapsed thread grows the pull.
+                        // At the top, dragging down on a collapsible, collapsed thread grows the reveal in
+                        // pixels (tracks the finger), gently resisting near full so it never runs ahead.
                         if (available.y > 0f && canPull.value && !listState.canScrollBackward) {
-                            if (pull.floatValue == 0f) pullHaptics.tick() // a click as it starts unwrapping
-                            pull.floatValue += available.y * THINKING_PULL_RESISTANCE
+                            if (reveal.value == 0f) pullHaptics.tick() // a click as it starts unwrapping
+                            val full = thinkingFullPx.intValue
+                            val rubber = if (full > 0) {
+                                (1f - reveal.value / full).coerceIn(THINKING_PULL_RUBBER_FLOOR, 1f)
+                            } else {
+                                1f
+                            }
+                            scope.launch { reveal.snapTo(reveal.value + available.y * rubber) }
                             return Offset(0f, available.y)
                         }
                         return Offset.Zero
                     }
 
                     override suspend fun onPreFling(available: Velocity): Velocity {
-                        if (pull.floatValue <= 0f) return Velocity.Zero
-                        if (pull.floatValue / pullDistancePx >= THINKING_EXPAND_THRESHOLD) expandOnRelease.value()
-                        animate(pull.floatValue, 0f, animationSpec = spring()) { v, _ -> pull.floatValue = v }
+                        if (reveal.value <= 0f) return Velocity.Zero
+                        val full = thinkingFullPx.intValue
+                        if (full > 0 && reveal.value >= full * THINKING_EXPAND_THRESHOLD) {
+                            reveal.animateTo(full.toFloat())
+                            thinkingExpanded = true
+                        } else {
+                            reveal.animateTo(0f)
+                        }
                         return available
                     }
                 }
@@ -253,15 +261,27 @@ fun HomeScreen(
                     Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
                 }
                 item(key = "thread") {
-                    displayThread?.let {
-                        AiThinkingThread(
-                            thread = it,
-                            isRunning = uiState.isRetrying,
-                            expanded = thinkingExpanded,
-                            onExpandedChange = { open -> thinkingExpanded = open },
-                            expandFraction = pullFraction,
-                        )
-                    }
+                    AiThinkingThread(
+                        thread = displayThread,
+                        isRunning = uiState.isRetrying,
+                        expanded = thinkingExpanded,
+                        // Tap animates the same reveal value (snap to full before a close so it eases
+                        // down from the natural height the expanded state was showing).
+                        onExpandedChange = { open ->
+                            scope.launch {
+                                if (open) {
+                                    reveal.animateTo(thinkingFullPx.intValue.toFloat())
+                                    thinkingExpanded = true
+                                } else {
+                                    thinkingExpanded = false
+                                    reveal.snapTo(thinkingFullPx.intValue.toFloat())
+                                    reveal.animateTo(0f)
+                                }
+                            }
+                        },
+                        expandPx = reveal.value,
+                        onFullHeight = { if (it != thinkingFullPx.intValue) thinkingFullPx.intValue = it },
+                    )
                 }
                 if (!hasNotificationPermission) {
                     item(key = "notif-permission") {
