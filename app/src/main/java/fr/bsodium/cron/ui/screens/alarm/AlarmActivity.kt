@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -130,7 +131,16 @@ private fun AlarmScreen(
             delay(1_000)
         }
     }
+    AlarmScreenContent(timeText = timeText, label = label, onDismiss = onDismiss, onSnooze = onSnooze)
+}
 
+@Composable
+private fun AlarmScreenContent(
+    timeText: String,
+    label: String,
+    onDismiss: () -> Unit,
+    onSnooze: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -251,5 +261,38 @@ private fun SlideToActTrack(
                     },
                 ),
         )
+    }
+}
+
+@Preview(showBackground = true, name = "Alarm — light")
+@Preview(showBackground = true, name = "Alarm — dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun AlarmScreenContentPreview() {
+    CronTheme {
+        AlarmScreenContent(
+            timeText = "06:40",
+            label = "Wake up",
+            onDismiss = {},
+            onSnooze = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Slide to dismiss track")
+@Composable
+private fun SlideToActTrackPreview() {
+    CronTheme {
+        Box(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.primary)
+                .padding(Spacing.xxxl),
+        ) {
+            SlideToActTrack(
+                label = "Slide to dismiss",
+                thumbColor = MaterialTheme.colorScheme.onPrimary,
+                slideToEnd = true,
+                onSlideComplete = {},
+            )
+        }
     }
 }
