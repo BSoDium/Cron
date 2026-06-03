@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +74,9 @@ fun AiThinkingThread(
     onExpandedChange: ((Boolean) -> Unit)? = null,
     expandPx: Float = 0f,
     onFullHeight: (Int) -> Unit = {},
+    // 0f = collapsed (chevron pointing right), 1f = fully open (chevron pointing down). Drives the
+    // pivot animation; tracked to the live reveal value so the chevron rotates with the drag.
+    expansionFraction: Float = 0f,
 ) {
     var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
     val isExpanded = expanded ?: internalExpanded
@@ -93,6 +96,7 @@ fun AiThinkingThread(
                 },
                 expandPx = expandPx,
                 onFullHeight = onFullHeight,
+                expansionFraction = expansionFraction,
             )
         }
         if (!thread.response.isNullOrBlank()) {
@@ -129,6 +133,7 @@ private fun ThinkingDisclosure(
     onToggle: () -> Unit,
     expandPx: Float = 0f,
     onFullHeight: (Int) -> Unit = {},
+    expansionFraction: Float = 0f,
 ) {
     val canExpand = process.isNotEmpty()
     // Full-bleed bar: transparent collapsed, a quiet fill when open. It bleeds past the side content
@@ -173,9 +178,10 @@ private fun ThinkingDisclosure(
             )
             if (canExpand) {
                 Icon(
-                    imageVector = if (expanded) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.graphicsLayer { rotationZ = expansionFraction * 90f },
                 )
             }
         }

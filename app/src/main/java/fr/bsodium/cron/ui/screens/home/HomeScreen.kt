@@ -281,6 +281,9 @@ fun HomeScreen(
                         },
                         expandPx = reveal.value,
                         onFullHeight = { if (it != thinkingFullPx.intValue) thinkingFullPx.intValue = it },
+                        expansionFraction = if (thinkingExpanded) 1f
+                            else (reveal.value / thinkingFullPx.intValue.toFloat().coerceAtLeast(1f))
+                                .coerceIn(0f, 1f),
                     )
                 }
                 if (!hasNotificationPermission) {
