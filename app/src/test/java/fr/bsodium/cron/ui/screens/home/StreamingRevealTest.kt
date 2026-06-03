@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home
 
 import fr.bsodium.cron.ui.screens.home.components.balanceInlineMarkers
+import fr.bsodium.cron.ui.screens.home.components.preferNonRegressed
 import fr.bsodium.cron.ui.screens.home.components.revealThread
 import fr.bsodium.cron.ui.screens.home.components.revealableLength
 import org.junit.Assert.assertEquals
@@ -77,5 +78,23 @@ class StreamingRevealTest {
         assertEquals("the **cal**", balanceInlineMarkers("the **cal**"))
         assertEquals("`code`", balanceInlineMarkers("`code`"))
         assertEquals("plain text", balanceInlineMarkers("plain text"))
+    }
+
+    @Test
+    fun prefer_non_regressed_holds_a_same_turn_answer_loss() {
+        val withAnswer = thread.copy(response = "Your alarm is set.")
+        val staleNoAnswer = thread.copy(response = null) // same turnIndex, lost the answer
+        // A transient stale read keeps the answered frame…
+        assertEquals(withAnswer, preferNonRegressed(previous = withAnswer, candidate = staleNoAnswer))
+        // …then releases once the candidate has the answer again.
+        assertEquals(withAnswer, preferNonRegressed(previous = staleNoAnswer, candidate = withAnswer))
+    }
+
+    @Test
+    fun prefer_non_regressed_lets_a_new_turn_or_first_value_through() {
+        val turn0 = thread.copy(turnIndex = 0, response = "done")
+        val turn1 = thread.copy(turnIndex = 1, response = null) // a fresh turn, answer not started
+        assertEquals(turn1, preferNonRegressed(previous = turn0, candidate = turn1))
+        assertEquals(turn0, preferNonRegressed(previous = null, candidate = turn0))
     }
 }
