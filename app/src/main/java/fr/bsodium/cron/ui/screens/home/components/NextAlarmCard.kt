@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import android.content.res.Configuration
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -44,6 +45,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
+import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.ui.components.PillBadge
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
@@ -56,6 +58,7 @@ import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -127,15 +130,42 @@ fun NextAlarmCard(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, name = "Pending — no sleep data")
 @Composable
-private fun NextAlarmCardPreview() {
+private fun NextAlarmCardPendingPreview() {
     CronTheme {
         NextAlarmCard(
             dateLabel = "Monday 1",
             alarmTime = LocalTime(6, 40),
             sleepDurationLabel = null,
             sleepSegments = emptyList(),
+            modifier = Modifier.padding(Spacing.xl),
+        )
+    }
+}
+
+/** A representative night ending at the 06:40 alarm, for previewing the sleep-duration state. */
+private val PREVIEW_SLEEP_SEGMENTS = listOf(
+    SleepStage.Awake to ("2026-06-01T23:00:00Z" to "2026-06-01T23:12:00Z"),
+    SleepStage.Light to ("2026-06-01T23:12:00Z" to "2026-06-02T00:30:00Z"),
+    SleepStage.Deep to ("2026-06-02T00:30:00Z" to "2026-06-02T02:05:00Z"),
+    SleepStage.Rem to ("2026-06-02T02:05:00Z" to "2026-06-02T02:50:00Z"),
+    SleepStage.Light to ("2026-06-02T02:50:00Z" to "2026-06-02T04:10:00Z"),
+    SleepStage.Deep to ("2026-06-02T04:10:00Z" to "2026-06-02T05:15:00Z"),
+    SleepStage.Rem to ("2026-06-02T05:15:00Z" to "2026-06-02T06:05:00Z"),
+    SleepStage.Light to ("2026-06-02T06:05:00Z" to "2026-06-02T06:40:00Z"),
+).map { (stage, span) -> SleepSegment(stage, Instant.parse(span.first), Instant.parse(span.second)) }
+
+@Preview(showBackground = true, name = "With sleep — light")
+@Preview(showBackground = true, name = "With sleep — dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun NextAlarmCardWithSleepPreview() {
+    CronTheme {
+        NextAlarmCard(
+            dateLabel = "Monday 1",
+            alarmTime = LocalTime(6, 40),
+            sleepDurationLabel = "7H 28M",
+            sleepSegments = PREVIEW_SLEEP_SEGMENTS,
             modifier = Modifier.padding(Spacing.xl),
         )
     }
