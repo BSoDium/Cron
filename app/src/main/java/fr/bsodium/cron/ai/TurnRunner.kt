@@ -30,7 +30,7 @@ import kotlin.math.min
  * Retries on 429 / 5xx with exponential backoff, capped at [maxRetries].
  */
 class TurnRunner(
-    private val client: AnthropicClient,
+    private val client: AnthropicMessages,
     private val aiMessageDao: AiMessageDao,
     private val model: String,
     private val systemPrompt: String,
@@ -62,43 +62,66 @@ class TurnRunner(
         turnIndex: Int,
         initialUserMessage: String,
     ): Outcome {
+        val startedAtMs = Clock.System.now().toEpochMilliseconds()
         val messages = loadOrSeed(sessionId, turnIndex, initialUserMessage).toMutableList()
+        // The turn's renderable blocks so far (assistant content + tool_result, never the user prompt),
+        // seeded from any already-persisted messages on resume. Streamed deltas append onto this.
+        var committedBlocks = renderableBlocks(messages)
         var aggregateUsage = Usage()
 
-        repeat(maxRoundTrips) { round ->
-            val request = MessagesRequest(
-                model = model,
-                max_tokens = maxTokens,
-                system = systemPrompt,
-                messages = messages.toList(),
-                tools = tools.definitions,
-                tool_choice = toolChoice,
-                thinking = thinking,
-            )
+        return try {
+            repeat(maxRoundTrips) { round ->
+                val request = MessagesRequest(
+                    model = model,
+                    max_tokens = maxTokens,
+                    system = systemPrompt,
+                    messages = messages.toList(),
+                    tools = tools.definitions,
+                    tool_choice = toolChoice,
+                    thinking = thinking,
+                )
 
-            val response = sendWithRetries(request)
-            aggregateUsage = aggregateUsage.plus(response.usage)
+                val response = streamWithRetries(sessionId, turnIndex, request, committedBlocks, startedAtMs)
+                aggregateUsage = aggregateUsage.plus(response.usage)
 
-            // Persist assistant message.
-            val assistantBlocks = response.content
-            persistMessage(sessionId, turnIndex, role = "assistant", blocks = assistantBlocks)
-            messages.add(MessageInput(role = "assistant", content = assistantBlocks))
+                // Persist assistant message (complete — keeps resume safe), then settle the partial.
+                val assistantBlocks = response.content
+                persistMessage(sessionId, turnIndex, role = "assistant", blocks = assistantBlocks)
+                messages.add(MessageInput(role = "assistant", content = assistantBlocks))
+                committedBlocks = committedBlocks + assistantBlocks
+                publish(sessionId, turnIndex, committedBlocks, startedAtMs)
 
-            val toolUses = assistantBlocks.filterIsInstance<ContentBlock.ToolUse>()
-            if (toolUses.isEmpty() || response.stop_reason == "end_turn") {
-                return Outcome.Completed(response, aggregateUsage)
+                val toolUses = assistantBlocks.filterIsInstance<ContentBlock.ToolUse>()
+                if (toolUses.isEmpty() || response.stop_reason == "end_turn") {
+                    return Outcome.Completed(response, aggregateUsage)
+                }
+
+                // Execute every tool_use block emitted in this assistant message.
+                val toolResults: List<ContentBlock> = toolUses.map { call ->
+                    executeToolCall(call)
+                }
+
+                persistMessage(sessionId, turnIndex, role = "user", blocks = toolResults)
+                messages.add(MessageInput(role = "user", content = toolResults))
+                committedBlocks = committedBlocks + toolResults
+                publish(sessionId, turnIndex, committedBlocks, startedAtMs)
             }
 
-            // Execute every tool_use block emitted in this assistant message.
-            val toolResults: List<ContentBlock> = toolUses.map { call ->
-                executeToolCall(call)
-            }
-
-            persistMessage(sessionId, turnIndex, role = "user", blocks = toolResults)
-            messages.add(MessageInput(role = "user", content = toolResults))
+            Outcome.BudgetExhausted(maxRoundTrips, aggregateUsage)
+        } finally {
+            StreamingTurnStore.clear(sessionId, turnIndex)
         }
+    }
 
-        return Outcome.BudgetExhausted(maxRoundTrips, aggregateUsage)
+    private fun publish(sessionId: String, turnIndex: Int, blocks: List<ContentBlock>, startedAtMs: Long) =
+        StreamingTurnStore.update(StreamingTurn(sessionId, turnIndex, blocks, startedAtMs))
+
+    /** Blocks the home thread renders: assistant content plus tool_result, excluding the user prompt. */
+    private fun renderableBlocks(messages: List<MessageInput>): List<ContentBlock> = buildList {
+        messages.forEach { message ->
+            if (message.role == "assistant") addAll(message.content)
+            else addAll(message.content.filterIsInstance<ContentBlock.ToolResult>())
+        }
     }
 
     private fun Usage.plus(other: Usage?): Usage {
@@ -133,13 +156,24 @@ class TurnRunner(
         )
     }
 
-    private suspend fun sendWithRetries(request: MessagesRequest): MessagesResponse {
+    private suspend fun streamWithRetries(
+        sessionId: String,
+        turnIndex: Int,
+        request: MessagesRequest,
+        committedBlocks: List<ContentBlock>,
+        startedAtMs: Long,
+    ): MessagesResponse {
         var attempt = 0
         while (true) {
             try {
-                return client.send(request)
+                return client.stream(request) { streamingBlocks ->
+                    publish(sessionId, turnIndex, committedBlocks + streamingBlocks, startedAtMs)
+                }
             } catch (e: AnthropicClient.AnthropicHttpException) {
                 if (!e.isRetryable || attempt >= maxRetries) throw e
+                // A fresh attempt re-streams from scratch — drop the half-streamed tail so the UI
+                // doesn't briefly show doubled text.
+                publish(sessionId, turnIndex, committedBlocks, startedAtMs)
                 val backoffMs = min(BASE_BACKOFF_MS shl attempt, MAX_BACKOFF_MS)
                 delay(backoffMs)
                 attempt++

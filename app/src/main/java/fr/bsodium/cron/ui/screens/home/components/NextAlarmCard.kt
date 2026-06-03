@@ -83,10 +83,10 @@ fun NextAlarmCard(
     ) {
         Column(
             modifier = Modifier.padding(
-                start = Spacing.xxxl,
-                top = Spacing.xxl,
+                start = Spacing.xxl,
+                top = Spacing.xl,
                 end = Spacing.xxl,
-                bottom = Spacing.xxl,
+                bottom = Spacing.xl,
             ),
         ) {
             AlignedFirstGlyph(

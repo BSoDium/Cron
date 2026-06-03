@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.LocalTime
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -53,6 +54,22 @@ class SettingsViewModelTest {
             }
             assertEquals(LocalTime(11, 30), state.hardLatest)
             assertEquals(45, state.commuteBufferMinutes)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun haptics_toggle_round_trips_through_uiState() = runTest(dispatcher) {
+        vm.uiState.test(timeout = 5.seconds) {
+            awaitItem()
+            vm.setHapticsEnabled(false)
+            var state = awaitItem()
+            while (state.hapticsEnabled) state = awaitItem()
+            assertFalse(state.hapticsEnabled)
+
+            vm.setHapticsEnabled(true)
+            while (!state.hapticsEnabled) state = awaitItem()
+            assertTrue(state.hapticsEnabled)
             cancelAndIgnoreRemainingEvents()
         }
     }

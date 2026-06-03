@@ -1,0 +1,100 @@
+package fr.bsodium.cron.ui.screens.home
+
+import fr.bsodium.cron.ui.screens.home.components.balanceInlineMarkers
+import fr.bsodium.cron.ui.screens.home.components.preferNonRegressed
+import fr.bsodium.cron.ui.screens.home.components.revealThread
+import fr.bsodium.cron.ui.screens.home.components.revealableLength
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class StreamingRevealTest {
+
+    private val thread = AiThreadUi(
+        turnIndex = 0,
+        summary = "Working",
+        process = listOf(
+            ProcessItem.Reasoning("abcde"),                              // 5 units
+            ProcessItem.Tool(name = "read_calendar", isComplete = true), // 1 unit (TOOL_COST)
+            ProcessItem.Narration("xyz"),                                // 3 units
+        ),
+        response = "hello",                                              // 5 units
+        isStreaming = true,
+    )
+
+    @Test
+    fun revealable_length_sums_process_text_tools_and_response() {
+        assertEquals(5 + 1 + 3 + 5, thread.revealableLength())
+    }
+
+    @Test
+    fun zero_budget_reveals_nothing() {
+        val r = revealThread(thread, 0)
+        assertEquals(emptyList<ProcessItem>(), r.process)
+        assertNull(r.response)
+        assertEquals("Working", r.summary) // the pill label is kept whole, not typewritten
+    }
+
+    @Test
+    fun partial_budget_truncates_the_straddling_text_item() {
+        val r = revealThread(thread, 3)
+        assertEquals(listOf(ProcessItem.Reasoning("abc")), r.process)
+        assertNull(r.response)
+    }
+
+    @Test
+    fun a_tool_only_appears_once_the_budget_reaches_it() {
+        // 5 reveals the reasoning exactly; the tool needs one more unit.
+        assertEquals(listOf(ProcessItem.Reasoning("abcde")), revealThread(thread, 5).process)
+        assertEquals(
+            listOf(ProcessItem.Reasoning("abcde"), ProcessItem.Tool(name = "read_calendar", isComplete = true)),
+            revealThread(thread, 6).process,
+        )
+    }
+
+    @Test
+    fun response_is_revealed_only_after_the_whole_process() {
+        val r = revealThread(thread, 11) // 5 + 1 + 3 process, then 2 of the answer
+        assertEquals(3, r.process.size)
+        assertEquals("he", r.response)
+    }
+
+    @Test
+    fun full_budget_returns_the_input_unchanged() {
+        assertEquals(thread, revealThread(thread, thread.revealableLength()))
+        // and over-budget is clamped to the same
+        assertEquals(thread, revealThread(thread, 999))
+    }
+
+    @Test
+    fun balance_inline_markers_closes_dangling_spans() {
+        assertEquals("the **cal**", balanceInlineMarkers("the **cal"))      // unclosed bold
+        assertEquals("**bold**", balanceInlineMarkers("**bold*"))           // half-typed closer
+        assertEquals("use `co`", balanceInlineMarkers("use `co"))           // unclosed inline code
+    }
+
+    @Test
+    fun balance_inline_markers_leaves_complete_text_untouched() {
+        assertEquals("the **cal**", balanceInlineMarkers("the **cal**"))
+        assertEquals("`code`", balanceInlineMarkers("`code`"))
+        assertEquals("plain text", balanceInlineMarkers("plain text"))
+    }
+
+    @Test
+    fun prefer_non_regressed_holds_a_same_turn_answer_loss() {
+        val withAnswer = thread.copy(response = "Your alarm is set.")
+        val staleNoAnswer = thread.copy(response = null) // same turnIndex, lost the answer
+        // A transient stale read keeps the answered frame…
+        assertEquals(withAnswer, preferNonRegressed(previous = withAnswer, candidate = staleNoAnswer))
+        // …then releases once the candidate has the answer again.
+        assertEquals(withAnswer, preferNonRegressed(previous = staleNoAnswer, candidate = withAnswer))
+    }
+
+    @Test
+    fun prefer_non_regressed_lets_a_new_turn_or_first_value_through() {
+        val turn0 = thread.copy(turnIndex = 0, response = "done")
+        val turn1 = thread.copy(turnIndex = 1, response = null) // a fresh turn, answer not started
+        assertEquals(turn1, preferNonRegressed(previous = turn0, candidate = turn1))
+        assertEquals(turn0, preferNonRegressed(previous = null, candidate = turn0))
+    }
+}

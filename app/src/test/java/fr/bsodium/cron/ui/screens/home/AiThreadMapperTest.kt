@@ -70,4 +70,88 @@ class AiThreadMapperTest {
         assertTrue(tool.isComplete)
         assertFalse(tool.isError)
     }
+
+    @Test
+    fun streaming_blocks_render_identically_to_the_settled_rows() {
+        val thinking = ContentBlock.Thinking(thinking = "Reading the calendar first.")
+        val toolUse = ContentBlock.ToolUse(id = "t1", name = "set_alarm", input = SessionJson.parseToJsonElement("{}"))
+        val toolResult = ContentBlock.ToolResult(
+            tool_use_id = "t1",
+            content = "{\"alarm_time\":\"2026-05-22T06:40:00Z\"}",
+            is_error = false,
+        )
+        val answer = ContentBlock.Text("SUMMARY: Set your alarm\n\nSet a 6:40 alarm so you make stand-up.")
+
+        val settled = requireNotNull(
+            AiThreadMapper.build(
+                listOf(
+                    row(0, "user", ContentBlock.Text("plan it")),
+                    row(0, "assistant", thinking, toolUse, answer),
+                    row(0, "user", toolResult),
+                ),
+            ),
+        )
+        // committedBlocks order during streaming: assistant blocks, then the tool_result, then the answer.
+        val streamed = AiThreadMapper.buildFromBlocks(
+            turnIndex = 0,
+            blocks = listOf(thinking, toolUse, toolResult, answer),
+        )
+
+        assertTrue(streamed.isStreaming)
+        // Same summary/process/response — only the settled-only duration and the streaming flag differ.
+        assertEquals(settled.copy(durationSeconds = null, isStreaming = true), streamed)
+    }
+
+    @Test
+    fun a_streaming_turn_with_no_assistant_blocks_yet_shows_the_placeholder() {
+        val thread = AiThreadMapper.buildFromBlocks(turnIndex = 0, blocks = emptyList())
+        assertEquals("Thinking…", thread.summary)
+        assertTrue(thread.process.isEmpty())
+        assertNull(thread.response)
+        assertTrue(thread.isStreaming)
+    }
+
+    @Test
+    fun streaming_leading_narration_is_not_shown_as_the_answer() {
+        // A turn streams reasoning then prose narration before any tool call. The prose must stay in
+        // the thinking process, never flash as the answer (it has no SUMMARY marker yet).
+        val thread = AiThreadMapper.buildFromBlocks(
+            turnIndex = 0,
+            blocks = listOf(
+                ContentBlock.Thinking(thinking = "Considering the morning."),
+                ContentBlock.Text("I can see tomorrow's picture clearly — a packed morning."),
+            ),
+        )
+        assertNull(thread.response)
+        val narration = thread.process.filterIsInstance<ProcessItem.Narration>().single()
+        assertEquals("I can see tomorrow's picture clearly — a packed morning.", narration.text)
+    }
+
+    @Test
+    fun streaming_summary_line_alone_is_the_pill_not_the_response() {
+        // The model has typed "SUMMARY: …" but not the answer body yet. The summary belongs in the pill;
+        // the response area must stay empty (no flash) until the body streams in.
+        val thread = AiThreadMapper.buildFromBlocks(
+            turnIndex = 0,
+            blocks = listOf(
+                ContentBlock.Thinking(thinking = "Deciding."),
+                ContentBlock.Text("SUMMARY: Set an 8:29 alarm so you have time"),
+            ),
+        )
+        assertNull(thread.response)
+        assertEquals("Set an 8:29 alarm so you have time", thread.summary)
+    }
+
+    @Test
+    fun streaming_answer_is_revealed_once_marked_with_summary() {
+        val thread = AiThreadMapper.buildFromBlocks(
+            turnIndex = 0,
+            blocks = listOf(
+                ContentBlock.Thinking(thinking = "Considering the morning."),
+                ContentBlock.Text("SUMMARY: Set your alarm\n\nSet a 6:40 alarm so you make stand-up."),
+            ),
+        )
+        assertEquals("Set a 6:40 alarm so you make stand-up.", thread.response)
+        assertEquals("Set your alarm", thread.summary)
+    }
 }

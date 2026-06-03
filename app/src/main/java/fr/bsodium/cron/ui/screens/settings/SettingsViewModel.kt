@@ -27,6 +27,7 @@ data class SettingsUiState(
     val userInstructions: String? = null,
     val dailyTokenLimit: Int = BudgetStore.DEFAULT_DAILY_TOKEN_LIMIT,
     val tokensUsedToday: Int = 0,
+    val hapticsEnabled: Boolean = true,
 )
 
 class SettingsViewModel @JvmOverloads constructor(
@@ -69,6 +70,8 @@ class SettingsViewModel @JvmOverloads constructor(
         state.copy(dailyTokenLimit = limit)
     }.combine(_tokensUsedToday) { state, used ->
         state.copy(tokensUsedToday = used)
+    }.combine(repo.hapticsEnabled) { state, haptics ->
+        state.copy(hapticsEnabled = haptics)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setEveningTrigger(time: LocalTime) {
@@ -108,6 +111,10 @@ class SettingsViewModel @JvmOverloads constructor(
 
     fun setDailyTokenLimit(tokens: Int) {
         viewModelScope.launch { repo.setDailyTokenLimit(tokens) }
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        viewModelScope.launch { repo.setHapticsEnabled(enabled) }
     }
 
     /** Re-reads today's token spend; called when the Settings screen resumes. */
