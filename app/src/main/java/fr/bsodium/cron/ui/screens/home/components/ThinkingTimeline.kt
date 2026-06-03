@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,14 +9,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.Spacing
@@ -27,6 +27,10 @@ private val TIMELINE_RULE_WIDTH = 2.dp
 private val ICON_MASK_SIZE = 24.dp
 /** Row content padding; doubles as the inter-step gap (sm keeps the timeline rule visible between discs). */
 private val TIMELINE_CONTENT_VPAD = Spacing.sm
+
+/** Surface colour behind the timeline icons — the elevation band when the disclosure is open. Read at
+ *  draw time (via the stable [State]) so rows don't recompose as it animates. Null → the page colour. */
+internal val LocalTimelineSurface = staticCompositionLocalOf<State<Color>?> { null }
 
 /** Stacks timeline rows so their per-row [TimelineRow] rules join into one thread. */
 @Composable
@@ -44,7 +48,9 @@ internal fun TimelineRow(
 ) {
     // Low-emphasis connector tone with enough contrast for a 2dp line against the page.
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    val maskColor = MaterialTheme.colorScheme.background
+    // The disc matches whatever sits behind the timeline — the elevation band when open, else the page.
+    val maskSurface = LocalTimelineSurface.current
+    val maskFallback = MaterialTheme.colorScheme.background
     // Centre the disc on the content's FIRST line (not the whole multi-line row): disc centre =
     // contentTopPad + firstLine/2, so its top inset is that minus half the disc.
     val discTop = (TIMELINE_CONTENT_VPAD + (firstLineHeight - ICON_MASK_SIZE) / 2)
@@ -90,8 +96,7 @@ internal fun TimelineRow(
                             .align(Alignment.TopCenter)
                             .padding(top = discTop)
                             .size(ICON_MASK_SIZE)
-                            .clip(CircleShape)
-                            .background(maskColor),
+                            .drawBehind { drawCircle(maskSurface?.value ?: maskFallback) },
                         contentAlignment = Alignment.Center,
                     ) { icon() }
                 }
