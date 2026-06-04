@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -21,8 +20,6 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Weekend
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,7 +37,7 @@ private data class SettingsCategory(
     val subtitle: String,
 )
 
-/** Categories grouped into Android-Settings-style cards: timing · assistant + system · app. */
+/** Categories grouped into Android-Settings-style connected cards: timing · assistant + system · app. */
 private val SETTINGS_GROUPS: List<List<SettingsCategory>> = listOf(
     listOf(
         SettingsCategory(SETTINGS_SCHEDULE, Icons.Outlined.Schedule, "Schedule", "When Cron plans tonight's alarm"),
@@ -57,7 +54,14 @@ private val SETTINGS_GROUPS: List<List<SettingsCategory>> = listOf(
     ),
 )
 
-/** Settings landing: tappable categories grouped into cards that drill into per-category sub-screens. */
+// Connected-card group: large radius on a group's outer corners, a barely-rounded seam where
+// same-group cards meet, a tight gap within a group and a wider gap between groups.
+private val GROUP_GAP = Spacing.lg
+private val CARD_GAP = Spacing.xs
+private val GROUP_OUTER_RADIUS = Radius.xl
+private val GROUP_INNER_RADIUS = Radius.sm
+
+/** Settings landing: tappable categories as connected cards that drill into per-category sub-screens. */
 @Composable
 fun SettingsScreen(onOpenCategory: (String) -> Unit) {
     val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -72,34 +76,27 @@ fun SettingsScreen(onOpenCategory: (String) -> Unit) {
     ) {
         ScreenTitle("Settings")
         Spacer(Modifier.height(Spacing.xl))
-        SETTINGS_GROUPS.forEachIndexed { index, group ->
-            if (index > 0) Spacer(Modifier.height(Spacing.lg))
-            SettingsCategoryGroup(group, onOpenCategory)
-        }
-    }
-}
-
-@Composable
-private fun SettingsCategoryGroup(
-    categories: List<SettingsCategory>,
-    onOpenCategory: (String) -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Radius.xl),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Column {
-            categories.forEach { category ->
+        SETTINGS_GROUPS.forEachIndexed { groupIndex, group ->
+            if (groupIndex > 0) Spacer(Modifier.height(GROUP_GAP))
+            group.forEachIndexed { index, category ->
+                if (index > 0) Spacer(Modifier.height(CARD_GAP))
                 SettingsCategoryRow(
                     icon = category.icon,
                     title = category.title,
                     subtitle = category.subtitle,
+                    shape = groupItemShape(isFirst = index == 0, isLast = index == group.lastIndex),
                     onClick = { onOpenCategory(category.route) },
                 )
             }
         }
     }
+}
+
+/** Rounds a card's outer (group-edge) corners large and its seams with neighbours small. */
+private fun groupItemShape(isFirst: Boolean, isLast: Boolean): RoundedCornerShape {
+    val top = if (isFirst) GROUP_OUTER_RADIUS else GROUP_INNER_RADIUS
+    val bottom = if (isLast) GROUP_OUTER_RADIUS else GROUP_INNER_RADIUS
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
 }
 
 @Preview(showBackground = true)
