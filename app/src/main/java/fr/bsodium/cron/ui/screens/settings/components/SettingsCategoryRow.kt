@@ -51,9 +51,7 @@ internal fun SettingsCategoryRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
-        // The brightest surface role — sits *above* the page (lighter than `background` in light), so
-        // the cards read as raised like Android Settings rather than darker wells.
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         Row(
             modifier = Modifier
@@ -67,7 +65,7 @@ internal fun SettingsCategoryRow(
                 modifier = Modifier
                     .size(CATEGORY_ICON_CHIP)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
