@@ -204,8 +204,16 @@ fun HomeScreen(
             val canPull = rememberUpdatedState(displayThread.process.isNotEmpty() && !thinkingExpanded)
             val pullHaptics = rememberCronHaptics()
             val expandTriggerMaxPx = with(density) { THINKING_EXPAND_TRIGGER_MAX.toPx() }
-            val pullConnection = remember(listState, reveal, expandTriggerMaxPx) {
+            // Tracks whether the pull is past the release-to-open threshold, so a click fires once per crossing.
+            val pastThreshold = remember(displayThread.turnIndex) { mutableStateOf(false) }
+            val pullConnection = remember(listState, reveal, expandTriggerMaxPx, pastThreshold) {
                 object : NestedScrollConnection {
+                    // Pixels of pull past which releasing snaps the block open — the same point onPreFling tests.
+                    fun triggerPx(): Float {
+                        val full = thinkingFullPx.intValue
+                        return if (full > 0) minOf(full * THINKING_EXPAND_THRESHOLD, expandTriggerMaxPx) else Float.MAX_VALUE
+                    }
+
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                         if (source != NestedScrollSource.UserInput) return Offset.Zero
                         // Dragging up while a partial peek is open unwinds it (1:1) before the list scrolls.
@@ -213,20 +221,24 @@ fun HomeScreen(
                         if (available.y < 0f && reveal.value > 0f && !thinkingExpanded) {
                             val next = (reveal.value + available.y).coerceAtLeast(0f)
                             val consumed = next - reveal.value
+                            pastThreshold.value = next >= triggerPx()
                             scope.launch { reveal.snapTo(next) }
                             return Offset(0f, consumed)
                         }
                         // At the top, dragging down on a collapsible, collapsed thread grows the reveal in
                         // pixels (tracks the finger), gently resisting near full so it never runs ahead.
                         if (available.y > 0f && canPull.value && !listState.canScrollBackward) {
-                            if (reveal.value == 0f) pullHaptics.tick() // a click as it starts unwrapping
                             val full = thinkingFullPx.intValue
                             val rubber = if (full > 0) {
                                 (1f - reveal.value / full).coerceIn(THINKING_PULL_RUBBER_FLOOR, 1f)
                             } else {
                                 1f
                             }
-                            scope.launch { reveal.snapTo(reveal.value + available.y * rubber) }
+                            val next = reveal.value + available.y * rubber
+                            val nowPast = next >= triggerPx()
+                            if (nowPast && !pastThreshold.value) pullHaptics.tick() // click as the pull reaches the open point
+                            pastThreshold.value = nowPast
+                            scope.launch { reveal.snapTo(next) }
                             return Offset(0f, available.y)
                         }
                         return Offset.Zero
@@ -235,8 +247,7 @@ fun HomeScreen(
                     override suspend fun onPreFling(available: Velocity): Velocity {
                         if (reveal.value <= 0f) return Velocity.Zero
                         val full = thinkingFullPx.intValue
-                        val trigger = minOf(full * THINKING_EXPAND_THRESHOLD, expandTriggerMaxPx)
-                        if (full > 0 && reveal.value >= trigger) {
+                        if (full > 0 && reveal.value >= triggerPx()) {
                             reveal.animateTo(full.toFloat())
                             thinkingExpanded = true
                         } else {
