@@ -21,19 +21,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextOverflow
@@ -139,95 +135,80 @@ private fun ThinkingDisclosure(
     expansionFraction: Float = 0f,
 ) {
     val canExpand = process.isNotEmpty()
-    // Both header and timeline ride the same continuous progress so the whole disclosure lifts as one.
+    // Drives the chevron pivot from the live reveal: 0f collapsed (points right), 1f open (points down).
     val openFraction = if (expanded) 1f else expansionFraction.coerceIn(0f, 1f)
-    // The band's visible colour over the page; also handed to the timeline/avatar discs so they sit
-    // flush on it instead of reading as bright page-coloured halos. rememberUpdatedState keeps a stable
-    // State the discs read at draw time, so they don't recompose as the colour animates.
-    val bandColor = lerp(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surfaceContainerLow, openFraction)
-    val bandColorState = rememberUpdatedState(bandColor)
-    // Full-bleed band over header + timeline: transparent collapsed, fading to a quiet fill as it opens.
-    // It bleeds past the side content padding (Spacing.xl) to hug both edges; the inner row/body re-inset
-    // by the same amount so the summary text, chevron, and timeline stay put.
-    CompositionLocalProvider(LocalTimelineSurface provides bandColorState) {
-        Column(
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // The header (and its tap ripple) bleeds past the list's content padding to span the full
+        // screen width; start/end padding re-insets the summary, avatars, and chevron to the margin.
+        Row(
             modifier = Modifier
                 .bleedHorizontally(Spacing.xl)
                 .fillMaxWidth()
-                .background(bandColor),
+                .let { if (canExpand) it.clickable { onToggle() } else it }
+                .heightIn(min = ROW_MIN_HEIGHT)
+                .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.xl, bottom = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .let { if (canExpand) it.clickable { onToggle() } else it }
-                    .heightIn(min = ROW_MIN_HEIGHT)
-                    .padding(start = Spacing.xl, top = Spacing.sm, end = Spacing.xl, bottom = Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-            ) {
-                if (inProgress) {
-                    // Live: the model's current gerund summary + a spinner.
-                    Text(
-                        text = summary ?: "Thinking…",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
+            if (inProgress) {
+                // Live: the model's current gerund summary + a spinner.
+                Text(
+                    text = summary ?: "Thinking…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                CircularProgressIndicator(
+                    modifier = Modifier.size(SPINNER_SIZE),
+                    strokeWidth = SPINNER_STROKE,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                // Settled: an avatar-stack of the tools that ran + how long it took.
+                val tools = process.filterIsInstance<ProcessItem.Tool>()
+                if (tools.isNotEmpty()) ToolStack(tools)
+                Text(
+                    text = thoughtForLabel(durationSeconds),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (canExpand) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
                     )
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(SPINNER_SIZE),
-                        strokeWidth = SPINNER_STROKE,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    // Settled: an avatar-stack of the tools that ran + how long it took.
-                    val tools = process.filterIsInstance<ProcessItem.Tool>()
-                    if (tools.isNotEmpty()) ToolStack(tools)
-                    Text(
-                        text = thoughtForLabel(durationSeconds),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (canExpand) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                            contentDescription = if (expanded) "Collapse" else "Expand",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
-                        )
-                    }
                 }
             }
-            // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate
-            // the same value (owned by HomeScreen), so there's no second source to dip against. Fully expanded
-            // clips to Float.MAX_VALUE → the natural height, re-measured so a still-streaming timeline isn't
-            // cut. Settled turns always compose (at h=0 when collapsed) so the full height is ready for tap/pull.
-            val revealing = expanded || expandPx > 0f || !inProgress
-            if (canExpand && revealing) {
-                // Re-inset by the bleed amount so the timeline aligns to the content margin, not the screen edge.
-                Box(modifier = Modifier.padding(horizontal = Spacing.xl)) {
-                    ExpandReveal(
-                        targetPx = if (expanded) Float.MAX_VALUE else expandPx,
-                        peeking = !expanded,
-                        onFullHeight = onFullHeight,
-                    ) {
-                        TimelineColumn {
-                            process.forEachIndexed { i, item ->
-                                val isFirst = i == 0
-                                val isLast = inProgress && i == process.lastIndex
-                                when (item) {
-                                    is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
-                                    is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
-                                    is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
-                                }
-                            }
-                            if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
+        }
+        // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate
+        // the same value (owned by HomeScreen), so there's no second source to dip against. Fully expanded
+        // clips to Float.MAX_VALUE → the natural height, re-measured so a still-streaming timeline isn't
+        // cut. Settled turns always compose (at h=0 when collapsed) so the full height is ready for tap/pull.
+        val revealing = expanded || expandPx > 0f || !inProgress
+        if (canExpand && revealing) {
+            ExpandReveal(
+                targetPx = if (expanded) Float.MAX_VALUE else expandPx,
+                peeking = !expanded,
+                onFullHeight = onFullHeight,
+            ) {
+                TimelineColumn {
+                    process.forEachIndexed { i, item ->
+                        val isFirst = i == 0
+                        val isLast = inProgress && i == process.lastIndex
+                        when (item) {
+                            is ProcessItem.Reasoning -> ProcessTextRow(item.text, isFirst, isLast)
+                            is ProcessItem.Narration -> ProcessTextRow(item.text, isFirst, isLast)
+                            is ProcessItem.Tool -> ToolStepRow(item, isFirst, isLast)
                         }
                     }
+                    if (!inProgress) DoneRow(isFirst = process.isEmpty(), isLast = true)
                 }
             }
         }
@@ -267,19 +248,18 @@ private val TOOL_DISC_ICON = 13.dp
 private val TOOL_STACK_OVERLAP = 8.dp
 
 /**
- * Avatar-stack of the tools that ran this turn. Each icon sits in a ring matching the surface behind it,
- * so where the discs overlap (negative spacing) the later one occludes the earlier with a clean gap.
+ * Avatar-stack of the tools that ran this turn. Each icon sits in a page-coloured ring, so where
+ * the discs overlap (negative spacing) the later one occludes the earlier with a clean gap.
  */
 @Composable
 private fun ToolStack(tools: List<ProcessItem.Tool>) {
-    val ringSurface = LocalTimelineSurface.current
-    val ringFallback = MaterialTheme.colorScheme.background
     Row(horizontalArrangement = Arrangement.spacedBy(-TOOL_STACK_OVERLAP)) {
         tools.forEach { tool ->
             Box(
                 modifier = Modifier
                     .size(TOOL_DISC_SIZE)
-                    .drawBehind { drawCircle(ringSurface?.value ?: ringFallback) },
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.background),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
