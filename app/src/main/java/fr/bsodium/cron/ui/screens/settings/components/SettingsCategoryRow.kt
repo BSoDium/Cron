@@ -51,7 +51,9 @@ internal fun SettingsCategoryRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        // The brightest surface role — sits *above* the page (lighter than `background` in light), so
+        // the cards read as raised like Android Settings rather than darker wells.
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
         Row(
             modifier = Modifier
