@@ -122,7 +122,7 @@ val Typography: Typography = Typography(
 /**
  * App-specific Typography roles that live outside the Material scale because
  * they bind to brand fonts (`DisplayFontFamily`, `SerifFontFamily`,
- * `MonoFontFamily`, `CodeFontFamily`) rather than the expressive sans. Use these wherever a
+ * `CodeFontFamily`) rather than the expressive sans. Use these wherever a
  * `TextStyle.copy(fontFamily = ...)` would otherwise be repeated.
  */
 object CronTypography {
