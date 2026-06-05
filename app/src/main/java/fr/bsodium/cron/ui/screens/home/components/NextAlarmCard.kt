@@ -8,12 +8,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -106,9 +108,9 @@ internal fun AlarmCardContent(
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
-    // The collapsing card hides this layer's clock (drawing its own moving copy on top) while still
-    // measuring it, so this stays the single source of the expanded geometry.
-    clockAlpha: Float = 1f,
+    // The collapsing card hides this layer's time row (clock + countdown — both become moving copies
+    // drawn on top) while still measuring it, so this stays the single source of expanded geometry.
+    timeRowAlpha: Float = 1f,
 ) {
     val onCard = MaterialTheme.colorScheme.onPrimary
     Column(
@@ -124,7 +126,7 @@ internal fun AlarmCardContent(
             color = onCard,
             style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
         )
-        LcdTimeDisplay(alarmTime = alarmTime, clockAlpha = clockAlpha)
+        LcdTimeDisplay(alarmTime = alarmTime, timeRowAlpha = timeRowAlpha)
         if (sleepSegments.isNotEmpty()) {
             Spacer(Modifier.height(Spacing.xl))
             Row(
@@ -199,7 +201,7 @@ private fun NextAlarmCardWithSleepPreview() {
 }
 
 @Composable
-private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier, clockAlpha: Float = 1f) {
+private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier, timeRowAlpha: Float = 1f) {
     // Tick once a minute so the countdown stays current without flickering.
     val countdown by produceState<HoursMinutes?>(initialValue = computeCountdown(alarmTime), alarmTime) {
         while (true) {
@@ -215,10 +217,10 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier,
     val countdownColor = if (pending) base.copy(alpha = 0.30f) else base.copy(alpha = 0.7f)
 
     Row(
-        modifier = modifier,
+        modifier = modifier.alpha(timeRowAlpha),
         verticalAlignment = Alignment.Top,
     ) {
-        LcdClock(alarmTime = alarmTime, progress = progress, color = digitColor, modifier = Modifier.alpha(clockAlpha))
+        LcdClock(alarmTime = alarmTime, progress = progress, color = digitColor)
         CountdownStack(
             countdown = countdown,
             progress = progress,
@@ -247,14 +249,16 @@ internal fun LcdClock(
     val hh = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
     val mm = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
     val lcdStyle = TightTextStyle.copy(fontFamily = LcdFontFamily, fontSize = 76.sp, lineHeight = 76.sp)
-    Row(modifier = modifier, verticalAlignment = Alignment.Top) {
+    val ink = rememberLcdInkMetrics()
+    // IntrinsicSize.Min so the colon's fillMaxHeight matches the digit line box, not the viewport.
+    Row(modifier = modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
         StrokeableLcdDigits(hh, color, lcdStyle, strokeWidthPx, alignFirstGlyph = true)
         ColonSeparator(
             color = color,
             dotBoostPx = strokeWidthPx,
-            modifier = Modifier
-                .align(Alignment.CenterVertically)
-                .padding(horizontal = Spacing.sm),
+            inkCenterFraction = ink.centerFraction,
+            inkHeightFraction = ink.heightFraction,
+            modifier = Modifier.padding(horizontal = Spacing.sm),
         )
         StrokeableLcdDigits(mm, color, lcdStyle, strokeWidthPx, alignFirstGlyph = false)
     }
@@ -325,7 +329,7 @@ private const val LCD_REVEAL_MILLIS = 700
  * Renders dim placeholders when no alarm is set.
  */
 @Composable
-private fun CountdownStack(
+internal fun CountdownStack(
     countdown: HoursMinutes?,
     progress: Float,
     color: Color,
@@ -363,25 +367,36 @@ internal fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
 }
 
 private val COLON_WIDTH = 8.dp
-private val COLON_HEIGHT = 56.dp
 private val TIMELINE_HEIGHT = 82.dp
 private val TICK_BAR_HEIGHT = 20.dp
 
-/** Two small filled dots stacked vertically — replaces the chunky Major Mono colon. */
+/**
+ * Two filled dots, centred on the DIGIT ink (not the line box) so the colon shares the digits'
+ * vertical centre. Fills the row height ([Alignment.Top]) and places the dots symmetric about
+ * [inkCenterFraction], spaced by a fraction of the ink height.
+ */
 @Composable
-private fun ColonSeparator(color: Color, modifier: Modifier = Modifier, dotBoostPx: Float = 0f) {
-    Canvas(modifier = modifier.size(width = COLON_WIDTH, height = COLON_HEIGHT)) {
-        drawColonDot(color, yFraction = 0.35f, boostPx = dotBoostPx)
-        drawColonDot(color, yFraction = 0.65f, boostPx = dotBoostPx)
+private fun ColonSeparator(
+    color: Color,
+    inkCenterFraction: Float,
+    inkHeightFraction: Float,
+    modifier: Modifier = Modifier,
+    dotBoostPx: Float = 0f,
+) {
+    Canvas(modifier = modifier.width(COLON_WIDTH).fillMaxHeight()) {
+        val cy = size.height * inkCenterFraction
+        val gap = size.height * inkHeightFraction * 0.24f
+        drawColonDot(color, centerY = cy - gap, boostPx = dotBoostPx)
+        drawColonDot(color, centerY = cy + gap, boostPx = dotBoostPx)
     }
 }
 
-private fun DrawScope.drawColonDot(color: Color, yFraction: Float, boostPx: Float = 0f) {
+private fun DrawScope.drawColonDot(color: Color, centerY: Float, boostPx: Float = 0f) {
     val radius = size.width * 0.45f + boostPx * 0.5f
     drawCircle(
         color = color,
         radius = radius,
-        center = Offset(x = size.width / 2f, y = size.height * yFraction),
+        center = Offset(x = size.width / 2f, y = centerY),
     )
 }
 
