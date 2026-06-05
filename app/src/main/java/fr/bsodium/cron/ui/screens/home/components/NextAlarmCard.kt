@@ -7,7 +7,6 @@ import android.graphics.Typeface
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -76,56 +76,83 @@ fun NextAlarmCard(
     sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
 ) {
+    AlarmShell(modifier) {
+        AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments)
+    }
+}
+
+/**
+ * The bold-filled card shell — Material You primary fill, flat, rounded. [shape] is a parameter so
+ * the collapsing variant can lerp its corner radius. Content renders in `onPrimary`.
+ */
+@Composable
+internal fun AlarmShell(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(Radius.xl),
+    content: @Composable () -> Unit,
+) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(Radius.xl),
-        tonalElevation = 6.dp,
+        color = MaterialTheme.colorScheme.primary,
+        shape = shape,
+        tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        content = content,
+    )
+}
+
+/** The expanded card body: bold date, hero LCD time, and the sleep block. Renders in `onPrimary`. */
+@Composable
+internal fun AlarmCardContent(
+    dateLabel: String,
+    alarmTime: LocalTime?,
+    sleepDurationLabel: String?,
+    sleepSegments: List<SleepSegment>,
+    modifier: Modifier = Modifier,
+) {
+    val onCard = MaterialTheme.colorScheme.onPrimary
+    Column(
+        modifier = modifier.padding(
+            start = Spacing.xxl,
+            top = Spacing.xl,
+            end = Spacing.xxl,
+            bottom = Spacing.xl,
+        ),
     ) {
-        Column(
-            modifier = Modifier.padding(
-                start = Spacing.xxl,
-                top = Spacing.xl,
-                end = Spacing.xxl,
-                bottom = Spacing.xl,
-            ),
-        ) {
-            AlignedFirstGlyph(
-                text = dateLabel.ifBlank { "—" },
-                color = MaterialTheme.colorScheme.onSurface,
-                style = CronTypography.dateLabel,
-            )
-            LcdTimeDisplay(alarmTime = alarmTime)
-            if (sleepSegments.isNotEmpty()) {
-                Spacer(Modifier.height(Spacing.xl))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Sleep",
-                        fontFamily = CodeFontFamily,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
+        AlignedFirstGlyph(
+            text = dateLabel.ifBlank { "—" },
+            color = onCard,
+            style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
+        )
+        LcdTimeDisplay(alarmTime = alarmTime)
+        if (sleepSegments.isNotEmpty()) {
+            Spacer(Modifier.height(Spacing.xl))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Sleep",
+                    fontFamily = CodeFontFamily,
+                    fontSize = 18.sp,
+                    color = onCard,
+                    modifier = Modifier.weight(1f),
+                )
+                if (sleepDurationLabel != null) {
+                    // Inverse pill on the bold card: on-color fill, primary text.
+                    PillBadge(
+                        text = sleepDurationLabel,
+                        containerColor = onCard,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        textStyle = MaterialTheme.typography.labelMedium.copy(
+                            fontFamily = CodeFontFamily,
+                            fontWeight = FontWeight.Bold,
+                        ),
                     )
-                    if (sleepDurationLabel != null) {
-                        PillBadge(
-                            text = sleepDurationLabel,
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            textStyle = MaterialTheme.typography.labelMedium.copy(
-                                fontFamily = CodeFontFamily,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                        )
-                    }
                 }
-                Spacer(Modifier.height(Spacing.md + Spacing.xs))
-                SleepTimeline(segments = sleepSegments)
             }
+            Spacer(Modifier.height(Spacing.md + Spacing.xs))
+            SleepTimeline(segments = sleepSegments)
         }
     }
 }
@@ -202,10 +229,10 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
         else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
     val mm = if (pending) "00"
         else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
-    val base = MaterialTheme.colorScheme.onSurface
-    val digitColor = if (pending) base.copy(alpha = 0.22f) else base
+    val base = MaterialTheme.colorScheme.onPrimary
+    val digitColor = if (pending) base.copy(alpha = 0.30f) else base
     // Pending: match the dimmed-digit alpha so "00H/00M" reads as a deliberate grayed twin; brighter once a real time shows.
-    val countdownColor = if (pending) base.copy(alpha = 0.22f) else base.copy(alpha = 0.6f)
+    val countdownColor = if (pending) base.copy(alpha = 0.30f) else base.copy(alpha = 0.7f)
 
     val lcdStyle = TightTextStyle.copy(
         fontFamily = LcdFontFamily,
@@ -234,7 +261,13 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
     }
 }
 
-private data class HoursMinutes(val hours: Long, val minutes: Long)
+internal data class HoursMinutes(val hours: Long, val minutes: Long)
+
+/** "21H 41M" — time remaining until the next [alarmTime], or "--" when none is set. */
+internal fun remainingLabel(alarmTime: LocalTime?): String {
+    val c = computeCountdown(alarmTime) ?: return "--"
+    return String.format(Locale.US, "%dH %02dM", c.hours, c.minutes)
+}
 
 private const val LCD_REVEAL_MILLIS = 700
 
@@ -269,7 +302,7 @@ private fun CountdownStack(
  * Distance from `now` to the next occurrence of [alarmTime] (today if it's
  * still ahead, otherwise tomorrow). Returns null when no alarm is set.
  */
-private fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
+internal fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
     if (alarmTime == null) return null
     val tz = TimeZone.currentSystemDefault()
     val nowLocal = Clock.System.now().toLocalDateTime(tz)
@@ -354,17 +387,16 @@ private fun AlignedFirstGlyph(
 }
 
 /**
- * Solid brand-orange tile with white tick marks across the strip and
- * near-black bars for each sleep-stage segment. Two timestamp labels at
- * the top, two stage labels at the bottom.
+ * Inverse tile within the bold card: an `onPrimary` panel with `primary` tick marks and
+ * segment bars. Two timestamp labels at the top, two stage labels at the bottom.
  */
 @Composable
 private fun SleepTimeline(
     segments: List<SleepSegment>,
     modifier: Modifier = Modifier,
 ) {
-    val tile = MaterialTheme.colorScheme.primary
-    val onTile = MaterialTheme.colorScheme.onPrimary
+    val tile = MaterialTheme.colorScheme.onPrimary
+    val onTile = MaterialTheme.colorScheme.primary
     val barColor = onTile.copy(alpha = 0.95f)
     // Martian Mono's line box runs taller than the condensed face it replaced; trim the font
     // padding and pin line height to the point size so both label rows clear the fixed-height tile.
