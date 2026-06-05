@@ -6,10 +6,9 @@ import android.graphics.Matrix
 import android.graphics.Path
 import android.graphics.RectF
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -80,23 +79,25 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier) {
             progress.snapTo(0f)
             coroutineScope {
                 launch { progress.animateTo(1f, REST_SPEC) }
-                launch { rotation.animateTo(nearestUpright(rotation.value), REST_SPIN_SPEC) }
+                launch { rotation.animateTo(nearestUpright(rotation.value), REST_SPEC) }
             }
             current = REST
             target = REST
             progress.snapTo(0f)
             return@LaunchedEffect
         }
-        val step = if (phase == ShapePhase.Writing) WRITING_STEP_SPEC else THINKING_STEP_SPEC
+        val writing = phase == ShapePhase.Writing
+        val morphSpec = if (writing) WRITING_STEP_SPEC else THINKING_STEP_SPEC
+        val spinSpec = if (writing) WRITING_SPIN_SPEC else THINKING_SPIN_SPEC
         var i = 0
         while (true) {
             val next = cycle[i % cycle.size]
             target = next
             progress.snapTo(0f)
-            // Morph and a quick springy spin run together — one spin per morph step.
+            // Morph and spin share a duration, so the spin lasts exactly as long as the morph.
             coroutineScope {
-                launch { progress.animateTo(1f, step) }
-                launch { rotation.animateTo(rotation.value + STEP_DEG, SPIN_SPEC) }
+                launch { progress.animateTo(1f, morphSpec) }
+                launch { rotation.animateTo(rotation.value + STEP_DEG, spinSpec) }
             }
             current = next
             i++
@@ -151,13 +152,18 @@ private val STROKE_WIDTH = 2.dp
 private const val STEP_DEG = 120f
 
 // Slow, gentle cadence while thinking; snappy while the answer streams; a soft landing into the heart.
-private val THINKING_STEP_SPEC = tween<Float>(durationMillis = 1100, easing = FastOutSlowInEasing)
-private val WRITING_STEP_SPEC = tween<Float>(durationMillis = 240, easing = FastOutSlowInEasing)
-private val REST_SPEC = tween<Float>(durationMillis = 420, easing = FastOutSlowInEasing)
+private const val THINKING_STEP_MS = 1100
+private const val WRITING_STEP_MS = 240
+private const val REST_MS = 420
+private val THINKING_STEP_SPEC = tween<Float>(durationMillis = THINKING_STEP_MS, easing = FastOutSlowInEasing)
+private val WRITING_STEP_SPEC = tween<Float>(durationMillis = WRITING_STEP_MS, easing = FastOutSlowInEasing)
+private val REST_SPEC = tween<Float>(durationMillis = REST_MS, easing = FastOutSlowInEasing)
 private val FILL_SPEC = tween<Float>(durationMillis = 360, easing = FastOutSlowInEasing)
-// Quick, springy spin per morph step; calm critically-damped settle to upright at rest.
-private val SPIN_SPEC = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-private val REST_SPIN_SPEC = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+// The spin shares the morph's per-phase duration so it lasts exactly as long as the morph, with a
+// mild ease-out-back overshoot for a springy arrival.
+private val SPIN_EASING = CubicBezierEasing(0.34f, 1.4f, 0.64f, 1f)
+private val THINKING_SPIN_SPEC = tween<Float>(durationMillis = THINKING_STEP_MS, easing = SPIN_EASING)
+private val WRITING_SPIN_SPEC = tween<Float>(durationMillis = WRITING_STEP_MS, easing = SPIN_EASING)
 
 // Filled heart at rest; cozy round shapes for thinking; sharp star shapes for streaming.
 private val REST: RoundedPolygon = MaterialShapes.Heart
