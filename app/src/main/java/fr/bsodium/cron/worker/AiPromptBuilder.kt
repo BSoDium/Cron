@@ -48,6 +48,7 @@ object AiPromptBuilder {
             if (location != null) {
                 appendLine("## Current location")
                 appendLine("- Latitude: ${location.lat}, Longitude: ${location.lng}")
+                location.address?.let { appendLine("- Address: $it") }
                 appendLine("- Source: ${location.source.name.lowercase()}")
                 appendLine("- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}")
                 appendLine("- Captured at: ${location.capturedAt}")
