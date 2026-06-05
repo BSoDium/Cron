@@ -31,9 +31,8 @@ private val GoogleSansFlex = GoogleFont("Google Sans Flex")
 private val RobotoFlex = GoogleFont("Roboto Flex")
 private val MajorMonoDisplay = GoogleFont("Major Mono Display")
 private val Iceland = GoogleFont("Iceland")
-private val Vt323 = GoogleFont("VT323")
 private val MartianMono = GoogleFont("Martian Mono")
-private val EbGaramond = GoogleFont("EB Garamond")
+private val NotoSerif = GoogleFont("Noto Serif")
 private val SpaceGrotesk = GoogleFont("Space Grotesk")
 
 private val WEIGHTS = listOf(
@@ -63,25 +62,12 @@ val LcdFontFamily: FontFamily = FontFamily(
 )
 
 /**
- * Monospace family for small UI text (date label, "Sleep" tag, duration
- * pill, sleep-timeline timestamps and stage labels). Iceland is listed
- * first because it has both lower- and uppercase letterforms (Major Mono
- * Display only carries uppercase, which breaks "Tuesday 17" / "Sleep"
- * rendering). VT323 falls in behind as a chunkier terminal-style backup.
- */
-val MonoFontFamily: FontFamily = FontFamily(
-    Font(R.font.iceland),
-    Font(R.font.vt323),
-    Font(googleFont = Iceland, fontProvider = Provider),
-    Font(googleFont = Vt323, fontProvider = Provider),
-)
-
-/**
- * Real code face for the AI thinking thread — tool-call name chips, result
- * labels, and markdown code spans. Martian Mono is a clean monospace (variable,
- * so it can sit light at small sizes) that replaces the retro [MonoFontFamily],
- * which stays on the LCD clock card and sleep timeline. Bundled .ttf resolves
- * first; downloadable Google Font is the network fallback.
+ * Clean monospace face — the AI thinking thread (tool-call name chips, result
+ * labels, markdown code spans) and the alarm card's sleep block ("Sleep" tag,
+ * duration pill, timeline timestamps and stage labels). Martian Mono is variable,
+ * so it can sit light at small sizes. Bundled .ttf resolves first; downloadable
+ * Google Font is the network fallback. The hero LCD clock keeps its own
+ * [LcdFontFamily] face — this is the one mono used for everything else.
  */
 val CodeFontFamily: FontFamily = FontFamily(
     Font(R.font.martian_mono),
@@ -89,18 +75,20 @@ val CodeFontFamily: FontFamily = FontFamily(
 )
 
 /**
- * Serif face for the AI assistant's final response prose — EB Garamond. Sets the
- * "conclusion" apart from the sans-serif thinking content. EB Garamond is variable, so the
+ * Serif face for the AI assistant's final response prose — Noto Serif. Sets the
+ * "conclusion" apart from the sans-serif thinking content with a grounded, legible
+ * voice that hints cleanly across densities (EB Garamond's high-contrast strokes
+ * read whimsical and rendered unevenly at small sizes). Noto Serif is variable, so the
  * bundled file is registered at each weight via its `wght` axis (no synthesis / no waiting on
  * the network for bold), with the downloadable entry as a fallback.
  */
 val SerifFontFamily: FontFamily = FontFamily(
-    Font(R.font.eb_garamond, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
-    Font(R.font.eb_garamond, weight = FontWeight(450), variationSettings = FontVariation.Settings(FontVariation.weight(450))),
-    Font(R.font.eb_garamond, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
-    Font(R.font.eb_garamond, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
-    Font(R.font.eb_garamond, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
-    Font(googleFont = EbGaramond, fontProvider = Provider),
+    Font(R.font.noto_serif, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.noto_serif, weight = FontWeight(450), variationSettings = FontVariation.Settings(FontVariation.weight(450))),
+    Font(R.font.noto_serif, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.noto_serif, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.noto_serif, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+    Font(googleFont = NotoSerif, fontProvider = Provider),
 )
 
 /**

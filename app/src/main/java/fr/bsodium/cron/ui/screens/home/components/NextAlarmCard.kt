@@ -47,11 +47,11 @@ import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.ui.components.PillBadge
+import fr.bsodium.cron.ui.theme.CodeFontFamily
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.DisplayFontFamily
 import fr.bsodium.cron.ui.theme.LcdFontFamily
-import fr.bsodium.cron.ui.theme.MonoFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
@@ -106,7 +106,7 @@ fun NextAlarmCard(
                 ) {
                     Text(
                         text = "Sleep",
-                        fontFamily = MonoFontFamily,
+                        fontFamily = CodeFontFamily,
                         fontSize = 18.sp,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
@@ -117,7 +117,7 @@ fun NextAlarmCard(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                             textStyle = MaterialTheme.typography.labelMedium.copy(
-                                fontFamily = MonoFontFamily,
+                                fontFamily = CodeFontFamily,
                                 fontWeight = FontWeight.Bold,
                             ),
                         )
@@ -366,6 +366,10 @@ private fun SleepTimeline(
     val tile = MaterialTheme.colorScheme.primary
     val onTile = MaterialTheme.colorScheme.onPrimary
     val barColor = onTile.copy(alpha = 0.95f)
+    // Martian Mono's line box runs taller than the condensed face it replaced; trim the font
+    // padding and pin line height to the point size so both label rows clear the fixed-height tile.
+    val timeStyle = TightTextStyle.copy(fontFamily = CodeFontFamily, fontSize = 16.sp, lineHeight = 16.sp, color = onTile)
+    val stageStyle = timeStyle.copy(fontSize = 14.sp, lineHeight = 14.sp)
     Surface(
         color = tile,
         shape = RoundedCornerShape(Radius.lg),
@@ -394,9 +398,7 @@ private fun SleepTimeline(
                     val local = seg.start.toLocalDateTime(tz)
                     Text(
                         text = String.format(Locale.US, "%02d:%02d", local.hour, local.minute),
-                        fontFamily = MonoFontFamily,
-                        fontSize = 16.sp,
-                        color = onTile,
+                        style = timeStyle,
                     )
                 }
             }
@@ -441,9 +443,7 @@ private fun SleepTimeline(
                 labelled.forEach { seg ->
                     Text(
                         text = seg.stage.name.uppercase(Locale.ROOT),
-                        fontFamily = MonoFontFamily,
-                        fontSize = 14.sp,
-                        color = onTile,
+                        style = stageStyle,
                     )
                 }
             }
