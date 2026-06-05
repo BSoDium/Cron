@@ -335,20 +335,25 @@ internal fun CountdownStack(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
-    // Space Grotesk pairs with the LCD digits — legible, unlike Major Mono Display's art-deco H/M.
+    // Space Grotesk (legible, unlike Major Mono's art-deco H/M); lineHeight < fontSize tightens the
+    // H↔M leading so the stack is compact and gains breathing room when centred in the collapsed pill.
     val smallLcd = TightTextStyle.copy(
         fontFamily = DisplayFontFamily,
         fontSize = 24.sp,
-        lineHeight = 26.sp,
+        lineHeight = 21.sp,
     )
     // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
     val (top, bottom) = if (countdown == null) "00H" to "00M"
     else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
         String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
-    Column(modifier = modifier) {
-        Text(text = top, color = color, style = smallLcd, maxLines = 1, softWrap = false)
-        Text(text = bottom, color = color, style = smallLcd, maxLines = 1, softWrap = false)
-    }
+    Text(
+        text = "$top\n$bottom",
+        color = color,
+        style = smallLcd,
+        maxLines = 2,
+        softWrap = false,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -370,11 +375,7 @@ private val COLON_WIDTH = 8.dp
 private val TIMELINE_HEIGHT = 82.dp
 private val TICK_BAR_HEIGHT = 20.dp
 
-/**
- * Two filled dots, centred on the DIGIT ink (not the line box) so the colon shares the digits'
- * vertical centre. Fills the row height ([Alignment.Top]) and places the dots symmetric about
- * [inkCenterFraction], spaced by a fraction of the ink height.
- */
+/** Two dots centred on the digit ink (fills the row height) so the colon shares the digits' centre. */
 @Composable
 private fun ColonSeparator(
     color: Color,

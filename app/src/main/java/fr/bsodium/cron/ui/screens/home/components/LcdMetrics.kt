@@ -13,8 +13,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.theme.LcdFontFamily
 
-/** Visible-ink vertical centre and height of the LCD digits, as fractions of the text line box. */
-internal data class LcdInkMetrics(val centerFraction: Float, val heightFraction: Float)
+/**
+ * Visible-ink vertical centre and height of the LCD digits, as fractions of the text line box, plus
+ * the line-box height in px (at 76sp) so callers can derive ink px without re-measuring the glyph.
+ */
+internal data class LcdInkMetrics(val centerFraction: Float, val heightFraction: Float, val lineBoxPx: Float)
 
 /**
  * Measures where the LCD digit ink actually sits inside its line box. Major Mono Display has no
@@ -27,7 +30,11 @@ internal fun rememberLcdInkMetrics(): LcdInkMetrics {
     val resolver = LocalFontFamilyResolver.current
     val density = LocalDensity.current
     return remember(resolver, density.density) {
-        val fallback = LcdInkMetrics(centerFraction = 0.5f, heightFraction = 0.7f)
+        val fallback = LcdInkMetrics(
+            centerFraction = 0.5f,
+            heightFraction = 0.7f,
+            lineBoxPx = with(density) { 76.sp.toPx() },
+        )
         runCatching {
             val typeface = resolver.resolve(
                 fontFamily = LcdFontFamily,
@@ -51,6 +58,7 @@ internal fun rememberLcdInkMetrics(): LcdInkMetrics {
             LcdInkMetrics(
                 centerFraction = (((inkTop + inkBottom) / 2f) / lineBox).coerceIn(0f, 1f),
                 heightFraction = ((inkBottom - inkTop) / lineBox).coerceIn(0.1f, 1f),
+                lineBoxPx = lineBox,
             )
         }.getOrDefault(fallback)
     }

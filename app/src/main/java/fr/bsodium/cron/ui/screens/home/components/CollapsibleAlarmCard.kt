@@ -94,8 +94,20 @@ internal fun CollapsibleAlarmCard(
             val date = subcompose("date") {
                 Text(dateLabel.ifBlank { "—" }, style = dateStyle, maxLines = 1)
             }.first().measure(cWrap)
-            // Stroke grows with collapse so the shrinking digits keep weight (local px; scaled with the glyph).
-            val strokePx = MAX_CLOCK_STROKE.toPx() * f
+            // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
+            val barHeight = (Radius.xl * 2).roundToPx()
+            // Inset > a tight fit so the shrunken digits gain a little spacing above and below in the pill.
+            val innerInset = Spacing.sm.roundToPx()
+            // Centre on the digit INK, not the line box (Major Mono digits have no descenders → sit high).
+            // Derived from the font's measured line box so the scale is known BEFORE the clock is
+            // subcomposed — the weight stroke is a draw param baked in at that point.
+            val inkHeightPx = ink.heightFraction * ink.lineBoxPx
+            val inkCenterPx = ink.centerFraction * ink.lineBoxPx
+            val collapsedScale = ((barHeight - innerInset * 2) / inkHeightPx).coerceIn(0.2f, 1f)
+            val clockScale = lerp(1f, collapsedScale, f)
+            // Fake weight grows in proportion to the size DECREASE. Dividing the local stroke by the
+            // glyph scale cancels the dilution from shrinking, so the RENDERED stroke tracks f directly.
+            val strokePx = MAX_CLOCK_STROKE.toPx() * f / clockScale
             val clock = subcompose("clock") {
                 LcdClock(alarmTime, progress, digitColor, strokeWidthPx = strokePx)
             }.first().measure(cWrap)
@@ -116,13 +128,6 @@ internal fun CollapsibleAlarmCard(
             val topPad = Spacing.xl.roundToPx()
             val endPad = Spacing.xxl.roundToPx()
             val cdGap = (Spacing.xs + Spacing.xxs).roundToPx()
-            // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
-            val barHeight = (Radius.xl * 2).roundToPx()
-            val innerInset = Spacing.xs.roundToPx()
-            // Centre on the digit INK, not the line box (Major Mono digits have no descenders → sit high).
-            val inkCenterPx = ink.centerFraction * clock.height
-            val inkHeightPx = ink.heightFraction * clock.height
-            val collapsedScale = ((barHeight - innerInset * 2) / inkHeightPx).coerceIn(0.2f, 1f)
             val height = lerp(extras.height, barHeight, f)
 
             val expandedClockY = topPad + date.height
@@ -140,9 +145,8 @@ internal fun CollapsibleAlarmCard(
                 // Clock: left-edge anchored; pivot on the digit-ink centre so scaling + translation land
                 // the ink dead-centre in the pill.
                 clock.placeWithLayer(startPad, expandedClockY) {
-                    val s = lerp(1f, collapsedScale, f)
-                    scaleX = s
-                    scaleY = s
+                    scaleX = clockScale
+                    scaleY = clockScale
                     transformOrigin = TransformOrigin(0f, ink.centerFraction)
                     translationY = lerp(0f, pillCenter - expandedInkCenter, f)
                 }
