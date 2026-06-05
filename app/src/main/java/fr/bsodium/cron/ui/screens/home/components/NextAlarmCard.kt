@@ -30,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -109,6 +110,9 @@ internal fun AlarmCardContent(
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
+    // The collapsing card hides this layer's clock (drawing its own moving copy on top) while still
+    // measuring it, so this stays the single source of the expanded geometry.
+    clockAlpha: Float = 1f,
 ) {
     val onCard = MaterialTheme.colorScheme.onPrimary
     Column(
@@ -124,7 +128,7 @@ internal fun AlarmCardContent(
             color = onCard,
             style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
         )
-        LcdTimeDisplay(alarmTime = alarmTime)
+        LcdTimeDisplay(alarmTime = alarmTime, clockAlpha = clockAlpha)
         if (sleepSegments.isNotEmpty()) {
             Spacer(Modifier.height(Spacing.xl))
             Row(
@@ -199,7 +203,7 @@ private fun NextAlarmCardWithSleepPreview() {
 }
 
 @Composable
-private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier) {
+private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier, clockAlpha: Float = 1f) {
     // Tick once a minute so the countdown stays current without flickering.
     val countdown by produceState<HoursMinutes?>(initialValue = computeCountdown(alarmTime), alarmTime) {
         while (true) {
@@ -208,8 +212,55 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
         }
     }
     val pending = alarmTime == null
-    // Roll digits up from 0 (easeOut) only when the alarm VALUE changes. The animated key is
-    // rememberSaveable, so reopening or switching tabs with an unchanged value shows digits at rest.
+    val progress = rememberLcdRevealProgress(alarmTime)
+    val base = MaterialTheme.colorScheme.onPrimary
+    val digitColor = if (pending) base.copy(alpha = 0.30f) else base
+    // Pending: match the dimmed-digit alpha so "00H/00M" reads as a deliberate grayed twin; brighter once a real time shows.
+    val countdownColor = if (pending) base.copy(alpha = 0.30f) else base.copy(alpha = 0.7f)
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.Top,
+    ) {
+        LcdClock(alarmTime = alarmTime, progress = progress, color = digitColor, modifier = Modifier.alpha(clockAlpha))
+        CountdownStack(
+            countdown = countdown,
+            progress = progress,
+            color = countdownColor,
+            modifier = Modifier.padding(start = Spacing.xs + Spacing.xxs, top = Spacing.xs + Spacing.xxs),
+        )
+    }
+}
+
+/**
+ * The "HH:MM" LCD clock (custom-colon, side-bearing-trimmed). Reused both inline in [LcdTimeDisplay]
+ * and as the single moving element of the collapsing card, so [progress] (the reveal) is hoisted in.
+ */
+@Composable
+internal fun LcdClock(alarmTime: LocalTime?, progress: Float, color: Color, modifier: Modifier = Modifier) {
+    val pending = alarmTime == null
+    // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
+    val hh = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
+    val mm = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
+    val lcdStyle = TightTextStyle.copy(fontFamily = LcdFontFamily, fontSize = 76.sp, lineHeight = 76.sp)
+    Row(modifier = modifier, verticalAlignment = Alignment.Top) {
+        AlignedFirstGlyph(text = hh, color = color, style = lcdStyle)
+        ColonSeparator(
+            color = color,
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .padding(horizontal = Spacing.sm),
+        )
+        Text(text = mm, color = color, style = lcdStyle, maxLines = 1, softWrap = false)
+    }
+}
+
+/**
+ * The 700ms "roll up from 0" reveal progress, fired only when the alarm VALUE changes. The animated
+ * key is [rememberSaveable], so reopening or switching tabs with an unchanged value shows it at rest.
+ */
+@Composable
+internal fun rememberLcdRevealProgress(alarmTime: LocalTime?): Float {
     val valueKey = alarmTime?.let { it.hour * 60 + it.minute }
     var animatedKey by rememberSaveable { mutableStateOf<Int?>(null) }
     val progressAnim = remember { Animatable(if (valueKey == null || valueKey == animatedKey) 1f else 0f) }
@@ -223,42 +274,7 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
             progressAnim.snapTo(1f)
         }
     }
-    val progress = progressAnim.value
-    // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
-    val hh = if (pending) "00"
-        else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
-    val mm = if (pending) "00"
-        else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
-    val base = MaterialTheme.colorScheme.onPrimary
-    val digitColor = if (pending) base.copy(alpha = 0.30f) else base
-    // Pending: match the dimmed-digit alpha so "00H/00M" reads as a deliberate grayed twin; brighter once a real time shows.
-    val countdownColor = if (pending) base.copy(alpha = 0.30f) else base.copy(alpha = 0.7f)
-
-    val lcdStyle = TightTextStyle.copy(
-        fontFamily = LcdFontFamily,
-        fontSize = 76.sp,
-        lineHeight = 76.sp,
-    )
-
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.Top,
-    ) {
-        AlignedFirstGlyph(text = hh, color = digitColor, style = lcdStyle)
-        ColonSeparator(
-            color = digitColor,
-            modifier = Modifier
-                .align(Alignment.CenterVertically)
-                .padding(horizontal = Spacing.sm),
-        )
-        Text(text = mm, color = digitColor, style = lcdStyle, maxLines = 1, softWrap = false)
-        CountdownStack(
-            countdown = countdown,
-            progress = progress,
-            color = countdownColor,
-            modifier = Modifier.padding(start = Spacing.xs + Spacing.xxs, top = Spacing.xs + Spacing.xxs),
-        )
-    }
+    return progressAnim.value
 }
 
 internal data class HoursMinutes(val hours: Long, val minutes: Long)
