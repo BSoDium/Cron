@@ -27,11 +27,13 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.snapshotFlow
+import fr.bsodium.cron.ui.components.rememberCronHaptics
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
@@ -61,7 +63,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -213,23 +214,54 @@ fun HomeScreen(
             // own measure — decoupled from the collapsing render height so the collapse can't feed back.
             var cardFullHeightPx by remember { mutableIntStateOf(0) }
 
-            // Magnetic collapse: once the card is pinned and the scroll settles mid-collapse, snap to
-            // the nearest end so it never rests half-collapsed. Pure post-settle observation — never
-            // consumes scroll, so it can't fight the thinking pull (which acts at the top, fraction≈0).
-            val snapSafeTopPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
-            val snapRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
-            LaunchedEffect(listState, snapSafeTopPx, snapRangePx) {
+            // Collapse geometry (single source): drives the sticky card, the threshold haptic, and the
+            // magnetic snap. fraction 0 = expanded, 1 = collapsed; pinned ⟺ distancePx > 0.
+            val collapseSafeTopPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
+            val collapseRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
+            val collapseFadePx = with(density) { Spacing.xxl.toPx() }
+            val collapse by remember(collapseSafeTopPx, collapseRangePx, collapseFadePx) {
+                derivedStateOf {
+                    val info = listState.layoutInfo
+                    val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
+                        ?.let { it.offset - info.viewportStartOffset }
+                    if (screenTop == null) {
+                        AlarmCollapse(top = collapseSafeTopPx, gradientAlpha = 1f, fraction = 1f, distancePx = collapseRangePx)
+                    } else {
+                        val distance = (collapseSafeTopPx - screenTop).coerceAtLeast(0).toFloat()
+                        AlarmCollapse(
+                            top = maxOf(collapseSafeTopPx, screenTop),
+                            gradientAlpha = (distance / collapseFadePx).coerceIn(0f, 1f),
+                            fraction = (distance / collapseRangePx).coerceIn(0f, 1f),
+                            distancePx = distance,
+                        )
+                    }
+                }
+            }
+
+            // A haptic tick each time the collapse crosses the snap threshold while scrolling.
+            val haptics = rememberCronHaptics(enabled = uiState.hapticsEnabled)
+            LaunchedEffect(listState) {
+                snapshotFlow { collapse.fraction >= 0.5f }
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .collect { haptics.tick() }
+            }
+
+            // Magnetic snap: on settle mid-collapse, animate to the nearest end with a deterministic
+            // tween (lands exactly, no half-way stalls / re-triggers). Pure post-settle observation —
+            // never consumes scroll, so it can't fight the thinking pull (which acts at the top, f≈0).
+            val collapseNow = rememberUpdatedState(collapse)
+            val rangeNow = rememberUpdatedState(collapseRangePx)
+            LaunchedEffect(listState) {
                 snapshotFlow { listState.isScrollInProgress }
+                    .distinctUntilChanged()
                     .filter { !it }
                     .collect {
-                        val info = listState.layoutInfo
-                        val spacer = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" } ?: return@collect
-                        val distance = (snapSafeTopPx - (spacer.offset - info.viewportStartOffset)).coerceAtLeast(0).toFloat()
-                        val fraction = (distance / snapRangePx).coerceIn(0f, 1f)
-                        if (fraction <= 0.001f || fraction >= 0.999f) return@collect
-                        // animateScrollBy(+) scrolls content up (collapse); (−) reveals (expand).
-                        val delta = if (fraction < 0.5f) -distance else snapRangePx - distance
-                        listState.animateScrollBy(delta, spring(stiffness = Spring.StiffnessMediumLow))
+                        val c = collapseNow.value
+                        if (c.distancePx > 0f && c.fraction > 0.001f && c.fraction < 0.999f) {
+                            val delta = if (c.fraction < 0.5f) -c.distancePx else rangeNow.value - c.distancePx
+                            listState.animateScrollBy(delta, tween(durationMillis = 260, easing = FastOutSlowInEasing))
+                        }
                     }
             }
 
@@ -352,8 +384,10 @@ fun HomeScreen(
                 }
             }
             StickyAlarm(
-                listState = listState,
-                safeTop = statusInsetTop + Spacing.sm,
+                safeTopPx = collapseSafeTopPx,
+                top = collapse.top,
+                gradientAlpha = collapse.gradientAlpha,
+                collapseFraction = collapse.fraction,
             ) { collapseFraction ->
                 CollapsibleAlarmCard(
                     dateLabel = uiState.dateLabel,
@@ -411,44 +445,23 @@ fun HomeScreen(
     }
 }
 
-private data class StickyAlarmState(val top: Int, val gradientAlpha: Float, val collapseFraction: Float)
+private data class AlarmCollapse(val top: Int, val gradientAlpha: Float, val fraction: Float, val distancePx: Float)
 
 /**
- * CSS-`sticky`-with-top-offset alarm card, rendered as an overlay over the list. It follows the
- * flow position of the "alarm-spacer" item, then holds at [safeTop] (just below the status bar).
- * Once pinned, continued scroll drives a 0→1 `collapseFraction` (passed to [card]) over
- * [ALARM_COLLAPSE_RANGE] so the card collapses into its slim bar. A full-width background→transparent
- * gradient fades in behind it, dissolving content that slides under into the page background.
+ * CSS-`sticky`-with-top-offset alarm card, rendered as an overlay over the list, consuming the
+ * pre-computed [top]/[gradientAlpha]/[collapseFraction] (single source in the caller). A full-width
+ * background→transparent gradient ([gradientAlpha]) fades in behind it as it pins, dissolving content
+ * that slides under into the page background.
  */
 @Composable
 private fun BoxScope.StickyAlarm(
-    listState: LazyListState,
-    safeTop: Dp,
+    safeTopPx: Int,
+    top: Int,
+    gradientAlpha: Float,
+    collapseFraction: Float,
     card: @Composable (collapseFraction: Float) -> Unit,
 ) {
     val density = LocalDensity.current
-    val safeTopPx = with(density) { safeTop.roundToPx() }
-    val fadePx = with(density) { Spacing.xxl.toPx() }
-    val collapseRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
-    val state by remember(safeTopPx, fadePx, collapseRangePx) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            // On-screen top = item offset − viewportStartOffset (= −beforeContentPadding). Null once
-            // the spacer scrolls off the top → fully stuck (handled explicitly to avoid int overflow).
-            val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
-                ?.let { it.offset - info.viewportStartOffset }
-            if (screenTop == null) {
-                StickyAlarmState(top = safeTopPx, gradientAlpha = 1f, collapseFraction = 1f)
-            } else {
-                val distance = (safeTopPx - screenTop).coerceAtLeast(0)
-                StickyAlarmState(
-                    top = maxOf(safeTopPx, screenTop),
-                    gradientAlpha = (distance / fadePx).coerceIn(0f, 1f),
-                    collapseFraction = (distance / collapseRangePx).coerceIn(0f, 1f),
-                )
-            }
-        }
-    }
     val background = MaterialTheme.colorScheme.background
     // Scrim tracks the card's CURRENT (collapsing) visible height — independent of the spacer's full
     // reservation — so the solid band always hugs the shrinking card bottom.
@@ -461,7 +474,7 @@ private fun BoxScope.StickyAlarm(
         modifier = Modifier
             .fillMaxWidth()
             .height(with(density) { totalPx.toDp() })
-            .graphicsLayer { alpha = state.gradientAlpha }
+            .graphicsLayer { alpha = gradientAlpha }
             .background(
                 Brush.verticalGradient(
                     0f to background,
@@ -473,10 +486,10 @@ private fun BoxScope.StickyAlarm(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { translationY = state.top.toFloat() }
+            .graphicsLayer { translationY = top.toFloat() }
             // Hugs at 12dp (tighter than the 20dp content) — kept constant so the collapsed bar
             // holds the same width/margin as the expanded card.
             .padding(horizontal = Spacing.md)
             .onSizeChanged { if (it.height != visiblePx) visiblePx = it.height },
-    ) { card(state.collapseFraction) }
+    ) { card(collapseFraction) }
 }

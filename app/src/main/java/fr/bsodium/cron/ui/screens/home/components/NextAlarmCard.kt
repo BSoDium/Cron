@@ -1,14 +1,12 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import android.content.res.Configuration
-import android.graphics.Paint
-import android.graphics.Rect
-import android.graphics.Typeface
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,13 +32,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -237,21 +233,58 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier,
  * and as the single moving element of the collapsing card, so [progress] (the reveal) is hoisted in.
  */
 @Composable
-internal fun LcdClock(alarmTime: LocalTime?, progress: Float, color: Color, modifier: Modifier = Modifier) {
+internal fun LcdClock(
+    alarmTime: LocalTime?,
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+    // The single-weight LCD face has no bold; [strokeWidthPx] (local px) overlays a stroke that
+    // thickens the glyphs as the clock shrinks, so the small digits read with more weight.
+    strokeWidthPx: Float = 0f,
+) {
     val pending = alarmTime == null
     // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
     val hh = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
     val mm = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
     val lcdStyle = TightTextStyle.copy(fontFamily = LcdFontFamily, fontSize = 76.sp, lineHeight = 76.sp)
     Row(modifier = modifier, verticalAlignment = Alignment.Top) {
-        AlignedFirstGlyph(text = hh, color = color, style = lcdStyle)
+        StrokeableLcdDigits(hh, color, lcdStyle, strokeWidthPx, alignFirstGlyph = true)
         ColonSeparator(
             color = color,
+            dotBoostPx = strokeWidthPx,
             modifier = Modifier
                 .align(Alignment.CenterVertically)
                 .padding(horizontal = Spacing.sm),
         )
-        Text(text = mm, color = color, style = lcdStyle, maxLines = 1, softWrap = false)
+        StrokeableLcdDigits(mm, color, lcdStyle, strokeWidthPx, alignFirstGlyph = false)
+    }
+}
+
+/** Filled digits with an optional same-color stroke overlaid on top to fake extra weight. */
+@Composable
+private fun StrokeableLcdDigits(
+    text: String,
+    color: Color,
+    style: TextStyle,
+    strokeWidthPx: Float,
+    alignFirstGlyph: Boolean,
+) {
+    Box {
+        if (alignFirstGlyph) {
+            AlignedFirstGlyph(text = text, color = color, style = style)
+        } else {
+            Text(text = text, color = color, style = style, maxLines = 1, softWrap = false)
+        }
+        if (strokeWidthPx > 0f) {
+            val stroked = style.copy(
+                drawStyle = Stroke(width = strokeWidthPx, join = StrokeJoin.Round, cap = StrokeCap.Round),
+            )
+            if (alignFirstGlyph) {
+                AlignedFirstGlyph(text = text, color = color, style = stroked)
+            } else {
+                Text(text = text, color = color, style = stroked, maxLines = 1, softWrap = false)
+            }
+        }
     }
 }
 
@@ -336,69 +369,19 @@ private val TICK_BAR_HEIGHT = 20.dp
 
 /** Two small filled dots stacked vertically — replaces the chunky Major Mono colon. */
 @Composable
-private fun ColonSeparator(color: Color, modifier: Modifier = Modifier) {
+private fun ColonSeparator(color: Color, modifier: Modifier = Modifier, dotBoostPx: Float = 0f) {
     Canvas(modifier = modifier.size(width = COLON_WIDTH, height = COLON_HEIGHT)) {
-        drawColonDot(color, yFraction = 0.35f)
-        drawColonDot(color, yFraction = 0.65f)
+        drawColonDot(color, yFraction = 0.35f, boostPx = dotBoostPx)
+        drawColonDot(color, yFraction = 0.65f, boostPx = dotBoostPx)
     }
 }
 
-private fun DrawScope.drawColonDot(color: Color, yFraction: Float) {
-    val radius = size.width * 0.45f
+private fun DrawScope.drawColonDot(color: Color, yFraction: Float, boostPx: Float = 0f) {
+    val radius = size.width * 0.45f + boostPx * 0.5f
     drawCircle(
         color = color,
         radius = radius,
         center = Offset(x = size.width / 2f, y = size.height * yFraction),
-    )
-}
-
-/**
- * Shifts [text] left by the first glyph's side bearing so the painted ink
- * starts at x=0. Lets the Space Grotesk date label and the Major Mono Display
- * digits below it share the same visible left edge without per-font magic.
- */
-@Composable
-private fun AlignedFirstGlyph(
-    text: String,
-    color: Color,
-    style: TextStyle,
-    modifier: Modifier = Modifier,
-) {
-    val resolver = LocalFontFamilyResolver.current
-    val density = LocalDensity.current
-    val leftBearingPx = remember(text, style, density.density) {
-        if (text.isEmpty() || style.fontFamily == null) 0
-        else runCatching {
-            val typeface = resolver.resolve(
-                fontFamily = style.fontFamily,
-                fontWeight = style.fontWeight ?: FontWeight.Normal,
-                fontStyle = style.fontStyle ?: FontStyle.Normal,
-                fontSynthesis = FontSynthesis.None,
-            ).value as? Typeface ?: return@runCatching 0
-            val paint = Paint().apply {
-                this.typeface = typeface
-                this.textSize = with(density) { style.fontSize.toPx() }
-                this.isAntiAlias = true
-            }
-            val rect = Rect()
-            paint.getTextBounds(text, 0, 1, rect)
-            rect.left
-        }.getOrDefault(0)
-    }
-    Text(
-        text = text,
-        color = color,
-        style = style,
-        maxLines = 1,
-        softWrap = false,
-        modifier = modifier.layout { measurable, constraints ->
-            val placeable = measurable.measure(constraints)
-            val shift = leftBearingPx
-            val newWidth = (placeable.width - shift).coerceAtLeast(0)
-            layout(newWidth, placeable.height) {
-                placeable.place(-shift, 0)
-            }
-        },
     )
 }
 
