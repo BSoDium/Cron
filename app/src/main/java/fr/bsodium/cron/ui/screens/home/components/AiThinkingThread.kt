@@ -102,6 +102,12 @@ fun AiThinkingThread(
             Spacer(Modifier.height(Spacing.sm))
             ResponseBody(thread.response)
         }
+        val phase = when {
+            !inProgress -> ShapePhase.Resting
+            thread.response.isNullOrBlank() -> ShapePhase.Thinking
+            else -> ShapePhase.Writing
+        }
+        ThinkingShape(phase = phase, modifier = Modifier.padding(top = Spacing.md))
     }
 }
 
