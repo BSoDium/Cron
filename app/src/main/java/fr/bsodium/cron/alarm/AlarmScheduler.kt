@@ -14,6 +14,7 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Schedules the **mutable** wake alarm decided by the AI.
@@ -115,12 +116,17 @@ class AlarmScheduler(private val context: Context) {
         val MIN_LEAD: kotlin.time.Duration = kotlin.time.Duration.parse("60s")
 
         /**
-         * Pure clamp: bounds [requested] to `[now + MIN_LEAD, hardLatest@sessionDate]`.
+         * Pure clamp: the **session owns the alarm date**, the model only chooses the time-of-day.
+         * The requested instant's local time-of-day is pinned onto [sessionDate], then bounded to
+         * `[now + MIN_LEAD, hardLatest@sessionDate]`. Pinning means a model that emits the wrong date
+         * (e.g. today instead of tomorrow's morning) can't arm the alarm on the wrong day.
          *
-         * - If [requested] is in the past or too close to [now], it slides up to `now + MIN_LEAD`.
+         * - If the pinned time is in the past or too close to [now], it slides up to `now + MIN_LEAD`.
          *   This is NOT considered a hard-latest clamp.
-         * - If [requested] exceeds the hard latest, it slides down to the hard latest and
+         * - If it exceeds the hard latest, it slides down to the hard latest and
          *   [ClampedSchedule.clampedToHardLatest] becomes true.
+         * - `maxOf(lower, upper)` guards the degenerate case where `now` is already past the hard
+         *   latest (`lower > upper`) so `coerceIn` can't throw.
          */
         fun clamp(
             requested: Instant,
@@ -129,13 +135,14 @@ class AlarmScheduler(private val context: Context) {
             sessionDate: LocalDate,
             timezone: TimeZone,
         ): ClampedSchedule {
+            val onDate = requested.toLocalDateTime(timezone).time.atDate(sessionDate).toInstant(timezone)
             val lower = now + MIN_LEAD
             val upper = hardLatest.atDate(sessionDate).toInstant(timezone)
-            val actual = requested.coerceIn(lower, upper)
+            val actual = onDate.coerceIn(lower, maxOf(lower, upper))
             return ClampedSchedule(
                 requestedInstant = requested,
                 actualInstant = actual,
-                clampedToHardLatest = actual == upper && requested > upper,
+                clampedToHardLatest = actual == upper && onDate > upper,
             )
         }
     }
