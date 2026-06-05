@@ -83,4 +83,27 @@ class AlarmSchedulerClampTest {
         assertEquals(hardLatestInstant, result.actualInstant)
         assertTrue(result.clampedToHardLatest)
     }
+
+    @Test
+    fun request_on_the_wrong_day_is_pinned_to_the_session_morning() {
+        // Model emitted the day AFTER the session morning. Only its time-of-day (07:30 Paris) is kept,
+        // re-pinned onto sessionDate — so the alarm can never arm on the wrong day.
+        val now = Instant.parse("2026-05-22T03:00:00Z") // 05:00 Paris, on sessionDate
+        val nextDay = Instant.parse("2026-05-23T05:30:00Z") // 07:30 Paris, one day late
+        val expected = Instant.parse("2026-05-22T05:30:00Z") // 07:30 Paris on sessionDate
+        val result = AlarmScheduler.clamp(nextDay, now, hardLatest, date, tz)
+        assertEquals(expected, result.actualInstant)
+        assertFalse(result.clampedToHardLatest)
+    }
+
+    @Test
+    fun now_already_past_hard_latest_falls_back_to_min_lead_without_throwing() {
+        // Degenerate bound (lower > upper): now is past today's hard latest. Must not throw; slides to
+        // now + MIN_LEAD.
+        val now = Instant.parse("2026-05-22T09:00:00Z") // 11:00 Paris, past the 10:00 hard latest
+        val requested = Instant.parse("2026-05-22T05:30:00Z") // 07:30 Paris
+        val result = AlarmScheduler.clamp(requested, now, hardLatest, date, tz)
+        assertEquals(now + AlarmScheduler.MIN_LEAD, result.actualInstant)
+        assertFalse(result.clampedToHardLatest)
+    }
 }
