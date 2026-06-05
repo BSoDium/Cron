@@ -116,14 +116,9 @@ object AiThreadMapper {
             return kept.joinToString("\n").trim()
         }
 
-        // The answer is the trailing run of Text blocks (after the last tool/reasoning block); text
-        // emitted earlier is thinking-process narration. While streaming, hold the answer back until
-        // the model marks it with a SUMMARY line — otherwise leading narration prose (which only reads
-        // as narration once a tool follows it) flashes as the answer for a beat before jumping up.
-        val structuralStart = blocks.indexOfLast { it !is ContentBlock.Text } + 1
-        val answerStart =
-            if (isStreaming && !blocks.trailingTextHasSummary(structuralStart)) blocks.size
-            else structuralStart
+        // The answer begins at the model's SUMMARY marker (see [answerStartOf]); everything before it is
+        // thinking-process narration. While streaming, nothing is the answer until the marker lands.
+        val answerStart = answerStartOf(blocks, isStreaming)
 
         val process = blocks.take(answerStart).mapNotNull { block ->
             when (block) {
@@ -231,12 +226,28 @@ object AiThreadMapper {
     private const val TAG = "AiThreadMapper"
 }
 
-/** True if any Text block from [from] onward carries a `SUMMARY:` line — the model's "answer starts
- *  here" marker, used to gate the streamed answer reveal. */
-private fun List<ContentBlock>.trailingTextHasSummary(from: Int): Boolean =
-    drop(from).filterIsInstance<ContentBlock.Text>().any { block ->
-        block.text.lineSequence().any { SUMMARY_LINE.matchEntire(it.trim()) != null }
+/**
+ * The index (into assistant-only blocks) where the answer begins. Anchored to the model's explicit
+ * `SUMMARY:` marker — the last Text block carrying one is the start of the final answer; everything
+ * before it is thinking-process. ("Last" so a stray `SUMMARY:` in earlier narration loses to the real
+ * answer.) Stream content is append-only, so this index is stable across frames — no flash, no demotion.
+ *
+ * With no marker: while streaming, hold at the end (reveal nothing as the answer yet); once settled,
+ * fall back to the trailing run of Text blocks so SUMMARY-less / do_nothing turns still surface a body.
+ */
+internal fun answerStartOf(blocks: List<ContentBlock>, isStreaming: Boolean): Int {
+    val assistant = blocks.filterNot { it is ContentBlock.ToolResult }
+    val summaryIndex = assistant.indexOfLast { it is ContentBlock.Text && it.text.hasSummaryLine() }
+    return when {
+        summaryIndex >= 0 -> summaryIndex
+        isStreaming -> assistant.size
+        else -> assistant.indexOfLast { it !is ContentBlock.Text } + 1
     }
+}
+
+/** True if any line of this text is a `SUMMARY:` directive — the model's "answer starts here" marker. */
+private fun String.hasSummaryLine(): Boolean =
+    lineSequence().any { SUMMARY_LINE.matchEntire(it.trim()) != null }
 
 /** True if [line] is a strict prefix of a directive keyword still being typed (e.g. "STATU", "SUMMAR"),
  *  before its colon completes — so we can hold it back from display while streaming. */

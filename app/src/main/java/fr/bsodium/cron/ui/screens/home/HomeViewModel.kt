@@ -247,14 +247,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 data = EventData.EveningPlan(timezone = tz.id, location = location),
             )
             val fsm = SessionFsm(getApplication(), repository)
-            val current = db.sessionDao().findCurrent()
-            if (current != null) {
-                // Append the fresh evening-plan event (latest wins in the worker), pull in any
-                // plan-affecting setting changed since bootstrap, then re-run the turn.
+            val current = repository.findCurrent()
+            val morning = SessionRepository.morningDate(Clock.System.now(), tz)
+            if (current != null && current.date == morning) {
+                // Same-morning replan: append the fresh evening-plan event (latest wins in the worker),
+                // pull in any plan-affecting setting changed since bootstrap, then re-run the turn.
                 repository.appendEvent(current.id, event)
                 fsm.refreshPlanFromSettings(current.id)
                 repository.triggerAiTurn(current.id)
             } else {
+                // No session, or a stale one targeting an earlier morning (e.g. a morning re-run of a
+                // session created last night) — let the FSM supersede the stale one and bootstrap a
+                // fresh session for the correct upcoming morning, so the alarm isn't pinned to today.
                 fsm.onEvent(event)
             }
         }
