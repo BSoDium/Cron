@@ -37,15 +37,15 @@ import fr.bsodium.cron.ui.screens.home.HomeScreen
 import fr.bsodium.cron.ui.screens.home.HomeViewModel
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
-import fr.bsodium.cron.ui.screens.settings.SettingsScreen
-import fr.bsodium.cron.ui.screens.settings.SettingsViewModel
+import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
+import fr.bsodium.cron.ui.screens.settings.settingsGraph
 import fr.bsodium.cron.ui.theme.CronTheme
 import kotlinx.coroutines.flow.first
 
 private const val FORWARD_MS = 350
 private const val TAB_MS = 220
 
-private val TAB_ROUTES = setOf("home", "history", "settings")
+private val TAB_ROUTES = setOf("home", "history", SETTINGS_ROOT)
 
 private val forwardTween = tween<Float>(durationMillis = FORWARD_MS, easing = EaseInOutCubic)
 private val tabTween = tween<Float>(durationMillis = TAB_MS, easing = EaseInOutCubic)
@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel<HomeViewModel>(),
                                 fabRegistry = fabRegistry,
                                 onNavigateToSettings = {
-                                    navController.navigate("settings") {
+                                    navController.navigate(SETTINGS_ROOT) {
                                         popUpTo("home") {
                                             saveState = true
                                             inclusive = false
@@ -165,13 +165,7 @@ class MainActivity : ComponentActivity() {
                         ) {
                             HistoryScreen(viewModel = viewModel<HistoryViewModel>())
                         }
-                        composable(
-                            route = "settings",
-                            enterTransition = { fadeIn(animationSpec = tabTween) },
-                            exitTransition = { fadeOut(animationSpec = tabTween) },
-                        ) {
-                            SettingsScreen(viewModel = viewModel<SettingsViewModel>())
-                        }
+                        settingsGraph(navController)
                     }
                         EdgeFades()
                         // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the
