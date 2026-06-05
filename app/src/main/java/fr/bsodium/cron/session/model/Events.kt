@@ -91,4 +91,6 @@ data class LocationPayload(
     val accuracyMeters: Float? = null,
     val source: LocationSource,
     val capturedAt: Instant,
+    /** Device-resolved human-readable address; null when reverse geocoding is unavailable or fails. */
+    val address: String? = null,
 )

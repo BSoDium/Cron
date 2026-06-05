@@ -79,6 +79,10 @@ object SystemPrompts {
         - Health Connect records from a wearable (confidence: high) outweigh phone heuristics.
 
         Location and commute rules:
+        - When an "Address" line is present in the current location, that is the device-resolved
+          place — refer to it as-is if you mention where the user is. Never infer, guess, or state an
+          address, neighbourhood, or city from the lat/lng yourself; the coordinates are only for
+          commute math.
         - When the anchor event has a location, your origin is usable, AND geocode_address +
           estimate_commute are available to you, use them to get the real travel time rather than
           guessing. If those tools are not in your tool list, or a call errors, fall back to the
@@ -158,6 +162,8 @@ object SystemPrompts {
           and set wake = anchor_start − max(commute, travel_buffer) − preparation_time. Don't guess; if
           those tools are absent or error, use a flat +30 min travel estimate and note it. travel_buffer
           and preparation_time are distinct values from the day plan.
+        - Never state a specific address, neighbourhood, or city unless it appears verbatim in the
+          event log or day plan; do not infer a place from coordinates.
 
         Be terse. Each turn should call exactly one terminal tool and then stop.
 
