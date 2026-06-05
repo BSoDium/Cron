@@ -153,7 +153,8 @@ private fun NavPill(
         ) {
             NavSlot(currentRoute, "home", Icons.Filled.Home, Icons.Outlined.Home, "Home", onNavigate)
             NavSlot(currentRoute, "history", Icons.Filled.History, Icons.Outlined.History, "History", onNavigate)
-            NavSlot(currentRoute, "settings", Icons.Filled.Settings, Icons.Outlined.Settings, "Settings", onNavigate)
+            // Settings landing route (the graph's start); sub-screen routes hide the pill entirely.
+            NavSlot(currentRoute, "settings/root", Icons.Filled.Settings, Icons.Outlined.Settings, "Settings", onNavigate)
         }
     }
 }
