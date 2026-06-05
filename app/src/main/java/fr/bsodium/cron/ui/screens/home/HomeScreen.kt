@@ -27,7 +27,12 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.filter
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -207,6 +212,26 @@ fun HomeScreen(
             // The spacer always reserves the FULL (expanded) card height, fed by the collapsible card's
             // own measure — decoupled from the collapsing render height so the collapse can't feed back.
             var cardFullHeightPx by remember { mutableIntStateOf(0) }
+
+            // Magnetic collapse: once the card is pinned and the scroll settles mid-collapse, snap to
+            // the nearest end so it never rests half-collapsed. Pure post-settle observation — never
+            // consumes scroll, so it can't fight the thinking pull (which acts at the top, fraction≈0).
+            val snapSafeTopPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
+            val snapRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
+            LaunchedEffect(listState, snapSafeTopPx, snapRangePx) {
+                snapshotFlow { listState.isScrollInProgress }
+                    .filter { !it }
+                    .collect {
+                        val info = listState.layoutInfo
+                        val spacer = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" } ?: return@collect
+                        val distance = (snapSafeTopPx - (spacer.offset - info.viewportStartOffset)).coerceAtLeast(0).toFloat()
+                        val fraction = (distance / snapRangePx).coerceIn(0f, 1f)
+                        if (fraction <= 0.001f || fraction >= 0.999f) return@collect
+                        // animateScrollBy(+) scrolls content up (collapse); (−) reveals (expand).
+                        val delta = if (fraction < 0.5f) -distance else snapRangePx - distance
+                        listState.animateScrollBy(delta, spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+            }
 
             // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed
             // thinking 1:1 with the finger. One reveal value (revealed pixels) drives the disclosure and
@@ -449,8 +474,9 @@ private fun BoxScope.StickyAlarm(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { translationY = state.top.toFloat() }
-            // Full: hugs at 12dp (tighter than the 20dp content). Collapsed: lerps to a full-bleed bar.
-            .padding(horizontal = Spacing.md * (1f - state.collapseFraction))
+            // Hugs at 12dp (tighter than the 20dp content) — kept constant so the collapsed bar
+            // holds the same width/margin as the expanded card.
+            .padding(horizontal = Spacing.md)
             .onSizeChanged { if (it.height != visiblePx) visiblePx = it.height },
     ) { card(state.collapseFraction) }
 }
