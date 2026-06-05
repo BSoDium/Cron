@@ -265,7 +265,9 @@ fun HomeScreen(
                     start = Spacing.xl,
                     end = Spacing.xl,
                     top = statusInsetTop + Spacing.xxl,
-                    bottom = navInsetBottom + Spacing.navBarClearance,
+                    // navBarClearance clears the pill; the extra xxxl matches the EdgeFades bottom
+                    // gradient's own xxxl so the last content (the thinking shape) rests above the fade.
+                    bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
                 ),
                 verticalArrangement = Arrangement.spacedBy(Spacing.xl),
             ) {
