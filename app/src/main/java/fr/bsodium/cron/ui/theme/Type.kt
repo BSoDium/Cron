@@ -148,8 +148,8 @@ object CronTypography {
     val bodySerif: TextStyle = TextStyle(
         fontFamily = SerifFontFamily,
         fontWeight = FontWeight(450),
-        fontSize = 20.sp,
-        lineHeight = 28.sp,
+        fontSize = 18.sp,
+        lineHeight = 26.sp,
     )
 
     /** Code label — AI tool-call name chips and their result labels (Martian Mono). */
