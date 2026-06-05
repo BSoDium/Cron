@@ -161,9 +161,8 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    // Horizontal inset is applied per-child so the card can hug wider than the rest.
                     .padding(
-                        start = Spacing.xl,
-                        end = Spacing.xl,
                         top = statusInsetTop + Spacing.xxl,
                         bottom = navInsetBottom + Spacing.navBarClearance,
                     ),
@@ -172,17 +171,26 @@ fun HomeScreen(
                 GreetingHeader(
                     prefix = uiState.greetingPrefix,
                     name = uiState.greetingName,
+                    modifier = Modifier.padding(horizontal = Spacing.xl),
                 )
-                card()
+                Box(Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) { card() }
                 // Bias the hint toward the upper third so "Let's get started" sits near eye height
                 // rather than floating in the dead-centre of the gap.
                 Box(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.xl),
                     contentAlignment = BiasAlignment(0f, -0.4f),
                 ) {
                     if (showOnboarding) OnboardingHint()
                 }
-                if (!hasNotificationPermission) NotificationPermissionRow(onEnable = onNotifEnable)
+                if (!hasNotificationPermission) {
+                    NotificationPermissionRow(
+                        onEnable = onNotifEnable,
+                        modifier = Modifier.padding(horizontal = Spacing.xl),
+                    )
+                }
             }
             // The onboarding callout that points at the play FAB is rendered in MainActivity,
             // layered above EdgeFades (via FabAction.hint) so the bottom scrim doesn't fade it.
@@ -425,7 +433,8 @@ private fun BoxScope.StickyAlarm(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { translationY = state.top.toFloat() }
-            .padding(horizontal = Spacing.xl)
+            // The hero card hugs the screen tighter than the rest of the content (20dp).
+            .padding(horizontal = Spacing.md)
             .onSizeChanged { if (it.height != cardHeightPx) onHeightChanged(it.height) },
     ) { card() }
 }
