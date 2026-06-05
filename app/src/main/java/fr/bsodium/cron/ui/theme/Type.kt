@@ -122,7 +122,7 @@ val Typography: Typography = Typography(
 /**
  * App-specific Typography roles that live outside the Material scale because
  * they bind to brand fonts (`DisplayFontFamily`, `SerifFontFamily`,
- * `MonoFontFamily`, `CodeFontFamily`) rather than the expressive sans. Use these wherever a
+ * `CodeFontFamily`) rather than the expressive sans. Use these wherever a
  * `TextStyle.copy(fontFamily = ...)` would otherwise be repeated.
  */
 object CronTypography {
@@ -148,8 +148,8 @@ object CronTypography {
     val bodySerif: TextStyle = TextStyle(
         fontFamily = SerifFontFamily,
         fontWeight = FontWeight(450),
-        fontSize = 20.sp,
-        lineHeight = 28.sp,
+        fontSize = 18.sp,
+        lineHeight = 26.sp,
     )
 
     /** Code label — AI tool-call name chips and their result labels (Martian Mono). */
