@@ -70,6 +70,7 @@ import kotlinx.coroutines.launch
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
+import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
@@ -85,6 +86,9 @@ private const val THINKING_PULL_RUBBER_FLOOR = 0.15f
 // Absolute cap on the release-to-expand pull distance, so a tall timeline (where 40% of full height
 // exceeds the screen) is still openable with a short drag.
 private val THINKING_EXPAND_TRIGGER_MAX = 120.dp
+
+// Scroll distance (past the pin point) over which the alarm card collapses full → slim bar.
+private val ALARM_COLLAPSE_RANGE = 120.dp
 
 @Composable
 fun HomeScreen(
@@ -200,7 +204,9 @@ fun HomeScreen(
             // stickyHeader (which pins at y=0 and can't take a top offset); an "alarm-spacer" holds its flow slot.
             val listState = rememberLazyListState()
             val density = LocalDensity.current
-            var cardHeightPx by remember { mutableIntStateOf(0) }
+            // The spacer always reserves the FULL (expanded) card height, fed by the collapsible card's
+            // own measure — decoupled from the collapsing render height so the collapse can't feed back.
+            var cardFullHeightPx by remember { mutableIntStateOf(0) }
 
             // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed
             // thinking 1:1 with the finger. One reveal value (revealed pixels) drives the disclosure and
@@ -286,7 +292,7 @@ fun HomeScreen(
                     )
                 }
                 item(key = "alarm-spacer") {
-                    Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
+                    Spacer(Modifier.height(with(density) { cardFullHeightPx.toDp() }))
                 }
                 item(key = "thread") {
                     AiThinkingThread(
@@ -323,10 +329,16 @@ fun HomeScreen(
             StickyAlarm(
                 listState = listState,
                 safeTop = statusInsetTop + Spacing.sm,
-                cardHeightPx = cardHeightPx,
-                onHeightChanged = { cardHeightPx = it },
-                card = card,
-            )
+            ) { collapseFraction ->
+                CollapsibleAlarmCard(
+                    dateLabel = uiState.dateLabel,
+                    alarmTime = uiState.sessionDisplay?.alarmTime,
+                    sleepDurationLabel = uiState.sleepStats?.durationLabel,
+                    sleepSegments = uiState.sleepStats?.segments.orEmpty(),
+                    collapseFraction = collapseFraction,
+                    onFullHeight = { cardFullHeightPx = it },
+                )
+            }
         }
 
         // Floating callouts stack just above the nav: a turn-failure banner on top of the
@@ -374,26 +386,26 @@ fun HomeScreen(
     }
 }
 
-private data class StickyAlarmState(val top: Int, val gradientAlpha: Float)
+private data class StickyAlarmState(val top: Int, val gradientAlpha: Float, val collapseFraction: Float)
 
 /**
  * CSS-`sticky`-with-top-offset alarm card, rendered as an overlay over the list. It follows the
  * flow position of the "alarm-spacer" item, then holds at [safeTop] (just below the status bar).
- * When stuck, a full-width background→transparent gradient fades in behind it, dissolving content
- * that slides under the card (and the full-bleed pill's edges) into the page background.
+ * Once pinned, continued scroll drives a 0→1 `collapseFraction` (passed to [card]) over
+ * [ALARM_COLLAPSE_RANGE] so the card collapses into its slim bar. A full-width background→transparent
+ * gradient fades in behind it, dissolving content that slides under into the page background.
  */
 @Composable
 private fun BoxScope.StickyAlarm(
     listState: LazyListState,
     safeTop: Dp,
-    cardHeightPx: Int,
-    onHeightChanged: (Int) -> Unit,
-    card: @Composable () -> Unit,
+    card: @Composable (collapseFraction: Float) -> Unit,
 ) {
     val density = LocalDensity.current
     val safeTopPx = with(density) { safeTop.roundToPx() }
     val fadePx = with(density) { Spacing.xxl.toPx() }
-    val state by remember(safeTopPx, fadePx) {
+    val collapseRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
+    val state by remember(safeTopPx, fadePx, collapseRangePx) {
         derivedStateOf {
             val info = listState.layoutInfo
             // On-screen top = item offset − viewportStartOffset (= −beforeContentPadding). Null once
@@ -401,18 +413,22 @@ private fun BoxScope.StickyAlarm(
             val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
                 ?.let { it.offset - info.viewportStartOffset }
             if (screenTop == null) {
-                StickyAlarmState(top = safeTopPx, gradientAlpha = 1f)
+                StickyAlarmState(top = safeTopPx, gradientAlpha = 1f, collapseFraction = 1f)
             } else {
+                val distance = (safeTopPx - screenTop).coerceAtLeast(0)
                 StickyAlarmState(
                     top = maxOf(safeTopPx, screenTop),
-                    gradientAlpha = ((safeTopPx - screenTop) / fadePx).coerceIn(0f, 1f),
+                    gradientAlpha = (distance / fadePx).coerceIn(0f, 1f),
+                    collapseFraction = (distance / collapseRangePx).coerceIn(0f, 1f),
                 )
             }
         }
     }
     val background = MaterialTheme.colorScheme.background
-    // Solid bg down to the card bottom, then a short fade below so content dissolves as it scrolls under.
-    val cardBottomPx = safeTopPx + cardHeightPx
+    // Scrim tracks the card's CURRENT (collapsing) visible height — independent of the spacer's full
+    // reservation — so the solid band always hugs the shrinking card bottom.
+    var visiblePx by remember { mutableIntStateOf(0) }
+    val cardBottomPx = safeTopPx + visiblePx
     val belowFadePx = with(density) { Spacing.xxxl.toPx() }
     val totalPx = cardBottomPx + belowFadePx
     val solidStop = if (totalPx > 0f) (cardBottomPx / totalPx).coerceIn(0f, 1f) else 1f
@@ -433,8 +449,8 @@ private fun BoxScope.StickyAlarm(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { translationY = state.top.toFloat() }
-            // The hero card hugs the screen tighter than the rest of the content (20dp).
-            .padding(horizontal = Spacing.md)
-            .onSizeChanged { if (it.height != cardHeightPx) onHeightChanged(it.height) },
-    ) { card() }
+            // Full: hugs at 12dp (tighter than the 20dp content). Collapsed: lerps to a full-bleed bar.
+            .padding(horizontal = Spacing.md * (1f - state.collapseFraction))
+            .onSizeChanged { if (it.height != visiblePx) visiblePx = it.height },
+    ) { card(state.collapseFraction) }
 }
