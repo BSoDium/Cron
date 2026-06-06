@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -125,7 +126,7 @@ fun AiThinkingThread(
             thread.response.isNullOrBlank() -> ShapePhase.Thinking
             else -> ShapePhase.Writing
         }
-        ThinkingShape(phase = phase, modifier = Modifier.padding(top = Spacing.md))
+        ThinkingShape(phase = phase, modifier = Modifier.padding(top = Spacing.md), restKey = thread.turnIndex)
     }
 }
 
@@ -175,7 +176,9 @@ private fun ThinkingDisclosure(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             if (inProgress) {
-                // Live: the model's current gerund summary + a spinner.
+                // Live: the tools called so far (accumulating) + the current step + a spinner.
+                val tools = process.filterIsInstance<ProcessItem.Tool>()
+                if (tools.isNotEmpty()) ToolStack(tools)
                 Text(
                     text = summary ?: "Thinking…",
                     style = MaterialTheme.typography.bodyLarge,
@@ -209,6 +212,30 @@ private fun ThinkingDisclosure(
                         modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
                     )
                 }
+            }
+        }
+        // While thinking and still collapsed, nudge the user that the process can be pulled open;
+        // it fades out as the reveal opens.
+        if (inProgress && canExpand) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.xl, vertical = Spacing.xs)
+                    .graphicsLayer { alpha = (1f - expansionFraction).coerceIn(0f, 1f) },
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(SPINNER_SIZE),
+                )
+                Text(
+                    text = "Pull to show thinking",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate
