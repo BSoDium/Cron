@@ -1,5 +1,9 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,8 +25,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -98,9 +104,21 @@ fun AiThinkingThread(
                 expansionFraction = expansionFraction,
             )
         }
-        if (!thread.response.isNullOrBlank()) {
-            Spacer(Modifier.height(Spacing.sm))
-            ResponseBody(thread.response)
+        // Animate the answer in/out so a re-plan (answer → "Thinking…") collapses smoothly instead of
+        // jumping. fadeIn is alpha-only (no height change) so it never fights the streaming reveal;
+        // the exit shrinks the height. Hold the last answer so the exit renders real content.
+        val response = thread.response
+        var lastResponse by remember { mutableStateOf("") }
+        LaunchedEffect(response) { if (!response.isNullOrBlank()) lastResponse = response }
+        AnimatedVisibility(
+            visible = !response.isNullOrBlank(),
+            enter = fadeIn(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column {
+                Spacer(Modifier.height(Spacing.sm))
+                ResponseBody(response?.takeIf { it.isNotBlank() } ?: lastResponse)
+            }
         }
         val phase = when {
             !inProgress -> ShapePhase.Resting
