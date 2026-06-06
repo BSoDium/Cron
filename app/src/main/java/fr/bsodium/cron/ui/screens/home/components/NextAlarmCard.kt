@@ -75,8 +75,18 @@ fun NextAlarmCard(
     sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
 ) {
+    val kind = alarmKindFor(alarmTime)
     AlarmShell(modifier) {
-        AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments)
+        Box(Modifier.fillMaxWidth()) {
+            AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, hasBadge = kind != null)
+            if (kind != null) {
+                AlarmTypeBadge(
+                    kind = kind,
+                    rotationDeg = 0f,
+                    modifier = Modifier.padding(start = BADGE_CORNER_GAP, top = BADGE_CORNER_GAP),
+                )
+            }
+        }
     }
 }
 
@@ -111,6 +121,8 @@ internal fun AlarmCardContent(
     // The collapsing card hides this layer's time row (clock + countdown — both become moving copies
     // drawn on top) while still measuring it, so this stays the single source of expanded geometry.
     timeRowAlpha: Float = 1f,
+    // When the corner badge is shown, indent the date so it clears the badge and reads alongside it.
+    hasBadge: Boolean = false,
 ) {
     val onCard = MaterialTheme.colorScheme.onPrimary
     Column(
@@ -125,6 +137,7 @@ internal fun AlarmCardContent(
             text = dateLabel.ifBlank { "—" },
             color = onCard,
             style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
+            modifier = if (hasBadge) Modifier.padding(start = BADGE_DATE_INSET) else Modifier,
         )
         LcdTimeDisplay(alarmTime = alarmTime, timeRowAlpha = timeRowAlpha)
         if (sleepSegments.isNotEmpty()) {
@@ -372,8 +385,6 @@ internal fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
 }
 
 private val COLON_WIDTH = 8.dp
-private val TIMELINE_HEIGHT = 82.dp
-private val TICK_BAR_HEIGHT = 20.dp
 
 /** Two dots centred on the digit ink (fills the row height) so the colon shares the digits' centre. */
 @Composable
@@ -399,101 +410,4 @@ private fun DrawScope.drawColonDot(color: Color, centerY: Float, boostPx: Float 
         radius = radius,
         center = Offset(x = size.width / 2f, y = centerY),
     )
-}
-
-/**
- * Inverse tile within the bold card: an `onPrimary` panel with `primary` tick marks and
- * segment bars. Two timestamp labels at the top, two stage labels at the bottom.
- */
-@Composable
-private fun SleepTimeline(
-    segments: List<SleepSegment>,
-    modifier: Modifier = Modifier,
-) {
-    val tile = MaterialTheme.colorScheme.onPrimary
-    val onTile = MaterialTheme.colorScheme.primary
-    val barColor = onTile.copy(alpha = 0.95f)
-    // Martian Mono's line box runs taller than the condensed face it replaced; trim the font
-    // padding and pin line height to the point size so both label rows clear the fixed-height tile.
-    val timeStyle = TightTextStyle.copy(fontFamily = CodeFontFamily, fontSize = 16.sp, lineHeight = 16.sp, color = onTile)
-    val stageStyle = timeStyle.copy(fontSize = 14.sp, lineHeight = 14.sp)
-    Surface(
-        color = tile,
-        shape = RoundedCornerShape(Radius.lg),
-        modifier = modifier
-            .fillMaxWidth()
-            .height(TIMELINE_HEIGHT),
-    ) {
-        val tStart = segments.first().start
-        val tEnd = segments.last().end
-        val totalSpanMs = (tEnd - tStart).inWholeMilliseconds.coerceAtLeast(1)
-        val tz = TimeZone.currentSystemDefault()
-
-        // Two anchor segments for labels: the longest two by duration, sorted chronologically (left earlier).
-        val labelled = segments
-            .sortedByDescending { (it.end - it.start).inWholeMilliseconds }
-            .take(2)
-            .sortedBy { it.start }
-            .ifEmpty { listOf(segments.first()) }
-
-        Column(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm + Spacing.xxs)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (labelled.size == 1) Arrangement.Start else Arrangement.SpaceBetween,
-            ) {
-                labelled.forEach { seg ->
-                    val local = seg.start.toLocalDateTime(tz)
-                    Text(
-                        text = String.format(Locale.US, "%02d:%02d", local.hour, local.minute),
-                        style = timeStyle,
-                    )
-                }
-            }
-            Spacer(Modifier.height(Spacing.xs))
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(TICK_BAR_HEIGHT),
-            ) {
-                val w = size.width
-                val h = size.height
-                val midY = h * 0.5f
-                val tickCount = 80
-                val tickColor = onTile.copy(alpha = 0.65f)
-                for (i in 0 until tickCount) {
-                    val x = w * i / (tickCount - 1).toFloat()
-                    drawLine(
-                        color = tickColor,
-                        start = Offset(x, midY - 4f),
-                        end = Offset(x, midY + 4f),
-                        strokeWidth = 1.2f,
-                    )
-                }
-                segments.forEach { seg ->
-                    val frac0 = ((seg.start - tStart).inWholeMilliseconds.toFloat() / totalSpanMs).coerceIn(0f, 1f)
-                    val frac1 = ((seg.end - tStart).inWholeMilliseconds.toFloat() / totalSpanMs).coerceIn(0f, 1f)
-                    val x0 = w * frac0
-                    val x1 = w * frac1
-                    drawLine(
-                        color = barColor,
-                        start = Offset(x0, midY),
-                        end = Offset(x1, midY),
-                        strokeWidth = 3.5f,
-                    )
-                }
-            }
-            Spacer(Modifier.height(Spacing.xs))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (labelled.size == 1) Arrangement.Start else Arrangement.SpaceBetween,
-            ) {
-                labelled.forEach { seg ->
-                    Text(
-                        text = seg.stage.name.uppercase(Locale.ROOT),
-                        style = stageStyle,
-                    )
-                }
-            }
-        }
-    }
 }

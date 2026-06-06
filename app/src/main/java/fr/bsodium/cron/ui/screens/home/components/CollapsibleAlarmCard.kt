@@ -34,6 +34,8 @@ import kotlin.math.roundToInt
 // Max stroke (local 76sp space) overlaid on the collapsed digits to fake weight as they shrink.
 // Conservative default — bump for bolder collapsed digits.
 private val MAX_CLOCK_STROKE = 1.5.dp
+// How far the alarm-type badge's shape spins (like a cog) over the full collapse.
+private const val BADGE_SPIN_DEG = 180f
 
 /**
  * The alarm card that collapses on scroll. Rather than crossfade two layouts, the **"HH:MM" clock**
@@ -54,6 +56,7 @@ internal fun CollapsibleAlarmCard(
     modifier: Modifier = Modifier,
 ) {
     val f = collapseFraction.coerceIn(0f, 1f)
+    val kind = alarmKindFor(alarmTime)
     val onCard = MaterialTheme.colorScheme.onPrimary
     val digitColor = if (alarmTime == null) onCard.copy(alpha = 0.30f) else onCard
     // Remaining keeps the dimmed countdown colour in BOTH states — colour alone conveys hierarchy.
@@ -92,7 +95,7 @@ internal fun CollapsibleAlarmCard(
 
             // Full expanded layout with its TIME ROW hidden (still measured) → single source of geometry.
             val extras = subcompose("extras") {
-                AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f)
+                AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f, hasBadge = kind != null)
             }.first().measure(cFill)
             onFullHeight(extras.height)
             // Date proxy — height only — to place the moving clock at the expanded clock-Y.
@@ -127,12 +130,22 @@ internal fun CollapsibleAlarmCard(
                 }
                 CountdownStack(countdown = cd, progress = progress, color = countdownColor)
             }.first().measure(cWrap)
+            // Alarm-type badge: stays nested in the top-left corner (== the collapsed pill's left
+            // circle), spinning like a cog as the card collapses. Drawn on top, never faded with extras.
+            val badge = kind?.let {
+                subcompose("badge") {
+                    AlarmTypeBadge(kind = it, rotationDeg = lerp(0f, BADGE_SPIN_DEG, f))
+                }.first().measure(cWrap)
+            }
 
             val w = extras.width
             val startPad = Spacing.xxl.roundToPx()
             val topPad = Spacing.xl.roundToPx()
             val endPad = Spacing.xxl.roundToPx()
             val cdGap = (Spacing.xs + Spacing.xxs).roundToPx()
+            // In the collapsed pill the clock must clear the badge in the left circle; expanded it keeps
+            // the normal start inset (the badge sits in the corner above it). No badge → no shift.
+            val collapsedClockX = if (kind != null) (BADGE_CORNER_GAP + BADGE_DIAMETER + Spacing.sm).roundToPx() else startPad
             val height = lerp(extras.height, barHeight, f)
 
             val expandedClockY = topPad + date.height
@@ -149,7 +162,7 @@ internal fun CollapsibleAlarmCard(
                 if (extrasAlpha > 0f) extras.placeWithLayer(0, 0) { alpha = extrasAlpha }
                 // Clock: left-edge anchored; pivot on the digit-ink centre so scaling + translation land
                 // the ink dead-centre in the pill.
-                clock.placeWithLayer(startPad, expandedClockY) {
+                clock.placeWithLayer(lerp(startPad.toFloat(), collapsedClockX.toFloat(), f).roundToInt(), expandedClockY) {
                     scaleX = clockScale
                     scaleY = clockScale
                     transformOrigin = TransformOrigin(0f, ink.centerFraction)
@@ -160,6 +173,11 @@ internal fun CollapsibleAlarmCard(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
+                // Badge on top, fixed in the corner (== pill left-circle); its shape spins via rotationDeg.
+                badge?.let {
+                    val pos = BADGE_CORNER_GAP.roundToPx()
+                    it.place(pos, pos)
+                }
             }
         }
     }
