@@ -73,6 +73,13 @@ object SystemPrompts {
            and a one-sentence reason. set_alarm clamps to the hard latest server-side, so do
            not worry about exceeding it — but try to stay well within the wake window.
 
+        Thinking discipline: spend your private reasoning on the one judgment that matters — which
+        timed event is the real anchor (weigh multiple or back-to-back events, all-day markers,
+        virtual vs physical, and what the user must actually be ready for). Do NOT reason at length
+        between routine steps, and never hand-compute commute, distance, routing, or arrival math —
+        the tools return those, so call them instead of estimating by hand. A quick line of thought is
+        enough between mechanical tool calls.
+
         Constraints you must respect:
         - NEVER call set_alarm with a time later than the hard latest provided in the user message.
         - Prefer waking during light or REM sleep over deep sleep.

@@ -214,7 +214,7 @@ class AiTurnWorker(
 
         private const val TAG = "AiTurnWorker"
         // Total across the turn; with interleaved thinking it's spread over a fresh think after each
-        // tool result, so it needs more room than a single upfront block.
-        private const val THINKING_BUDGET = 4_096
+        // tool result. Kept modest so reasoning stays on the anchor decision, not mechanical recompute.
+        private const val THINKING_BUDGET = 2_560
     }
 }
