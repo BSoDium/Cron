@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.home
 
-import android.util.Log
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -52,25 +51,14 @@ internal fun AlarmCollapseEffects(
         snapshotFlow { listState.isScrollInProgress }
             .filter { !it }
             .collect {
-                // The release flips this false for a frame before the fling; wait it out, then re-check.
+                // The release flips this false for a frame before the fling; wait it out, then re-check
+                // so the snap runs from the true settle (else the fling preempts it: "Mutation interrupted").
                 delay(SETTLE_DEBOUNCE_MS)
-                if (listState.isScrollInProgress) {
-                    Log.d("AlarmSnap", "settle deferred — fling in progress")
-                    return@collect
-                }
+                if (listState.isScrollInProgress) return@collect
                 val c = collapse.value
-                Log.d(
-                    "AlarmSnap",
-                    "settle fraction=${"%.3f".format(c.fraction)} dist=${c.distancePx} canFwd=${listState.canScrollForward} " +
-                        "idx=${listState.firstVisibleItemIndex} off=${listState.firstVisibleItemScrollOffset} rangePx=$rangePx",
-                )
-                if (c.fraction <= 0.001f || c.fraction >= 0.999f) {
-                    Log.d("AlarmSnap", "  → at end, skip")
-                    return@collect
-                }
+                if (c.fraction <= 0.001f || c.fraction >= 0.999f) return@collect
                 try {
                     if (c.fraction >= 0.5f && listState.canScrollForward) {
-                        Log.d("AlarmSnap", "  → COLLAPSE animateScrollBy(${rangePx - c.distancePx})")
                         listState.animateScrollBy(rangePx - c.distancePx, ALARM_SNAP_SPEC)
                         // Hit the content bottom before fully collapsing → expand instead of stalling.
                         val rest = collapse.value
@@ -78,12 +66,9 @@ internal fun AlarmCollapseEffects(
                             listState.animateScrollBy(-rest.distancePx, ALARM_SNAP_SPEC)
                         }
                     } else {
-                        Log.d("AlarmSnap", "  → EXPAND animateScrollBy(${-c.distancePx})")
                         listState.animateScrollBy(-c.distancePx, ALARM_SNAP_SPEC)
                     }
-                    Log.d("AlarmSnap", "  ← done fraction=${"%.3f".format(collapse.value.fraction)}")
                 } catch (e: CancellationException) {
-                    Log.d("AlarmSnap", "  ✗ cancelled: ${e.message}")
                     // User grabbed the list mid-snap → the SCROLL is cancelled, not us. Keep observing
                     // so the next settle re-snaps; rethrow only if WE were cancelled (composition gone).
                     coroutineContext.ensureActive()
