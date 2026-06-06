@@ -143,14 +143,21 @@ internal fun CollapsibleAlarmCard(
             val topPad = Spacing.xl.roundToPx()
             val endPad = Spacing.xxl.roundToPx()
             val cdGap = (Spacing.xs + Spacing.xxs).roundToPx()
-            // In the collapsed pill the clock must clear the badge in the left circle; expanded it keeps
-            // the normal start inset (the badge sits in the corner above it). No badge → no shift.
-            val collapsedClockX = if (kind != null) (BADGE_COLLAPSED_LEFT + BADGE_DIAMETER + BADGE_CLOCK_GAP).roundToPx() else startPad
+            // Collapsed: the badge nests concentric in the pill's left cap (centre = barHeight/2); the
+            // clock starts just past its right edge so the time clears the shape. No badge → no shift.
+            val collapsedClockX = if (badge != null) (barHeight - badge.width) / 2 + badge.width + BADGE_CLOCK_GAP.roundToPx() else startPad
             val height = lerp(extras.height, barHeight, f)
 
-            val expandedClockY = topPad + date.height
+            // The badge can be taller than the date glyphs, so the clock sits below the WHOLE row —
+            // otherwise the moving clock would overlap the badge in the expanded state.
+            val rowHeight = maxOf(date.height, badge?.height ?: 0)
+            val expandedClockY = topPad + rowHeight
             val expandedInkCenter = expandedClockY + inkCenterPx
             val pillCenter = barHeight / 2f
+            // The clock's vertical travel LAGS its horizontal travel (f² ≤ f): it first slides right,
+            // clearing the badge's right edge, and only then rises into the pill centre. That routes the
+            // time around the badge's corner instead of sweeping up through the shape.
+            val fv = f * f
 
             // Countdown mover: expanded slot (right of the clock, matching the LcdTimeDisplay row) → pill-right, centred.
             val expandedCdX = startPad + clock.width + cdGap
@@ -166,19 +173,21 @@ internal fun CollapsibleAlarmCard(
                     scaleX = clockScale
                     scaleY = clockScale
                     transformOrigin = TransformOrigin(0f, ink.centerFraction)
-                    translationY = lerp(0f, pillCenter - expandedInkCenter, f)
+                    translationY = lerp(0f, pillCenter - expandedInkCenter, fv)
                 }
                 // Countdown: identical typography in both states, just moves (no fade, no scale).
                 countdown.place(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
-                    y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
+                    y = lerp(expandedCdY.toFloat(), collapsedCdY, fv).roundToInt(),
                 )
                 // Badge on top (never faded); slides from the expanded date-row slot to the pill's left,
                 // its shape spinning via rotationDeg. Vertically centred in the collapsed pill.
                 badge?.let {
+                    // Concentric in the pill's left cap: centre x = centre y = barHeight / 2.
+                    val collapsedLeft = (barHeight - it.width) / 2f
                     val collapsedTop = (barHeight - it.height) / 2f
                     it.place(
-                        x = lerp(startPad.toFloat(), BADGE_COLLAPSED_LEFT.roundToPx().toFloat(), f).roundToInt(),
+                        x = lerp(startPad.toFloat(), collapsedLeft, f).roundToInt(),
                         y = lerp(topPad.toFloat(), collapsedTop, f).roundToInt(),
                     )
                 }

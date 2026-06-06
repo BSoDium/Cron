@@ -44,15 +44,13 @@ private val AlarmKind.shape: RoundedPolygon
     }
 
 internal val BADGE_DIAMETER = 44.dp
-internal val BADGE_DATE_GAP = Spacing.md            // badge ↔ date in the expanded row
-internal val BADGE_COLLAPSED_LEFT = Spacing.md      // badge's left margin inside the collapsed pill
+internal val BADGE_DATE_GAP = Spacing.lg            // badge ↔ date in the expanded row
 internal val BADGE_CLOCK_GAP = Spacing.lg           // collapsed badge ↔ time (breathing room)
 
-private const val BADGE_BG_ALPHA = 0.16f
-
 /**
- * The alarm-type indicator: a zero-elevation round background holding a Material [shape], drawn inside
- * with a small margin and spun by [rotationDeg] (driven by the card's collapse fraction, like a cog).
+ * The alarm-type indicator: a flat (elevation-0) `onPrimary` disc with the Material [shape] knocked out
+ * of it in the card's own `primary` colour, so the shape reads as a hole in a solid disc. Spun by
+ * [rotationDeg] (driven by the card's collapse fraction, like a cog).
  */
 @Composable
 internal fun AlarmTypeBadge(
@@ -61,7 +59,8 @@ internal fun AlarmTypeBadge(
     modifier: Modifier = Modifier,
     diameter: Dp = BADGE_DIAMETER,
 ) {
-    val onCard = MaterialTheme.colorScheme.onPrimary
+    val disc = MaterialTheme.colorScheme.onPrimary
+    val shapeColor = MaterialTheme.colorScheme.primary
     val morph = remember(kind) { Morph(kind.shape, kind.shape) }
     val path = remember { Path() }
     val matrix = remember { Matrix() }
@@ -69,11 +68,11 @@ internal fun AlarmTypeBadge(
         modifier = modifier
             .size(diameter)
             .clip(CircleShape)
-            .background(onCard.copy(alpha = BADGE_BG_ALPHA)),
+            .background(disc),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            drawMorph(morph, progress = 0f, rotationDeg = rotationDeg, fillFraction = 1f, color = onCard, path = path, matrix = matrix)
+            drawMorph(morph, progress = 0f, rotationDeg = rotationDeg, fillFraction = 1f, color = shapeColor, path = path, matrix = matrix)
         }
     }
 }
