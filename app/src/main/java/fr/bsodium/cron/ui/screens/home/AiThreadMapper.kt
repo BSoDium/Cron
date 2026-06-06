@@ -96,15 +96,17 @@ object AiThreadMapper {
         // the answer. Pull them out in order and strip them so they never render.
         val statuses = mutableListOf<String>()
         var summaryLine: String? = null
-        fun stripDirectives(text: String): String {
+        // [committable] = false for the still-streaming tail block: a STATUS gerund may be half-typed
+        // ("Evaluating"…), so strip it from display but don't surface it as the live step title yet.
+        fun stripDirectives(text: String, committable: Boolean = true): String {
             val kept = mutableListOf<String>()
             text.lineSequence().forEach { line ->
                 val trimmed = line.trim()
                 val status = STATUS_LINE.matchEntire(trimmed)
                 val summary = SUMMARY_LINE.matchEntire(trimmed)
                 when {
-                    status != null -> status.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { statuses += it }
-                    summary != null -> summary.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { summaryLine = it }
+                    status != null -> if (committable) status.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { statuses += it }
+                    summary != null -> if (committable) summary.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { summaryLine = it }
                     else -> kept += line
                 }
             }
@@ -120,12 +122,13 @@ object AiThreadMapper {
         // thinking-process narration. While streaming, nothing is the answer until the marker lands.
         val answerStart = answerStartOf(blocks, isStreaming)
 
-        val process = blocks.take(answerStart).mapNotNull { block ->
+        val process = blocks.take(answerStart).mapIndexedNotNull { index, block ->
             when (block) {
                 is ContentBlock.Thinking ->
                     block.thinking.takeIf { it.isNotBlank() }?.let { ProcessItem.Reasoning(it) }
                 is ContentBlock.Text ->
-                    stripDirectives(block.text).takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
+                    stripDirectives(block.text, committable = !(isStreaming && index == blocks.lastIndex))
+                        .takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
                 is ContentBlock.ToolUse -> {
                     val result = toolResults[block.id]
                     ProcessItem.Tool(

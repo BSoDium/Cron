@@ -51,10 +51,12 @@ enum class ShapePhase { Resting, Thinking, Writing }
  * while the answer streams in, settling to a filled heart at rest — like a logo under a message.
  */
 @Composable
-fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier) {
+fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any? = null) {
     val color = MaterialTheme.colorScheme.primary
-    var current by remember { mutableStateOf(REST) }
-    var target by remember { mutableStateOf(REST) }
+    // Each turn ([restKey]) settles to a different soft, low-corner shape.
+    val rest = remember(restKey) { RESTING_SET.random() }
+    var current by remember { mutableStateOf(rest) }
+    var target by remember { mutableStateOf(rest) }
     val progress = remember { Animatable(0f) }
     val rotation = remember { Animatable(0f) }
     val morph = remember(current, target) { Morph(current, target) }
@@ -74,15 +76,15 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier) {
             ShapePhase.Resting -> null
         }
         if (cycle == null) {
-            // Settle to the heart, upright (nearest full turn) so it lands level.
-            target = REST
+            // Settle to the resting shape, upright (nearest full turn) so it lands level.
+            target = rest
             progress.snapTo(0f)
             coroutineScope {
                 launch { progress.animateTo(1f, REST_SPEC) }
                 launch { rotation.animateTo(nearestUpright(rotation.value), REST_SPEC) }
             }
-            current = REST
-            target = REST
+            current = rest
+            target = rest
             progress.snapTo(0f)
             return@LaunchedEffect
         }
@@ -113,7 +115,7 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier) {
  * Renders [morph] at [progress], rotated by [rotationDeg] and fit-and-centered into the draw bounds
  * (with [SHAPE_FIT] margin so rotation never clips). [fillFraction] crossfades stroke→fill.
  */
-private fun DrawScope.drawMorph(
+internal fun DrawScope.drawMorph(
     morph: Morph,
     progress: Float,
     rotationDeg: Float,
@@ -165,8 +167,14 @@ private val SPIN_EASING = CubicBezierEasing(0.34f, 1.4f, 0.64f, 1f)
 private val THINKING_SPIN_SPEC = tween<Float>(durationMillis = THINKING_STEP_MS, easing = SPIN_EASING)
 private val WRITING_SPIN_SPEC = tween<Float>(durationMillis = WRITING_STEP_MS, easing = SPIN_EASING)
 
-// Filled heart at rest; cozy round shapes for thinking; sharp star shapes for streaming.
-private val REST: RoundedPolygon = MaterialShapes.Heart
+// At rest, a random soft low-corner shape; cozy round shapes for thinking; sharp star shapes streaming.
+private val RESTING_SET: List<RoundedPolygon> = listOf(
+    MaterialShapes.Ghostish,
+    MaterialShapes.Bun,
+    MaterialShapes.Heart,
+    MaterialShapes.Flower,
+    MaterialShapes.Clover4Leaf,
+)
 private val COZY: List<RoundedPolygon> = listOf(
     MaterialShapes.Cookie9Sided,
     MaterialShapes.Cookie6Sided,
@@ -190,7 +198,7 @@ private fun ThinkingShapePreview() {
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.padding(16.dp),
         ) {
-            StaticShape(REST, fill = 1f)
+            StaticShape(RESTING_SET.first(), fill = 1f)
             StaticShape(COZY.first(), fill = 0f)
             StaticShape(SHARP.first(), fill = 1f)
         }
