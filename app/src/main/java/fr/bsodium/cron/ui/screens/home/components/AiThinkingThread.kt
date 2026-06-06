@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.animation.animateBounds
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +23,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -30,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,35 +83,49 @@ fun AiThinkingThread(
 ) {
     var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
     val isExpanded = expanded ?: internalExpanded
-    Column(modifier = modifier.fillMaxWidth()) {
-        // Settled/running is the WorkManager signal, not response presence — a do_nothing turn settles with none.
-        val inProgress = isRunning
-        if (thread.process.isNotEmpty() || inProgress) {
-            ThinkingDisclosure(
-                summary = thread.summary,
-                process = thread.process,
-                inProgress = inProgress,
-                durationSeconds = thread.durationSeconds,
-                expanded = isExpanded,
-                onToggle = {
-                    val next = !isExpanded
-                    if (onExpandedChange != null) onExpandedChange(next) else internalExpanded = next
-                },
-                expandPx = expandPx,
-                onFullHeight = onFullHeight,
-                expansionFraction = expansionFraction,
-            )
+    // Settled/running is the WorkManager signal, not response presence — a do_nothing turn settles with none.
+    val inProgress = isRunning
+    val phase = when {
+        !inProgress -> ShapePhase.Resting
+        thread.response.isNullOrBlank() -> ShapePhase.Thinking
+        else -> ShapePhase.Writing
+    }
+    LookaheadScope {
+        val lookahead = this
+        // One shape that MIGRATES between two slots: small among the tool icons in the thinking header
+        // (while thinking), full under the response (once it streams / at rest). movableContent keeps its
+        // identity across the two parents; animateBounds tweens position AND size as it moves.
+        val shape = remember(lookahead) {
+            movableContentOf<ShapePhase, Boolean> { p, compact ->
+                ThinkingShape(phase = p, compact = compact, modifier = Modifier.animateBounds(lookahead))
+            }
         }
-        if (!thread.response.isNullOrBlank()) {
-            Spacer(Modifier.height(Spacing.sm))
-            ResponseBody(thread.response)
+        Column(modifier = modifier.fillMaxWidth()) {
+            if (thread.process.isNotEmpty() || inProgress) {
+                ThinkingDisclosure(
+                    summary = thread.summary,
+                    process = thread.process,
+                    inProgress = inProgress,
+                    durationSeconds = thread.durationSeconds,
+                    expanded = isExpanded,
+                    onToggle = {
+                        val next = !isExpanded
+                        if (onExpandedChange != null) onExpandedChange(next) else internalExpanded = next
+                    },
+                    expandPx = expandPx,
+                    onFullHeight = onFullHeight,
+                    expansionFraction = expansionFraction,
+                    headerShape = if (phase == ShapePhase.Thinking) ({ shape(phase, true) }) else null,
+                )
+            }
+            if (!thread.response.isNullOrBlank()) {
+                Spacer(Modifier.height(Spacing.sm))
+                ResponseBody(thread.response)
+            }
+            if (phase != ShapePhase.Thinking) {
+                Box(Modifier.padding(top = Spacing.md)) { shape(phase, false) }
+            }
         }
-        val phase = when {
-            !inProgress -> ShapePhase.Resting
-            thread.response.isNullOrBlank() -> ShapePhase.Thinking
-            else -> ShapePhase.Writing
-        }
-        ThinkingShape(phase = phase, modifier = Modifier.padding(top = Spacing.md))
     }
 }
 
@@ -139,6 +157,8 @@ private fun ThinkingDisclosure(
     expandPx: Float = 0f,
     onFullHeight: (Int) -> Unit = {},
     expansionFraction: Float = 0f,
+    // The migrating thinking shape, rendered left of the summary while thinking (null once it leaves).
+    headerShape: (@Composable () -> Unit)? = null,
 ) {
     val canExpand = process.isNotEmpty()
     // Drives the chevron pivot from the live reveal: 0f collapsed (points right), 1f open (points down).
@@ -157,7 +177,8 @@ private fun ThinkingDisclosure(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             if (inProgress) {
-                // Live: the model's current gerund summary + a spinner.
+                // Live: the migrating shape (while thinking) + the model's current gerund summary + a spinner.
+                headerShape?.invoke()
                 Text(
                     text = summary ?: "Thinking…",
                     style = MaterialTheme.typography.bodyLarge,
