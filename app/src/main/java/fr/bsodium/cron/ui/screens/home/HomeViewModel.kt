@@ -62,6 +62,8 @@ data class HomeUiState(
     val aiFailure: AiTurnFailure? = null,
     /** User preference: fire subtle haptic ticks while the assistant streams. */
     val hapticsEnabled: Boolean = true,
+    /** True once the user has expanded the thinking once — hides the one-time pull hint. */
+    val thinkingHintSeen: Boolean = false,
 )
 
 /** Why the most recent AI turn ended without updating the plan, for the home failure banner. */
@@ -144,18 +146,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         StreamingTurnStore.active,
     ) { id, streaming -> id != null && streaming?.sessionId == id }
 
+    // Two UX prefs pre-combined so statusFlow stays within combine's 5-arg arity.
+    private val prefsFlow = combine(settings.hapticsEnabled, settings.thinkingHintSeen) { haptics, hintSeen ->
+        haptics to hintSeen
+    }
+
     private val statusFlow = combine(
         _isRetrying,
         settingsChangedFlow,
         _aiFailure,
         streamingActiveFlow,
-        settings.hapticsEnabled,
-    ) { retrying, settingsChanged, failure, streaming, haptics ->
+        prefsFlow,
+    ) { retrying, settingsChanged, failure, streaming, prefs ->
         HomeStatus(
             isRetrying = retrying || streaming,
             settingsChanged = settingsChanged,
             failure = failure,
-            hapticsEnabled = haptics,
+            hapticsEnabled = prefs.first,
+            thinkingHintSeen = prefs.second,
         )
     }
 
@@ -180,12 +188,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             settingsChangedSincePlan = status.settingsChanged && thread != null,
             aiFailure = status.failure,
             hapticsEnabled = status.hapticsEnabled,
+            thinkingHintSeen = status.thinkingHintSeen,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     /** Hide the "settings changed" reminder until the next plan-affecting change. */
     fun dismissSettingsReminder() {
         _dismissedSettingsAt.value = Clock.System.now().toEpochMilliseconds()
+    }
+
+    /** Mark the one-time "pull to show thinking" hint as seen the first time the user expands it. */
+    fun markThinkingHintSeen() {
+        viewModelScope.launch { settings.setThinkingHintSeen() }
     }
 
     /**
@@ -363,4 +377,5 @@ private data class HomeStatus(
     val settingsChanged: Boolean,
     val failure: AiTurnFailure?,
     val hapticsEnabled: Boolean,
+    val thinkingHintSeen: Boolean,
 )
