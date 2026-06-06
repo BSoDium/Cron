@@ -213,6 +213,8 @@ class AiTurnWorker(
         const val REASON_HTTP = "http_error"
 
         private const val TAG = "AiTurnWorker"
-        private const val THINKING_BUDGET = 2_000
+        // Total across the turn; with interleaved thinking it's spread over a fresh think after each
+        // tool result, so it needs more room than a single upfront block.
+        private const val THINKING_BUDGET = 4_096
     }
 }
