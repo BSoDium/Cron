@@ -95,7 +95,7 @@ internal fun CollapsibleAlarmCard(
 
             // Full expanded layout with its TIME ROW hidden (still measured) → single source of geometry.
             val extras = subcompose("extras") {
-                AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f, hasBadge = kind != null)
+                AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f, alarmKind = kind, badgeAlpha = 0f)
             }.first().measure(cFill)
             onFullHeight(extras.height)
             // Date proxy — height only — to place the moving clock at the expanded clock-Y.
@@ -145,7 +145,7 @@ internal fun CollapsibleAlarmCard(
             val cdGap = (Spacing.xs + Spacing.xxs).roundToPx()
             // In the collapsed pill the clock must clear the badge in the left circle; expanded it keeps
             // the normal start inset (the badge sits in the corner above it). No badge → no shift.
-            val collapsedClockX = if (kind != null) (BADGE_CORNER_GAP + BADGE_DIAMETER + Spacing.sm).roundToPx() else startPad
+            val collapsedClockX = if (kind != null) (BADGE_COLLAPSED_LEFT + BADGE_DIAMETER + BADGE_CLOCK_GAP).roundToPx() else startPad
             val height = lerp(extras.height, barHeight, f)
 
             val expandedClockY = topPad + date.height
@@ -173,10 +173,14 @@ internal fun CollapsibleAlarmCard(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
-                // Badge on top, fixed in the corner (== pill left-circle); its shape spins via rotationDeg.
+                // Badge on top (never faded); slides from the expanded date-row slot to the pill's left,
+                // its shape spinning via rotationDeg. Vertically centred in the collapsed pill.
                 badge?.let {
-                    val pos = BADGE_CORNER_GAP.roundToPx()
-                    it.place(pos, pos)
+                    val collapsedTop = (barHeight - it.height) / 2f
+                    it.place(
+                        x = lerp(startPad.toFloat(), BADGE_COLLAPSED_LEFT.roundToPx().toFloat(), f).roundToInt(),
+                        y = lerp(topPad.toFloat(), collapsedTop, f).roundToInt(),
+                    )
                 }
             }
         }

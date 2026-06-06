@@ -19,9 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
-import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalTime
 
@@ -43,14 +43,10 @@ private val AlarmKind.shape: RoundedPolygon
         AlarmKind.Late -> MaterialShapes.Boom
     }
 
-// Gap between the badge's round background and the card edges/corner. With this gap the round
-// background of diameter 2*(Radius.xl − gap) is concentric with the card corner (radius Radius.xl) and
-// with the collapsed pill's left circle (same radius) — so it nests pixel-perfectly in BOTH states.
-internal val BADGE_CORNER_GAP = Spacing.sm
-internal val BADGE_DIAMETER = (Radius.xl - BADGE_CORNER_GAP) * 2
-// Extra start-padding on the date so it begins just past the badge (badge right edge + a small gap),
-// relative to the content's existing Spacing.xxl start padding.
-internal val BADGE_DATE_INSET = (BADGE_CORNER_GAP + BADGE_DIAMETER + Spacing.sm - Spacing.xxl)
+internal val BADGE_DIAMETER = 44.dp
+internal val BADGE_DATE_GAP = Spacing.md            // badge ↔ date in the expanded row
+internal val BADGE_COLLAPSED_LEFT = Spacing.md      // badge's left margin inside the collapsed pill
+internal val BADGE_CLOCK_GAP = Spacing.lg           // collapsed badge ↔ time (breathing room)
 
 private const val BADGE_BG_ALPHA = 0.16f
 

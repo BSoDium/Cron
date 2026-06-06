@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
@@ -75,18 +76,8 @@ fun NextAlarmCard(
     sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
 ) {
-    val kind = alarmKindFor(alarmTime)
     AlarmShell(modifier) {
-        Box(Modifier.fillMaxWidth()) {
-            AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, hasBadge = kind != null)
-            if (kind != null) {
-                AlarmTypeBadge(
-                    kind = kind,
-                    rotationDeg = 0f,
-                    modifier = Modifier.padding(start = BADGE_CORNER_GAP, top = BADGE_CORNER_GAP),
-                )
-            }
-        }
+        AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, alarmKind = alarmKindFor(alarmTime))
     }
 }
 
@@ -121,8 +112,10 @@ internal fun AlarmCardContent(
     // The collapsing card hides this layer's time row (clock + countdown — both become moving copies
     // drawn on top) while still measuring it, so this stays the single source of expanded geometry.
     timeRowAlpha: Float = 1f,
-    // When the corner badge is shown, indent the date so it clears the badge and reads alongside it.
-    hasBadge: Boolean = false,
+    // The alarm-type badge sits in a row with the date (centred on it). In the collapsing card the
+    // badge is hidden here (badgeAlpha = 0, still measured) and drawn as a moving copy on top.
+    alarmKind: AlarmKind? = null,
+    badgeAlpha: Float = 1f,
 ) {
     val onCard = MaterialTheme.colorScheme.onPrimary
     Column(
@@ -133,12 +126,19 @@ internal fun AlarmCardContent(
             bottom = Spacing.xl,
         ),
     ) {
-        AlignedFirstGlyph(
-            text = dateLabel.ifBlank { "—" },
-            color = onCard,
-            style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
-            modifier = if (hasBadge) Modifier.padding(start = BADGE_DATE_INSET) else Modifier,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(BADGE_DATE_GAP),
+        ) {
+            if (alarmKind != null) {
+                AlarmTypeBadge(kind = alarmKind, rotationDeg = 0f, modifier = Modifier.graphicsLayer { alpha = badgeAlpha })
+            }
+            AlignedFirstGlyph(
+                text = dateLabel.ifBlank { "—" },
+                color = onCard,
+                style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
+            )
+        }
         LcdTimeDisplay(alarmTime = alarmTime, timeRowAlpha = timeRowAlpha)
         if (sleepSegments.isNotEmpty()) {
             Spacer(Modifier.height(Spacing.xl))
