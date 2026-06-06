@@ -96,6 +96,9 @@ private val THINKING_EXPAND_TRIGGER_MAX = 120.dp
 // Scroll distance (past the pin point) over which the alarm card collapses full → slim bar.
 private val ALARM_COLLAPSE_RANGE = 120.dp
 
+// Deterministic landing for the magnetic collapse snap — a spring's asymptotic tail reads as a stall.
+private val ALARM_SNAP_SPEC = tween<Float>(durationMillis = 260, easing = FastOutSlowInEasing)
+
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -205,17 +208,13 @@ fun HomeScreen(
             // The onboarding callout that points at the play FAB is rendered in MainActivity,
             // layered above EdgeFades (via FabAction.hint) so the bottom scrim doesn't fade it.
         } else {
-            // The alarm card acts like CSS `position: sticky` (top = statusBar + gap): the list scrolls
-            // under the status bar while the card sticks just below it. It's an overlay, not a
-            // stickyHeader (which pins at y=0 and can't take a top offset); an "alarm-spacer" holds its flow slot.
+            // The alarm card is CSS-`sticky`-like: an overlay pinned below the status bar (not a stickyHeader, which can't take a top offset); the "alarm-spacer" item holds its flow slot.
             val listState = rememberLazyListState()
             val density = LocalDensity.current
-            // The spacer always reserves the FULL (expanded) card height, fed by the collapsible card's
-            // own measure — decoupled from the collapsing render height so the collapse can't feed back.
+            // Reserves the FULL (expanded) card height (fed by the card's own measure), decoupled from the collapsing render height so collapse can't feed back.
             var cardFullHeightPx by remember { mutableIntStateOf(0) }
 
-            // Collapse geometry (single source): drives the sticky card, the threshold haptic, and the
-            // magnetic snap. fraction 0 = expanded, 1 = collapsed; pinned ⟺ distancePx > 0.
+            // Collapse geometry (single source) for the sticky card, threshold haptic, and snap. fraction 0 = expanded, 1 = collapsed; pinned ⟺ distancePx > 0.
             val collapseSafeTopPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
             val collapseRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
             val collapseFadePx = with(density) { Spacing.xxl.toPx() }
@@ -247,9 +246,7 @@ fun HomeScreen(
                     .collect { haptics.tick() }
             }
 
-            // Magnetic snap: on settle mid-collapse, animate to the nearest end with a deterministic
-            // tween (lands exactly, no half-way stalls / re-triggers). Pure post-settle observation —
-            // never consumes scroll, so it can't fight the thinking pull (which acts at the top, f≈0).
+            // Magnetic snap on settle: collapsing scrolls the list UP (stalls when content below is too short to finish), expanding scrolls DOWN (always reachable via the off-screen greeting) — so only collapse when there's room, never rest half-way. Post-settle only; never consumes scroll.
             val collapseNow = rememberUpdatedState(collapse)
             val rangeNow = rememberUpdatedState(collapseRangePx)
             LaunchedEffect(listState) {
@@ -258,9 +255,16 @@ fun HomeScreen(
                     .filter { !it }
                     .collect {
                         val c = collapseNow.value
-                        if (c.distancePx > 0f && c.fraction > 0.001f && c.fraction < 0.999f) {
-                            val delta = if (c.fraction < 0.5f) -c.distancePx else rangeNow.value - c.distancePx
-                            listState.animateScrollBy(delta, tween(durationMillis = 260, easing = FastOutSlowInEasing))
+                        if (c.fraction <= 0.001f || c.fraction >= 0.999f) return@collect
+                        if (c.fraction >= 0.5f && listState.canScrollForward) {
+                            listState.animateScrollBy(rangeNow.value - c.distancePx, ALARM_SNAP_SPEC)
+                            // Hit the content bottom before fully collapsing → expand instead of stalling.
+                            val rest = collapseNow.value
+                            if (rest.fraction > 0.001f && rest.fraction < 0.999f) {
+                                listState.animateScrollBy(-rest.distancePx, ALARM_SNAP_SPEC)
+                            }
+                        } else {
+                            listState.animateScrollBy(-c.distancePx, ALARM_SNAP_SPEC)
                         }
                     }
             }

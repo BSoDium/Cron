@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,10 +64,14 @@ internal fun CollapsibleAlarmCard(
     val ink = rememberLcdInkMetrics()
     val dateStyle = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp)
 
-    // Springy entrance: the card eases in with a small scale + fade the first time it appears.
-    val entrance = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        entrance.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow))
+    // Springy entrance: the card eases in with a small scale + fade the first time it appears. Static
+    // @Preview never runs the effect, so start settled there (else the alpha gate renders it invisible).
+    val inPreview = LocalInspectionMode.current
+    val entrance = remember { Animatable(if (inPreview) 1f else 0f) }
+    if (!inPreview) {
+        LaunchedEffect(Unit) {
+            entrance.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow))
+        }
     }
 
     AlarmShell(
@@ -97,7 +102,7 @@ internal fun CollapsibleAlarmCard(
             // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
             val barHeight = (Radius.xl * 2).roundToPx()
             // Inset > a tight fit so the shrunken digits gain a little spacing above and below in the pill.
-            val innerInset = Spacing.sm.roundToPx()
+            val innerInset = Spacing.md.roundToPx()
             // Centre on the digit INK, not the line box (Major Mono digits have no descenders → sit high).
             // Derived from the font's measured line box so the scale is known BEFORE the clock is
             // subcomposed — the weight stroke is a draw param baked in at that point.
