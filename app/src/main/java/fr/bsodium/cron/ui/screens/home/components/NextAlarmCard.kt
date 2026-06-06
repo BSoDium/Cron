@@ -174,7 +174,7 @@ private fun NextAlarmCardPendingPreview() {
 }
 
 /** A representative night ending at the 06:40 alarm, for previewing the sleep-duration state. */
-private val PREVIEW_SLEEP_SEGMENTS = listOf(
+internal val PREVIEW_SLEEP_SEGMENTS = listOf(
     SleepStage.Awake to ("2026-06-01T23:00:00Z" to "2026-06-01T23:12:00Z"),
     SleepStage.Light to ("2026-06-01T23:12:00Z" to "2026-06-02T00:30:00Z"),
     SleepStage.Deep to ("2026-06-02T00:30:00Z" to "2026-06-02T02:05:00Z"),
