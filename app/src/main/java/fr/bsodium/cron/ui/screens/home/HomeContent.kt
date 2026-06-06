@@ -70,6 +70,8 @@ internal fun HomePlanContent(
     navInsetBottom: Dp,
     hasNotificationPermission: Boolean,
     onNotifEnable: () -> Unit,
+    showPullHint: Boolean,
+    onFirstExpand: () -> Unit,
 ) {
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -158,6 +160,7 @@ internal fun HomePlanContent(
                 if (full > 0 && reveal.value >= triggerPx()) {
                     reveal.animateTo(full.toFloat())
                     thinkingExpanded = true
+                    onFirstExpand()
                 } else {
                     reveal.animateTo(0f)
                 }
@@ -201,6 +204,7 @@ internal fun HomePlanContent(
                             if (open) {
                                 reveal.animateTo(thinkingFullPx.intValue.toFloat())
                                 thinkingExpanded = true
+                                onFirstExpand()
                             } else {
                                 thinkingExpanded = false
                                 reveal.snapTo(thinkingFullPx.intValue.toFloat())
@@ -213,6 +217,7 @@ internal fun HomePlanContent(
                     expansionFraction = if (thinkingExpanded) 1f
                         else (reveal.value / thinkingFullPx.intValue.toFloat().coerceAtLeast(1f))
                             .coerceIn(0f, 1f),
+                    showPullHint = showPullHint,
                 )
             }
             if (!hasNotificationPermission) {

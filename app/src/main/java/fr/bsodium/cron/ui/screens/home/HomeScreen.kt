@@ -152,6 +152,8 @@ fun HomeScreen(
                         navInsetBottom = navInsetBottom,
                         hasNotificationPermission = hasNotificationPermission,
                         onNotifEnable = onNotifEnable,
+                        showPullHint = !uiState.thinkingHintSeen,
+                        onFirstExpand = viewModel::markThinkingHintSeen,
                     )
                 }
             }

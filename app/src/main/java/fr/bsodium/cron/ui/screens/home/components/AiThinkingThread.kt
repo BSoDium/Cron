@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +83,8 @@ fun AiThinkingThread(
     // 0f = collapsed (chevron pointing right), 1f = fully open (chevron pointing down). Drives the
     // pivot animation; tracked to the live reveal value so the chevron rotates with the drag.
     expansionFraction: Float = 0f,
+    // One-time onboarding nudge, shown inline beside the thinking shape until the user first expands.
+    showPullHint: Boolean = false,
 ) {
     var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
     val isExpanded = expanded ?: internalExpanded
@@ -126,7 +128,33 @@ fun AiThinkingThread(
             thread.response.isNullOrBlank() -> ShapePhase.Thinking
             else -> ShapePhase.Writing
         }
-        ThinkingShape(phase = phase, modifier = Modifier.padding(top = Spacing.md), restKey = thread.turnIndex)
+        Row(
+            modifier = Modifier.padding(top = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            ThinkingShape(phase = phase, restKey = thread.turnIndex)
+            // Inline onboarding hint, below the revealed block and beside the shape; fades as you pull.
+            if (showPullHint && inProgress && thread.process.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.graphicsLayer { alpha = (1f - expansionFraction).coerceIn(0f, 1f) },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ArrowDownward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(SPINNER_SIZE),
+                    )
+                    Text(
+                        text = "Pull to show thinking",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -212,30 +240,6 @@ private fun ThinkingDisclosure(
                         modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
                     )
                 }
-            }
-        }
-        // While thinking and still collapsed, nudge the user that the process can be pulled open;
-        // it fades out as the reveal opens.
-        if (inProgress && canExpand) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.xl, vertical = Spacing.xs)
-                    .graphicsLayer { alpha = (1f - expansionFraction).coerceIn(0f, 1f) },
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(SPINNER_SIZE),
-                )
-                Text(
-                    text = "Pull to show thinking",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
         // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate

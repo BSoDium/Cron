@@ -66,6 +66,11 @@ class SettingsRepository(private val context: Context) {
         prefs[HAPTICS_ENABLED] ?: true
     }
 
+    /** True once the user has expanded the thinking block — hides the one-time pull-to-show hint. */
+    val thinkingHintSeen: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[THINKING_HINT_SEEN] ?: false
+    }
+
     /** User-supplied display name shown in the home greeting. */
     val displayName: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[DISPLAY_NAME]?.takeIf { it.isNotBlank() }
@@ -126,6 +131,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHapticsEnabled(enabled: Boolean) =
         context.dataStore.edit { it[HAPTICS_ENABLED] = enabled }
 
+    suspend fun setThinkingHintSeen() =
+        context.dataStore.edit { it[THINKING_HINT_SEEN] = true }
+
     suspend fun setDisplayName(name: String) =
         context.dataStore.edit { it[DISPLAY_NAME] = name.trim() }
 
@@ -160,6 +168,7 @@ class SettingsRepository(private val context: Context) {
         val HOME_LNG = stringPreferencesKey("home_address_lng")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+        val THINKING_HINT_SEEN = booleanPreferencesKey("thinking_hint_seen")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val USER_INSTRUCTIONS = stringPreferencesKey("user_instructions")
         val DAILY_TOKEN_LIMIT = intPreferencesKey("daily_token_limit")
