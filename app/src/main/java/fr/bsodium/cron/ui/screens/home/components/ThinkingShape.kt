@@ -51,7 +51,7 @@ enum class ShapePhase { Resting, Thinking, Writing }
  * while the answer streams in, settling to a filled heart at rest — like a logo under a message.
  */
 @Composable
-fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier) {
+fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, compact: Boolean = false) {
     val color = MaterialTheme.colorScheme.primary
     var current by remember { mutableStateOf(REST) }
     var target by remember { mutableStateOf(REST) }
@@ -104,7 +104,7 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier) {
         }
     }
 
-    Canvas(modifier = modifier.size(SHAPE_SIZE)) {
+    Canvas(modifier = modifier.size(if (compact) HEADER_SHAPE_SIZE else SHAPE_SIZE)) {
         drawMorph(morph, progress.value, rotation.value, fill, color, androidPath, matrix)
     }
 }
@@ -147,6 +147,8 @@ private fun nearestUpright(deg: Float): Float = (deg / 360f).roundToInt() * 360f
 
 // Canvas is a touch larger than the visible shape so a spun shape never clips at the edges.
 private val SHAPE_SIZE = 32.dp
+// Scaled-down size while it lives among the tool icons in the thinking header.
+private val HEADER_SHAPE_SIZE = 24.dp
 private const val SHAPE_FIT = 0.8f
 private val STROKE_WIDTH = 2.dp
 private const val STEP_DEG = 120f
