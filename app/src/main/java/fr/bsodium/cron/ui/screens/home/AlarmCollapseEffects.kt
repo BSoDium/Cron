@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home
 
+import android.util.Log
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -14,6 +15,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.onEach
 
 /** Sticky alarm-card collapse geometry. fraction 0 = expanded, 1 = collapsed; pinned ⟺ distancePx > 0. */
 internal data class AlarmCollapse(val top: Int, val gradientAlpha: Float, val fraction: Float, val distancePx: Float)
@@ -45,22 +47,36 @@ internal fun AlarmCollapseEffects(
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
+            .onEach { Log.d("AlarmSnap", "scrolling=$it fraction=${"%.3f".format(collapse.value.fraction)} dist=${collapse.value.distancePx}") }
             .filter { !it }
             .collect {
                 val c = collapse.value
-                if (c.fraction <= 0.001f || c.fraction >= 0.999f) return@collect
+                Log.d(
+                    "AlarmSnap",
+                    "settle fraction=${"%.3f".format(c.fraction)} dist=${c.distancePx} canFwd=${listState.canScrollForward} " +
+                        "idx=${listState.firstVisibleItemIndex} off=${listState.firstVisibleItemScrollOffset} rangePx=$rangePx",
+                )
+                if (c.fraction <= 0.001f || c.fraction >= 0.999f) {
+                    Log.d("AlarmSnap", "  → early-return (fraction at an end)")
+                    return@collect
+                }
                 try {
                     if (c.fraction >= 0.5f && listState.canScrollForward) {
+                        Log.d("AlarmSnap", "  → COLLAPSE animateScrollBy(${rangePx - c.distancePx})")
                         listState.animateScrollBy(rangePx - c.distancePx, ALARM_SNAP_SPEC)
+                        Log.d("AlarmSnap", "  ← collapse done idx=${listState.firstVisibleItemIndex} off=${listState.firstVisibleItemScrollOffset} fraction=${"%.3f".format(collapse.value.fraction)}")
                         // Hit the content bottom before fully collapsing → expand instead of stalling.
                         val rest = collapse.value
                         if (rest.fraction > 0.001f && rest.fraction < 0.999f) {
                             listState.animateScrollBy(-rest.distancePx, ALARM_SNAP_SPEC)
                         }
                     } else {
+                        Log.d("AlarmSnap", "  → EXPAND animateScrollBy(${-c.distancePx})")
                         listState.animateScrollBy(-c.distancePx, ALARM_SNAP_SPEC)
+                        Log.d("AlarmSnap", "  ← expand done idx=${listState.firstVisibleItemIndex} off=${listState.firstVisibleItemScrollOffset} fraction=${"%.3f".format(collapse.value.fraction)}")
                     }
                 } catch (e: CancellationException) {
+                    Log.d("AlarmSnap", "  ✗ cancelled: ${e.message}")
                     // User grabbed the list mid-snap → the SCROLL is cancelled, not us. Keep observing
                     // so the next settle re-snaps; rethrow only if WE were cancelled (composition gone).
                     coroutineContext.ensureActive()

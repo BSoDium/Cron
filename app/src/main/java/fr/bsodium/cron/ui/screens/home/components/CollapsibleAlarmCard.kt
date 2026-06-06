@@ -175,7 +175,7 @@ private fun CollapsedAlarmCardPreview() {
                 dateLabel = "Saturday 6",
                 alarmTime = LocalTime(10, 0),
                 sleepDurationLabel = "7H 28M",
-                sleepSegments = emptyList(),
+                sleepSegments = PREVIEW_SLEEP_SEGMENTS,
                 collapseFraction = 1f,
                 onFullHeight = {},
             )
@@ -197,7 +197,7 @@ private fun CollapsibleAlarmCardPreview() {
                     dateLabel = "Saturday 6",
                     alarmTime = LocalTime(10, 0),
                     sleepDurationLabel = "7H 28M",
-                    sleepSegments = emptyList(),
+                    sleepSegments = PREVIEW_SLEEP_SEGMENTS,
                     collapseFraction = frac,
                     onFullHeight = {},
                 )
