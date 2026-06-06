@@ -27,14 +27,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.runtime.snapshotFlow
-import fr.bsodium.cron.ui.components.rememberCronHaptics
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filter
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -95,9 +87,6 @@ private val THINKING_EXPAND_TRIGGER_MAX = 120.dp
 
 // Scroll distance (past the pin point) over which the alarm card collapses full → slim bar.
 private val ALARM_COLLAPSE_RANGE = 120.dp
-
-// Deterministic landing for the magnetic collapse snap — a spring's asymptotic tail reads as a stall.
-private val ALARM_SNAP_SPEC = tween<Float>(durationMillis = 260, easing = FastOutSlowInEasing)
 
 @Composable
 fun HomeScreen(
@@ -218,7 +207,7 @@ fun HomeScreen(
             val collapseSafeTopPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
             val collapseRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
             val collapseFadePx = with(density) { Spacing.xxl.toPx() }
-            val collapse by remember(collapseSafeTopPx, collapseRangePx, collapseFadePx) {
+            val collapseState = remember(collapseSafeTopPx, collapseRangePx, collapseFadePx) {
                 derivedStateOf {
                     val info = listState.layoutInfo
                     val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
@@ -236,38 +225,9 @@ fun HomeScreen(
                     }
                 }
             }
-
-            // A haptic tick each time the collapse crosses the snap threshold while scrolling.
-            val haptics = rememberCronHaptics(enabled = uiState.hapticsEnabled)
-            LaunchedEffect(listState) {
-                snapshotFlow { collapse.fraction >= 0.5f }
-                    .distinctUntilChanged()
-                    .drop(1)
-                    .collect { haptics.tick() }
-            }
-
-            // Magnetic snap on settle: collapsing scrolls the list UP (stalls when content below is too short to finish), expanding scrolls DOWN (always reachable via the off-screen greeting) — so only collapse when there's room, never rest half-way. Post-settle only; never consumes scroll.
-            val collapseNow = rememberUpdatedState(collapse)
-            val rangeNow = rememberUpdatedState(collapseRangePx)
-            LaunchedEffect(listState) {
-                snapshotFlow { listState.isScrollInProgress }
-                    .distinctUntilChanged()
-                    .filter { !it }
-                    .collect {
-                        val c = collapseNow.value
-                        if (c.fraction <= 0.001f || c.fraction >= 0.999f) return@collect
-                        if (c.fraction >= 0.5f && listState.canScrollForward) {
-                            listState.animateScrollBy(rangeNow.value - c.distancePx, ALARM_SNAP_SPEC)
-                            // Hit the content bottom before fully collapsing → expand instead of stalling.
-                            val rest = collapseNow.value
-                            if (rest.fraction > 0.001f && rest.fraction < 0.999f) {
-                                listState.animateScrollBy(-rest.distancePx, ALARM_SNAP_SPEC)
-                            }
-                        } else {
-                            listState.animateScrollBy(-c.distancePx, ALARM_SNAP_SPEC)
-                        }
-                    }
-            }
+            val collapse by collapseState
+            // Threshold haptic + magnetic snap, both keyed on listState (extracted to keep this file small).
+            AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
 
             // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed
             // thinking 1:1 with the finger. One reveal value (revealed pixels) drives the disclosure and
@@ -448,8 +408,6 @@ fun HomeScreen(
         }
     }
 }
-
-private data class AlarmCollapse(val top: Int, val gradientAlpha: Float, val fraction: Float, val distancePx: Float)
 
 /**
  * CSS-`sticky`-with-top-offset alarm card, rendered as an overlay over the list, consuming the
