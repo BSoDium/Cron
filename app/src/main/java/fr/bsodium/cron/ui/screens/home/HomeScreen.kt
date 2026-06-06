@@ -6,7 +6,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import android.util.Log
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -87,6 +94,9 @@ private val THINKING_EXPAND_TRIGGER_MAX = 120.dp
 
 // Scroll distance (past the pin point) over which the alarm card collapses full → slim bar.
 private val ALARM_COLLAPSE_RANGE = 120.dp
+
+// Deterministic landing for the magnetic collapse snap — a spring's asymptotic tail reads as a stall.
+private val ALARM_SNAP_SPEC = tween<Float>(durationMillis = 260, easing = FastOutSlowInEasing)
 
 @Composable
 fun HomeScreen(
@@ -227,7 +237,7 @@ fun HomeScreen(
             }
             val collapse by collapseState
             // Threshold haptic + magnetic snap, both keyed on listState (extracted to keep this file small).
-            AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
+            AlarmThresholdHaptic(listState, collapseState, uiState.hapticsEnabled)
 
             // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed
             // thinking 1:1 with the finger. One reveal value (revealed pixels) drives the disclosure and
@@ -289,6 +299,34 @@ fun HomeScreen(
                             reveal.animateTo(0f)
                         }
                         return available
+                    }
+
+                    // Magnetic snap, run once per gesture-end (so it can't go silent for the session like
+                    // an isScrollInProgress observer did). Collapse if there's room to finish, else expand
+                    // (always reachable via the off-screen greeting); never rest mid-collapse.
+                    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                        if (reveal.value <= 0f) {
+                            val c = collapseState.value
+                            Log.d("AlarmSnap", "onPostFling fraction=${"%.3f".format(c.fraction)} canFwd=${listState.canScrollForward}")
+                            if (c.fraction > 0.001f && c.fraction < 0.999f) {
+                                try {
+                                    if (c.fraction >= 0.5f && listState.canScrollForward) {
+                                        listState.animateScrollBy(collapseRangePx - c.distancePx, ALARM_SNAP_SPEC)
+                                        val rest = collapseState.value
+                                        if (rest.fraction > 0.001f && rest.fraction < 0.999f) {
+                                            listState.animateScrollBy(-rest.distancePx, ALARM_SNAP_SPEC)
+                                        }
+                                    } else {
+                                        listState.animateScrollBy(-c.distancePx, ALARM_SNAP_SPEC)
+                                    }
+                                    Log.d("AlarmSnap", "onPostFling done fraction=${"%.3f".format(collapseState.value.fraction)}")
+                                } catch (e: CancellationException) {
+                                    Log.d("AlarmSnap", "onPostFling cancelled: ${e.message}")
+                                    coroutineContext.ensureActive()
+                                }
+                            }
+                        }
+                        return Velocity.Zero
                     }
                 }
             }
