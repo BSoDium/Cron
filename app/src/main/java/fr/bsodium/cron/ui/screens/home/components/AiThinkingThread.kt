@@ -84,6 +84,8 @@ fun AiThinkingThread(
     expansionFraction: Float = 0f,
     // One-time onboarding nudge, shown inline beside the thinking shape until the user first expands.
     showPullHint: Boolean = false,
+    // The trailing status shape marks where the assistant currently is — shown only on the latest round.
+    showShape: Boolean = true,
 ) {
     var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
     val isExpanded = expanded ?: internalExpanded
@@ -123,17 +125,18 @@ fun AiThinkingThread(
                 ResponseBody(response?.takeIf { it.isNotBlank() } ?: lastResponse)
             }
         }
-        val phase = when {
-            !inProgress -> ShapePhase.Resting
-            thread.response.isNullOrBlank() -> ShapePhase.Thinking
-            else -> ShapePhase.Writing
-        }
-        Row(
-            modifier = Modifier.padding(top = Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            ThinkingShape(phase = phase, restKey = thread.turnIndex)
+        if (showShape) {
+            val phase = when {
+                !inProgress -> ShapePhase.Resting
+                thread.response.isNullOrBlank() -> ShapePhase.Thinking
+                else -> ShapePhase.Writing
+            }
+            Row(
+                modifier = Modifier.padding(top = Spacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                ThinkingShape(phase = phase, restKey = thread.turnIndex)
             // Inline onboarding hint, below the revealed block and beside the shape; fades as you pull.
             if (showPullHint && inProgress && thread.process.isNotEmpty()) {
                 Row(
@@ -153,6 +156,7 @@ fun AiThinkingThread(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
             }
         }
     }
