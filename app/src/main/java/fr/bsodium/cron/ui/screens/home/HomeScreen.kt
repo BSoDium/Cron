@@ -42,7 +42,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
-import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
+import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
@@ -66,16 +66,21 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    // The displayed thread is the typewriter-revealed view of the streaming thread (whole when settled).
-    val displayThread = rememberRevealedThread(uiState.aiThread)
+    // At most one turn streams at a time (the plan, or the latest edit). Typewriter-reveal that sub-thread
+    // and splice it back so the rest of the plan renders settled.
+    val streamingThread = uiState.aiPlan?.let { plan ->
+        plan.edits.lastOrNull { it.thread.isStreaming }?.thread ?: plan.plan.takeIf { it.isStreaming }
+    }
+    val revealed = rememberRevealedThread(streamingThread)
+    val displayPlan = uiState.aiPlan?.withStreamingReplaced(revealed)
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.
-    StreamingHaptics(thread = displayThread, enabled = uiState.hapticsEnabled)
+    StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
     DisposableEffect(viewModel, fabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
     }
     // Onboarding callout (rendered above EdgeFades in MainActivity): only in the loaded, no-plan, idle state.
-    val showOnboardingHint = uiState.initialized && displayThread == null && !uiState.isRetrying
+    val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying
     LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
         fabRegistry.set(
             FabAction(
@@ -119,16 +124,19 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Keep the last shown plan so a Plan→Idle dissolve still renders it while fading out — and so a
+        // re-plan's brief null gap (old turn cleared before the new one publishes) holds Plan instead of
+        // flashing the Idle onboarding cake.
+        var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
+        LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
         // Gate on `initialized` so we never flash the idle layout before data resolves, then crossfade
         // straight into the right layout — no empty→thread pop / card jump on cold start.
         val homePhase = when {
             !uiState.initialized -> HomePhase.Loading
-            displayThread != null -> HomePhase.Plan
+            displayPlan != null -> HomePhase.Plan
+            lastPlan != null && uiState.isRetrying -> HomePhase.Plan
             else -> HomePhase.Idle
         }
-        // Keep the last shown thread so a Plan→Idle dissolve still renders it while fading out.
-        var lastThread by remember { mutableStateOf<AiThreadUi?>(null) }
-        LaunchedEffect(displayThread) { displayThread?.let { lastThread = it } }
         Crossfade(
             targetState = homePhase,
             animationSpec = tween(HOME_FADE_MS),
@@ -143,10 +151,11 @@ fun HomeScreen(
                     navInsetBottom = navInsetBottom,
                     hasNotificationPermission = hasNotificationPermission,
                     onNotifEnable = onNotifEnable,
+                    onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                 )
-                HomePhase.Plan -> (displayThread ?: lastThread)?.let { thread ->
+                HomePhase.Plan -> (displayPlan ?: lastPlan)?.let { plan ->
                     HomePlanContent(
-                        thread = thread,
+                        plan = plan,
                         uiState = uiState,
                         statusInsetTop = statusInsetTop,
                         navInsetBottom = navInsetBottom,
@@ -154,6 +163,7 @@ fun HomeScreen(
                         onNotifEnable = onNotifEnable,
                         showPullHint = !uiState.thinkingHintSeen,
                         onFirstExpand = viewModel::markThinkingHintSeen,
+                        onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                     )
                 }
             }
@@ -212,6 +222,7 @@ private fun HomeIdleContent(
     navInsetBottom: Dp,
     hasNotificationPermission: Boolean,
     onNotifEnable: () -> Unit,
+    onAutoAlarmsChange: (Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -223,9 +234,11 @@ private fun HomeIdleContent(
             ),
         verticalArrangement = Arrangement.spacedBy(Spacing.xl),
     ) {
-        GreetingHeader(
+        HomeGreetingRow(
             prefix = uiState.greetingPrefix,
             name = uiState.greetingName,
+            autoAlarmsEnabled = uiState.autoAlarmsEnabled,
+            onAutoAlarmsChange = onAutoAlarmsChange,
             modifier = Modifier.padding(horizontal = Spacing.xl),
         )
         Box(Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) {

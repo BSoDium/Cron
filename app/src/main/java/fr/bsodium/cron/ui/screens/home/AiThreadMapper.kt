@@ -189,7 +189,7 @@ object AiThreadMapper {
         )
     }
 
-    private fun decodeBlocks(json: String): List<ContentBlock> = runCatching {
+    internal fun decodeBlocks(json: String): List<ContentBlock> = runCatching {
         SessionJson.decodeFromString<List<ContentBlock>>(json)
     }
         .onFailure { Log.w(TAG, "decode AI content blocks failed", it) }
