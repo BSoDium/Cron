@@ -38,8 +38,14 @@ class EveningPlanScheduler(
     private val alarmManager: AlarmManager =
         context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    /** Arm the next evening trigger. Resolves the local time at arm-time so DST is correct. */
+    /** Arm the next evening trigger. Resolves the local time at arm-time so DST is correct. When the
+     *  user has disabled auto alarms this instead cancels any pending trigger — so every arm call site
+     *  (boot, settings, timezone change, the chained re-arm) respects the toggle through one guard. */
     suspend fun armNext() {
+        if (!settings.autoAlarmsEnabledNow()) {
+            cancel()
+            return
+        }
         val triggerLocal = settings.currentEveningTriggerLocalTime()
         val tz = TimeZone.currentSystemDefault()
         val now = Clock.System.now().toLocalDateTime(tz)
