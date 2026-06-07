@@ -31,11 +31,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Square
@@ -151,7 +151,7 @@ private fun NavPill(
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavSlot(currentRoute, "home", Icons.Filled.Home, Icons.Outlined.Home, "Home", onNavigate)
+            NavSlot(currentRoute, "home", Icons.Filled.Alarm, Icons.Outlined.Alarm, "Home", onNavigate)
             NavSlot(currentRoute, "history", Icons.Filled.History, Icons.Outlined.History, "History", onNavigate)
             // Settings landing route (the graph's start); sub-screen routes hide the pill entirely.
             NavSlot(currentRoute, "settings/root", Icons.Filled.Settings, Icons.Outlined.Settings, "Settings", onNavigate)
