@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -38,11 +39,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
-import fr.bsodium.cron.ui.screens.home.components.AiEditsList
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
+import fr.bsodium.cron.ui.screens.home.components.ReplanRound
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
@@ -227,12 +228,14 @@ internal fun HomePlanContent(
                         else (reveal.value / thinkingFullPx.intValue.toFloat().coerceAtLeast(1f))
                             .coerceIn(0f, 1f),
                     showPullHint = showPullHint,
+                    // The status shape marks where the assistant is now — only if there are no replans.
+                    showShape = plan.edits.isEmpty(),
                 )
             }
-            if (plan.edits.isNotEmpty()) {
-                item(key = "edits") {
-                    AiEditsList(edits = plan.edits)
-                }
+            // Replans render as ChatGPT-style rounds in the normal flow: a system message naming the
+            // trigger, then the assistant's thinking + answer. Only the latest round keeps the shape.
+            itemsIndexed(plan.edits, key = { _, edit -> "round_${edit.turnIndex}" }) { index, edit ->
+                ReplanRound(edit = edit, isLast = index == plan.edits.lastIndex)
             }
             if (!hasNotificationPermission) {
                 item(key = "notif-permission") {

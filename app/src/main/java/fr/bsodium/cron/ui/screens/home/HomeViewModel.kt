@@ -18,6 +18,7 @@ import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.SessionEntity
 import fr.bsodium.cron.session.db.SessionEventEntity
 import fr.bsodium.cron.session.db.SessionJson
+import fr.bsodium.cron.session.db.toModel
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionEvent
@@ -126,8 +127,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (id == null) {
                 flowOf(null)
             } else {
-                combine(db.aiMessageDao().observeBySession(id), StreamingTurnStore.active) { rows, streaming ->
-                    AiPlanMapper.buildPlan(rows, streaming?.takeIf { it.sessionId == id })
+                combine(
+                    db.aiMessageDao().observeBySession(id),
+                    db.eventDao().observeBySession(id),
+                    StreamingTurnStore.active,
+                ) { rows, events, streaming ->
+                    AiPlanMapper.buildPlan(rows, streaming?.takeIf { it.sessionId == id }, events.map { it.toModel() })
                 }.conflate()
             }
         }
