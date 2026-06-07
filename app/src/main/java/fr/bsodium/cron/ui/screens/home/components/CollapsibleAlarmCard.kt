@@ -6,7 +6,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,13 +28,12 @@ import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import kotlinx.datetime.LocalTime
+import kotlin.math.PI
 import kotlin.math.roundToInt
 
 // Max stroke (local 76sp space) overlaid on the collapsed digits to fake weight as they shrink.
 // Conservative default — bump for bolder collapsed digits.
 private val MAX_CLOCK_STROKE = 1.5.dp
-// How far the alarm-type badge's shape spins (like a cog) over the full collapse.
-private const val BADGE_SPIN_DEG = 180f
 
 /**
  * The alarm card that collapses on scroll. Rather than crossfade two layouts, the **"HH:MM" clock**
@@ -56,6 +54,9 @@ internal fun CollapsibleAlarmCard(
     modifier: Modifier = Modifier,
 ) {
     val f = collapseFraction.coerceIn(0f, 1f)
+    // The badge rolls in from off the left edge with an ease-out (fast start, settling early) into its
+    // nested spot in the pill's left cap. Its rotation is matched to this translation (see placement).
+    val fb = (1f - f).let { inv -> 1f - inv * inv * inv }
     val kind = alarmKindFor(alarmTime)
     val onCard = MaterialTheme.colorScheme.onPrimary
     val digitColor = if (alarmTime == null) onCard.copy(alpha = 0.30f) else onCard
@@ -65,6 +66,7 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val progress = rememberLcdRevealProgress(alarmTime)
     val ink = rememberLcdInkMetrics()
+    // The alarm-type shape is sized to one expanded clock digit (see AlarmCardContent).
     val dateStyle = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp)
 
     // Springy entrance: the card eases in with a small scale + fade the first time it appears. Static
@@ -93,14 +95,15 @@ internal fun CollapsibleAlarmCard(
             val cFill = if (constraints.hasBoundedWidth) constraints.copy(minWidth = constraints.maxWidth, minHeight = 0) else cWrap
             val extrasAlpha = (1f - f * 1.6f).coerceIn(0f, 1f)
 
-            // Full expanded layout with its TIME ROW hidden (still measured) → single source of geometry.
+            // Full expanded layout with its time row and date hidden (still measured) → single source of
+            // geometry; those are drawn as moving copies on top. The badge isn't in the expanded card.
             val extras = subcompose("extras") {
-                AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f, alarmKind = kind, badgeAlpha = 0f)
+                AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f, dateAlpha = 0f)
             }.first().measure(cFill)
             onFullHeight(extras.height)
-            // Date proxy — height only — to place the moving clock at the expanded clock-Y.
+            // Date mover — the same AlignedFirstGlyph as extras, placed so it can slide up out the top.
             val date = subcompose("date") {
-                Text(dateLabel.ifBlank { "—" }, style = dateStyle, maxLines = 1)
+                AlignedFirstGlyph(dateLabel.ifBlank { "—" }, color = onCard, style = dateStyle)
             }.first().measure(cWrap)
             // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
             val barHeight = (Radius.xl * 2).roundToPx()
@@ -120,7 +123,7 @@ internal fun CollapsibleAlarmCard(
                 LcdClock(alarmTime, progress, digitColor, strokeWidthPx = strokePx)
             }.first().measure(cWrap)
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
-            // moves; it never fades or resizes.
+            // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
             val countdown = subcompose("countdown") {
                 val cd by produceState<HoursMinutes?>(computeCountdown(alarmTime), alarmTime) {
                     while (true) {
@@ -128,13 +131,13 @@ internal fun CollapsibleAlarmCard(
                         delay(60_000)
                     }
                 }
-                CountdownStack(countdown = cd, progress = progress, color = countdownColor)
+                CountdownStack(countdown = cd, progress = progress, color = countdownColor, alignFraction = f)
             }.first().measure(cWrap)
-            // Alarm-type badge: stays nested in the top-left corner (== the collapsed pill's left
-            // circle), spinning like a cog as the card collapses. Drawn on top, never faded with extras.
+            // Alarm-type badge: collapsed-only. Rolls in from off the left edge into the pill's left cap
+            // (placement below). Drawn on top, never faded with extras.
             val badge = kind?.let {
                 subcompose("badge") {
-                    AlarmTypeBadge(kind = it, rotationDeg = lerp(0f, BADGE_SPIN_DEG, f))
+                    AlarmTypeBadge(kind = it, diameter = BADGE_DIAMETER)
                 }.first().measure(cWrap)
             }
 
@@ -148,16 +151,9 @@ internal fun CollapsibleAlarmCard(
             val collapsedClockX = if (badge != null) (barHeight - badge.width) / 2 + badge.width + BADGE_CLOCK_GAP.roundToPx() else startPad
             val height = lerp(extras.height, barHeight, f)
 
-            // The badge can be taller than the date glyphs, so the clock sits below the WHOLE row —
-            // otherwise the moving clock would overlap the badge in the expanded state.
-            val rowHeight = maxOf(date.height, badge?.height ?: 0)
-            val expandedClockY = topPad + rowHeight
+            val expandedClockY = topPad + date.height
             val expandedInkCenter = expandedClockY + inkCenterPx
             val pillCenter = barHeight / 2f
-            // The clock's vertical travel LAGS its horizontal travel (f² ≤ f): it first slides right,
-            // clearing the badge's right edge, and only then rises into the pill centre. That routes the
-            // time around the badge's corner instead of sweeping up through the shape.
-            val fv = f * f
 
             // Countdown mover: expanded slot (right of the clock, matching the LcdTimeDisplay row) → pill-right, centred.
             val expandedCdX = startPad + clock.width + cdGap
@@ -167,29 +163,39 @@ internal fun CollapsibleAlarmCard(
 
             layout(w, height) {
                 if (extrasAlpha > 0f) extras.placeWithLayer(0, 0) { alpha = extrasAlpha }
+                // Date: sits where extras' (hidden) date is at f=0, then slides UP out the top and fades —
+                // opposite the time, which rises from the bottom.
+                if (extrasAlpha > 0f) {
+                    date.placeWithLayer(startPad, topPad) {
+                        translationY = -(topPad + date.height).toFloat() * f
+                        alpha = extrasAlpha
+                    }
+                }
                 // Clock: left-edge anchored; pivot on the digit-ink centre so scaling + translation land
                 // the ink dead-centre in the pill.
                 clock.placeWithLayer(lerp(startPad.toFloat(), collapsedClockX.toFloat(), f).roundToInt(), expandedClockY) {
                     scaleX = clockScale
                     scaleY = clockScale
                     transformOrigin = TransformOrigin(0f, ink.centerFraction)
-                    translationY = lerp(0f, pillCenter - expandedInkCenter, fv)
+                    translationY = lerp(0f, pillCenter - expandedInkCenter, f)
                 }
                 // Countdown: identical typography in both states, just moves (no fade, no scale).
                 countdown.place(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
-                    y = lerp(expandedCdY.toFloat(), collapsedCdY, fv).roundToInt(),
+                    y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
-                // Badge on top (never faded); slides from the expanded date-row slot to the pill's left,
-                // its shape spinning via rotationDeg. Vertically centred in the collapsed pill.
+                // Badge (collapsed-only): rolls in from off the left edge into the pill's left cap. The
+                // off-left start is clipped away (clipToBounds) so it's hidden until it rolls in. Rotation
+                // is matched to the distance travelled (rolling-wheel: deg = distance / circumference × 360).
                 badge?.let {
-                    // Concentric in the pill's left cap: centre x = centre y = barHeight / 2.
-                    val collapsedLeft = (barHeight - it.width) / 2f
-                    val collapsedTop = (barHeight - it.height) / 2f
-                    it.place(
-                        x = lerp(startPad.toFloat(), collapsedLeft, f).roundToInt(),
-                        y = lerp(topPad.toFloat(), collapsedTop, f).roundToInt(),
-                    )
+                    val nestedLeft = (barHeight - it.width) / 2f
+                    val nestedTop = (barHeight - it.height) / 2f
+                    val offLeft = -it.width.toFloat()
+                    val x = lerp(offLeft, nestedLeft, fb)
+                    val rollDeg = (x - offLeft) / (PI.toFloat() * it.width) * 360f
+                    it.placeWithLayer(x.roundToInt(), nestedTop.roundToInt()) {
+                        rotationZ = rollDeg
+                    }
                 }
             }
         }

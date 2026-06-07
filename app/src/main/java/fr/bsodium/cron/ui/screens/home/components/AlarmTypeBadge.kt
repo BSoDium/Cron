@@ -5,19 +5,14 @@ package fr.bsodium.cron.ui.screens.home.components
 import android.graphics.Matrix
 import android.graphics.Path
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
@@ -38,41 +33,32 @@ internal fun alarmKindFor(time: LocalTime?): AlarmKind? = when {
 
 private val AlarmKind.shape: RoundedPolygon
     get() = when (this) {
-        AlarmKind.Early -> MaterialShapes.SemiCircle
-        AlarmKind.Morning -> MaterialShapes.Sunny
-        AlarmKind.Late -> MaterialShapes.Boom
+        AlarmKind.Early -> MaterialShapes.Circle
+        AlarmKind.Morning -> MaterialShapes.SemiCircle
+        AlarmKind.Late -> MaterialShapes.VerySunny
     }
 
-internal val BADGE_DIAMETER = 44.dp
-internal val BADGE_DATE_GAP = Spacing.lg            // badge ↔ date in the expanded row
 internal val BADGE_CLOCK_GAP = Spacing.lg           // collapsed badge ↔ time (breathing room)
+internal val BADGE_DIAMETER = 40.dp                 // nests in the 56dp pill cap with an 8dp ring
 
 /**
- * The alarm-type indicator: a flat (elevation-0) `onPrimary` disc with the Material [shape] knocked out
- * of it in the card's own `primary` colour, so the shape reads as a hole in a solid disc. Spun by
- * [rotationDeg] (driven by the card's collapse fraction, like a cog).
+ * The alarm-type indicator: a flat (elevation-0) solid `onPrimary` disc filled by the Material shape in
+ * the card's own `primary` colour. Sized by [diameter]. Only shown in the collapsed pill; its rolling
+ * spin is applied by the caller via a `graphicsLayer` rotation, so it draws upright here.
  */
 @Composable
 internal fun AlarmTypeBadge(
     kind: AlarmKind,
-    rotationDeg: Float,
+    diameter: Dp,
     modifier: Modifier = Modifier,
-    diameter: Dp = BADGE_DIAMETER,
 ) {
     val disc = MaterialTheme.colorScheme.onPrimary
     val shapeColor = MaterialTheme.colorScheme.primary
     val morph = remember(kind) { Morph(kind.shape, kind.shape) }
     val path = remember { Path() }
     val matrix = remember { Matrix() }
-    Box(
-        modifier = modifier
-            .size(diameter)
-            .clip(CircleShape)
-            .background(disc),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawMorph(morph, progress = 0f, rotationDeg = rotationDeg, fillFraction = 1f, color = shapeColor, path = path, matrix = matrix)
-        }
+    Canvas(modifier = modifier.size(diameter)) {
+        drawCircle(color = disc, radius = size.minDimension / 2f, center = Offset(size.width / 2f, size.height / 2f))
+        drawMorph(morph, progress = 0f, rotationDeg = 0f, fillFraction = 1f, color = shapeColor, path = path, matrix = matrix)
     }
 }

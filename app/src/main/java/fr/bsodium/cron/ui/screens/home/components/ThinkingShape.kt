@@ -112,8 +112,10 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
 }
 
 /**
- * Renders [morph] at [progress], rotated by [rotationDeg] and fit-and-centered into the draw bounds
- * (with [SHAPE_FIT] margin so rotation never clips). [fillFraction] crossfades stroke→fill.
+ * Renders [morph] at [progress], rotated by [rotationDeg] and fit-and-centered into the draw bounds.
+ * [fit] is the fraction of the bounds the shape spans (default [SHAPE_FIT] leaves margin so rotation
+ * never clips; pass 1f to fill the bounds when not rotating). [fillFraction] crossfades stroke→fill;
+ * the stroke can use a different colour ([strokeColor]) from the fill (defaults to the same [color]).
  */
 internal fun DrawScope.drawMorph(
     morph: Morph,
@@ -123,6 +125,8 @@ internal fun DrawScope.drawMorph(
     color: Color,
     path: Path,
     matrix: Matrix,
+    strokeColor: Color = color,
+    fit: Float = SHAPE_FIT,
 ) {
     path.rewind()
     morph.toPath(progress.coerceIn(0f, 1f), path)
@@ -130,7 +134,7 @@ internal fun DrawScope.drawMorph(
     path.computeBounds(bounds, true)
     val span = maxOf(bounds.width(), bounds.height())
     if (span <= 0f) return
-    val scale = size.minDimension * SHAPE_FIT / span
+    val scale = size.minDimension * fit / span
     matrix.reset()
     matrix.setScale(scale, scale)
     matrix.postTranslate(
@@ -142,7 +146,7 @@ internal fun DrawScope.drawMorph(
     val composePath = path.asComposePath()
     val fill = fillFraction.coerceIn(0f, 1f)
     if (fill > 0f) drawPath(composePath, color = color.copy(alpha = fill))
-    if (fill < 1f) drawPath(composePath, color = color.copy(alpha = 1f - fill), style = Stroke(width = STROKE_WIDTH.toPx()))
+    if (fill < 1f) drawPath(composePath, color = strokeColor.copy(alpha = 1f - fill), style = Stroke(width = STROKE_WIDTH.toPx()))
 }
 
 private fun nearestUpright(deg: Float): Float = (deg / 360f).roundToInt() * 360f

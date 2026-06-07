@@ -17,7 +17,11 @@ import fr.bsodium.cron.ui.theme.LcdFontFamily
  * Visible-ink vertical centre and height of the LCD digits, as fractions of the text line box, plus
  * the line-box height in px (at 76sp) so callers can derive ink px without re-measuring the glyph.
  */
-internal data class LcdInkMetrics(val centerFraction: Float, val heightFraction: Float, val lineBoxPx: Float)
+internal data class LcdInkMetrics(
+    val centerFraction: Float,
+    val heightFraction: Float,
+    val lineBoxPx: Float,
+)
 
 /**
  * Measures where the LCD digit ink actually sits inside its line box. Major Mono Display has no
