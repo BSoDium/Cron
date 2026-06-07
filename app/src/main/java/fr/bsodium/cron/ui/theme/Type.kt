@@ -136,11 +136,12 @@ object CronTypography {
         lineHeight = 28.sp,
     )
 
-    /** Home greeting — pageTitle, but bigger and on the condensed Roboto Flex face (tall + narrow). */
+    /** Home greeting — pageTitle on the condensed Roboto Flex face, sized so its caps roughly match the
+     *  auto-alarms switch height for a balanced row; the tight width keeps it from overflowing. */
     val greeting: TextStyle = pageTitle.copy(
         fontFamily = CondensedDisplayFontFamily,
-        fontSize = 26.sp,
-        lineHeight = 32.sp,
+        fontSize = 34.sp,
+        lineHeight = 38.sp,
     )
 
     /** Date label on the alarm card — "Thursday 28". */
