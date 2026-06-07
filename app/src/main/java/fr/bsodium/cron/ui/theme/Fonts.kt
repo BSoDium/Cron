@@ -51,7 +51,7 @@ val ExpressiveFontFamily: FontFamily = FontFamily(
 
 // Roboto Flex's width axis runs 25..151 (100 = default); lower = narrower (paired with a larger
 // greeting size for a tall, condensed display feel).
-private const val GREETING_WIDTH = 40f
+private const val GREETING_WIDTH = 25f
 private val GREETING_WEIGHTS = listOf(
     FontWeight.Light,
     FontWeight.Normal,
