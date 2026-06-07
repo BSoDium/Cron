@@ -3,7 +3,6 @@ package fr.bsodium.cron.ui.screens.home.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -107,16 +106,17 @@ fun AiThinkingThread(
                 expansionFraction = expansionFraction,
             )
         }
-        // Animate the answer in/out so a re-plan (answer → "Thinking…") collapses smoothly instead of
-        // jumping. fadeIn is alpha-only (no height change) so it never fights the streaming reveal;
-        // the exit shrinks the height. Hold the last answer so the exit renders real content.
+        // Alpha-only in AND out: any size-changing transition (e.g. shrinkVertically) makes
+        // AnimatedVisibility clipToBounds the block, which clips the streaming markdown to its
+        // first-frame (too-small) height as the answer appears. Pure fades never clip. Hold the last
+        // answer so the exit renders real content while it fades.
         val response = thread.response
         var lastResponse by remember { mutableStateOf("") }
         LaunchedEffect(response) { if (!response.isNullOrBlank()) lastResponse = response }
         AnimatedVisibility(
             visible = !response.isNullOrBlank(),
             enter = fadeIn(),
-            exit = fadeOut() + shrinkVertically(),
+            exit = fadeOut(),
         ) {
             Column {
                 Spacer(Modifier.height(Spacing.sm))

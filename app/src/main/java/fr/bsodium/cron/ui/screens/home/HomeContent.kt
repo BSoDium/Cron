@@ -38,9 +38,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
+import fr.bsodium.cron.ui.screens.home.components.AiEditsList
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
-import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
+import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.launch
@@ -64,7 +65,7 @@ private val ALARM_COLLAPSE_RANGE = 120.dp
  */
 @Composable
 internal fun HomePlanContent(
-    thread: AiThreadUi,
+    plan: AiPlanUi,
     uiState: HomeUiState,
     statusInsetTop: Dp,
     navInsetBottom: Dp,
@@ -72,7 +73,10 @@ internal fun HomePlanContent(
     onNotifEnable: () -> Unit,
     showPullHint: Boolean,
     onFirstExpand: () -> Unit,
+    onAutoAlarmsChange: (Boolean) -> Unit,
 ) {
+    // The main thread is the original plan; replans render as an edits list below it.
+    val thread = plan.plan
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     // Reserves the FULL (expanded) card height (fed by the card's own measure), decoupled from the
@@ -184,9 +188,11 @@ internal fun HomePlanContent(
             verticalArrangement = Arrangement.spacedBy(Spacing.xl),
         ) {
             item(key = "greeting") {
-                GreetingHeader(
+                HomeGreetingRow(
                     prefix = uiState.greetingPrefix,
                     name = uiState.greetingName,
+                    autoAlarmsEnabled = uiState.autoAlarmsEnabled,
+                    onAutoAlarmsChange = onAutoAlarmsChange,
                 )
             }
             item(key = "alarm-spacer") {
@@ -219,6 +225,11 @@ internal fun HomePlanContent(
                             .coerceIn(0f, 1f),
                     showPullHint = showPullHint,
                 )
+            }
+            if (plan.edits.isNotEmpty()) {
+                item(key = "edits") {
+                    AiEditsList(edits = plan.edits)
+                }
             }
             if (!hasNotificationPermission) {
                 item(key = "notif-permission") {

@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.Data
 import androidx.work.WorkInfo
 import fr.bsodium.cron.ai.StreamingTurnStore
+import fr.bsodium.cron.alarm.AlarmScheduler
+import fr.bsodium.cron.alarm.EveningPlanScheduler
+import fr.bsodium.cron.alarm.HardLatestScheduler
 import fr.bsodium.cron.calendar.requestCalendarSync
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
@@ -51,7 +54,7 @@ data class HomeUiState(
     val greetingName: String? = null,
     val dateLabel: String = "",
     val sleepStats: SleepStatsUi? = null,
-    val aiThread: AiThreadUi? = null,
+    val aiPlan: AiPlanUi? = null,
     val isRetrying: Boolean = false,
     /** False until the backing flows have produced their first value — gates the onboarding so it
      *  doesn't flash over an existing plan during the cold-start load. */
@@ -64,6 +67,8 @@ data class HomeUiState(
     val hapticsEnabled: Boolean = true,
     /** True once the user has expanded the thinking once — hides the one-time pull hint. */
     val thinkingHintSeen: Boolean = false,
+    /** User preference: auto-plan and arm alarms each night. Off cancels everything armed. */
+    val autoAlarmsEnabled: Boolean = true,
 )
 
 /** Why the most recent AI turn ended without updating the plan, for the home failure banner. */
@@ -85,6 +90,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SessionRepository(application)
     private val settings = SettingsRepository(application)
     private val locationProvider = LocationProvider(application)
+    private val eveningPlanScheduler = EveningPlanScheduler(application)
+    private val alarmScheduler = AlarmScheduler(application)
+    private val hardLatestScheduler = HardLatestScheduler(application)
 
     private val _isRetrying = MutableStateFlow(false)
 
@@ -111,7 +119,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Latest-turn AI thread — the live streaming partial overrides the settled DB state while a turn
      *  for this session is in flight, so tokens render as they arrive. `.conflate()` bounds recomposition. */
-    private val aiThreadFlow = sessionFlow
+    private val aiPlanFlow = sessionFlow
         .map { it?.id }
         .distinctUntilChanged()
         .flatMapLatest { id ->
@@ -119,9 +127,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 flowOf(null)
             } else {
                 combine(db.aiMessageDao().observeBySession(id), StreamingTurnStore.active) { rows, streaming ->
-                    val partial = streaming?.takeIf { it.sessionId == id }
-                    if (partial != null) AiThreadMapper.buildFromBlocks(partial.turnIndex, partial.blocks)
-                    else AiThreadMapper.build(rows)
+                    AiPlanMapper.buildPlan(rows, streaming?.takeIf { it.sessionId == id })
                 }.conflate()
             }
         }
@@ -146,9 +152,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         StreamingTurnStore.active,
     ) { id, streaming -> id != null && streaming?.sessionId == id }
 
-    // Two UX prefs pre-combined so statusFlow stays within combine's 5-arg arity.
-    private val prefsFlow = combine(settings.hapticsEnabled, settings.thinkingHintSeen) { haptics, hintSeen ->
-        haptics to hintSeen
+    // UX prefs pre-combined so statusFlow stays within combine's 5-arg arity.
+    private val prefsFlow = combine(
+        settings.hapticsEnabled,
+        settings.thinkingHintSeen,
+        settings.autoAlarmsEnabled,
+    ) { haptics, hintSeen, autoAlarms ->
+        HomePrefs(hapticsEnabled = haptics, thinkingHintSeen = hintSeen, autoAlarmsEnabled = autoAlarms)
     }
 
     private val statusFlow = combine(
@@ -162,33 +172,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isRetrying = retrying || streaming,
             settingsChanged = settingsChanged,
             failure = failure,
-            hapticsEnabled = prefs.first,
-            thinkingHintSeen = prefs.second,
+            hapticsEnabled = prefs.hapticsEnabled,
+            thinkingHintSeen = prefs.thinkingHintSeen,
+            autoAlarmsEnabled = prefs.autoAlarmsEnabled,
         )
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
         sessionFlow.map { it?.toDisplayState() },
         sleepStatsFlow,
-        aiThreadFlow,
+        aiPlanFlow,
         settings.displayName,
         statusFlow,
-    ) { session, sleepStats, thread, displayName, status ->
+    ) { session, sleepStats, plan, displayName, status ->
         HomeUiState(
             sessionDisplay = session,
             greetingPrefix = greetingPrefix(),
             greetingName = displayName,
             dateLabel = formatDateLabel(session),
             sleepStats = sleepStats,
-            aiThread = thread,
+            aiPlan = plan,
             isRetrying = status.isRetrying,
             // combine() only emits once every source has produced a value, so reaching here means
             // the backing flows have loaded — distinguishes "no plan" from "not loaded yet".
             initialized = true,
-            settingsChangedSincePlan = status.settingsChanged && thread != null,
+            settingsChangedSincePlan = status.settingsChanged && plan != null,
             aiFailure = status.failure,
             hapticsEnabled = status.hapticsEnabled,
             thinkingHintSeen = status.thinkingHintSeen,
+            autoAlarmsEnabled = status.autoAlarmsEnabled,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -200,6 +212,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** Mark the one-time "pull to show thinking" hint as seen the first time the user expands it. */
     fun markThinkingHintSeen() {
         viewModelScope.launch { settings.setThinkingHintSeen() }
+    }
+
+    /**
+     * Toggle automatic alarm planning. ON re-arms the nightly trigger; OFF cancels it and tears down
+     * everything armed for the current session (the AI alarm, the hard-latest safety alarm, and any
+     * in-flight AI turn) so nothing is left to ring.
+     */
+    fun setAutoAlarmsEnabled(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settings.setAutoAlarmsEnabled(enabled)
+            if (enabled) {
+                eveningPlanScheduler.armNext()
+            } else {
+                eveningPlanScheduler.cancel()
+                repository.findCurrent()?.let { session ->
+                    alarmScheduler.cancel(session.date)
+                    hardLatestScheduler.clear(session.date)
+                    repository.cancelAiTurn(session.id)
+                }
+            }
+        }
     }
 
     /**
@@ -378,4 +411,12 @@ private data class HomeStatus(
     val failure: AiTurnFailure?,
     val hapticsEnabled: Boolean,
     val thinkingHintSeen: Boolean,
+    val autoAlarmsEnabled: Boolean,
+)
+
+/** The DataStore-backed UX prefs, pre-combined so [HomeStatus] stays within combine's arity. */
+private data class HomePrefs(
+    val hapticsEnabled: Boolean,
+    val thinkingHintSeen: Boolean,
+    val autoAlarmsEnabled: Boolean,
 )
