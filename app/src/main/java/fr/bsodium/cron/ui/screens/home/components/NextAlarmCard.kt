@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -50,21 +49,13 @@ import fr.bsodium.cron.ui.components.PillBadge
 import fr.bsodium.cron.ui.theme.CodeFontFamily
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.DisplayFontFamily
 import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.coroutines.delay
-import kotlinx.datetime.Clock
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
-import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.plus
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -77,7 +68,7 @@ fun NextAlarmCard(
     modifier: Modifier = Modifier,
 ) {
     AlarmShell(modifier) {
-        AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, alarmKind = alarmKindFor(alarmTime))
+        AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments)
     }
 }
 
@@ -112,10 +103,9 @@ internal fun AlarmCardContent(
     // The collapsing card hides this layer's time row (clock + countdown — both become moving copies
     // drawn on top) while still measuring it, so this stays the single source of expanded geometry.
     timeRowAlpha: Float = 1f,
-    // The alarm-type badge sits in a row with the date (centred on it). In the collapsing card the
-    // badge is hidden here (badgeAlpha = 0, still measured) and drawn as a moving copy on top.
-    alarmKind: AlarmKind? = null,
-    badgeAlpha: Float = 1f,
+    // The date is hidden here (dateAlpha = 0) in the collapsing card and drawn as a moving copy that
+    // slides up out the top, so it leaves/enters opposite the time (which moves from the bottom).
+    dateAlpha: Float = 1f,
 ) {
     val onCard = MaterialTheme.colorScheme.onPrimary
     Column(
@@ -126,19 +116,12 @@ internal fun AlarmCardContent(
             bottom = Spacing.xl,
         ),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(BADGE_DATE_GAP),
-        ) {
-            if (alarmKind != null) {
-                AlarmTypeBadge(kind = alarmKind, rotationDeg = 0f, modifier = Modifier.graphicsLayer { alpha = badgeAlpha })
-            }
-            AlignedFirstGlyph(
-                text = dateLabel.ifBlank { "—" },
-                color = onCard,
-                style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
-            )
-        }
+        AlignedFirstGlyph(
+            text = dateLabel.ifBlank { "—" },
+            color = onCard,
+            style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
+            modifier = Modifier.graphicsLayer { alpha = dateAlpha },
+        )
         LcdTimeDisplay(alarmTime = alarmTime, timeRowAlpha = timeRowAlpha)
         if (sleepSegments.isNotEmpty()) {
             Spacer(Modifier.height(Spacing.xl))
@@ -245,7 +228,7 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier,
 
 /**
  * The "HH:MM" LCD clock (custom-colon, side-bearing-trimmed). Reused both inline in [LcdTimeDisplay]
- * and as the single moving element of the collapsing card, so [progress] (the reveal) is hoisted in.
+ * and as one of the moving copies of the collapsing card, so [progress] (the reveal) is hoisted in.
  */
 @Composable
 internal fun LcdClock(
@@ -327,62 +310,7 @@ internal fun rememberLcdRevealProgress(alarmTime: LocalTime?): Float {
     return progressAnim.value
 }
 
-internal data class HoursMinutes(val hours: Long, val minutes: Long)
-
-/** "21H 41M" — time remaining until the next [alarmTime], or "--" when none is set. */
-internal fun remainingLabel(alarmTime: LocalTime?): String {
-    val c = computeCountdown(alarmTime) ?: return "--"
-    return String.format(Locale.US, "%dH %02dM", c.hours, c.minutes)
-}
-
 private const val LCD_REVEAL_MILLIS = 700
-
-/**
- * Two-line LCD stack ("8H" / "12M") showing time remaining until the alarm.
- * Renders dim placeholders when no alarm is set.
- */
-@Composable
-internal fun CountdownStack(
-    countdown: HoursMinutes?,
-    progress: Float,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    // Space Grotesk (legible, unlike Major Mono's art-deco H/M); lineHeight < fontSize tightens the
-    // H↔M leading so the stack is compact and gains breathing room when centred in the collapsed pill.
-    val smallLcd = TightTextStyle.copy(
-        fontFamily = DisplayFontFamily,
-        fontSize = 24.sp,
-        lineHeight = 21.sp,
-    )
-    // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
-    val (top, bottom) = if (countdown == null) "00H" to "00M"
-    else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
-        String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
-    Text(
-        text = "$top\n$bottom",
-        color = color,
-        style = smallLcd,
-        maxLines = 2,
-        softWrap = false,
-        modifier = modifier,
-    )
-}
-
-/**
- * Distance from `now` to the next occurrence of [alarmTime] (today if it's
- * still ahead, otherwise tomorrow). Returns null when no alarm is set.
- */
-internal fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
-    if (alarmTime == null) return null
-    val tz = TimeZone.currentSystemDefault()
-    val nowLocal = Clock.System.now().toLocalDateTime(tz)
-    val targetDate = if (alarmTime > nowLocal.time) nowLocal.date else nowLocal.date.plus(1, DateTimeUnit.DAY)
-    val targetInstant = LocalDateTime(targetDate, alarmTime).toInstant(tz)
-    val remaining = targetInstant - Clock.System.now()
-    val totalMinutes = remaining.inWholeMinutes.coerceAtLeast(0)
-    return HoursMinutes(hours = totalMinutes / 60, minutes = totalMinutes % 60)
-}
 
 private val COLON_WIDTH = 8.dp
 
