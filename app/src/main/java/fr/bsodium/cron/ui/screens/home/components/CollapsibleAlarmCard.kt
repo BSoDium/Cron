@@ -28,7 +28,6 @@ import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import kotlinx.datetime.LocalTime
-import kotlin.math.PI
 import kotlin.math.roundToInt
 
 // Max stroke (local 76sp space) overlaid on the collapsed digits to fake weight as they shrink.
@@ -130,14 +129,11 @@ internal fun CollapsibleAlarmCard(
                 }
                 CountdownStack(countdown = cd, progress = progress, color = countdownColor, alignFraction = f)
             }.first().measure(cWrap)
-            // Auto-alarms status badge: collapsed-only. Rolls in from off the left edge into the pill's
-            // left cap (placement below). Only its SHAPE spins (rolling-wheel: deg = distance travelled /
-            // circumference × 360, linear in f); the icon rides upright, so the rotation is passed in
-            // rather than applied to the placed node. Drawn on top, never faded with extras.
-            val badgePx = BADGE_DIAMETER.roundToPx()
-            val rollDeg = f * ((barHeight + badgePx) / 2f) / (PI.toFloat() * badgePx) * 360f
+            // Auto-alarms status badge: collapsed-only. Scales + fades in from its final position's left
+            // edge / vertical centre as the card collapses (placement below). Drawn on top, never faded
+            // with extras.
             val badge = subcompose("badge") {
-                AlarmStatusBadge(enabled = autoAlarmsEnabled, rotationDeg = rollDeg, diameter = BADGE_DIAMETER)
+                AlarmStatusBadge(enabled = autoAlarmsEnabled, diameter = BADGE_DIAMETER)
             }.first().measure(cWrap)
 
             val w = extras.width
@@ -183,16 +179,19 @@ internal fun CollapsibleAlarmCard(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
-                // Badge (collapsed-only): translates in LINEARLY from off the left edge into the pill's
-                // left cap — position tracks the collapse fraction (and thus scroll) 1:1. The off-left
-                // start is clipped away (clipToBounds) so it's hidden until it rolls in. The shape's
-                // rolling spin is applied inside the badge (rollDeg, above) so the icon stays upright.
+                // Badge (collapsed-only): nests concentric in the pill's left cap, scaling + fading in
+                // from its final position's left edge / vertical centre (pivot 0, 0.5) as the card
+                // collapses — it grows out of the pill rather than sliding across it.
                 badge.let {
-                    val nestedLeft = (barHeight - it.width) / 2f
-                    val nestedTop = (barHeight - it.height) / 2f
-                    val offLeft = -it.width.toFloat()
-                    val x = lerp(offLeft, nestedLeft, f)
-                    it.place(x.roundToInt(), nestedTop.roundToInt())
+                    val nestedLeft = (barHeight - it.width) / 2
+                    val nestedTop = (barHeight - it.height) / 2
+                    it.placeWithLayer(nestedLeft, nestedTop) {
+                        alpha = f
+                        val s = lerp(0.5f, 1f, f)
+                        scaleX = s
+                        scaleY = s
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                    }
                 }
             }
         }
