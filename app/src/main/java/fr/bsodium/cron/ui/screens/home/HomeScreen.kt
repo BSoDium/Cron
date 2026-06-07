@@ -232,7 +232,8 @@ private fun HomeIdleContent(
                 top = statusInsetTop + Spacing.xxl,
                 bottom = navInsetBottom + Spacing.navBarClearance,
             ),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xl),
+        // Tight gap from the greeting down to the card; the card→hint area is a weighted box below.
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         HomeGreetingRow(
             prefix = uiState.greetingPrefix,

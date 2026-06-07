@@ -49,6 +49,37 @@ val ExpressiveFontFamily: FontFamily = FontFamily(
     },
 )
 
+// Roboto Flex's width axis runs 25..151 (100 = default); ~80 reads clearly condensed but legible.
+private const val GREETING_WIDTH = 80f
+private val GREETING_WEIGHTS = listOf(
+    FontWeight.Light,
+    FontWeight.Normal,
+    FontWeight.Medium,
+    FontWeight.SemiBold,
+    FontWeight.Bold,
+)
+
+/**
+ * Condensed grotesque for the home greeting — the bundled **Roboto Flex** variable font driven on its
+ * width (`wdth`) + weight axes. Downloadable fonts can't carry variation settings (so the expressive
+ * family above can't be condensed), hence the local file; the downloadable Roboto Flex is a
+ * non-condensed network fallback that's only hit if the bundled face fails to load.
+ */
+val CondensedDisplayFontFamily: FontFamily = FontFamily(
+    buildList {
+        GREETING_WEIGHTS.forEach { w ->
+            add(
+                Font(
+                    R.font.roboto_flex,
+                    weight = w,
+                    variationSettings = FontVariation.Settings(FontVariation.weight(w.weight), FontVariation.width(GREETING_WIDTH)),
+                ),
+            )
+        }
+        add(Font(googleFont = RobotoFlex, fontProvider = Provider))
+    },
+)
+
 /**
  * Hero LCD face for the next-alarm time. Bundled .ttf files resolve first,
  * with the downloadable Google Fonts entry as a network fallback. The
