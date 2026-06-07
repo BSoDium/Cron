@@ -49,15 +49,12 @@ internal fun CollapsibleAlarmCard(
     alarmTime: LocalTime?,
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
+    autoAlarmsEnabled: Boolean,
     collapseFraction: Float,
     onFullHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val f = collapseFraction.coerceIn(0f, 1f)
-    // The badge rolls in from off the left edge with an ease-out (fast start, settling early) into its
-    // nested spot in the pill's left cap. Its rotation is matched to this translation (see placement).
-    val fb = (1f - f).let { inv -> 1f - inv * inv * inv }
-    val kind = alarmKindFor(alarmTime)
     val onCard = MaterialTheme.colorScheme.onPrimary
     val digitColor = if (alarmTime == null) onCard.copy(alpha = 0.30f) else onCard
     // Remaining keeps the dimmed countdown colour in BOTH states — colour alone conveys hierarchy.
@@ -133,13 +130,11 @@ internal fun CollapsibleAlarmCard(
                 }
                 CountdownStack(countdown = cd, progress = progress, color = countdownColor, alignFraction = f)
             }.first().measure(cWrap)
-            // Alarm-type badge: collapsed-only. Rolls in from off the left edge into the pill's left cap
-            // (placement below). Drawn on top, never faded with extras.
-            val badge = kind?.let {
-                subcompose("badge") {
-                    AlarmTypeBadge(kind = it, diameter = BADGE_DIAMETER)
-                }.first().measure(cWrap)
-            }
+            // Auto-alarms status badge: collapsed-only. Rolls in from off the left edge into the pill's
+            // left cap (placement below). Drawn on top, never faded with extras.
+            val badge = subcompose("badge") {
+                AlarmStatusBadge(enabled = autoAlarmsEnabled, diameter = BADGE_DIAMETER)
+            }.first().measure(cWrap)
 
             val w = extras.width
             val startPad = Spacing.xxl.roundToPx()
@@ -147,8 +142,8 @@ internal fun CollapsibleAlarmCard(
             val endPad = Spacing.xxl.roundToPx()
             val cdGap = (Spacing.xs + Spacing.xxs).roundToPx()
             // Collapsed: the badge nests concentric in the pill's left cap (centre = barHeight/2); the
-            // clock starts just past its right edge so the time clears the shape. No badge → no shift.
-            val collapsedClockX = if (badge != null) (barHeight - badge.width) / 2 + badge.width + BADGE_CLOCK_GAP.roundToPx() else startPad
+            // clock starts just past its right edge so the time clears the badge.
+            val collapsedClockX = (barHeight - badge.width) / 2 + badge.width + BADGE_CLOCK_GAP.roundToPx()
             val height = lerp(extras.height, barHeight, f)
 
             val expandedClockY = topPad + date.height
@@ -184,14 +179,15 @@ internal fun CollapsibleAlarmCard(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
-                // Badge (collapsed-only): rolls in from off the left edge into the pill's left cap. The
-                // off-left start is clipped away (clipToBounds) so it's hidden until it rolls in. Rotation
-                // is matched to the distance travelled (rolling-wheel: deg = distance / circumference × 360).
-                badge?.let {
+                // Badge (collapsed-only): rolls in LINEARLY from off the left edge into the pill's left
+                // cap — position and roll track the collapse fraction (and thus scroll) 1:1. The off-left
+                // start is clipped away (clipToBounds) so it's hidden until it rolls in; rotation is matched
+                // to the distance travelled (rolling-wheel: deg = distance / circumference × 360).
+                badge.let {
                     val nestedLeft = (barHeight - it.width) / 2f
                     val nestedTop = (barHeight - it.height) / 2f
                     val offLeft = -it.width.toFloat()
-                    val x = lerp(offLeft, nestedLeft, fb)
+                    val x = lerp(offLeft, nestedLeft, f)
                     val rollDeg = (x - offLeft) / (PI.toFloat() * it.width) * 360f
                     it.placeWithLayer(x.roundToInt(), nestedTop.roundToInt()) {
                         rotationZ = rollDeg
@@ -213,6 +209,7 @@ private fun CollapsedAlarmCardPreview() {
                 alarmTime = LocalTime(10, 0),
                 sleepDurationLabel = "7H 28M",
                 sleepSegments = PREVIEW_SLEEP_SEGMENTS,
+                autoAlarmsEnabled = false,
                 collapseFraction = 1f,
                 onFullHeight = {},
             )
@@ -235,6 +232,7 @@ private fun CollapsibleAlarmCardPreview() {
                     alarmTime = LocalTime(10, 0),
                     sleepDurationLabel = "7H 28M",
                     sleepSegments = PREVIEW_SLEEP_SEGMENTS,
+                    autoAlarmsEnabled = true,
                     collapseFraction = frac,
                     onFullHeight = {},
                 )
