@@ -5,6 +5,8 @@ import fr.bsodium.cron.ai.ToolResult
 import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.session.db.SessionJson
+import fr.bsodium.cron.travel.GeocodingClient
+import fr.bsodium.cron.travel.LatLng
 import fr.bsodium.cron.travel.RoutesClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -17,7 +19,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-class EstimateCommuteMultiModeTool(private val client: RoutesClient) : Tool {
+class EstimateCommuteMultiModeTool(
+    private val client: RoutesClient,
+    private val geocoder: GeocodingClient,
+    private val originBias: LatLng? = null,
+) : Tool {
 
     @Serializable
     private data class ModeResult(val duration_sec: Long, val distance_m: Int)
@@ -50,19 +56,27 @@ class EstimateCommuteMultiModeTool(private val client: RoutesClient) : Tool {
 
     override suspend fun execute(input: JsonElement): ToolResult = coroutineScope {
         val obj = input.jsonObject
-        val lat = obj["origin_lat"]?.jsonPrimitive?.content?.toDoubleOrNull()
-            ?: return@coroutineScope ToolResult("""{"error":"origin_lat required"}""", isError = true)
-        val lng = obj["origin_lng"]?.jsonPrimitive?.content?.toDoubleOrNull()
-            ?: return@coroutineScope ToolResult("""{"error":"origin_lng required"}""", isError = true)
+        // Prefer the device's captured location as origin (the model may pass a stale/(0,0) value).
+        val origin = originBias ?: run {
+            val lat = obj["origin_lat"]?.jsonPrimitive?.content?.toDoubleOrNull()
+                ?: return@coroutineScope ToolResult("""{"error":"origin_lat required"}""", isError = true)
+            val lng = obj["origin_lng"]?.jsonPrimitive?.content?.toDoubleOrNull()
+                ?: return@coroutineScope ToolResult("""{"error":"origin_lng required"}""", isError = true)
+            LatLng(lat, lng)
+        }
         val dest = obj["destination"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
             ?: return@coroutineScope ToolResult("""{"error":"destination required"}""", isError = true)
         val arrivalMs = obj["arrival_time_iso"]?.jsonPrimitive?.content
             ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
 
-        val transitD = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.TRANSIT, arrivalMs).getOrNull() }
-        val walkD    = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.WALK).getOrNull() }
-        val driveD   = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.DRIVE).getOrNull() }
-        val bicycleD = async { client.estimate(lat, lng, dest, RoutesClient.TravelMode.BICYCLE).getOrNull() }
+        // Geocode once, biased to the user's area, then route each mode from coordinates.
+        val target = geocoder.geocode(dest, originBias).getOrElse { e ->
+            return@coroutineScope ToolResult("""{"error":"geocoding failed: ${e.message?.take(200)}"}""", isError = true)
+        }
+        val transitD = async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, RoutesClient.TravelMode.TRANSIT, arrivalMs).getOrNull() }
+        val walkD    = async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, RoutesClient.TravelMode.WALK).getOrNull() }
+        val driveD   = async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, RoutesClient.TravelMode.DRIVE).getOrNull() }
+        val bicycleD = async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, RoutesClient.TravelMode.BICYCLE).getOrNull() }
 
         fun RoutesClient.RouteResult.toMode() = ModeResult(durationSeconds, distanceMeters)
         val output = Output(
