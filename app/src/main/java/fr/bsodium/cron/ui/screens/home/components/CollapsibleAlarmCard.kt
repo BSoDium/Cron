@@ -131,9 +131,13 @@ internal fun CollapsibleAlarmCard(
                 CountdownStack(countdown = cd, progress = progress, color = countdownColor, alignFraction = f)
             }.first().measure(cWrap)
             // Auto-alarms status badge: collapsed-only. Rolls in from off the left edge into the pill's
-            // left cap (placement below). Drawn on top, never faded with extras.
+            // left cap (placement below). Only its SHAPE spins (rolling-wheel: deg = distance travelled /
+            // circumference × 360, linear in f); the icon rides upright, so the rotation is passed in
+            // rather than applied to the placed node. Drawn on top, never faded with extras.
+            val badgePx = BADGE_DIAMETER.roundToPx()
+            val rollDeg = f * ((barHeight + badgePx) / 2f) / (PI.toFloat() * badgePx) * 360f
             val badge = subcompose("badge") {
-                AlarmStatusBadge(enabled = autoAlarmsEnabled, diameter = BADGE_DIAMETER)
+                AlarmStatusBadge(enabled = autoAlarmsEnabled, rotationDeg = rollDeg, diameter = BADGE_DIAMETER)
             }.first().measure(cWrap)
 
             val w = extras.width
@@ -179,19 +183,16 @@ internal fun CollapsibleAlarmCard(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
-                // Badge (collapsed-only): rolls in LINEARLY from off the left edge into the pill's left
-                // cap — position and roll track the collapse fraction (and thus scroll) 1:1. The off-left
-                // start is clipped away (clipToBounds) so it's hidden until it rolls in; rotation is matched
-                // to the distance travelled (rolling-wheel: deg = distance / circumference × 360).
+                // Badge (collapsed-only): translates in LINEARLY from off the left edge into the pill's
+                // left cap — position tracks the collapse fraction (and thus scroll) 1:1. The off-left
+                // start is clipped away (clipToBounds) so it's hidden until it rolls in. The shape's
+                // rolling spin is applied inside the badge (rollDeg, above) so the icon stays upright.
                 badge.let {
                     val nestedLeft = (barHeight - it.width) / 2f
                     val nestedTop = (barHeight - it.height) / 2f
                     val offLeft = -it.width.toFloat()
                     val x = lerp(offLeft, nestedLeft, f)
-                    val rollDeg = (x - offLeft) / (PI.toFloat() * it.width) * 360f
-                    it.placeWithLayer(x.roundToInt(), nestedTop.roundToInt()) {
-                        rotationZ = rollDeg
-                    }
+                    it.place(x.roundToInt(), nestedTop.roundToInt())
                 }
             }
         }
