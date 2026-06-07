@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -43,7 +42,7 @@ import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
-import fr.bsodium.cron.ui.screens.home.components.ReplanRound
+import fr.bsodium.cron.ui.screens.home.components.ReplanHistoryBar
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
@@ -76,8 +75,14 @@ internal fun HomePlanContent(
     onFirstExpand: () -> Unit,
     onAutoAlarmsChange: (Boolean) -> Unit,
 ) {
-    // The main thread is the original plan; replans render as an edits list below it.
-    val thread = plan.plan
+    // Only the selected iteration's thinking is shown (the scroll-to-reveal needs a single thread); the
+    // connected tab group above it navigates the history. Default to the latest; a fresh replan (new
+    // latest turnIndex) re-keys this back to newest while letting the user browse older iterations.
+    var selectedTurn by rememberSaveable(plan.iterations.last().turnIndex) {
+        mutableStateOf(plan.iterations.last().turnIndex)
+    }
+    val current = plan.iterations.firstOrNull { it.turnIndex == selectedTurn } ?: plan.iterations.last()
+    val thread = current.thread
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     // Reserves the FULL (expanded) card height (fed by the card's own measure), decoupled from the
@@ -201,6 +206,16 @@ internal fun HomePlanContent(
             item(key = "alarm-spacer") {
                 Spacer(Modifier.height(with(density) { cardFullHeightPx.toDp() }))
             }
+            if (plan.iterations.size > 1) {
+                item(key = "history") {
+                    ReplanHistoryBar(
+                        modifier = Modifier.padding(top = Spacing.sm),
+                        iterations = plan.iterations,
+                        selectedTurn = selectedTurn,
+                        onSelect = { selectedTurn = it },
+                    )
+                }
+            }
             item(key = "thread") {
                 AiThinkingThread(
                     modifier = Modifier.padding(top = Spacing.sm),
@@ -228,14 +243,7 @@ internal fun HomePlanContent(
                         else (reveal.value / thinkingFullPx.intValue.toFloat().coerceAtLeast(1f))
                             .coerceIn(0f, 1f),
                     showPullHint = showPullHint,
-                    // The status shape marks where the assistant is now — only if there are no replans.
-                    showShape = plan.edits.isEmpty(),
                 )
-            }
-            // Replans render as ChatGPT-style rounds in the normal flow: a system message naming the
-            // trigger, then the assistant's thinking + answer. Only the latest round keeps the shape.
-            itemsIndexed(plan.edits, key = { _, edit -> "round_${edit.turnIndex}" }) { index, edit ->
-                ReplanRound(edit = edit, isLast = index == plan.edits.lastIndex)
             }
             if (!hasNotificationPermission) {
                 item(key = "notif-permission") {
