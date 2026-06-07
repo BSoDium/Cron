@@ -185,7 +185,9 @@ internal fun HomePlanContent(
                 // gradient's own xxxl so the last content (the thinking shape) rests above the fade.
                 bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
             ),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xl),
+            // md is the tight greeting→card gap; the thread item adds its own top padding to keep the
+            // larger card→thread breathing room.
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             item(key = "greeting") {
                 HomeGreetingRow(
@@ -200,6 +202,7 @@ internal fun HomePlanContent(
             }
             item(key = "thread") {
                 AiThinkingThread(
+                    modifier = Modifier.padding(top = Spacing.sm),
                     thread = thread,
                     isRunning = uiState.isRetrying,
                     expanded = thinkingExpanded,

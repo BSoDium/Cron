@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import fr.bsodium.cron.ui.theme.CondensedDisplayFontFamily
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
@@ -41,7 +42,7 @@ fun GreetingHeader(
                 }
             }
         },
-        style = CronTypography.pageTitle,
+        style = CronTypography.pageTitle.copy(fontFamily = CondensedDisplayFontFamily),
         color = MaterialTheme.colorScheme.onBackground,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
