@@ -128,12 +128,19 @@ val Typography: Typography = Typography(
 object CronTypography {
     private val tight = TightTextStyle
 
-    /** Page title — the home greeting and the History/Settings screen labels. */
+    /** Page title — the History/Settings screen labels. */
     val pageTitle: TextStyle = TextStyle(
         fontFamily = ExpressiveFontFamily,
         fontWeight = FontWeight.Light,
         fontSize = 22.sp,
         lineHeight = 28.sp,
+    )
+
+    /** Home greeting — pageTitle, but bigger and on the condensed Roboto Flex face (tall + narrow). */
+    val greeting: TextStyle = pageTitle.copy(
+        fontFamily = CondensedDisplayFontFamily,
+        fontSize = 26.sp,
+        lineHeight = 32.sp,
     )
 
     /** Date label on the alarm card — "Thursday 28". */
