@@ -6,6 +6,8 @@ import fr.bsodium.cron.ai.toolErrorResult
 import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.session.db.SessionJson
+import fr.bsodium.cron.travel.GeocodingClient
+import fr.bsodium.cron.travel.LatLng
 import fr.bsodium.cron.travel.RoutesClient
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
@@ -17,7 +19,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-class EstimateCommuteTool(private val client: RoutesClient) : Tool {
+class EstimateCommuteTool(
+    private val client: RoutesClient,
+    private val geocoder: GeocodingClient,
+    private val originBias: LatLng? = null,
+) : Tool {
 
     @Serializable
     private data class Output(val duration_sec: Long, val distance_m: Int)
@@ -53,10 +59,15 @@ class EstimateCommuteTool(private val client: RoutesClient) : Tool {
 
     override suspend fun execute(input: JsonElement): ToolResult {
         val obj = input.jsonObject
-        val lat = obj["origin_lat"]?.jsonPrimitive?.content?.toDoubleOrNull()
-            ?: return ToolResult("""{"error":"origin_lat required and must be a number"}""", isError = true)
-        val lng = obj["origin_lng"]?.jsonPrimitive?.content?.toDoubleOrNull()
-            ?: return ToolResult("""{"error":"origin_lng required and must be a number"}""", isError = true)
+        // Prefer the device's captured location as origin (overrides whatever the model passed — which
+        // can be (0,0) when the prompt's location was unavailable); fall back to the model's values.
+        val origin = originBias ?: run {
+            val lat = obj["origin_lat"]?.jsonPrimitive?.content?.toDoubleOrNull()
+                ?: return ToolResult("""{"error":"origin_lat required and must be a number"}""", isError = true)
+            val lng = obj["origin_lng"]?.jsonPrimitive?.content?.toDoubleOrNull()
+                ?: return ToolResult("""{"error":"origin_lng required and must be a number"}""", isError = true)
+            LatLng(lat, lng)
+        }
         val dest = obj["destination"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
             ?: return ToolResult("""{"error":"destination required"}""", isError = true)
         val mode = obj["mode"]?.jsonPrimitive?.content
@@ -65,7 +76,11 @@ class EstimateCommuteTool(private val client: RoutesClient) : Tool {
         val arrivalMs = obj["arrival_time_iso"]?.jsonPrimitive?.content
             ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
 
-        val result = client.estimate(lat, lng, dest, mode, arrivalMs).getOrElse { e ->
+        // Geocode the destination biased to the user's area so a same-named place elsewhere can't win.
+        val target = geocoder.geocode(dest, originBias).getOrElse { e ->
+            return toolErrorResult("geocoding failed: ${e.message?.take(300)}")
+        }
+        val result = client.estimate(origin.lat, origin.lng, target.lat, target.lng, mode, arrivalMs).getOrElse { e ->
             return toolErrorResult("commute estimate failed: ${e.message?.take(300)}")
         }
 

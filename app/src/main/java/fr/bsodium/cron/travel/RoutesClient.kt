@@ -27,7 +27,8 @@ class RoutesClient(
     suspend fun estimate(
         originLat: Double,
         originLng: Double,
-        destinationAddress: String,
+        destLat: Double,
+        destLng: Double,
         mode: TravelMode = TravelMode.TRANSIT,
         arrivalTimeEpochMs: Long? = null,
     ): Result<RouteResult> = withContext(Dispatchers.IO) {
@@ -36,7 +37,11 @@ class RoutesClient(
                 put("origin", JSONObject().put("location", JSONObject().put("latLng",
                     JSONObject().put("latitude", originLat).put("longitude", originLng)
                 )))
-                put("destination", JSONObject().put("address", destinationAddress))
+                // Destination as coordinates (geocoded upstream with a location bias) so it can't snap
+                // to a same-named place in another city.
+                put("destination", JSONObject().put("location", JSONObject().put("latLng",
+                    JSONObject().put("latitude", destLat).put("longitude", destLng)
+                )))
                 put("travelMode", mode.name)
                 if (mode == TravelMode.TRANSIT && arrivalTimeEpochMs != null) {
                     put("arrivalTime", kotlinx.datetime.Instant.fromEpochMilliseconds(arrivalTimeEpochMs).toString())
