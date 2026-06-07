@@ -45,26 +45,27 @@ class AiPlanMapperTest {
     }
 
     @Test
-    fun single_turn_has_no_edits() {
-        val plan = AiPlanMapper.buildPlan(listOf(assistant(0)), null, emptyList())
-        assertEquals(0, plan?.plan?.turnIndex)
-        assertTrue(plan?.edits.orEmpty().isEmpty())
+    fun single_turn_is_one_iteration_labelled_planned() {
+        val plan = requireNotNull(AiPlanMapper.buildPlan(listOf(assistant(0)), null, emptyList()))
+        assertEquals(1, plan.iterations.size)
+        assertEquals(0, plan.iterations.single().turnIndex)
+        assertEquals("Planned", plan.iterations.single().systemMessage)
     }
 
     @Test
-    fun replan_round_names_its_triggering_event() {
+    fun replan_iteration_names_its_triggering_event() {
         val rows = listOf(assistant(0, createdAt = 0L), assistant(1, createdAt = 1000L))
         val events = listOf(event(TriggerType.CalendarChange, 500L, EventData.CalendarChange("modified", "e1", true)))
-        val edit = requireNotNull(AiPlanMapper.buildPlan(rows, null, events)).edits.single()
-        assertEquals(1, edit.turnIndex)
-        assertEquals("Your schedule changed", edit.systemMessage)
+        val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, events))
+        assertEquals(listOf("Planned", "Your schedule changed"), plan.iterations.map { it.systemMessage })
+        assertEquals(1, plan.iterations.last().turnIndex)
     }
 
     @Test
     fun a_replan_with_no_matching_event_falls_back_to_replanned() {
         val rows = listOf(assistant(0, createdAt = 0L), assistant(1, createdAt = 1000L))
-        val edit = requireNotNull(AiPlanMapper.buildPlan(rows, null, emptyList())).edits.single()
-        assertEquals("Re-planned", edit.systemMessage)
+        val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, emptyList()))
+        assertEquals("Re-planned", plan.iterations.last().systemMessage)
     }
 
     @Test
@@ -75,17 +76,17 @@ class AiPlanMapperTest {
             event(TriggerType.CalendarChange, 800L, EventData.CalendarChange("added", "e2", true)),
             event(TriggerType.AlarmSnoozed, 1500L), // after the turn started — must be ignored
         )
-        val edit = requireNotNull(AiPlanMapper.buildPlan(rows, null, events)).edits.single()
-        assertEquals("Your schedule changed", edit.systemMessage)
+        val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, events))
+        assertEquals("Your schedule changed", plan.iterations.last().systemMessage)
     }
 
     @Test
-    fun streaming_partial_is_the_last_edit() {
+    fun streaming_partial_is_the_last_iteration() {
         val rows = listOf(assistant(0, createdAt = 0L))
         val streaming = StreamingTurn(sessionId = "s", turnIndex = 1, blocks = listOf(ContentBlock.Text("SUMMARY: y\n\nz")), startedAtMs = 0L)
         val plan = requireNotNull(AiPlanMapper.buildPlan(rows, streaming, emptyList()))
-        assertEquals(1, plan.edits.size)
-        assertTrue(plan.edits.single().thread.isStreaming)
+        assertEquals(2, plan.iterations.size)
+        assertTrue(plan.iterations.last().thread.isStreaming)
     }
 
     @Test
@@ -93,24 +94,25 @@ class AiPlanMapperTest {
         val rows = listOf(assistant(0, createdAt = 0L), assistant(1, createdAt = 1000L, text = "old"))
         val streaming = StreamingTurn(sessionId = "s", turnIndex = 1, blocks = listOf(ContentBlock.Text("SUMMARY: live\n\nnow")), startedAtMs = 1000L)
         val plan = requireNotNull(AiPlanMapper.buildPlan(rows, streaming, emptyList()))
-        assertEquals(1, plan.edits.size)
-        assertTrue(plan.edits.single().thread.isStreaming)
+        assertEquals(2, plan.iterations.size)
+        assertTrue(plan.iterations.last().thread.isStreaming)
     }
 
     @Test
-    fun streaming_first_plan_has_no_edits() {
+    fun streaming_first_plan_is_a_single_streaming_iteration() {
         val streaming = StreamingTurn(sessionId = "s", turnIndex = 0, blocks = listOf(ContentBlock.Thinking(thinking = "deciding")), startedAtMs = 0L)
         val plan = requireNotNull(AiPlanMapper.buildPlan(emptyList(), streaming, emptyList()))
-        assertTrue(plan.plan.isStreaming)
-        assertTrue(plan.edits.isEmpty())
+        assertEquals(1, plan.iterations.size)
+        assertTrue(plan.iterations.single().thread.isStreaming)
+        assertEquals("Planned", plan.iterations.single().systemMessage)
     }
 
     @Test
-    fun edit_time_label_formats_hh_mm() {
+    fun iteration_time_label_formats_hh_mm() {
         val iso = "2026-05-22T08:35:00Z"
         val createdAt = Instant.parse(iso).toEpochMilliseconds()
         val rows = listOf(assistant(0, createdAt = 0L), assistant(1, createdAt = createdAt))
-        val edit = requireNotNull(AiPlanMapper.buildPlan(rows, null, emptyList())).edits.single()
-        assertEquals(localHhMm(iso), edit.timeLabel)
+        val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, emptyList()))
+        assertEquals(localHhMm(iso), plan.iterations.last().timeLabel)
     }
 }

@@ -110,8 +110,8 @@ class HomeViewModelTest {
                     startedAtMs = 0L,
                 ),
             )
-            while (state.aiPlan?.plan?.response == null) state = awaitItem()
-            val thread = requireNotNull(state.aiPlan).plan
+            while (state.aiPlan?.iterations?.lastOrNull()?.thread?.response == null) state = awaitItem()
+            val thread = requireNotNull(state.aiPlan).iterations.last().thread
             assertEquals("Streaming answer…", thread.response)
             assertTrue(thread.isStreaming)
             assertTrue(state.isRetrying) // running spinner tracks the live stream, not just WorkManager

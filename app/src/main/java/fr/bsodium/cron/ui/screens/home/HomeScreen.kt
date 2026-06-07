@@ -66,11 +66,9 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    // At most one turn streams at a time (the plan, or the latest edit). Typewriter-reveal that sub-thread
-    // and splice it back so the rest of the plan renders settled.
-    val streamingThread = uiState.aiPlan?.let { plan ->
-        plan.edits.lastOrNull { it.thread.isStreaming }?.thread ?: plan.plan.takeIf { it.isStreaming }
-    }
+    // At most one iteration streams at a time (always the latest). Typewriter-reveal that sub-thread and
+    // splice it back so the rest of the plan renders settled.
+    val streamingThread = uiState.aiPlan?.iterations?.lastOrNull { it.thread.isStreaming }?.thread
     val revealed = rememberRevealedThread(streamingThread)
     val displayPlan = uiState.aiPlan?.withStreamingReplaced(revealed)
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.

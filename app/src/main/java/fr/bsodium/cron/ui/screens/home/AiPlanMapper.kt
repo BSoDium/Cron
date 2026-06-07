@@ -9,14 +9,13 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 
-/** The original plan (turn 0) plus the replans that followed it, shown as ChatGPT-style rounds. */
+/** The session's AI turns as a chronological list of iterations; the last entry is the latest. */
 data class AiPlanUi(
-    val plan: AiThreadUi,
-    val edits: List<AiEditUi>,
+    val iterations: List<AiIterationUi>,
 )
 
-/** A single replan round: a [systemMessage] for the event that triggered the rerun, plus the full [thread]. */
-data class AiEditUi(
+/** One planning iteration: a [systemMessage] for what triggered it, plus the full [thread] at [timeLabel]. */
+data class AiIterationUi(
     val turnIndex: Int,
     val timeLabel: String,
     val systemMessage: String,
@@ -24,21 +23,20 @@ data class AiEditUi(
 )
 
 /**
- * Swaps in the typewriter-[revealed] view of whichever turn is streaming (the plan or the last edit),
- * matched by `turnIndex`. A null [revealed] (nothing streaming) returns this plan unchanged, so a
- * just-settled edit renders from the DB view without a flash.
+ * Swaps in the typewriter-[revealed] view of whichever iteration is streaming, matched by `turnIndex`.
+ * A null [revealed] (nothing streaming) returns this plan unchanged, so a just-settled iteration renders
+ * from the DB view without a flash.
  */
 fun AiPlanUi.withStreamingReplaced(revealed: AiThreadUi?): AiPlanUi {
     if (revealed == null) return this
-    if (plan.turnIndex == revealed.turnIndex) return copy(plan = revealed)
-    return copy(edits = edits.map { if (it.turnIndex == revealed.turnIndex) it.copy(thread = revealed) else it })
+    return copy(iterations = iterations.map { if (it.turnIndex == revealed.turnIndex) it.copy(thread = revealed) else it })
 }
 
 /**
- * Folds the session's AI turns into the original [AiPlanUi.plan] (lowest turn) plus the later turns as
- * replan rounds. Each round's [AiEditUi.systemMessage] names the event that triggered the rerun, found
- * by matching the turn's start time against the session [events]. Pure mapping (delegates per-turn
- * rendering to [AiThreadMapper]).
+ * Folds the session's AI turns into a chronological list of [AiIterationUi]. The original (lowest) turn
+ * reads "Planned"; each later turn's [AiIterationUi.systemMessage] names the event that triggered the
+ * rerun, found by matching the turn's start time against the session [events]. Pure mapping (delegates
+ * per-turn rendering to [AiThreadMapper]).
  */
 object AiPlanMapper {
 
@@ -52,7 +50,7 @@ object AiPlanMapper {
         val turns = (byTurn.keys + listOfNotNull(streamingTurn)).toSortedSet()
         if (turns.isEmpty()) return null
 
-        // The live partial overrides the persisted rows of its turn → never a duplicate/stale round.
+        // The live partial overrides the persisted rows of its turn → never a duplicate/stale iteration.
         fun threadOf(turn: Int): AiThreadUi =
             if (turn == streamingTurn && streaming != null) AiThreadMapper.buildFromBlocks(turn, streaming.blocks)
             else AiThreadMapper.build(byTurn.getValue(turn)) ?: AiThreadUi(turn, summary = null, process = emptyList(), response = null)
@@ -70,22 +68,27 @@ object AiPlanMapper {
             return String.format(Locale.US, "%02d:%02d", local.hour, local.minute)
         }
 
-        val plan = threadOf(turns.first())
-        val edits = turns.drop(1).map { turn ->
-            // The triggering event is the latest one appended at/before the turn started.
-            val start = startOf(turn)
-            val trigger = events.filter { it.timestamp.toEpochMilliseconds() <= start }.maxByOrNull { it.timestamp }
-            AiEditUi(
+        val iterations = turns.mapIndexed { index, turn ->
+            // The original evening plan reads "Planned"; later turns are named by their triggering event
+            // (the latest one appended at/before the turn started).
+            val systemMessage = if (index == 0) {
+                "Planned"
+            } else {
+                val start = startOf(turn)
+                val trigger = events.filter { it.timestamp.toEpochMilliseconds() <= start }.maxByOrNull { it.timestamp }
+                triggerMessageOf(trigger)
+            }
+            AiIterationUi(
                 turnIndex = turn,
                 timeLabel = timeLabelOf(turn),
-                systemMessage = triggerMessageOf(trigger),
+                systemMessage = systemMessage,
                 thread = threadOf(turn),
             )
         }
-        return AiPlanUi(plan = plan, edits = edits)
+        return AiPlanUi(iterations = iterations)
     }
 
-    /** A short "what happened" line for a replan round. Exhaustive over [TriggerType]. */
+    /** A short "what happened" line for a replan iteration. Exhaustive over [TriggerType]. */
     private fun triggerMessageOf(event: SessionEvent?): String = when (event?.trigger) {
         null -> "Re-planned"
         TriggerType.EveningPlan -> "Re-planned"
