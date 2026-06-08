@@ -26,19 +26,29 @@ private val DarkOnBackground = Color(0xFFF2F2F2)
 private val DarkOnSurfaceVariant = Color(0xFFA8A8AC)
 private val DarkOutline = Color(0xFF2A2A30)
 
+// Varied accents (Material You "apply varied accents") for the non-dynamic fallback — a cool teal
+// secondary and a soft blue tertiary alongside the warm primary, so accent-coded UI (trigger headers,
+// containers) reads as more than one hue on Android < 12. Dynamic colour supplies these on 12+.
+private val DarkSecondary = Color(0xFF8FC7B3)
+private val DarkSecondaryContainer = Color(0xFF1E2A26)
+private val DarkOnSecondaryContainer = Color(0xFFBFE3D5)
+private val DarkTertiary = Color(0xFF9CB8E0)
+private val DarkTertiaryContainer = Color(0xFF1C2330)
+private val DarkOnTertiaryContainer = Color(0xFFC9DCF2)
+
 val FallbackDarkColors = darkColorScheme(
     primary = FallbackAccent,
     onPrimary = FallbackOnAccent,
     primaryContainer = FallbackAccent,
     onPrimaryContainer = FallbackOnAccent,
-    secondary = FallbackAccent,
+    secondary = DarkSecondary,
     onSecondary = FallbackOnAccent,
-    secondaryContainer = DarkSurfaceContainer,
-    onSecondaryContainer = DarkOnBackground,
-    tertiary = FallbackAccent,
+    secondaryContainer = DarkSecondaryContainer,
+    onSecondaryContainer = DarkOnSecondaryContainer,
+    tertiary = DarkTertiary,
     onTertiary = FallbackOnAccent,
-    tertiaryContainer = DarkSurfaceContainer,
-    onTertiaryContainer = DarkOnBackground,
+    tertiaryContainer = DarkTertiaryContainer,
+    onTertiaryContainer = DarkOnTertiaryContainer,
     background = DarkBackground,
     onBackground = DarkOnBackground,
     surface = DarkSurface,
@@ -66,19 +76,27 @@ private val LightOnBackground = Color(0xFF141414)
 private val LightOnSurfaceVariant = Color(0xFF6B6B6B)
 private val LightOutline = Color(0xFFD9D2C7)
 
+// Varied accents for the light fallback — deep teal secondary, deep blue tertiary (see the dark note).
+private val LightSecondary = Color(0xFF3D6655)
+private val LightSecondaryContainer = Color(0xFFD6E8DF)
+private val LightOnSecondaryContainer = Color(0xFF15291F)
+private val LightTertiary = Color(0xFF3A5680)
+private val LightTertiaryContainer = Color(0xFFDAE2F1)
+private val LightOnTertiaryContainer = Color(0xFF152030)
+
 val FallbackLightColors = lightColorScheme(
     primary = FallbackOnAccent,
     onPrimary = Color.White,
     primaryContainer = FallbackAccent,
     onPrimaryContainer = FallbackOnAccent,
-    secondary = FallbackOnAccent,
+    secondary = LightSecondary,
     onSecondary = Color.White,
-    secondaryContainer = LightSurfaceContainer,
-    onSecondaryContainer = LightOnBackground,
-    tertiary = FallbackOnAccent,
+    secondaryContainer = LightSecondaryContainer,
+    onSecondaryContainer = LightOnSecondaryContainer,
+    tertiary = LightTertiary,
     onTertiary = Color.White,
-    tertiaryContainer = LightSurfaceContainer,
-    onTertiaryContainer = LightOnBackground,
+    tertiaryContainer = LightTertiaryContainer,
+    onTertiaryContainer = LightOnTertiaryContainer,
     background = LightBackground,
     onBackground = LightOnBackground,
     surface = LightSurface,

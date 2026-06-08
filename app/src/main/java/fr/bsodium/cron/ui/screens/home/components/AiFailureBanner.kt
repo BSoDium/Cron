@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,8 +18,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.AiTurnFailure
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 import java.util.Locale
 
 /** Dismissible error surface explaining why the latest AI turn didn't update the plan. */
@@ -52,8 +51,8 @@ internal fun AiFailureBanner(
             ) {
                 TextButton(onClick = { onOpenSettings(); onDismiss() }) { Text("Open settings") }
                 IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
+                    Symbol(
+                        symbol = MaterialSymbol.Close,
                         contentDescription = "Dismiss",
                         tint = MaterialTheme.colorScheme.onErrorContainer,
                     )

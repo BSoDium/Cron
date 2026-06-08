@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -88,6 +89,10 @@ internal fun HomePlanContent(
     // Reserves the FULL (expanded) card height (fed by the card's own measure), decoupled from the
     // collapsing render height so collapse can't feed back.
     var cardFullHeightPx by remember { mutableIntStateOf(0) }
+    // Sticky tab strip height (fixed) — reserved below the card so scrolling content starts clear of it.
+    var tabsHeightPx by remember { mutableIntStateOf(0) }
+    // The history strip only earns its space with more than one run; a single planning pass shows none.
+    val hasTabs = plan.iterations.size > 1
 
     val collapseSafeTopPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
     val collapseRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
@@ -186,7 +191,7 @@ internal fun HomePlanContent(
             contentPadding = PaddingValues(
                 start = Spacing.xl,
                 end = Spacing.xl,
-                top = statusInsetTop + Spacing.xxl,
+                top = statusInsetTop + Spacing.sm,
                 // navBarClearance clears the pill; the extra xxxl matches the EdgeFades bottom
                 // gradient's own xxxl so the last content (the thinking shape) rests above the fade.
                 bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
@@ -204,21 +209,16 @@ internal fun HomePlanContent(
                 )
             }
             item(key = "alarm-spacer") {
-                Spacer(Modifier.height(with(density) { cardFullHeightPx.toDp() }))
-            }
-            if (plan.iterations.size > 1) {
-                item(key = "history") {
-                    ReplanHistoryBar(
-                        modifier = Modifier.padding(top = Spacing.sm),
-                        iterations = plan.iterations,
-                        selectedTurn = selectedTurn,
-                        onSelect = { selectedTurn = it },
-                    )
-                }
+                // Reserve the expanded card AND the sticky tab strip below it, so scrolling content
+                // starts clear of both (the strip is rendered in the StickyAlarm overlay, not the list).
+                // When tabs show, add a gap below them matching the thread's thinking→response spacing so
+                // the strip sits symmetrically above the thinking block.
+                val stripGapPx = with(density) { Spacing.sm.roundToPx() }
+                val reservePx = cardFullHeightPx + if (hasTabs) tabsHeightPx + stripGapPx else 0
+                Spacer(Modifier.height(with(density) { reservePx.toDp() }))
             }
             item(key = "thread") {
                 AiThinkingThread(
-                    modifier = Modifier.padding(top = Spacing.sm),
                     thread = thread,
                     isRunning = uiState.isRetrying,
                     expanded = thinkingExpanded,
@@ -256,13 +256,27 @@ internal fun HomePlanContent(
             top = collapse.top,
             gradientAlpha = collapse.gradientAlpha,
             collapseFraction = collapse.fraction,
+            // The history tabs ride in the overlay (above the scrim), sticky right below the card, so the
+            // scroll gradient never fades them. Lifted out of the list for that reason.
+            belowCard = if (hasTabs) {
+                {
+                    ReplanHistoryBar(
+                        iterations = plan.iterations,
+                        selectedTurn = selectedTurn,
+                        onSelect = { selectedTurn = it },
+                        hapticsEnabled = uiState.hapticsEnabled,
+                    )
+                }
+            } else {
+                null
+            },
+            onBelowCardHeight = { tabsHeightPx = it },
         ) { collapseFraction ->
             CollapsibleAlarmCard(
                 dateLabel = uiState.dateLabel,
                 alarmTime = uiState.sessionDisplay?.alarmTime,
                 sleepDurationLabel = uiState.sleepStats?.durationLabel,
                 sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-                autoAlarmsEnabled = uiState.autoAlarmsEnabled,
                 collapseFraction = collapseFraction,
                 onFullHeight = { cardFullHeightPx = it },
             )
@@ -282,12 +296,15 @@ private fun BoxScope.StickyAlarm(
     top: Int,
     gradientAlpha: Float,
     collapseFraction: Float,
+    belowCard: (@Composable () -> Unit)? = null,
+    onBelowCardHeight: (Int) -> Unit = {},
     card: @Composable (collapseFraction: Float) -> Unit,
 ) {
     val density = LocalDensity.current
     val background = MaterialTheme.colorScheme.background
-    // Scrim tracks the card's CURRENT (collapsing) visible height — independent of the spacer's full
-    // reservation — so the solid band always hugs the shrinking card bottom.
+    // Scrim tracks the CURRENT (collapsing) visible height of the card + its sticky strip — independent
+    // of the spacer's full reservation — so the solid band always hugs the bottom of what's pinned, and
+    // the strip sits on solid background (never faded), with content below dissolving into the page.
     var visiblePx by remember { mutableIntStateOf(0) }
     val cardBottomPx = safeTopPx + visiblePx
     val belowFadePx = with(density) { Spacing.xxxl.toPx() }
@@ -310,9 +327,20 @@ private fun BoxScope.StickyAlarm(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { translationY = top.toFloat() }
-            // Hugs at 12dp (tighter than the 20dp content) — kept constant so the collapsed bar
-            // holds the same width/margin as the expanded card.
-            .padding(horizontal = Spacing.md)
             .onSizeChanged { if (it.height != visiblePx) visiblePx = it.height },
-    ) { card(collapseFraction) }
+    ) {
+        Column {
+            // Card hugs at 12dp (tighter than the 20dp content), constant across collapse. The tab strip
+            // below it gets a FULL-WIDTH scroll viewport (tabs clip at the screen edge) with its own
+            // internal 12dp content padding, so at rest the tabs line up with the card.
+            Box(Modifier.padding(horizontal = Spacing.md)) { card(collapseFraction) }
+            if (belowCard != null) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = Spacing.sm)
+                        .onSizeChanged { onBelowCardHeight(it.height) },
+                ) { belowCard() }
+            }
+        }
+    }
 }

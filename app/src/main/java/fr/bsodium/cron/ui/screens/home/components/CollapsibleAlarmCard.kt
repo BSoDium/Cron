@@ -48,7 +48,6 @@ internal fun CollapsibleAlarmCard(
     alarmTime: LocalTime?,
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
-    autoAlarmsEnabled: Boolean,
     collapseFraction: Float,
     onFullHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -129,21 +128,12 @@ internal fun CollapsibleAlarmCard(
                 }
                 CountdownStack(countdown = cd, progress = progress, color = countdownColor, alignFraction = f)
             }.first().measure(cWrap)
-            // Auto-alarms status badge: collapsed-only. Scales + fades in from its final position's left
-            // edge / vertical centre as the card collapses (placement below). Drawn on top, never faded
-            // with extras.
-            val badge = subcompose("badge") {
-                AlarmStatusBadge(enabled = autoAlarmsEnabled, diameter = BADGE_DIAMETER)
-            }.first().measure(cWrap)
 
             val w = extras.width
             val startPad = Spacing.xxl.roundToPx()
             val topPad = Spacing.xl.roundToPx()
             val endPad = Spacing.xxl.roundToPx()
             val cdGap = (Spacing.xs + Spacing.xxs).roundToPx()
-            // Collapsed: the badge nests concentric in the pill's left cap (centre = barHeight/2); the
-            // clock starts just past its right edge so the time clears the badge.
-            val collapsedClockX = (barHeight - badge.width) / 2 + badge.width + BADGE_CLOCK_GAP.roundToPx()
             val height = lerp(extras.height, barHeight, f)
 
             val expandedClockY = topPad + date.height
@@ -166,9 +156,9 @@ internal fun CollapsibleAlarmCard(
                         alpha = extrasAlpha
                     }
                 }
-                // Clock: left-edge anchored; pivot on the digit-ink centre so scaling + translation land
-                // the ink dead-centre in the pill.
-                clock.placeWithLayer(lerp(startPad.toFloat(), collapsedClockX.toFloat(), f).roundToInt(), expandedClockY) {
+                // Clock: left-anchored at startPad in BOTH states (the collapsed time stays left-aligned);
+                // pivot on the digit-ink centre so scaling + translation land the ink dead-centre in the pill.
+                clock.placeWithLayer(startPad, expandedClockY) {
                     scaleX = clockScale
                     scaleY = clockScale
                     transformOrigin = TransformOrigin(0f, ink.centerFraction)
@@ -179,20 +169,6 @@ internal fun CollapsibleAlarmCard(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
-                // Badge (collapsed-only): nests concentric in the pill's left cap, scaling + fading in
-                // from its final position's left edge / vertical centre (pivot 0, 0.5) as the card
-                // collapses — it grows out of the pill rather than sliding across it.
-                badge.let {
-                    val nestedLeft = (barHeight - it.width) / 2
-                    val nestedTop = (barHeight - it.height) / 2
-                    it.placeWithLayer(nestedLeft, nestedTop) {
-                        alpha = f
-                        val s = lerp(0.5f, 1f, f)
-                        scaleX = s
-                        scaleY = s
-                        transformOrigin = TransformOrigin(0f, 0.5f)
-                    }
-                }
             }
         }
     }
@@ -209,7 +185,6 @@ private fun CollapsedAlarmCardPreview() {
                 alarmTime = LocalTime(10, 0),
                 sleepDurationLabel = "7H 28M",
                 sleepSegments = PREVIEW_SLEEP_SEGMENTS,
-                autoAlarmsEnabled = false,
                 collapseFraction = 1f,
                 onFullHeight = {},
             )
@@ -232,7 +207,6 @@ private fun CollapsibleAlarmCardPreview() {
                     alarmTime = LocalTime(10, 0),
                     sleepDurationLabel = "7H 28M",
                     sleepSegments = PREVIEW_SLEEP_SEGMENTS,
-                    autoAlarmsEnabled = true,
                     collapseFraction = frac,
                     onFullHeight = {},
                 )

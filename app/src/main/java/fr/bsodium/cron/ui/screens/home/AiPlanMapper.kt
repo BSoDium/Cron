@@ -14,11 +14,13 @@ data class AiPlanUi(
     val iterations: List<AiIterationUi>,
 )
 
-/** One planning iteration: a [systemMessage] for what triggered it, plus the full [thread] at [timeLabel]. */
+/** One planning iteration: a [systemMessage] for what triggered it (with the raw [trigger] for its
+ *  icon/accent), plus the full [thread] at [timeLabel]. */
 data class AiIterationUi(
     val turnIndex: Int,
     val timeLabel: String,
     val systemMessage: String,
+    val trigger: TriggerType?,
     val thread: AiThreadUi,
 )
 
@@ -71,17 +73,15 @@ object AiPlanMapper {
         val iterations = turns.mapIndexed { index, turn ->
             // The original evening plan reads "Planned"; later turns are named by their triggering event
             // (the latest one appended at/before the turn started).
-            val systemMessage = if (index == 0) {
-                "Planned"
-            } else {
+            val triggerEvent = if (index == 0) null else {
                 val start = startOf(turn)
-                val trigger = events.filter { it.timestamp.toEpochMilliseconds() <= start }.maxByOrNull { it.timestamp }
-                triggerMessageOf(trigger)
+                events.filter { it.timestamp.toEpochMilliseconds() <= start }.maxByOrNull { it.timestamp }
             }
             AiIterationUi(
                 turnIndex = turn,
                 timeLabel = timeLabelOf(turn),
-                systemMessage = systemMessage,
+                systemMessage = if (index == 0) "Planned" else triggerMessageOf(triggerEvent),
+                trigger = triggerEvent?.trigger,
                 thread = threadOf(turn),
             )
         }

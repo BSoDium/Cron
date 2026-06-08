@@ -19,6 +19,7 @@ import fr.bsodium.cron.session.db.SessionEntity
 import fr.bsodium.cron.session.db.SessionEventEntity
 import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.session.db.toModel
+import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionEvent
@@ -41,7 +42,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toJavaLocalDate
 import java.time.LocalDate as JavaLocalDate
 import java.time.format.DateTimeFormatter
@@ -220,15 +223,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Toggle automatic alarm planning. ON re-arms the nightly trigger; OFF cancels it and tears down
-     * everything armed for the current session (the AI alarm, the hard-latest safety alarm, and any
-     * in-flight AI turn) so nothing is left to ring.
+     * Toggle automatic alarm planning. ON re-arms the nightly trigger AND re-applies the current
+     * session's already-decided alarm + safety floor to AlarmManager (so Android actually has them);
+     * OFF cancels the trigger and tears down everything armed for the current session (the AI alarm,
+     * the hard-latest safety alarm, and any in-flight AI turn) so nothing is left to ring.
      */
     fun setAutoAlarmsEnabled(enabled: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             settings.setAutoAlarmsEnabled(enabled)
             if (enabled) {
                 eveningPlanScheduler.armNext()
+                // Re-arm what the current session already decided — toggling ON must make Android aware
+                // of the alarm again (symmetry with the OFF teardown below). The clock pref alone did nothing.
+                repository.findCurrent()?.let { session ->
+                    val tz = TimeZone.of(session.timezone)
+                    hardLatestScheduler.arm(session.plan.hardLatest, session.date, tz, session.id)
+                    val instr = session.currentInstruction
+                    val alarmTime = instr.alarmTime
+                    if (instr.action == ActionType.SetAlarm && alarmTime != null) {
+                        val requested = LocalDateTime(
+                            session.date.year, session.date.monthNumber, session.date.dayOfMonth,
+                            alarmTime.hour, alarmTime.minute, alarmTime.second, alarmTime.nanosecond,
+                        ).toInstant(tz)
+                        alarmScheduler.schedule(
+                            requested = requested,
+                            hardLatest = session.plan.hardLatest,
+                            sessionDate = session.date,
+                            timezone = tz,
+                            label = instr.reason.ifBlank { "Cron Alarm" },
+                            sessionId = session.id,
+                        )
+                    }
+                }
             } else {
                 eveningPlanScheduler.cancel()
                 repository.findCurrent()?.let { session ->

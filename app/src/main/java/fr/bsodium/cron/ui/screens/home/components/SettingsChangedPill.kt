@@ -3,9 +3,6 @@ package fr.bsodium.cron.ui.screens.home.components
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -16,8 +13,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 
 /** Floating pill offering to re-run the plan after a plan-affecting setting changed. */
 @Composable
@@ -46,8 +45,8 @@ internal fun SettingsChangedPill(
             )
             TextButton(onClick = onRewrite) { Text("Replan alarm") }
             IconButton(onClick = onDismiss) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
+                Symbol(
+                    symbol = MaterialSymbol.Close,
                     contentDescription = "Dismiss",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
