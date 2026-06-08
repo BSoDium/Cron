@@ -14,21 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Article
-import androidx.compose.material.icons.outlined.Alarm
-import androidx.compose.material.icons.outlined.AlarmOff
-import androidx.compose.material.icons.outlined.Bedtime
-import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.DirectionsCar
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,20 +31,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 
 private val STEP_ICON_SIZE = 16.dp
 
@@ -75,11 +60,11 @@ private val REASONING_FADE_HEIGHT = 56.dp
 private val REASONING_HEIGHT_SPEC = tween<Int>(durationMillis = 200, easing = FastOutSlowInEasing)
 
 @Composable
-private fun ThinkingIcon() = Icon(
-    painter = painterResource(R.drawable.ic_thinking),
+private fun ThinkingIcon() = Symbol(
+    symbol = MaterialSymbol.SearchActivity,
     contentDescription = null,
     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-    modifier = Modifier.size(STEP_ICON_SIZE),
+    size = STEP_ICON_SIZE,
 )
 
 /** Line height of a step's first line, used to centre its icon on that line. */
@@ -140,11 +125,11 @@ internal fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
                         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        Symbol(
+                            symbol = if (expanded) MaterialSymbol.ExpandLess else MaterialSymbol.ExpandMore,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(STEP_ICON_SIZE),
+                            size = STEP_ICON_SIZE,
                         )
                         Text(
                             text = if (expanded) "See less" else "See more",
@@ -200,17 +185,17 @@ private fun ClippedReveal(
     }
 }
 
-/** Outlined icon for each tool's operation; wrench for anything unmapped. */
-internal fun toolIcon(name: String): ImageVector = when (name) {
-    "read_calendar" -> Icons.Outlined.CalendarMonth
-    "set_alarm" -> Icons.Outlined.Alarm
-    "cancel_alarm" -> Icons.Outlined.AlarmOff
-    "estimate_commute", "estimate_commute_multi_mode" -> Icons.Outlined.DirectionsCar
-    "geocode_address" -> Icons.Outlined.LocationOn
-    "notify_warning" -> Icons.Outlined.WarningAmber
-    "send_brief" -> Icons.AutoMirrored.Outlined.Article
-    "do_nothing" -> Icons.Outlined.Bedtime
-    else -> Icons.Outlined.Build
+/** The Material Symbol for each tool's operation; wrench for anything unmapped. */
+internal fun toolSymbol(name: String): MaterialSymbol = when (name) {
+    "read_calendar" -> MaterialSymbol.CalendarMonth
+    "set_alarm" -> MaterialSymbol.Alarm
+    "cancel_alarm" -> MaterialSymbol.AlarmOff
+    "estimate_commute", "estimate_commute_multi_mode" -> MaterialSymbol.DirectionsCar
+    "geocode_address" -> MaterialSymbol.LocationOn
+    "notify_warning" -> MaterialSymbol.Warning
+    "send_brief" -> MaterialSymbol.Article
+    "do_nothing" -> MaterialSymbol.Bedtime
+    else -> MaterialSymbol.Build
 }
 
 @Composable
@@ -220,11 +205,11 @@ internal fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boole
         isFirst = isFirst,
         isLast = isLast,
         icon = {
-            Icon(
-                imageVector = toolIcon(step.name),
+            Symbol(
+                symbol = toolSymbol(step.name),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(STEP_ICON_SIZE),
+                size = STEP_ICON_SIZE,
             )
         },
     ) {
@@ -261,11 +246,11 @@ internal fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boole
                         strokeWidth = SPINNER_STROKE,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    step.isError -> Icon(
-                        imageVector = Icons.Outlined.WarningAmber,
+                    step.isError -> Symbol(
+                        symbol = MaterialSymbol.Warning,
                         contentDescription = "Failed",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(STEP_ICON_SIZE),
+                        size = STEP_ICON_SIZE,
                     )
                     step.contextLabel != null -> Text(
                         text = step.contextLabel,
@@ -275,11 +260,11 @@ internal fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boole
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.End,
                     )
-                    else -> Icon(
-                        imageVector = Icons.Outlined.Check,
+                    else -> Symbol(
+                        symbol = MaterialSymbol.Check,
                         contentDescription = "Done",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(STEP_ICON_SIZE),
+                        size = STEP_ICON_SIZE,
                     )
                 }
             }
@@ -294,11 +279,11 @@ internal fun DoneRow(isFirst: Boolean, isLast: Boolean) {
         isFirst = isFirst,
         isLast = isLast,
         icon = {
-        Icon(
-            imageVector = Icons.Outlined.Check,
+        Symbol(
+            symbol = MaterialSymbol.Check,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(STEP_ICON_SIZE),
+            size = STEP_ICON_SIZE,
         )
     }) {
         Text(

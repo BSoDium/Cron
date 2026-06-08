@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,12 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 
 private val CATEGORY_ROW_MIN_HEIGHT = 56.dp
 private val CATEGORY_ICON_CHIP = 40.dp
@@ -40,7 +38,7 @@ private val CATEGORY_ICON_SIZE = 22.dp
  */
 @Composable
 internal fun SettingsCategoryRow(
-    icon: ImageVector,
+    icon: MaterialSymbol,
     title: String,
     subtitle: String,
     shape: Shape,
@@ -67,11 +65,11 @@ internal fun SettingsCategoryRow(
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = icon,
+                Symbol(
+                    symbol = icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(CATEGORY_ICON_SIZE),
+                    size = CATEGORY_ICON_SIZE,
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -95,7 +93,7 @@ internal fun SettingsCategoryRow(
 private fun SettingsCategoryRowPreview() {
     CronTheme {
         SettingsCategoryRow(
-            icon = Icons.Outlined.Schedule,
+            icon = MaterialSymbol.Schedule,
             title = "Schedule",
             subtitle = "When Cron plans tonight's alarm",
             shape = RoundedCornerShape(Radius.xl),

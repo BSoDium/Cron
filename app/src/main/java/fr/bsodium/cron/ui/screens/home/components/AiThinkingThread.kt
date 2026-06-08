@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -16,11 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,7 +44,9 @@ import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 import kotlin.math.roundToInt
 
 private val ROW_MIN_HEIGHT = 48.dp
@@ -110,19 +109,12 @@ fun AiThinkingThread(
         // AnimatedVisibility clipToBounds the block, which clips the streaming markdown to its
         // first-frame (too-small) height as the answer appears. Pure fades never clip. Hold the last
         // answer so the exit renders real content while it fades.
-        val response = thread.response
-        var lastResponse by remember { mutableStateOf("") }
-        LaunchedEffect(response) { if (!response.isNullOrBlank()) lastResponse = response }
-        AnimatedVisibility(
-            visible = !response.isNullOrBlank(),
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
-            Column {
-                Spacer(Modifier.height(Spacing.sm))
-                ResponseBody(response?.takeIf { it.isNotBlank() } ?: lastResponse)
-            }
-        }
+        // The response and the "no response" note share one crossfading slot (see [AnswerArea]).
+        AnswerArea(
+            response = thread.response,
+            inProgress = inProgress,
+            hasProcess = thread.process.isNotEmpty(),
+        )
         val phase = when {
             !inProgress -> ShapePhase.Resting
             thread.response.isNullOrBlank() -> ShapePhase.Thinking
@@ -141,11 +133,11 @@ fun AiThinkingThread(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ArrowDownward,
+                    Symbol(
+                        symbol = MaterialSymbol.ArrowDownward,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(SPINNER_SIZE),
+                        size = SPINNER_SIZE,
                     )
                     Text(
                         text = "Pull to show thinking",
@@ -233,10 +225,11 @@ private fun ThinkingDisclosure(
                     modifier = Modifier.weight(1f),
                 )
                 if (canExpand) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    Symbol(
+                        symbol = MaterialSymbol.KeyboardArrowRight,
                         contentDescription = if (expanded) "Collapse" else "Expand",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        autoMirror = true,
                         modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
                     )
                 }
@@ -324,11 +317,11 @@ private fun ToolStack(tools: List<ProcessItem.Tool>) {
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = toolIcon(tool.name),
+                    Symbol(
+                        symbol = toolSymbol(tool.name),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(TOOL_DISC_ICON),
+                        size = TOOL_DISC_ICON,
                     )
                 }
             }
@@ -343,6 +336,44 @@ private fun ResponseBody(text: String) {
         bodyStyle = CronTypography.bodySerif.copy(color = MaterialTheme.colorScheme.onSurface),
         serif = true,
     )
+}
+
+/**
+ * The answer area below the timeline. The markdown response and the "no response" fallback share ONE
+ * overlapping slot and crossfade (`Box` + `animateContentSize`), so switching to a no-response iteration
+ * doesn't pop the fallback in stacked under the still-fading old answer and then jump when it unmounts.
+ * The fallback matches the serif response size. Lives in its own composable so the two `AnimatedVisibility`
+ * calls resolve to the top-level (Box) overload rather than the enclosing `ColumnScope` one.
+ */
+@Composable
+private fun AnswerArea(
+    response: String?,
+    inProgress: Boolean,
+    hasProcess: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    var lastResponse by remember { mutableStateOf("") }
+    LaunchedEffect(response) { if (!response.isNullOrBlank()) lastResponse = response }
+    val hasAnswer = !response.isNullOrBlank()
+    val showFallback = !inProgress && !hasAnswer && hasProcess
+    Box(modifier = modifier.fillMaxWidth().animateContentSize()) {
+        AnimatedVisibility(visible = hasAnswer, enter = fadeIn(), exit = fadeOut()) {
+            Column {
+                Spacer(Modifier.height(Spacing.sm))
+                ResponseBody(response?.takeIf { it.isNotBlank() } ?: lastResponse)
+            }
+        }
+        AnimatedVisibility(visible = showFallback, enter = fadeIn(), exit = fadeOut()) {
+            Column {
+                Spacer(Modifier.height(Spacing.sm))
+                Text(
+                    text = "Cron didn't write a response.",
+                    style = CronTypography.bodySerif,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 /** Representative thread for previews: a long (collapsible) reasoning block, a few tool steps, and a

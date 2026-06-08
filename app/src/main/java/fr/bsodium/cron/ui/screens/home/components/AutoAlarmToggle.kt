@@ -3,11 +3,6 @@ package fr.bsodium.cron.ui.screens.home.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Alarm
-import androidx.compose.material.icons.outlined.AlarmOff
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -17,7 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 
 /**
  * On/off switch for automatic alarm planning, with an alarm icon in the thumb. Lives at the right end
@@ -37,10 +34,10 @@ internal fun AutoAlarmToggle(
             onCheckedChange = onChange,
             modifier = modifier,
             thumbContent = {
-                Icon(
-                    imageVector = if (enabled) Icons.Outlined.Alarm else Icons.Outlined.AlarmOff,
+                Symbol(
+                    symbol = MaterialSymbol.Alarm,
                     contentDescription = if (enabled) "Auto alarms on" else "Auto alarms off",
-                    modifier = Modifier.size(SwitchDefaults.IconSize),
+                    size = SwitchDefaults.IconSize,
                 )
             },
         )
