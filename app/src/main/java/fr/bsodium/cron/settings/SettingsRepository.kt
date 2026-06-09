@@ -1,6 +1,7 @@
 package fr.bsodium.cron.settings
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -19,6 +20,8 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalTime
 
 private val Context.dataStore by preferencesDataStore(name = "cron_settings")
+
+private const val TAG = "SettingsRepository"
 
 /**
  * Backing store for non-sensitive user preferences.
@@ -58,7 +61,11 @@ class SettingsRepository(private val context: Context) {
         if (raw.isNullOrEmpty()) {
             CommuteMode.entries.toSet()
         } else {
-            raw.mapNotNull { name -> runCatching { CommuteMode.valueOf(name) }.getOrNull() }
+            raw.mapNotNull { name ->
+                runCatching { CommuteMode.valueOf(name) }
+                    .onFailure { Log.w(TAG, "unknown commute mode '$name' in prefs — dropped", it) }
+                    .getOrNull()
+            }
                 .toSet().ifEmpty { CommuteMode.entries.toSet() }
         }
     }

@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import android.util.Log
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +108,9 @@ private fun rememberNameStyle(target: Dp): TextStyle {
             val paint = Paint().apply { this.typeface = tf; textSize = 200f; isAntiAlias = true }
             val fm = paint.fontMetrics
             ((fm.descent - fm.ascent) / 200f).takeIf { it > 0f } ?: LINE_RATIO_FALLBACK
-        }.getOrDefault(LINE_RATIO_FALLBACK)
+        }
+            .onFailure { Log.w("GreetingHeader", "line-ratio measurement failed — using fallback ratio", it) }
+            .getOrDefault(LINE_RATIO_FALLBACK)
         base.copy(
             fontSize = with(density) { (targetPx / ratio).toSp() },
             lineHeight = with(density) { targetPx.toSp() },

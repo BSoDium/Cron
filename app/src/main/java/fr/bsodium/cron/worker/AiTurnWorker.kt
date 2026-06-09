@@ -34,9 +34,9 @@ import fr.bsodium.cron.calendar.CalendarReader
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.model.ActionType
-import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.LocationSource
 import fr.bsodium.cron.session.model.SleepSession
+import fr.bsodium.cron.session.model.latestEveningPlanLocation
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
@@ -151,16 +151,15 @@ class AiTurnWorker(
             val geocoder = GeocodingClient(routesKey, sharedHttp)
             // The device's captured location anchors geocoding + commute to the user's actual area, so
             // ambiguous destinations resolve nearby (not the capital) and the origin is never a bogus (0,0).
-            val bias = session.events.asSequence()
-                .map { it.data }
-                .filterIsInstance<EventData.EveningPlan>()
-                .firstOrNull()
-                ?.location
+            // The LATEST fix, via the shared helper — the prompt reads the same one, so they can't diverge.
+            val bias = session.latestEveningPlanLocation()
                 ?.takeIf { it.source != LocationSource.Unavailable }
                 ?.let { LatLng(it.lat, it.lng) }
             tools.add(GeocodeTool(geocoder, bias))
-            tools.add(EstimateCommuteTool(routesClient, geocoder, bias))
-            tools.add(EstimateCommuteMultiModeTool(routesClient, geocoder, bias))
+            // Enforce the user's allowed commute modes in the tools themselves — prompt prose alone still
+            // hands the model an excluded mode's duration to plan around.
+            tools.add(EstimateCommuteTool(routesClient, geocoder, bias, session.plan.allowedCommuteModes))
+            tools.add(EstimateCommuteMultiModeTool(routesClient, geocoder, bias, session.plan.allowedCommuteModes))
         }
 
         tools.add(SetAlarmTool(

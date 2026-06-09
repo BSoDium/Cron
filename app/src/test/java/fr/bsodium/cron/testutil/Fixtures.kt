@@ -52,12 +52,14 @@ object Fixtures {
         address: String? = "Klagenfurt, Austria",
         source: LocationSource = LocationSource.Gps,
         at: Instant = T0,
+        isManual: Boolean = false,
     ) = SessionEvent(
         trigger = TriggerType.EveningPlan,
         timestamp = at,
         data = EventData.EveningPlan(
             timezone = "Europe/Vienna",
             location = LocationPayload(lat = lat, lng = lng, source = source, capturedAt = at, address = address),
+            isManual = isManual,
         ),
     )
 

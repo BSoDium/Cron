@@ -6,6 +6,7 @@ import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SignalConfidence
 import fr.bsodium.cron.session.model.SleepSession
 import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.session.model.latestEveningPlanLocation
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -32,8 +33,7 @@ object AiPromptBuilder {
     ): String {
         val plan = session.plan
         // Latest evening-plan event, so a manual replan's freshly-captured location wins.
-        val eveningEvent = session.events.lastOrNull { it.trigger == TriggerType.EveningPlan }
-        val location = (eveningEvent?.data as? EventData.EveningPlan)?.location
+        val location = session.latestEveningPlanLocation()
 
         return buildString {
             appendLine("It is now $localNow (${session.timezone}).")
@@ -62,7 +62,7 @@ object AiPromptBuilder {
             appendLine("## Current location")
             appendLine("- Latitude: ${location.lat}, Longitude: ${location.lng}")
             location.address?.let { appendLine("- Address: $it") }
-            appendLine("- Source: ${location.source.name.lowercase()}")
+            appendLine("- Source: ${location.source.wireToken}")
             appendLine("- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}")
             appendLine("- Captured at: ${location.capturedAt}")
         } else {
@@ -98,8 +98,7 @@ object AiPromptBuilder {
         val instr = session.currentInstruction
         // Same origin the evening plan captured — without it the replan model has no coordinates and
         // guesses a city.
-        val location = (session.events.lastOrNull { it.trigger == TriggerType.EveningPlan }
-            ?.data as? EventData.EveningPlan)?.location
+        val location = session.latestEveningPlanLocation()
 
         return buildString {
             appendLine("It is now $localNow (${session.timezone}).")
@@ -139,7 +138,7 @@ object AiPromptBuilder {
     }
 
     private fun summarizeEventData(event: SessionEvent): String = when (val d = event.data) {
-        is EventData.EveningPlan -> "timezone=${d.timezone}, location_source=${d.location.source}"
+        is EventData.EveningPlan -> "timezone=${d.timezone}, location_source=${d.location.source.wireToken}"
         is EventData.SleepOnset -> "screen_off_since=${d.screenOffSince}, rearm=${d.rearm}"
         is EventData.HcStageUpdate -> "stage=${d.stage}, source=${d.source}, confidence=${d.confidence}"
         is EventData.MidSleepActivity -> "activity=${d.activityType}, screen_on=${d.screenOn}, duration=${d.durationSeconds}s"

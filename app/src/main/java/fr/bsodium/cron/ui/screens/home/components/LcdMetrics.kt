@@ -1,5 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import fr.bsodium.cron.ui.theme.LCD_FONT_SIZE
+import android.util.Log
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -37,7 +39,7 @@ internal fun rememberLcdInkMetrics(): LcdInkMetrics {
         val fallback = LcdInkMetrics(
             centerFraction = 0.5f,
             heightFraction = 0.7f,
-            lineBoxPx = with(density) { 76.sp.toPx() },
+            lineBoxPx = with(density) { LCD_FONT_SIZE.toPx() },
         )
         runCatching {
             val typeface = resolver.resolve(
@@ -48,7 +50,7 @@ internal fun rememberLcdInkMetrics(): LcdInkMetrics {
             ).value as? Typeface ?: return@runCatching fallback
             val paint = Paint().apply {
                 this.typeface = typeface
-                this.textSize = with(density) { 76.sp.toPx() }
+                this.textSize = with(density) { LCD_FONT_SIZE.toPx() }
                 this.isAntiAlias = true
             }
             val fm = paint.fontMetrics
@@ -64,6 +66,8 @@ internal fun rememberLcdInkMetrics(): LcdInkMetrics {
                 heightFraction = ((inkBottom - inkTop) / lineBox).coerceIn(0.1f, 1f),
                 lineBoxPx = lineBox,
             )
-        }.getOrDefault(fallback)
+        }
+            .onFailure { Log.w("LcdMetrics", "LCD ink metrics measurement failed — using fallback ratios", it) }
+            .getOrDefault(fallback)
     }
 }

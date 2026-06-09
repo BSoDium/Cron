@@ -181,7 +181,45 @@ object CronTypography {
 
     /** Smaller code label — tool-call name chips and result labels in the thinking timeline. */
     val labelMonoSmall: TextStyle = labelMono.copy(fontSize = 11.sp, lineHeight = 15.sp)
+
+    /** Bold code label — emphasis pills (e.g. the sleep-duration badge). */
+    val labelMonoBold: TextStyle = labelMono.copy(fontWeight = FontWeight.Bold)
+
+    /** Mono tile heading — section titles inside card tiles ("Sleep"). */
+    val titleMono: TextStyle = TextStyle(
+        fontFamily = CodeFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 18.sp,
+        lineHeight = 24.sp,
+    )
+
+    /** The hero LCD clock face — the big slashed-zero alarm time on the card. */
+    val lcdHero: TextStyle = tight.copy(
+        fontFamily = LcdFontFamily,
+        fontSize = LCD_FONT_SIZE,
+        lineHeight = LCD_FONT_SIZE,
+    )
+
+    /** Compact two-line LCD stack — the remaining/status block beside the hero clock.
+     *  lineHeight < fontSize tightens the leading so the stack reads as one unit. */
+    val lcdStack: TextStyle = tight.copy(
+        fontFamily = DisplayFontFamily,
+        fontSize = 24.sp,
+        lineHeight = 21.sp,
+    )
+
+    /** Small mono clock figures on tiles (sleep-timeline tick labels). */
+    val timeMono: TextStyle = tight.copy(
+        fontFamily = CodeFontFamily,
+        fontSize = 16.sp,
+        lineHeight = 16.sp,
+    )
 }
+
+/** The hero LCD clock size — the SINGLE source for the 76sp contract shared by the rendered clock
+ *  ([CronTypography.lcdHero]), the measured ink metrics (LcdMetrics), and the collapse geometry that
+ *  derives from them. Change it here and every consumer follows. */
+internal val LCD_FONT_SIZE = 76.sp
 
 /**
  * Shared no-padding text style for tight headline rows. Stripping the default

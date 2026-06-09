@@ -13,6 +13,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.RunKind
+import fr.bsodium.cron.ui.screens.home.label
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
@@ -41,42 +42,30 @@ internal fun triggerSymbol(trigger: TriggerType?): MaterialSymbol = when (trigge
     TriggerType.HardLatestFired -> MaterialSymbol.NotificationImportant
 }
 
-private fun triggerLabel(trigger: TriggerType?): String = when (trigger) {
-    null -> "Planned (scheduled)"
-    TriggerType.EveningPlan -> "Re-planned (manual)"
-    TriggerType.CalendarChange -> "Your schedule changed"
-    TriggerType.SleepOnset -> "You fell asleep"
-    TriggerType.HcStageUpdate -> "Sleep stage update"
-    TriggerType.MidSleepActivity -> "Movement mid-sleep"
-    TriggerType.OutOfBedConfirmed -> "You got out of bed"
-    TriggerType.WakeWindowOpportunity -> "A good moment to wake"
-    TriggerType.AlarmSnoozed -> "You snoozed the alarm"
-    TriggerType.AlarmDismissed -> "You dismissed the alarm"
-    TriggerType.HardLatestFired -> "Hard-latest backstop fired"
-}
-
 @Preview(showBackground = true)
 @Composable
 private fun TriggerIconsPreview() {
-    val triggers: List<TriggerType?> = listOf(null) + TriggerType.entries
+    // Real production kinds → the preview renders the exact icon/label pairs the app ships.
+    val kinds: List<RunKind> = listOf(RunKind.ScheduledBase, RunKind.ManualBase) +
+        TriggerType.entries.map { RunKind.Replan(it) }
     CronTheme {
         Column(
             modifier = Modifier.padding(Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            triggers.forEach { trigger ->
+            kinds.forEach { kind ->
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Symbol(
-                        symbol = triggerSymbol(trigger),
+                        symbol = runSymbol(kind),
                         contentDescription = null,
                         size = 24.dp,
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                     Text(
-                        text = triggerLabel(trigger),
+                        text = kind.label,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )

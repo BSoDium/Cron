@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,33 +72,34 @@ private val PEEK_FADE_HEIGHT = 24.dp
  *   ✓  Done
  *   {serif response body, full markdown}               ← final answer, always shown
  */
+/** Which iteration a thread renders: the latest carries the live shape + pull hint; an older one ends on
+ *  a footer linking back to the latest. */
+sealed interface ThreadRole {
+    data object Latest : ThreadRole
+    data class Older(val ranAtEpochMs: Long?, val onJumpToLatest: () -> Unit) : ThreadRole
+}
+
 @Composable
 fun AiThinkingThread(
     thread: AiThreadUi,
-    isRunning: Boolean,
     modifier: Modifier = Modifier,
     // Controlled/uncontrolled: when [expanded] is null the disclosure manages its own state (previews,
     // tests); HomeScreen hoists it so the pull gesture can drive it. [expandPx] peeks the timeline open
     // by an absolute pixel height (1:1 with the drag); [onFullHeight] reports its measured full height.
+    // Both per-frame values arrive as PROVIDERS, read only in measure/draw — a drag never recomposes.
     expanded: Boolean? = null,
     onExpandedChange: ((Boolean) -> Unit)? = null,
-    expandPx: Float = 0f,
+    expandPx: () -> Float = { 0f },
     onFullHeight: (Int) -> Unit = {},
-    // 0f = collapsed (chevron pointing right), 1f = fully open (chevron pointing down). Drives the
-    // pivot animation; tracked to the live reveal value so the chevron rotates with the drag.
-    expansionFraction: Float = 0f,
-    // The morphing shape represents where the assistant currently "is" — only meaningful on the latest
-    // iteration; older (settled) tabs end on their response.
-    showShape: Boolean = true,
-    // For an older (non-latest) tab: when it ran, and a jump-back-to-latest action shown in its footer.
-    ranAtEpochMs: Long? = null,
-    onJumpToLatest: (() -> Unit)? = null,
+    // 0f = collapsed (chevron pointing toward the reading direction), 1f = fully open (chevron down).
+    expansionFraction: () -> Float = { 0f },
+    role: ThreadRole = ThreadRole.Latest,
 ) {
     var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
     val isExpanded = expanded ?: internalExpanded
     Column(modifier = modifier.fillMaxWidth()) {
-        // Settled/running is the WorkManager signal, not response presence — a do_nothing turn settles with none.
-        val inProgress = isRunning
+        // Live token-flow is the signal, not response presence — a do_nothing turn settles with none.
+        val inProgress = thread.isStreaming
         // Loader only while genuinely thinking — it stops the instant the answer starts streaming.
         val thinking = inProgress && thread.response.isNullOrBlank()
         // Always present, even with no tools/reasoning, so the block settles into a "Thought for Xs" header
@@ -127,7 +129,7 @@ fun AiThinkingThread(
             inProgress = inProgress,
             hasProcess = thread.process.isNotEmpty(),
         )
-        if (showShape) {
+        if (role is ThreadRole.Latest) {
             val phase = when {
                 !inProgress -> ShapePhase.Resting
                 thread.response.isNullOrBlank() -> ShapePhase.Thinking
@@ -147,13 +149,13 @@ fun AiThinkingThread(
                         text = "Pull down to show thinking",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.graphicsLayer { alpha = (1f - expansionFraction).coerceIn(0f, 1f) },
+                        modifier = Modifier.graphicsLayer { alpha = (1f - expansionFraction()).coerceIn(0f, 1f) },
                     )
                 }
             }
-        } else if (onJumpToLatest != null) {
+        } else if (role is ThreadRole.Older) {
             // Older tabs hide the shape; show how long ago this ran + a tap back to the latest plan.
-            OldPlanFooter(ranAtEpochMs = ranAtEpochMs, onJumpToLatest = onJumpToLatest)
+            OldPlanFooter(ranAtEpochMs = role.ranAtEpochMs, onJumpToLatest = role.onJumpToLatest)
         }
     }
 }
@@ -167,13 +169,13 @@ private fun ThinkingDisclosure(
     durationSeconds: Int?,
     expanded: Boolean,
     onToggle: () -> Unit,
-    expandPx: Float = 0f,
+    expandPx: () -> Float = { 0f },
     onFullHeight: (Int) -> Unit = {},
-    expansionFraction: Float = 0f,
+    expansionFraction: () -> Float = { 0f },
 ) {
     val canExpand = process.isNotEmpty()
-    // Drives the chevron pivot from the live reveal: 0f collapsed (points right), 1f open (points down).
-    val openFraction = if (expanded) 1f else expansionFraction.coerceIn(0f, 1f)
+    // Chevron pivot from the live reveal, resolved lazily so the drag only invalidates the draw layer.
+    val openFraction = { if (expanded) 1f else expansionFraction().coerceIn(0f, 1f) }
     Column(modifier = Modifier.fillMaxWidth()) {
         // The header (and its tap ripple) bleeds past the list's content padding to span the full
         // screen width; start/end padding re-insets the summary, avatars, and chevron to the margin.
@@ -209,7 +211,7 @@ private fun ThinkingDisclosure(
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.graphicsLayer {
-                        rotationZ = (openFraction - 1f) * 90f * (if (ltr) 1f else -1f)
+                        rotationZ = (openFraction() - 1f) * 90f * (if (ltr) 1f else -1f)
                     },
                 )
             }
@@ -218,10 +220,13 @@ private fun ThinkingDisclosure(
         // the same value (owned by HomeScreen), so there's no second source to dip against. Fully expanded
         // clips to Float.MAX_VALUE → the natural height, re-measured so a still-streaming timeline isn't
         // cut. Settled turns always compose (at h=0 when collapsed) so the full height is ready for tap/pull.
-        val revealing = expanded || expandPx > 0f || !inProgress
+        // Derived: expandPx changes per drag frame, but composition only cares whether it crossed zero.
+        val revealing by remember(expanded, inProgress) {
+            derivedStateOf { expanded || expandPx() > 0f || !inProgress }
+        }
         if (canExpand && revealing) {
             ExpandReveal(
-                targetPx = if (expanded) Float.MAX_VALUE else expandPx,
+                targetPx = { if (expanded) Float.MAX_VALUE else expandPx() },
                 peeking = !expanded,
                 onFullHeight = onFullHeight,
             ) {
@@ -247,7 +252,7 @@ private fun ThinkingDisclosure(
  *  bottom edge while partially open. */
 @Composable
 private fun ExpandReveal(
-    targetPx: Float,
+    targetPx: () -> Float,
     peeking: Boolean,
     onFullHeight: (Int) -> Unit,
     content: @Composable () -> Unit,
@@ -259,7 +264,7 @@ private fun ExpandReveal(
     ) { constraints ->
         val placeable = subcompose(Unit, content).first().measure(constraints.copy(minHeight = 0))
         onFullHeight(placeable.height)
-        val h = targetPx.coerceIn(0f, placeable.height.toFloat()).roundToInt()
+        val h = targetPx().coerceIn(0f, placeable.height.toFloat()).roundToInt()
         layout(placeable.width, h) { placeable.place(0, 0) }
     }
 }
@@ -428,7 +433,6 @@ private fun AiThinkingThreadPreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             AiThinkingThread(
                 thread = PREVIEW_THREAD,
-                isRunning = false,
                 modifier = Modifier.padding(Spacing.xl),
             )
         }
@@ -466,8 +470,8 @@ private fun AiThinkingThreadRunningPreview() {
                     summary = "Reading your calendar",
                     process = listOf(ProcessItem.Tool(name = "read_calendar", isComplete = false)),
                     response = null,
+                    isStreaming = true,
                 ),
-                isRunning = true,
                 modifier = Modifier.padding(Spacing.xl),
             )
         }

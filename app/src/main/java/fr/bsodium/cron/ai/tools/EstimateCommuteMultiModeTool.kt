@@ -5,6 +5,7 @@ import fr.bsodium.cron.ai.ToolResult
 import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.session.db.SessionJson
+import fr.bsodium.cron.session.model.CommuteMode
 import fr.bsodium.cron.travel.GeocodingClient
 import fr.bsodium.cron.travel.LatLng
 import fr.bsodium.cron.travel.RoutesClient
@@ -23,7 +24,11 @@ class EstimateCommuteMultiModeTool(
     private val client: RoutesClient,
     private val geocoder: GeocodingClient,
     private val originBias: LatLng? = null,
+    allowedModes: Set<CommuteMode> = CommuteMode.entries.toSet(),
 ) : Tool {
+
+    // Excluded modes are simply never routed, so the model is never handed a duration it must not plan with.
+    private val allowedTokens = allowedModes.map { it.promptToken }.toSet()
 
     @Serializable
     private data class ModeResult(val duration_sec: Long, val distance_m: Int)
@@ -73,17 +78,23 @@ class EstimateCommuteMultiModeTool(
         val target = geocoder.geocode(dest, originBias).getOrElse { e ->
             return@coroutineScope ToolResult("""{"error":"geocoding failed: ${e.message?.take(200)}"}""", isError = true)
         }
-        val transitD = async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, RoutesClient.TravelMode.TRANSIT, arrivalMs).getOrNull() }
-        val walkD    = async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, RoutesClient.TravelMode.WALK).getOrNull() }
-        val driveD   = async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, RoutesClient.TravelMode.DRIVE).getOrNull() }
-        val bicycleD = async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, RoutesClient.TravelMode.BICYCLE).getOrNull() }
+        fun estimateIfAllowed(mode: RoutesClient.TravelMode, arrival: Long? = null) =
+            if (mode.name in allowedTokens) {
+                async { client.estimate(origin.lat, origin.lng, target.lat, target.lng, mode, arrival).getOrNull() }
+            } else {
+                null
+            }
+        val transitD = estimateIfAllowed(RoutesClient.TravelMode.TRANSIT, arrivalMs)
+        val walkD    = estimateIfAllowed(RoutesClient.TravelMode.WALK)
+        val driveD   = estimateIfAllowed(RoutesClient.TravelMode.DRIVE)
+        val bicycleD = estimateIfAllowed(RoutesClient.TravelMode.BICYCLE)
 
         fun RoutesClient.RouteResult.toMode() = ModeResult(durationSeconds, distanceMeters)
         val output = Output(
-            transit = transitD.await()?.toMode(),
-            walk    = walkD.await()?.toMode(),
-            drive   = driveD.await()?.toMode(),
-            bicycle = bicycleD.await()?.toMode(),
+            transit = transitD?.await()?.toMode(),
+            walk    = walkD?.await()?.toMode(),
+            drive   = driveD?.await()?.toMode(),
+            bicycle = bicycleD?.await()?.toMode(),
         )
         if (output.transit == null && output.walk == null &&
             output.drive == null && output.bicycle == null

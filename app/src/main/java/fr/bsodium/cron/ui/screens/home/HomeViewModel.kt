@@ -264,15 +264,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Re-runs the AI alarm prediction for the active session, or bootstraps a
-     * fresh session via the same evening-plan flow the nightly receiver uses
-     * when no session exists. Spins the retry button while the worker runs.
-     *
-     * (We skip the alarm re-arm and foreground-service startup that
-     * [fr.bsodium.cron.receiver.EveningPlanReceiver] also performs — those are
-     * scheduling concerns owned by the receiver, not a manual user trigger.)
-     */
     init {
         // Drive the "working" flag and the failure banner off the real WorkManager turn, not a fixed
         // delay: a tap sets isRetrying true optimistically; this clears it when the turn reaches a
@@ -312,6 +303,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _aiFailure.value = null
     }
 
+    /**
+     * Re-runs the AI alarm prediction for the active session, or bootstraps a
+     * fresh session via the same evening-plan flow the nightly receiver uses
+     * when no session exists. Spins the retry button while the worker runs.
+     *
+     * (We skip the alarm re-arm and foreground-service startup that
+     * [fr.bsodium.cron.receiver.EveningPlanReceiver] also performs — those are
+     * scheduling concerns owned by the receiver, not a manual user trigger.)
+     */
     fun retryAiPlan() {
         _isRetrying.value = true
         // Application-scoped, NOT viewModelScope: the seeded StreamingTurnStore placeholder is a

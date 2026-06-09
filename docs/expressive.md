@@ -54,3 +54,18 @@ Rounded, MaterialShapes-based. **Flat**: no `Modifier.shadow`, no `shadowElevati
 - [ ] Used the Expressive variant where one exists (`ButtonGroup` + `animateWidth`, `ToggleButton`, Expressive FAB).
 - [ ] Press/selection has spring feedback.
 - [ ] Uses accent roles (not only `primary`); flat; `Spacing`/`Radius` tokens; ships a `@Preview`.
+
+## Sanctioned exceptions to the motionScheme rule
+
+The "zero hardcoded tween/spring" rule has exactly these standing exceptions — each exists because a
+spring is *structurally* wrong for the job, not as a tuning preference. Anything not listed here uses
+`MaterialTheme.motionScheme`. When adding one, list it here and reference this section from the code.
+
+- **Duration-coupled pairs** (`ThinkingShape.kt` writing morph + spin): two animations that must end on
+  the exact same frame. Springs expose no fixed duration, so the pair shares a `tween` duration.
+- **Magnetic settles** (`AlarmCollapseEffects.kt` `ALARM_SNAP_SPEC`): a snap that must land
+  deterministically — a spring's asymptotic tail reads as a stall at the end of a scroll gesture.
+- **Navigation transitions** (`SettingsNavGraph.kt`): `NavGraphBuilder` transition lambdas are not
+  composable, so they structurally cannot read `MaterialTheme.motionScheme`.
+- **Content-reveal choreography** (`NextAlarmCard.kt` LCD digit reveal): the reveal drives a 0→1
+  progress that gates digit rolling; a spring's overshoot would push progress past 1 and re-roll digits.

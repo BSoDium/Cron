@@ -6,6 +6,7 @@ import fr.bsodium.cron.ai.toolErrorResult
 import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.session.db.SessionJson
+import fr.bsodium.cron.session.model.CommuteMode
 import fr.bsodium.cron.travel.GeocodingClient
 import fr.bsodium.cron.travel.LatLng
 import fr.bsodium.cron.travel.RoutesClient
@@ -23,7 +24,12 @@ class EstimateCommuteTool(
     private val client: RoutesClient,
     private val geocoder: GeocodingClient,
     private val originBias: LatLng? = null,
+    allowedModes: Set<CommuteMode> = CommuteMode.entries.toSet(),
 ) : Tool {
+
+    // The user's allowed modes, enforced in the schema (the model never sees excluded options) AND at
+    // execute time (a non-compliant call gets an error result instead of an excluded mode's duration).
+    private val allowedTokens = allowedModes.map { it.promptToken }.toSet()
 
     @Serializable
     private data class Output(val duration_sec: Long, val distance_m: Int)
@@ -46,7 +52,7 @@ class EstimateCommuteTool(
             )),
             "mode" to JsonObject(mapOf(
                 "type" to JsonPrimitive("string"),
-                "enum" to JsonArray(listOf("DRIVE", "TRANSIT", "WALK", "BICYCLE").map { JsonPrimitive(it) }),
+                "enum" to JsonArray(allowedTokens.map { JsonPrimitive(it) }),
                 "description" to JsonPrimitive("Travel mode (default TRANSIT)"),
             )),
             "arrival_time_iso" to JsonObject(mapOf(
@@ -73,6 +79,9 @@ class EstimateCommuteTool(
         val mode = obj["mode"]?.jsonPrimitive?.content
             ?.let { runCatching { RoutesClient.TravelMode.valueOf(it) }.getOrNull() }
             ?: RoutesClient.TravelMode.TRANSIT
+        if (mode.name !in allowedTokens) {
+            return toolErrorResult("mode ${mode.name} is excluded by the user's settings; allowed: ${allowedTokens.joinToString()}")
+        }
         val arrivalMs = obj["arrival_time_iso"]?.jsonPrimitive?.content
             ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
 

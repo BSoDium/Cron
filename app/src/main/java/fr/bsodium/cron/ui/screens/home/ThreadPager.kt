@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
+import fr.bsodium.cron.ui.screens.home.components.ThreadRole
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
@@ -82,9 +83,6 @@ internal fun ThreadPager(
             AiThinkingThread(
                 thread = iter.thread,
                 modifier = Modifier.padding(horizontal = Spacing.xl), // re-inset after the pager's full-screen bleed
-                // Loading follows the turn itself, not a global retry flag — a settled tab never shows
-                // "Thinking…" just because a replan was triggered before its new turn exists.
-                isRunning = iter.thread.isStreaming,
                 expanded = pull.expanded,
                 onExpandedChange = { open ->
                     scope.launch {
@@ -98,13 +96,15 @@ internal fun ThreadPager(
                         }
                     }
                 },
-                expandPx = pull.reveal.value,
+                // Per-frame reveal values as providers: the drag invalidates the reveal's measure pass and
+                // the chevron/hint draw layers — never this page's composition.
+                expandPx = { pull.reveal.value },
                 onFullHeight = { if (it != pull.fullPx.intValue) pull.fullPx.intValue = it },
-                expansionFraction = if (pull.expanded) 1f
-                    else (pull.reveal.value / pull.fullPx.intValue.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f),
-                showShape = isLatest,
-                ranAtEpochMs = iter.ranAtEpochMs,
-                onJumpToLatest = onJumpToLatest,
+                expansionFraction = {
+                    if (pull.expanded) 1f
+                    else (pull.reveal.value / pull.fullPx.intValue.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f)
+                },
+                role = if (isLatest) ThreadRole.Latest else ThreadRole.Older(iter.ranAtEpochMs, onJumpToLatest),
             )
         }
     }

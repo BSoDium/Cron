@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import fr.bsodium.cron.ui.theme.CronTypography
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,14 +19,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
-import fr.bsodium.cron.ui.theme.CodeFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
-import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 
+// Canvas strokes in dp (resolved via toPx in the DrawScope) so bar/tick weights track density —
+// the old raw-px literals rendered ~3x heavier on 1x screens. Values match the previous look at ~3.5x.
+private val TICK_HALF_HEIGHT = 1.dp
+private val TICK_STROKE = 0.4.dp
+private val SEGMENT_STROKE = 1.dp
 private val TIMELINE_HEIGHT = 82.dp
 private val TICK_BAR_HEIGHT = 20.dp
 
@@ -43,7 +47,7 @@ internal fun SleepTimeline(
     val barColor = onTile.copy(alpha = 0.95f)
     // Martian Mono's line box runs taller than the condensed face it replaced; trim the font
     // padding and pin line height to the point size so both label rows clear the fixed-height tile.
-    val timeStyle = TightTextStyle.copy(fontFamily = CodeFontFamily, fontSize = 16.sp, lineHeight = 16.sp, color = onTile)
+    val timeStyle = CronTypography.timeMono.copy(color = onTile)
     val stageStyle = timeStyle.copy(fontSize = 14.sp, lineHeight = 14.sp)
     Surface(
         color = tile,
@@ -92,9 +96,9 @@ internal fun SleepTimeline(
                     val x = w * i / (tickCount - 1).toFloat()
                     drawLine(
                         color = tickColor,
-                        start = Offset(x, midY - 4f),
-                        end = Offset(x, midY + 4f),
-                        strokeWidth = 1.2f,
+                        start = Offset(x, midY - TICK_HALF_HEIGHT.toPx()),
+                        end = Offset(x, midY + TICK_HALF_HEIGHT.toPx()),
+                        strokeWidth = TICK_STROKE.toPx(),
                     )
                 }
                 segments.forEach { seg ->
@@ -106,7 +110,7 @@ internal fun SleepTimeline(
                         color = barColor,
                         start = Offset(x0, midY),
                         end = Offset(x1, midY),
-                        strokeWidth = 3.5f,
+                        strokeWidth = SEGMENT_STROKE.toPx(),
                     )
                 }
             }
