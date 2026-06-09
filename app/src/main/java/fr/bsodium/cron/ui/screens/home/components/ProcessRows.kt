@@ -46,6 +46,8 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 private val STEP_ICON_SIZE = 16.dp
+private val SPINNER_SIZE = 14.dp
+private val SPINNER_STROKE = 1.5.dp
 
 /** Centre the glyph in its line box so the first line's optical centre lands at lineHeight/2 (where the gutter disc sits). */
 private val STEP_LINE_HEIGHT = LineHeightStyle(

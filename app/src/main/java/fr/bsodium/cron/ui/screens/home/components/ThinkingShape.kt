@@ -49,10 +49,10 @@ import kotlin.math.roundToInt
 enum class ShapePhase { Resting, Thinking, Writing }
 
 /**
- * A small brand-tinted Material shape under the AI thread that reacts to the assistant's state: a
- * quiet, still, outlined shape while thinking, then — the moment the answer starts streaming — it fills
- * in and comes alive, morphing and spinning springily through sharp stars, settling to a soft filled
- * shape at rest. Like a logo under a message.
+ * A small brand-tinted Material shape under the AI thread that reacts to the assistant's state: while
+ * thinking, a small muted outline that pulses between a down-arrow (the pull-to-show cue) and a random
+ * shape about once a second; the moment the answer streams it grows, fills in, and morphs through sharp
+ * stars with a spin; it settles to a soft filled shape at rest. Like a logo under a message.
  */
 @Composable
 fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any? = null) {
@@ -89,6 +89,15 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
     )
 
     LaunchedEffect(phase) {
+        // One morph step: re-target and play the morph 0→1. Deliberately does NOT touch [current] — each
+        // caller holds the just-completed morph and reassigns current only right before the next step, so a
+        // static pause never renders a degenerate Morph(X, X) whose re-matched bounds would jump the
+        // fit-scale the instant the shape lands.
+        suspend fun morphTo(next: RoundedPolygon) {
+            target = next
+            progress.snapTo(0f)
+            progress.animateTo(1f, thinkingMorphSpec)
+        }
         when (phase) {
             ShapePhase.Thinking -> {
                 // Bouncily pulse the down-arrow ⇄ a random shape (~once a second) — the pull-to-show-thinking
@@ -96,25 +105,15 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
                 // orientation is the intended pull affordance, not an accidental icon flip. The pool shapes
                 // read fine at this fixed rotation, so there's no spin.)
                 rotation.snapTo(ARROW_DOWN_DEG)
-                // Form the down-arrow first, then idle: hold, morph to a random shape, hold, morph back — repeat.
-                // Each hold stays on the JUST-COMPLETED morph (current is reassigned only right before the next
-                // morph), so the static pause never renders a degenerate Morph(X, X) whose re-matched bounds
-                // would jump the fit-scale the instant the shape lands.
-                target = THINKING_ARROW
-                progress.snapTo(0f)
-                progress.animateTo(1f, thinkingMorphSpec)
+                morphTo(THINKING_ARROW)
                 while (true) {
                     delay(THINKING_HOLD_MS)
                     current = THINKING_ARROW
                     val other = THINKING_POOL.random()
-                    target = other
-                    progress.snapTo(0f)
-                    progress.animateTo(1f, thinkingMorphSpec)
+                    morphTo(other)
                     delay(THINKING_HOLD_MS)
                     current = other
-                    target = THINKING_ARROW
-                    progress.snapTo(0f)
-                    progress.animateTo(1f, thinkingMorphSpec)
+                    morphTo(THINKING_ARROW)
                 }
             }
             ShapePhase.Resting -> {
@@ -154,12 +153,11 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
 }
 
 /**
- * Renders [morph] at [progress], rotated by [rotationDeg] and fit-and-centered into the draw bounds.
- * [fit] is the fraction of the bounds the shape spans (default [SHAPE_FIT] leaves margin so rotation
- * never clips; pass 1f to fill the bounds when not rotating). [fillFraction] crossfades stroke→fill;
+ * Renders [morph] at [progress], rotated by [rotationDeg] and fit-and-centered into the draw bounds
+ * (spanning [SHAPE_FIT] of them, so a rotated shape never clips). [fillFraction] crossfades stroke→fill;
  * the stroke can use a different colour ([strokeColor]) from the fill (defaults to the same [color]).
  */
-internal fun DrawScope.drawMorph(
+private fun DrawScope.drawMorph(
     morph: Morph,
     progress: Float,
     rotationDeg: Float,
@@ -168,7 +166,6 @@ internal fun DrawScope.drawMorph(
     path: Path,
     matrix: Matrix,
     strokeColor: Color = color,
-    fit: Float = SHAPE_FIT,
 ) {
     path.rewind()
     morph.toPath(progress.coerceIn(0f, 1f), path)
@@ -176,7 +173,7 @@ internal fun DrawScope.drawMorph(
     path.computeBounds(bounds, true)
     val span = maxOf(bounds.width(), bounds.height())
     if (span <= 0f) return
-    val scale = size.minDimension * fit / span
+    val scale = size.minDimension * SHAPE_FIT / span
     matrix.reset()
     matrix.setScale(scale, scale)
     matrix.postTranslate(

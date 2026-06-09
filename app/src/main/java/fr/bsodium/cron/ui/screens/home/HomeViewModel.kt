@@ -332,9 +332,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             // appendEvent below adds an event, not an AiMessage, so the index stays correct).
             if (replanSession != null) {
                 val nextTurn = (db.aiMessageDao().maxTurnIndex(replanSession.id) ?: -1) + 1
-                // Seed with the trigger we're about to fire, so the new tab reads "Re-planned" immediately instead
-            // of inheriting the prior event's label (e.g. "Your schedule changed") until our event is persisted.
-            StreamingTurnStore.seedPending(replanSession.id, nextTurn, Clock.System.now().toEpochMilliseconds(), TriggerType.EveningPlan)
+                // Seed with the trigger we're about to fire, so the new tab reads "Re-planned" immediately
+                // instead of inheriting the prior event's label until our event is persisted.
+                StreamingTurnStore.seedPending(replanSession.id, nextTurn, Clock.System.now().toEpochMilliseconds(), TriggerType.EveningPlan)
                 _optimisticTurn.value = replanSession.id to nextTurn
             }
             // Nudge a calendar sync up front; the location fetch + AI round-trip below give it time to land.

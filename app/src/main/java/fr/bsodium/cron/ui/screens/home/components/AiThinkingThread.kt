@@ -56,21 +56,18 @@ import fr.bsodium.cron.ui.theme.Symbol
 import kotlin.math.roundToInt
 
 private val ROW_MIN_HEIGHT = 48.dp
-internal val SPINNER_SIZE = 14.dp
-internal val SPINNER_STROKE = 1.5.dp
 
 // Soft edge on the partially-revealed timeline while peeking open via the pull gesture.
 private val PEEK_FADE_HEIGHT = 24.dp
 
 /**
- * Latest-turn AI thread:
+ * One turn's AI thread:
  *
- *   ( summary line  ⌄ )                               (pill: lighter bg when open)
- *   🔍 reasoning / narration (sans, markdown)         ← whole process collapses
- *   🔧 Calling [read_calendar]            12 events      inside the disclosure;
- *   🔧 Calling [set_alarm]              set for 09:30     rule emerges from pill
+ *   ◔◑ summary line  ⌄                                 ← tool-disc stack + header; tap/pull
+ *   🔍 reasoning / narration (sans, markdown)             reveals the process timeline
+ *   🔧 Calling [read_calendar]            12 events
  *   ✓  Done
- *   {serif response body, full markdown}              ← final answer, always shown
+ *   {serif response body, full markdown}               ← final answer, always shown
  */
 @Composable
 fun AiThinkingThread(

@@ -57,30 +57,33 @@ import fr.bsodium.cron.ui.components.CronHaptics
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
+import fr.bsodium.cron.ui.screens.home.RunKind
+import fr.bsodium.cron.ui.screens.home.label
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import fr.bsodium.cron.ui.theme.MaterialSymbol
-import fr.bsodium.cron.ui.theme.Symbol
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val TAB_MIN_HEIGHT = 48.dp
 private val ICON_GLYPH = 22.dp
 private val TAB_LOADER = 32.dp
-// Connected-tab corners: unselected inner corners rest at the M3 default (CornerValueSmall = 8.dp),
-// morphing to a full pill when selected; the end tabs keep their pill OUTER corner in both states.
+
+/** Connected-tab corners: unselected inner corners rest at the M3 default (CornerValueSmall = 8.dp),
+ *  morphing to a full pill when selected; the end tabs keep their pill OUTER corner in both states. */
 private val TAB_INNER_CORNER = CornerSize(8.dp)
 private val TAB_PILL_CORNER = CornerSize(50)
-// Frame cap for the auto-scroll's wait-for-scroll-range-to-settle loop (animateContentSize widens the
-// strip over several frames after a tab is added); bounds the wait when the range never reaches the target.
+
+/** Frame cap for the auto-scroll's wait-for-scroll-range-to-settle loop (animateContentSize widens the
+ *  strip over several frames after a tab is added); bounds the wait when the range never reaches the target. */
 private const val MAX_SETTLE_FRAMES = 30
 
-/** Scroll offset that centres [span] (a tab's [left, right] in row coords) in the viewport, clamped to
+/** Scroll offset that centres [span] (a tab's left..right x in row coords) in the viewport, clamped to
  *  the scroll range so end tabs rest aligned with the card. */
-private fun centreTarget(span: IntArray, padPx: Int, viewportPx: Int, maxScroll: Int): Int {
-    val tabCentre = (span[0] + span[1]) / 2 + padPx
+private fun centreTarget(span: IntRange, padPx: Int, viewportPx: Int, maxScroll: Int): Int {
+    val tabCentre = (span.first + span.last) / 2 + padPx
     return (tabCentre - viewportPx / 2).coerceIn(0, maxScroll)
 }
 
@@ -109,8 +112,8 @@ private class LerpCornerSize(val start: CornerSize, val stop: CornerSize, val t:
     }
 }
 
-// Linear selection fraction — drives the corner-radius morph so the shape tracks the swipe smoothly.
-// The colour inversion eases this through [fastMiddle] separately (see ReplanTab).
+/** Linear selection fraction — drives the corner-radius morph so the shape tracks the swipe smoothly.
+ *  The colour inversion eases this through [fastMiddle] separately (see ReplanTab). */
 private fun selectedFraction(index: Int, position: Float): Float = (1f - abs(index - position)).coerceIn(0f, 1f)
 
 /**
@@ -123,7 +126,7 @@ private fun selectedFraction(index: Int, position: Float): Float = (1f - abs(ind
  * spring motion instead of a visible state flip.
  */
 @Composable
-private fun tabFraction(index: Int, turnIndex: Int, position: Float, selectedTurn: Int, dragging: Boolean): Float {
+private fun rememberTabFraction(index: Int, turnIndex: Int, position: Float, selectedTurn: Int, dragging: Boolean): Float {
     val spec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     val raw = rememberUpdatedState(selectedFraction(index, position))
     val target = if (turnIndex == selectedTurn) 1f else 0f
@@ -135,9 +138,9 @@ private fun tabFraction(index: Int, turnIndex: Int, position: Float, selectedTur
     return fraction.value
 }
 
-// Quintic "gain" easing — slope 5 at the centre, flat at the ends. Applied to the COLOUR inversion only:
-// a tab keeps its colour for most of the swipe and flips fast across the low-contrast crossover, so the
-// label barely lingers unreadable. The shape morph stays linear.
+/** Quintic "gain" easing — slope 5 at the centre, flat at the ends. Applied to the COLOUR inversion only:
+ *  a tab keeps its colour for most of the swipe and flips fast across the low-contrast crossover, so the
+ *  label barely lingers unreadable. The shape morph stays linear. */
 private fun fastMiddle(x: Float): Float {
     val t = x.coerceIn(0f, 1f)
     return if (t < 0.5f) 16f * t * t * t * t * t else 1f - 16f * pow5(1f - t)
@@ -231,7 +234,7 @@ private fun StretchedTabs(
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
             ) {
                 iterations.forEachIndexed { index, iteration ->
-                    val fraction = tabFraction(index, iteration.turnIndex, position, selectedTurn, dragging)
+                    val fraction = rememberTabFraction(index, iteration.turnIndex, position, selectedTurn, dragging)
                     ReplanTab(
                         iteration = iteration,
                         fraction = fraction,
@@ -263,7 +266,7 @@ private fun ScrollableTabs(
     // the latest tab lives there, so the strip never flashes scrolled-left before the centring effect runs.
     val scrollState = rememberScrollState(initial = Int.MAX_VALUE)
     // Each tab's [left, right] x within the scroll content, for bring-into-view.
-    val spans = remember { mutableStateMapOf<Int, IntArray>() }
+    val spans = remember { mutableStateMapOf<Int, IntRange>() }
     var viewportPx by remember { mutableIntStateOf(0) }
     var didInitialScroll by remember { mutableStateOf(false) }
     val padPx = with(LocalDensity.current) { Spacing.md.roundToPx() }
@@ -278,9 +281,8 @@ private fun ScrollableTabs(
         // animateContentSize, so the scroll range (maxValue) ramps up over several frames; clamping
         // centreTarget to a mid-ramp maxValue leaves the new tab clipped. Wait until the range is wide
         // enough to reach the desired (unclamped) centre — capped so a full strip can't hang us.
-        snapshotFlow { spans[activeTurn] }.filterNotNull().first()
-        val span = spans[activeTurn] ?: return@LaunchedEffect
-        val wanted = (span[0] + span[1]) / 2 + padPx - viewportPx / 2
+        val span = snapshotFlow { spans[activeTurn] }.filterNotNull().first()
+        val wanted = (span.first + span.last) / 2 + padPx - viewportPx / 2
         var frames = 0
         while (scrollState.maxValue < wanted && frames < MAX_SETTLE_FRAMES) {
             withFrameNanos { }
@@ -305,7 +307,7 @@ private fun ScrollableTabs(
             horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
         ) {
             iterations.forEachIndexed { index, iteration ->
-                val fraction = tabFraction(index, iteration.turnIndex, position, selectedTurn, dragging)
+                val fraction = rememberTabFraction(index, iteration.turnIndex, position, selectedTurn, dragging)
                 ReplanTab(
                     iteration = iteration,
                     fraction = fraction,
@@ -314,7 +316,9 @@ private fun ScrollableTabs(
                     isNew = iteration.turnIndex !in initialTurns,
                     modifier = Modifier.onPlaced { coords ->
                         val b = coords.boundsInParent()
-                        spans[iteration.turnIndex] = intArrayOf(b.left.roundToInt(), b.right.roundToInt())
+                        val range = b.left.roundToInt()..b.right.roundToInt()
+                        // Structural equality guard: skip the snapshot write (and invalidation) when unmoved.
+                        if (spans[iteration.turnIndex] != range) spans[iteration.turnIndex] = range
                     },
                     onClick = { if (iteration.turnIndex != selectedTurn) { haptics.tick(); onSelect(iteration.turnIndex) } },
                 )
@@ -381,9 +385,7 @@ private fun ReplanTab(
                         indicatorColor = content,
                     )
                 } else {
-                    // A user-started base plan reads as a "run" (play); the scheduled base + replans use their trigger icon.
-                    val symbol = if (iteration.manualBase) MaterialSymbol.PlayArrow else triggerSymbol(iteration.trigger)
-                    Symbol(symbol = symbol, contentDescription = null, tint = content, size = ICON_GLYPH)
+                    Symbol(symbol = runSymbol(iteration.kind), contentDescription = null, tint = content, size = ICON_GLYPH)
                 }
             }
             Spacer(Modifier.width(Spacing.xs))
@@ -416,8 +418,8 @@ private fun ReplanHistoryBarFitPreview() {
     CronTheme {
         ReplanHistoryBar(
             iterations = listOf(
-                PREVIEW_ITER(0, "21:30", "Planned", null),
-                PREVIEW_ITER(1, "23:10", "Your schedule changed", TriggerType.CalendarChange),
+                previewIteration(0, "21:30", RunKind.ScheduledBase),
+                previewIteration(1, "23:10", RunKind.Replan(TriggerType.CalendarChange)),
             ),
             position = 1f,
             selectedTurn = 1,
@@ -434,9 +436,9 @@ private fun ReplanHistoryBarOverflowPreview() {
     CronTheme {
         ReplanHistoryBar(
             iterations = listOf(
-                PREVIEW_ITER(0, "21:30", "Planned", null),
-                PREVIEW_ITER(1, "23:10", "Your schedule changed", TriggerType.CalendarChange),
-                PREVIEW_ITER(2, "02:10", "A good moment to wake", TriggerType.WakeWindowOpportunity),
+                previewIteration(0, "21:30", RunKind.ScheduledBase),
+                previewIteration(1, "23:10", RunKind.Replan(TriggerType.CalendarChange)),
+                previewIteration(2, "02:10", RunKind.Replan(TriggerType.WakeWindowOpportunity)),
             ),
             position = 1.5f, // mid-swipe between tabs 1 and 2 → both partially morphed
             selectedTurn = 2,
@@ -447,13 +449,11 @@ private fun ReplanHistoryBarOverflowPreview() {
     }
 }
 
-@Suppress("FunctionName")
-private fun PREVIEW_ITER(turn: Int, time: String, message: String, trigger: TriggerType?, streaming: Boolean = false) = AiIterationUi(
+private fun previewIteration(turn: Int, time: String, kind: RunKind, streaming: Boolean = false) = AiIterationUi(
     turnIndex = turn,
     timeLabel = time,
-    systemMessage = message,
-    trigger = trigger,
-    thread = AiThreadUi(turnIndex = turn, summary = message, process = emptyList(), response = null, isStreaming = streaming),
+    kind = kind,
+    thread = AiThreadUi(turnIndex = turn, summary = kind.label, process = emptyList(), response = null, isStreaming = streaming),
 )
 
 @Preview(showBackground = true, name = "Tabs — streaming (loader)")
@@ -462,8 +462,8 @@ private fun ReplanHistoryBarStreamingPreview() {
     CronTheme {
         ReplanHistoryBar(
             iterations = listOf(
-                PREVIEW_ITER(0, "21:30", "Planned", null),
-                PREVIEW_ITER(1, "23:10", "Re-planned", TriggerType.EveningPlan, streaming = true),
+                previewIteration(0, "21:30", RunKind.ScheduledBase),
+                previewIteration(1, "23:10", RunKind.Replan(TriggerType.EveningPlan), streaming = true),
             ),
             position = 1f,
             selectedTurn = 1,

@@ -15,19 +15,50 @@ data class AiPlanUi(
     val iterations: List<AiIterationUi>,
 )
 
-/** One planning iteration: a [systemMessage] for what triggered it (with the raw [trigger] for its
- *  icon/accent), plus the full [thread] at [timeLabel]. */
+/** What kind of run produced an iteration — the single source for its tab label and icon. */
+sealed interface RunKind {
+    /** The nightly scheduled base plan. */
+    data object ScheduledBase : RunKind
+
+    /** A base plan the user started from the FAB. */
+    data object ManualBase : RunKind
+
+    /** A later rerun, named by the event that triggered it (null trigger → generic "Re-planned"). */
+    data class Replan(val trigger: TriggerType?) : RunKind
+}
+
+/** The tab label for a run. Exhaustive over [RunKind] and [TriggerType]. */
+val RunKind.label: String
+    get() = when (this) {
+        RunKind.ScheduledBase -> "Planned"
+        RunKind.ManualBase -> "Planned manually"
+        is RunKind.Replan -> when (trigger) {
+            null -> "Re-planned"
+            TriggerType.EveningPlan -> "Re-planned"
+            TriggerType.CalendarChange -> "Your schedule changed"
+            TriggerType.SleepOnset -> "You fell asleep"
+            TriggerType.HcStageUpdate -> "Sleep update"
+            TriggerType.MidSleepActivity -> "Movement detected"
+            TriggerType.OutOfBedConfirmed -> "You got up"
+            TriggerType.WakeWindowOpportunity -> "A good moment to wake"
+            TriggerType.AlarmDismissed -> "Alarm dismissed"
+            TriggerType.AlarmSnoozed -> "Alarm snoozed"
+            TriggerType.HardLatestFired -> "Safety alarm fired"
+        }
+    }
+
+/** One planning iteration: its [kind] (label/icon source) plus the full [thread] at [timeLabel]. */
 data class AiIterationUi(
     val turnIndex: Int,
     val timeLabel: String,
-    val systemMessage: String,
-    val trigger: TriggerType?,
+    val kind: RunKind,
     val thread: AiThreadUi,
     /** When this turn ran (epoch ms), for the "Ran X ago" footer on older iterations. */
     val ranAtEpochMs: Long? = null,
-    /** The base plan (turn 0) was started by the user from the FAB, not the scheduled nightly job. */
-    val manualBase: Boolean = false,
-)
+) {
+    /** The tab label for this run. */
+    val systemMessage: String get() = kind.label
+}
 
 /**
  * Swaps in the typewriter-[revealed] view of whichever iteration is streaming, matched by `turnIndex`.
@@ -80,42 +111,25 @@ object AiPlanMapper {
         val iterations = turns.mapIndexed { index, turn ->
             // The latest event appended at/before this turn started: it names a replan, and for turn 0
             // it's the bootstrap evening-plan — read only to tell a manual FAB plan from the nightly one.
+            // lastOrNull over the id-ASC list so an equal-timestamp tie resolves to the latest-appended event.
             val start = startOf(turn)
-            val sourceEvent = events.filter { it.timestamp.toEpochMilliseconds() <= start }.maxByOrNull { it.timestamp }
-            val manualBase = index == 0 && (sourceEvent?.data as? EventData.EveningPlan)?.isManual == true
+            val sourceEvent = events.lastOrNull { it.timestamp.toEpochMilliseconds() <= start }
             // Prefer the seeded trigger for the still-streaming turn: its triggering event may not be persisted
             // yet (the seed beats the event write), so inferring from `events` alone would briefly mislabel it.
             val effectiveTrigger = streaming?.trigger?.takeIf { turn == streamingTurn } ?: sourceEvent?.trigger
+            val kind = when {
+                index > 0 -> RunKind.Replan(effectiveTrigger)
+                (sourceEvent?.data as? EventData.EveningPlan)?.isManual == true -> RunKind.ManualBase
+                else -> RunKind.ScheduledBase
+            }
             AiIterationUi(
                 turnIndex = turn,
                 timeLabel = timeLabelOf(turn),
-                systemMessage = when {
-                    index == 0 && manualBase -> "Planned manually"
-                    index == 0 -> "Planned"
-                    else -> triggerMessageOf(effectiveTrigger)
-                },
-                // Turn 0 keeps a null trigger so the scheduled base keeps its clock icon; manualBase drives its icon.
-                trigger = if (index == 0) null else effectiveTrigger,
+                kind = kind,
                 thread = threadOf(turn),
                 ranAtEpochMs = ranAtOf(turn),
-                manualBase = manualBase,
             )
         }
         return AiPlanUi(iterations = iterations)
-    }
-
-    /** A short "what happened" line for a replan iteration. Exhaustive over [TriggerType]. */
-    private fun triggerMessageOf(trigger: TriggerType?): String = when (trigger) {
-        null -> "Re-planned"
-        TriggerType.EveningPlan -> "Re-planned"
-        TriggerType.CalendarChange -> "Your schedule changed"
-        TriggerType.SleepOnset -> "You fell asleep"
-        TriggerType.HcStageUpdate -> "Sleep update"
-        TriggerType.MidSleepActivity -> "Movement detected"
-        TriggerType.OutOfBedConfirmed -> "You got up"
-        TriggerType.WakeWindowOpportunity -> "A good moment to wake"
-        TriggerType.AlarmDismissed -> "Alarm dismissed"
-        TriggerType.AlarmSnoozed -> "Alarm snoozed"
-        TriggerType.HardLatestFired -> "Safety alarm fired"
     }
 }

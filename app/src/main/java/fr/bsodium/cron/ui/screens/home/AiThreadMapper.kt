@@ -38,9 +38,9 @@ sealed interface ProcessItem {
 }
 
 /**
- * Turns the persisted AI message rows for the latest turn into the [AiThreadUi] the home screen
- * renders. Pure mapping over [AiMessageEntity] / [ContentBlock] — no Android or ViewModel coupling,
- * so it's unit-testable in isolation.
+ * Turns one turn's persisted AI message rows (or its in-flight streamed blocks) into the [AiThreadUi]
+ * the home screen renders. Pure mapping over [AiMessageEntity] / [ContentBlock] — no Android or
+ * ViewModel coupling, so it's unit-testable in isolation.
  */
 object AiThreadMapper {
 
@@ -51,6 +51,7 @@ object AiThreadMapper {
         val turnRows = rows.filter { it.turnIndex == latestTurn }
         val assistantBlocks = turnRows.filter { it.role == "assistant" }.flatMap { decodeBlocks(it.contentJson) }
         val toolResultBlocks = turnRows.filter { it.role == "user" }.flatMap { decodeBlocks(it.contentJson) }
+            .filterIsInstance<ContentBlock.ToolResult>()
         if (assistantBlocks.isEmpty()) return AiThreadUi(
             turnIndex = latestTurn,
             summary = "Thinking…",
@@ -82,15 +83,12 @@ object AiThreadMapper {
 
     private fun buildFromBlocks(
         turnIndex: Int,
-        assistantBlocks: List<ContentBlock>,
-        toolResultBlocks: List<ContentBlock>,
+        blocks: List<ContentBlock>,
+        toolResultBlocks: List<ContentBlock.ToolResult>,
         durationSeconds: Int?,
         isStreaming: Boolean,
     ): AiThreadUi {
-        val blocks = assistantBlocks
-        val toolResults = toolResultBlocks
-            .filterIsInstance<ContentBlock.ToolResult>()
-            .associateBy { it.tool_use_id }
+        val toolResults = toolResultBlocks.associateBy { it.tool_use_id }
 
         // Model-authored pill labels: "STATUS: <gerund>" while working, leading "SUMMARY: <past>" on
         // the answer. Pull them out in order and strip them so they never render.

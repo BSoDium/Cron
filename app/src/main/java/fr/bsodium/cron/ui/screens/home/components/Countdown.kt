@@ -99,7 +99,7 @@ private fun TwoLineLcdStack(
         val (line0, line1) = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
         // Stack by BASELINE pitch (= the style's lineHeight), reproducing a single 2-line Text's leading
         // rather than the sum of trimmed line heights (which spaced the lines too far apart).
-        val pitch = 21.sp.roundToPx()
+        val pitch = smallLcd.lineHeight.roundToPx()
         val b0 = line0[FirstBaseline]
         val b1 = line1[FirstBaseline]
         val y1 = if (b0 == AlignmentLine.Unspecified || b1 == AlignmentLine.Unspecified) line0.height
