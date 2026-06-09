@@ -34,11 +34,14 @@ import fr.bsodium.cron.calendar.CalendarReader
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.model.ActionType
+import fr.bsodium.cron.session.model.LocationSource
 import fr.bsodium.cron.session.model.SleepSession
+import fr.bsodium.cron.session.model.latestEveningPlanLocation
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.travel.GeocodingClient
+import fr.bsodium.cron.travel.LatLng
 import fr.bsodium.cron.travel.RoutesClient
 import kotlinx.datetime.TimeZone
 
@@ -145,9 +148,18 @@ class AiTurnWorker(
         if (routesKey != null) {
             val sharedHttp = RoutesClient.defaultHttp()
             val routesClient = RoutesClient(routesKey, sharedHttp)
-            tools.add(GeocodeTool(GeocodingClient(routesKey, sharedHttp)))
-            tools.add(EstimateCommuteTool(routesClient))
-            tools.add(EstimateCommuteMultiModeTool(routesClient))
+            val geocoder = GeocodingClient(routesKey, sharedHttp)
+            // The device's captured location anchors geocoding + commute to the user's actual area, so
+            // ambiguous destinations resolve nearby (not the capital) and the origin is never a bogus (0,0).
+            // The LATEST fix, via the shared helper — the prompt reads the same one, so they can't diverge.
+            val bias = session.latestEveningPlanLocation()
+                ?.takeIf { it.source != LocationSource.Unavailable }
+                ?.let { LatLng(it.lat, it.lng) }
+            tools.add(GeocodeTool(geocoder, bias))
+            // Enforce the user's allowed commute modes in the tools themselves — prompt prose alone still
+            // hands the model an excluded mode's duration to plan around.
+            tools.add(EstimateCommuteTool(routesClient, geocoder, bias, session.plan.allowedCommuteModes))
+            tools.add(EstimateCommuteMultiModeTool(routesClient, geocoder, bias, session.plan.allowedCommuteModes))
         }
 
         tools.add(SetAlarmTool(
@@ -213,6 +225,8 @@ class AiTurnWorker(
         const val REASON_HTTP = "http_error"
 
         private const val TAG = "AiTurnWorker"
-        private const val THINKING_BUDGET = 2_000
+        // Total across the turn; with interleaved thinking it's spread over a fresh think after each
+        // tool result. Kept modest so reasoning stays on the anchor decision, not mechanical recompute.
+        private const val THINKING_BUDGET = 2_560
     }
 }

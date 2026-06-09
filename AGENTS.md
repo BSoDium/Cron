@@ -10,6 +10,14 @@ These rules exist because LLM passes have repeatedly violated them. Follow them 
 - Never rotate a Material icon to fake another direction. Pick a different icon, or commit a custom vector under `res/drawable/`.
 - Converting a Material Symbols SVG (`viewBox="0 -960 960 960"`) to a vector drawable: wrap the path in `<group android:translateY="960">`. That's the correct coordinate mapping into Android's 0-based viewport, **not** an icon flip — see `res/drawable/ic_thinking.xml`. Don't "fix" it.
 
+## Motion & Expressive
+
+This app targets **Material 3 Expressive**, not static M3. **Read `docs/expressive.md` before adding or animating any component** — it's the rule set, grounded in the real APIs.
+
+- **Pull every animation spec from `MaterialTheme.motionScheme`** (the theme is Expressive, so these are the bouncy springs): spatial specs (`fast/default/slowSpatialSpec()`) for anything that moves/resizes/scales/morphs/rotates; effects specs (`*EffectsSpec()`) for colour/alpha. **Do not** hardcode `tween(…, FastOutSlowInEasing)` or `spring(dampingRatio = …)` for UI motion.
+- Reach for the Expressive component variant: `ButtonGroup` + `Modifier.animateWidth(interactionSource)` (neighbours react on press), `ToggleButton` (shape morph), the Expressive FAB. A plain `Row` of buttons has no neighbour reaction.
+- Don't paint everything `primary` — apply varied accents via `secondary`/`tertiary` + `*Container` roles (restrained), which dynamic colour generates from the wallpaper.
+
 ## Locale & formatting
 
 - Always pass `Locale.US` to `String.format` for numeric/clock display (`"%02d"`, `"%.2f"`, etc.). Locale-default formatting renders non-ASCII digit glyphs on Arabic/Farsi/Bengali devices, breaking the LCD readout.

@@ -15,6 +15,7 @@ data class DayPlan(
     val firstEventLocation: String? = null,
     val commuteBufferMinutes: Int,
     val preparationBufferMinutes: Int = 15,
+    val allowedCommuteModes: Set<CommuteMode> = CommuteMode.entries.toSet(),
     val isFreeDayFallback: Boolean,
     val generatedAt: Instant,
 )
@@ -34,3 +35,9 @@ data class SleepSession(
     val createdAt: Instant,
     val updatedAt: Instant,
 )
+
+/** The LATEST evening-plan location fix. A manual replan exists precisely to capture a fresh fix after
+ *  the user moved, so every consumer (prompt text, commute origin bias) must read this one helper —
+ *  reading the bootstrap's first event routes commutes from a stale location. */
+fun SleepSession.latestEveningPlanLocation(): LocationPayload? =
+    (events.lastOrNull { it.trigger == TriggerType.EveningPlan }?.data as? EventData.EveningPlan)?.location

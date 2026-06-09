@@ -6,85 +6,67 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.session.model.ActionType
+import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.ui.components.FabAction
-import fr.bsodium.cron.ui.components.rememberCronHaptics
-import kotlinx.coroutines.launch
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
-import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
-import fr.bsodium.cron.ui.screens.home.components.GreetingHeader
+import fr.bsodium.cron.ui.screens.home.components.AlarmTiming
+import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
+import fr.bsodium.cron.ui.screens.home.components.NextPlanHint
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
 import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
+import fr.bsodium.cron.ui.screens.home.components.rememberAlarmTiming
 import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 
-// Pull-to-expand feel: the release fraction (of full height) past which it snaps open (springs back
-// below), and the rubber-band floor so the reveal still creeps near full instead of fully stalling.
-private const val THINKING_EXPAND_THRESHOLD = 0.4f
-private const val THINKING_PULL_RUBBER_FLOOR = 0.15f
-// Absolute cap on the release-to-expand pull distance, so a tall timeline (where 40% of full height
-// exceeds the screen) is still openable with a short drag.
-private val THINKING_EXPAND_TRIGGER_MAX = 120.dp
+// The onset card's header when no plan has run for the next alarm yet.
+private const val EMPTY_STATE_DATE_LABEL = "No alarm set"
+
+/** What the home body should show — kept coarse (not the thread content) so it only crossfades on a
+ *  real state change, never on each streaming update. */
+private enum class HomePhase { Loading, Idle, Plan }
 
 @Composable
 fun HomeScreen(
@@ -93,16 +75,26 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    // The displayed thread is the typewriter-revealed view of the streaming thread (whole when settled).
-    val displayThread = rememberRevealedThread(uiState.aiThread)
+    // At most one iteration streams at a time (always the latest). Typewriter-reveal that sub-thread and
+    // splice it back so the rest of the plan renders settled.
+    val streamingThread = uiState.aiPlan?.iterations?.lastOrNull { it.thread.isStreaming }?.thread
+    val revealed = rememberRevealedThread(streamingThread)
+    val displayPlan = uiState.aiPlan?.withStreamingReplaced(revealed)
+    // Once the alarm has passed (out of date) or been dismissed (session Complete), the plan is spent:
+    // Home rests on the onset card + "next plan" line rather than the now-stale thread. Ticks live via
+    // rememberAlarmTiming, so it flips to resting the minute the alarm time passes.
+    val timing = rememberAlarmTiming(uiState.sessionDisplay?.alarmTime, uiState.sessionDisplay?.sessionDate)
+    val resting = uiState.sessionDisplay?.status == SessionStatus.Complete || timing is AlarmTiming.Past
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.
-    StreamingHaptics(thread = displayThread, enabled = uiState.hapticsEnabled)
+    StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
     DisposableEffect(viewModel, fabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
     }
-    // Onboarding callout (rendered above EdgeFades in MainActivity): only in the loaded, no-plan, idle state.
-    val showOnboardingHint = uiState.initialized && displayThread == null && !uiState.isRetrying
+    // Onboarding callout (rendered above EdgeFades in MainActivity): only on a true first run — loaded,
+    // no plan, no session yet. The between-sessions resting state uses NextPlanHint instead, no tooltip.
+    val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying &&
+        uiState.sessionDisplay == null
     LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
         fabRegistry.set(
             FabAction(
@@ -144,181 +136,49 @@ fun HomeScreen(
             }
         )
     }
-    val card: @Composable () -> Unit = {
-        NextAlarmCard(
-            dateLabel = uiState.dateLabel,
-            alarmTime = uiState.sessionDisplay?.alarmTime,
-            sleepDurationLabel = uiState.sleepStats?.durationLabel,
-            sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-        )
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (displayThread == null) {
-            // First-run / no-plan / loading: a simple centred Column. The hint + arrow render only
-            // once `initialized`, so they never flash over an existing plan on cold start.
-            val showOnboarding = uiState.initialized
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        start = Spacing.xl,
-                        end = Spacing.xl,
-                        top = statusInsetTop + Spacing.xxl,
-                        bottom = navInsetBottom + Spacing.navBarClearance,
-                    ),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xl),
-            ) {
-                GreetingHeader(
-                    prefix = uiState.greetingPrefix,
-                    name = uiState.greetingName,
+        // Keep the last shown plan so a Plan→Idle dissolve still renders it while fading out — and so a
+        // re-plan's brief null gap (old turn cleared before the new one publishes) holds Plan instead of
+        // flashing the Idle onboarding cake.
+        var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
+        LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
+        // Gate on `initialized` so we never flash the idle layout before data resolves, then crossfade
+        // straight into the right layout — no empty→thread pop / card jump on cold start.
+        val homePhase = when {
+            !uiState.initialized -> HomePhase.Loading
+            displayPlan != null && !resting -> HomePhase.Plan
+            lastPlan != null && uiState.isRetrying && !resting -> HomePhase.Plan
+            else -> HomePhase.Idle
+        }
+        Crossfade(
+            targetState = homePhase,
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+            label = "home-phase",
+            modifier = Modifier.fillMaxSize(),
+        ) { phase ->
+            when (phase) {
+                HomePhase.Loading -> Unit
+                HomePhase.Idle -> HomeIdleContent(
+                    uiState = uiState,
+                    statusInsetTop = statusInsetTop,
+                    navInsetBottom = navInsetBottom,
+                    hasNotificationPermission = hasNotificationPermission,
+                    onNotifEnable = onNotifEnable,
+                    onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                 )
-                card()
-                // Bias the hint toward the upper third so "Let's get started" sits near eye height
-                // rather than floating in the dead-centre of the gap.
-                Box(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentAlignment = BiasAlignment(0f, -0.4f),
-                ) {
-                    if (showOnboarding) OnboardingHint()
-                }
-                if (!hasNotificationPermission) NotificationPermissionRow(onEnable = onNotifEnable)
-            }
-            // The onboarding callout that points at the play FAB is rendered in MainActivity,
-            // layered above EdgeFades (via FabAction.hint) so the bottom scrim doesn't fade it.
-        } else {
-            // The alarm card acts like CSS `position: sticky` (top = statusBar + gap): the list scrolls
-            // under the status bar while the card sticks just below it. It's an overlay, not a
-            // stickyHeader (which pins at y=0 and can't take a top offset); an "alarm-spacer" holds its flow slot.
-            val listState = rememberLazyListState()
-            val density = LocalDensity.current
-            var cardHeightPx by remember { mutableIntStateOf(0) }
-
-            // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed
-            // thinking 1:1 with the finger. One reveal value (revealed pixels) drives the disclosure and
-            // the release/tap animation, so there's no second source to dip against. Reset per turn.
-            val scope = rememberCoroutineScope()
-            var thinkingExpanded by rememberSaveable(displayThread.turnIndex) { mutableStateOf(false) }
-            val reveal = remember(displayThread.turnIndex) { Animatable(0f) }
-            val thinkingFullPx = remember(displayThread.turnIndex) { mutableIntStateOf(0) }
-            val canPull = rememberUpdatedState(displayThread.process.isNotEmpty() && !thinkingExpanded)
-            val pullHaptics = rememberCronHaptics()
-            val expandTriggerMaxPx = with(density) { THINKING_EXPAND_TRIGGER_MAX.toPx() }
-            // Tracks whether the pull is past the release-to-open threshold, so a click fires once per crossing.
-            val pastThreshold = remember(displayThread.turnIndex) { mutableStateOf(false) }
-            val pullConnection = remember(listState, reveal, expandTriggerMaxPx, pastThreshold) {
-                object : NestedScrollConnection {
-                    // Pixels of pull past which releasing snaps the block open — the same point onPreFling tests.
-                    fun triggerPx(): Float {
-                        val full = thinkingFullPx.intValue
-                        return if (full > 0) minOf(full * THINKING_EXPAND_THRESHOLD, expandTriggerMaxPx) else Float.MAX_VALUE
-                    }
-
-                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        if (source != NestedScrollSource.UserInput) return Offset.Zero
-                        // Dragging up while a partial peek is open unwinds it (1:1) before the list scrolls.
-                        // Skip once fully expanded, or the upward scroll is eaten instead of moving the list.
-                        if (available.y < 0f && reveal.value > 0f && !thinkingExpanded) {
-                            val next = (reveal.value + available.y).coerceAtLeast(0f)
-                            val consumed = next - reveal.value
-                            pastThreshold.value = next >= triggerPx()
-                            scope.launch { reveal.snapTo(next) }
-                            return Offset(0f, consumed)
-                        }
-                        // At the top, dragging down on a collapsible, collapsed thread grows the reveal in
-                        // pixels (tracks the finger), gently resisting near full so it never runs ahead.
-                        if (available.y > 0f && canPull.value && !listState.canScrollBackward) {
-                            val full = thinkingFullPx.intValue
-                            val rubber = if (full > 0) {
-                                (1f - reveal.value / full).coerceIn(THINKING_PULL_RUBBER_FLOOR, 1f)
-                            } else {
-                                1f
-                            }
-                            val next = reveal.value + available.y * rubber
-                            val nowPast = next >= triggerPx()
-                            if (nowPast && !pastThreshold.value) pullHaptics.tick() // click as the pull reaches the open point
-                            pastThreshold.value = nowPast
-                            scope.launch { reveal.snapTo(next) }
-                            return Offset(0f, available.y)
-                        }
-                        return Offset.Zero
-                    }
-
-                    override suspend fun onPreFling(available: Velocity): Velocity {
-                        if (reveal.value <= 0f) return Velocity.Zero
-                        val full = thinkingFullPx.intValue
-                        if (full > 0 && reveal.value >= triggerPx()) {
-                            reveal.animateTo(full.toFloat())
-                            thinkingExpanded = true
-                        } else {
-                            reveal.animateTo(0f)
-                        }
-                        return available
-                    }
-                }
-            }
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().nestedScroll(pullConnection),
-                contentPadding = PaddingValues(
-                    start = Spacing.xl,
-                    end = Spacing.xl,
-                    top = statusInsetTop + Spacing.xxl,
-                    // navBarClearance clears the pill; the extra xxxl matches the EdgeFades bottom
-                    // gradient's own xxxl so the last content (the thinking shape) rests above the fade.
-                    bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
-                ),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xl),
-            ) {
-                item(key = "greeting") {
-                    GreetingHeader(
-                        prefix = uiState.greetingPrefix,
-                        name = uiState.greetingName,
+                HomePhase.Plan -> (displayPlan ?: lastPlan)?.let { plan ->
+                    HomePlanContent(
+                        plan = plan,
+                        uiState = uiState,
+                        statusInsetTop = statusInsetTop,
+                        navInsetBottom = navInsetBottom,
+                        hasNotificationPermission = hasNotificationPermission,
+                        onNotifEnable = onNotifEnable,
+                        onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                     )
                 }
-                item(key = "alarm-spacer") {
-                    Spacer(Modifier.height(with(density) { cardHeightPx.toDp() }))
-                }
-                item(key = "thread") {
-                    AiThinkingThread(
-                        thread = displayThread,
-                        isRunning = uiState.isRetrying,
-                        expanded = thinkingExpanded,
-                        // Tap animates the same reveal value (snap to full before a close so it eases
-                        // down from the natural height the expanded state was showing).
-                        onExpandedChange = { open ->
-                            scope.launch {
-                                if (open) {
-                                    reveal.animateTo(thinkingFullPx.intValue.toFloat())
-                                    thinkingExpanded = true
-                                } else {
-                                    thinkingExpanded = false
-                                    reveal.snapTo(thinkingFullPx.intValue.toFloat())
-                                    reveal.animateTo(0f)
-                                }
-                            }
-                        },
-                        expandPx = reveal.value,
-                        onFullHeight = { if (it != thinkingFullPx.intValue) thinkingFullPx.intValue = it },
-                        expansionFraction = if (thinkingExpanded) 1f
-                            else (reveal.value / thinkingFullPx.intValue.toFloat().coerceAtLeast(1f))
-                                .coerceIn(0f, 1f),
-                    )
-                }
-                if (!hasNotificationPermission) {
-                    item(key = "notif-permission") {
-                        NotificationPermissionRow(onEnable = onNotifEnable)
-                    }
-                }
             }
-            StickyAlarm(
-                listState = listState,
-                safeTop = statusInsetTop + Spacing.sm,
-                cardHeightPx = cardHeightPx,
-                onHeightChanged = { cardHeightPx = it },
-                card = card,
-            )
         }
 
         // Floating callouts stack just above the nav: a turn-failure banner on top of the
@@ -366,66 +226,97 @@ fun HomeScreen(
     }
 }
 
-private data class StickyAlarmState(val top: Int, val gradientAlpha: Float)
-
-/**
- * CSS-`sticky`-with-top-offset alarm card, rendered as an overlay over the list. It follows the
- * flow position of the "alarm-spacer" item, then holds at [safeTop] (just below the status bar).
- * When stuck, a full-width background→transparent gradient fades in behind it, dissolving content
- * that slides under the card (and the full-bleed pill's edges) into the page background.
- */
+/** First-run / no-plan / loading layout: greeting, the alarm card, and the onboarding hint. */
 @Composable
-private fun BoxScope.StickyAlarm(
-    listState: LazyListState,
-    safeTop: Dp,
-    cardHeightPx: Int,
-    onHeightChanged: (Int) -> Unit,
-    card: @Composable () -> Unit,
+private fun HomeIdleContent(
+    uiState: HomeUiState,
+    statusInsetTop: Dp,
+    navInsetBottom: Dp,
+    hasNotificationPermission: Boolean,
+    onNotifEnable: () -> Unit,
+    onAutoAlarmsChange: (Boolean) -> Unit,
 ) {
-    val density = LocalDensity.current
-    val safeTopPx = with(density) { safeTop.roundToPx() }
-    val fadePx = with(density) { Spacing.xxl.toPx() }
-    val state by remember(safeTopPx, fadePx) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            // On-screen top = item offset − viewportStartOffset (= −beforeContentPadding). Null once
-            // the spacer scrolls off the top → fully stuck (handled explicitly to avoid int overflow).
-            val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
-                ?.let { it.offset - info.viewportStartOffset }
-            if (screenTop == null) {
-                StickyAlarmState(top = safeTopPx, gradientAlpha = 1f)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            // Horizontal inset is applied per-child so the card can hug wider than the rest.
+            .padding(
+                top = statusInsetTop + Spacing.xxl,
+                bottom = navInsetBottom + Spacing.navBarClearance,
+            ),
+        // Tight gap from the greeting down to the card; the card→hint area is a weighted box below.
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        HomeGreetingRow(
+            prefix = uiState.greetingPrefix,
+            name = uiState.greetingName,
+            autoAlarmsEnabled = uiState.autoAlarmsEnabled,
+            onAutoAlarmsChange = onAutoAlarmsChange,
+            modifier = Modifier.padding(horizontal = Spacing.xl),
+        )
+        Box(Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) {
+            // No active alarm in this state — render the blank onset card; "what's next" lives below it.
+            NextAlarmCard(
+                dateLabel = EMPTY_STATE_DATE_LABEL,
+                alarmTime = null,
+                sessionDate = null,
+                sleepDurationLabel = null,
+                sleepSegments = emptyList(),
+            )
+        }
+        // Bias the hint toward the upper third so it sits near eye height rather than dead-centre.
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.xl),
+            contentAlignment = BiasAlignment(0f, -0.4f),
+        ) {
+            // First run (no session ever) → the onboarding invite; otherwise the between-sessions rest state.
+            if (uiState.sessionDisplay == null) {
+                OnboardingHint()
             } else {
-                StickyAlarmState(
-                    top = maxOf(safeTopPx, screenTop),
-                    gradientAlpha = ((safeTopPx - screenTop) / fadePx).coerceIn(0f, 1f),
+                NextPlanHint(
+                    autoAlarmsEnabled = uiState.autoAlarmsEnabled,
+                    eveningTriggerTime = uiState.eveningTriggerTime,
                 )
             }
         }
+        if (!hasNotificationPermission) {
+            NotificationPermissionRow(
+                onEnable = onNotifEnable,
+                modifier = Modifier.padding(horizontal = Spacing.xl),
+            )
+        }
     }
-    val background = MaterialTheme.colorScheme.background
-    // Solid bg down to the card bottom, then a short fade below so content dissolves as it scrolls under.
-    val cardBottomPx = safeTopPx + cardHeightPx
-    val belowFadePx = with(density) { Spacing.xxxl.toPx() }
-    val totalPx = cardBottomPx + belowFadePx
-    val solidStop = if (totalPx > 0f) (cardBottomPx / totalPx).coerceIn(0f, 1f) else 1f
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(with(density) { totalPx.toDp() })
-            .graphicsLayer { alpha = state.gradientAlpha }
-            .background(
-                Brush.verticalGradient(
-                    0f to background,
-                    solidStop to background,
-                    1f to Color.Transparent,
+}
+
+@Preview(showBackground = true, name = "Home — resting (no plan yet)")
+@Composable
+private fun HomeRestingPreview() {
+    CronTheme {
+        HomeIdleContent(
+            uiState = HomeUiState(
+                initialized = true,
+                greetingPrefix = "Good evening",
+                greetingName = "Elliot",
+                // A completed (dismissed) session → the resting NextPlanHint branch, not first-run onboarding.
+                sessionDisplay = SessionDisplayState(
+                    status = SessionStatus.Complete,
+                    action = ActionType.DoNothing,
+                    alarmTime = null,
+                    reason = "",
+                    sessionDate = LocalDate(2026, 6, 8),
+                    snoozeCount = 0,
                 ),
+                autoAlarmsEnabled = true,
+                eveningTriggerTime = LocalTime(20, 0),
             ),
-    )
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer { translationY = state.top.toFloat() }
-            .padding(horizontal = Spacing.xl)
-            .onSizeChanged { if (it.height != cardHeightPx) onHeightChanged(it.height) },
-    ) { card() }
+            statusInsetTop = 0.dp,
+            navInsetBottom = 0.dp,
+            hasNotificationPermission = true,
+            onNotifEnable = {},
+            onAutoAlarmsChange = {},
+        )
+    }
 }

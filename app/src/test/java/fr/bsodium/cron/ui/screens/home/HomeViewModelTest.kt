@@ -65,7 +65,7 @@ class HomeViewModelTest {
             var state = awaitItem()
             while (!state.initialized) state = awaitItem()
             assertNull(state.sessionDisplay)
-            assertNull(state.aiThread)
+            assertNull(state.aiPlan)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -110,16 +110,16 @@ class HomeViewModelTest {
                     startedAtMs = 0L,
                 ),
             )
-            while (state.aiThread?.response == null) state = awaitItem()
-            val thread = requireNotNull(state.aiThread)
+            while (state.aiPlan?.iterations?.lastOrNull()?.thread?.response == null) state = awaitItem()
+            val thread = requireNotNull(state.aiPlan).iterations.last().thread
             assertEquals("Streaming answer…", thread.response)
             assertTrue(thread.isStreaming)
             assertTrue(state.isRetrying) // running spinner tracks the live stream, not just WorkManager
 
-            // Turn ends: with no persisted rows the thread falls back to the (empty) DB state.
+            // Turn ends: with no persisted rows the plan falls back to the (empty) DB state.
             StreamingTurnStore.clear("s1", 0)
-            while (state.aiThread != null) state = awaitItem()
-            assertNull(state.aiThread)
+            while (state.aiPlan != null) state = awaitItem()
+            assertNull(state.aiPlan)
             cancelAndIgnoreRemainingEvents()
         }
     }

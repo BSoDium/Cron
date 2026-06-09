@@ -7,6 +7,7 @@ import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.travel.GeocodingClient
+import fr.bsodium.cron.travel.LatLng
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonElement
@@ -15,7 +16,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-class GeocodeTool(private val client: GeocodingClient) : Tool {
+class GeocodeTool(private val client: GeocodingClient, private val bias: LatLng? = null) : Tool {
 
     @Serializable
     private data class Output(val lat: Double, val lng: Double, val formatted: String)
@@ -36,7 +37,7 @@ class GeocodeTool(private val client: GeocodingClient) : Tool {
         val address = input.jsonObject["address"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
             ?: return ToolResult("""{"error":"address is required"}""", isError = true)
 
-        val result = client.geocode(address).getOrElse { e ->
+        val result = client.geocode(address, bias).getOrElse { e ->
             return toolErrorResult("geocoding failed: ${e.message?.take(300)}")
         }
 

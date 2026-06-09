@@ -38,9 +38,9 @@ sealed interface ProcessItem {
 }
 
 /**
- * Turns the persisted AI message rows for the latest turn into the [AiThreadUi] the home screen
- * renders. Pure mapping over [AiMessageEntity] / [ContentBlock] — no Android or ViewModel coupling,
- * so it's unit-testable in isolation.
+ * Turns one turn's persisted AI message rows (or its in-flight streamed blocks) into the [AiThreadUi]
+ * the home screen renders. Pure mapping over [AiMessageEntity] / [ContentBlock] — no Android or
+ * ViewModel coupling, so it's unit-testable in isolation.
  */
 object AiThreadMapper {
 
@@ -51,6 +51,7 @@ object AiThreadMapper {
         val turnRows = rows.filter { it.turnIndex == latestTurn }
         val assistantBlocks = turnRows.filter { it.role == "assistant" }.flatMap { decodeBlocks(it.contentJson) }
         val toolResultBlocks = turnRows.filter { it.role == "user" }.flatMap { decodeBlocks(it.contentJson) }
+            .filterIsInstance<ContentBlock.ToolResult>()
         if (assistantBlocks.isEmpty()) return AiThreadUi(
             turnIndex = latestTurn,
             summary = "Thinking…",
@@ -82,29 +83,28 @@ object AiThreadMapper {
 
     private fun buildFromBlocks(
         turnIndex: Int,
-        assistantBlocks: List<ContentBlock>,
-        toolResultBlocks: List<ContentBlock>,
+        blocks: List<ContentBlock>,
+        toolResultBlocks: List<ContentBlock.ToolResult>,
         durationSeconds: Int?,
         isStreaming: Boolean,
     ): AiThreadUi {
-        val blocks = assistantBlocks
-        val toolResults = toolResultBlocks
-            .filterIsInstance<ContentBlock.ToolResult>()
-            .associateBy { it.tool_use_id }
+        val toolResults = toolResultBlocks.associateBy { it.tool_use_id }
 
         // Model-authored pill labels: "STATUS: <gerund>" while working, leading "SUMMARY: <past>" on
         // the answer. Pull them out in order and strip them so they never render.
         val statuses = mutableListOf<String>()
         var summaryLine: String? = null
-        fun stripDirectives(text: String): String {
+        // [committable] = false for the still-streaming tail block: a STATUS gerund may be half-typed
+        // ("Evaluating"…), so strip it from display but don't surface it as the live step title yet.
+        fun stripDirectives(text: String, committable: Boolean = true): String {
             val kept = mutableListOf<String>()
             text.lineSequence().forEach { line ->
                 val trimmed = line.trim()
                 val status = STATUS_LINE.matchEntire(trimmed)
                 val summary = SUMMARY_LINE.matchEntire(trimmed)
                 when {
-                    status != null -> status.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { statuses += it }
-                    summary != null -> summary.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { summaryLine = it }
+                    status != null -> if (committable) status.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { statuses += it }
+                    summary != null -> if (committable) summary.groupValues[1].trim().takeIf { it.isNotEmpty() }?.let { summaryLine = it }
                     else -> kept += line
                 }
             }
@@ -120,12 +120,13 @@ object AiThreadMapper {
         // thinking-process narration. While streaming, nothing is the answer until the marker lands.
         val answerStart = answerStartOf(blocks, isStreaming)
 
-        val process = blocks.take(answerStart).mapNotNull { block ->
+        val process = blocks.take(answerStart).mapIndexedNotNull { index, block ->
             when (block) {
                 is ContentBlock.Thinking ->
                     block.thinking.takeIf { it.isNotBlank() }?.let { ProcessItem.Reasoning(it) }
                 is ContentBlock.Text ->
-                    stripDirectives(block.text).takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
+                    stripDirectives(block.text, committable = !(isStreaming && index == blocks.lastIndex))
+                        .takeIf { it.isNotBlank() }?.let { ProcessItem.Narration(it) }
                 is ContentBlock.ToolUse -> {
                     val result = toolResults[block.id]
                     ProcessItem.Tool(
@@ -186,7 +187,7 @@ object AiThreadMapper {
         )
     }
 
-    private fun decodeBlocks(json: String): List<ContentBlock> = runCatching {
+    internal fun decodeBlocks(json: String): List<ContentBlock> = runCatching {
         SessionJson.decodeFromString<List<ContentBlock>>(json)
     }
         .onFailure { Log.w(TAG, "decode AI content blocks failed", it) }
@@ -217,6 +218,11 @@ object AiThreadMapper {
             }
             "cancel_alarm" -> "cancelled"
             "estimate_commute" -> obj["duration_sec"]?.jsonPrimitive?.content?.toLongOrNull()
+                ?.let { "${it / 60} min" }
+            // Nested per-mode output ({transit:{duration_sec,…},…}) — surface the fastest available mode.
+            "estimate_commute_multi_mode" -> obj.values
+                .mapNotNull { mode -> runCatching { mode.jsonObject["duration_sec"]?.jsonPrimitive?.content?.toLongOrNull() }.getOrNull() }
+                .minOrNull()
                 ?.let { "${it / 60} min" }
             "geocode_address" -> obj["formatted"]?.jsonPrimitive?.content?.take(28)
             else -> null

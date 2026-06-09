@@ -45,7 +45,11 @@ import kotlinx.coroutines.flow.first
 private const val FORWARD_MS = 350
 private const val TAB_MS = 220
 
-private val TAB_ROUTES = setOf("home", "history", SETTINGS_ROOT)
+/** Tab destinations, shared with [CronBottomBar] so a route rename can't silently un-highlight a tab. */
+const val ROUTE_HOME = "home"
+const val ROUTE_HISTORY = "history"
+
+private val TAB_ROUTES = setOf(ROUTE_HOME, ROUTE_HISTORY, SETTINGS_ROOT)
 
 private val forwardTween = tween<Float>(durationMillis = FORWARD_MS, easing = EaseInOutCubic)
 private val tabTween = tween<Float>(durationMillis = TAB_MS, easing = EaseInOutCubic)
@@ -90,7 +94,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val done = onboardingDone ?: return@CronTheme
 
-                val startDestination = if (done && secureStore.hasAnthropicKey()) "home" else "onboarding"
+                val startDestination = if (done && secureStore.hasAnthropicKey()) ROUTE_HOME else "onboarding"
                 val navController = rememberNavController()
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = backStackEntry?.destination?.route
@@ -104,7 +108,7 @@ class MainActivity : ComponentActivity() {
                                 currentRoute = currentRoute,
                                 onNavigate = { route ->
                                     navController.navigate(route) {
-                                        popUpTo("home") {
+                                        popUpTo(ROUTE_HOME) {
                                             saveState = true
                                             inclusive = false
                                         }
@@ -132,14 +136,14 @@ class MainActivity : ComponentActivity() {
                             OnboardingScreen(
                                 viewModel = viewModel<OnboardingViewModel>(),
                                 onComplete = {
-                                    navController.navigate("home") {
+                                    navController.navigate(ROUTE_HOME) {
                                         popUpTo("onboarding") { inclusive = true }
                                     }
                                 },
                             )
                         }
                         composable(
-                            route = "home",
+                            route = ROUTE_HOME,
                             enterTransition = { fadeIn(animationSpec = tabTween) },
                             exitTransition = { fadeOut(animationSpec = tabTween) },
                         ) {
@@ -148,7 +152,7 @@ class MainActivity : ComponentActivity() {
                                 fabRegistry = fabRegistry,
                                 onNavigateToSettings = {
                                     navController.navigate(SETTINGS_ROOT) {
-                                        popUpTo("home") {
+                                        popUpTo(ROUTE_HOME) {
                                             saveState = true
                                             inclusive = false
                                         }
@@ -159,7 +163,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(
-                            route = "history",
+                            route = ROUTE_HISTORY,
                             enterTransition = { fadeIn(animationSpec = tabTween) },
                             exitTransition = { fadeOut(animationSpec = tabTween) },
                         ) {
@@ -170,7 +174,7 @@ class MainActivity : ComponentActivity() {
                         EdgeFades()
                         // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the
                         // bottom scrim doesn't fade it out; HomeScreen requests it via FabAction.hint.
-                        if (currentRoute == "home") {
+                        if (currentRoute == ROUTE_HOME) {
                             val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                             fabRegistry.action?.hint?.let { OnboardingTooltip(navBottom = navBottom, text = it) }
                         }
