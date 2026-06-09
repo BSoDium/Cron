@@ -53,7 +53,6 @@ enum class MaterialSymbol(val code: String) {
     Alarm("\uE855"),
     AlarmOff("\uE857"),
     ArrowBack("\uE5C4"),
-    ArrowDownward("\uE5DB"),
     ArrowForward("\uE5C8"),
     Article("\uEF87"),
     AutoAwesome("\uE65F"),
@@ -89,8 +88,7 @@ enum class MaterialSymbol(val code: String) {
     Weekend("\uE16B"),
 }
 
-/** Builds (and caches per axis-tuple) a one-font [FontFamily] pinned to the requested variation axes.
- *  An animated [fill] re-resolves per distinct value — fine for the handful of icons that animate. */
+/** Resolves the bundled symbols font to a [Typeface] once per resolver (axes ride on the draw Paint). */
 @Composable
 private fun rememberSymbolTypeface(): Typeface? {
     val resolver = LocalFontFamilyResolver.current

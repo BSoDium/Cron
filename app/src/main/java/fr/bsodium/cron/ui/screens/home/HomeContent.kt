@@ -46,8 +46,11 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
+import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.ui.theme.CronTheme
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
@@ -157,12 +160,15 @@ internal fun HomePlanContent(
     }
 
     // Per-iteration pull-to-expand state, shared between the pager pages and the pull connection below.
-    val pullStates = remember { mutableStateMapOf<Int, PullState>() }
+    // Keyed on the session: turn indices restart at 0 across a session rollover, so without the key the
+    // new session's turns would inherit the old session's expanded/height state.
+    val sessionKey = uiState.sessionDisplay?.sessionDate
+    val pullStates = remember(sessionKey) { mutableStateMapOf<Int, PullState>() }
     // Size the pager to the SETTLED page's natural height: a fixed height keeps the pager draggable
     // (`wrapContentHeight` disables the horizontal drag), and keying on the settled page keeps it stable
     // through a swipe (no relayout spike). Pages measure unbounded, so an expanding page grows this map
     // → the pager follows → the content isn't clipped.
-    val pageHeights = remember { mutableStateMapOf<Int, Int>() }
+    val pageHeights = remember(sessionKey) { mutableStateMapOf<Int, Int>() }
     val pagerHeightPx by remember(iterations) {
         derivedStateOf { pageHeights[iterations.getOrNull(pagerState.settledPage)?.turnIndex] ?: 0 }
     }
@@ -200,7 +206,7 @@ internal fun HomePlanContent(
     // the greeting + gap above the card scroll off FIRST, and a taller card (range > 120) needs more slack
     // than the bottom contentPadding alone gives — so a short page always collapses fully and rests (no
     // jump-back). Scroll-independent → constant across scroll.
-    val minGrabPx by remember {
+    val minGrabPx by remember(mdPx, fallbackRangePx) {
         derivedStateOf {
             (rootHeightPx - threadTopPx).coerceAtLeast(0) + greetingHeightPx + mdPx +
                 (collapseRangePx - fallbackRangePx).coerceAtLeast(0f).roundToInt()
@@ -445,3 +451,31 @@ private fun BoxScope.StickyAlarm(
         }
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+private fun HomePlanContentPreview() {
+    CronTheme {
+        HomePlanContent(
+            plan = AiPlanUi(
+                iterations = listOf(
+                    previewIteration(0, RunKind.ScheduledBase, "Alarm set for **07:45** to cover the 08:30 stand-up."),
+                    previewIteration(1, RunKind.Replan(TriggerType.CalendarChange), "Moved to **07:15** after your first meeting shifted earlier."),
+                ),
+            ),
+            uiState = HomeUiState(initialized = true),
+            statusInsetTop = 0.dp,
+            navInsetBottom = 0.dp,
+            hasNotificationPermission = true,
+            onNotifEnable = {},
+            onAutoAlarmsChange = {},
+        )
+    }
+}
+
+private fun previewIteration(turn: Int, kind: RunKind, response: String) = AiIterationUi(
+    turnIndex = turn,
+    timeLabel = "21:30",
+    kind = kind,
+    thread = AiThreadUi(turnIndex = turn, summary = kind.label, process = emptyList(), response = response),
+)

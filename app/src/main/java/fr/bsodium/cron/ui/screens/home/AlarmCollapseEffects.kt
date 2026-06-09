@@ -43,15 +43,16 @@ internal fun AlarmCollapseEffects(
     rangePx: Float,
     hapticsEnabled: Boolean,
 ) {
-    val haptics = rememberCronHaptics(enabled = hapticsEnabled)
-    // The range resolves from the card's measured height a frame or two after this effect launches; read it
-    // live so the snap lands on the true full-collapse distance, not the fallback captured at launch.
+    // Read live inside the listState-keyed effects below: a haptics-pref toggle swaps the instance, and the
+    // range resolves from the card's measured height a frame or two after the effects launch — neither should
+    // stay captured stale.
+    val haptics = rememberUpdatedState(rememberCronHaptics(enabled = hapticsEnabled))
     val range = rememberUpdatedState(rangePx)
     LaunchedEffect(listState) {
         snapshotFlow { collapse.value.fraction >= 0.5f }
             .distinctUntilChanged()
             .drop(1)
-            .collect { haptics.tick() }
+            .collect { haptics.value.tick() }
     }
     // Latest scroll direction within the collapse range, so a settle-in-between completes toward where the
     // user was headed (down → collapse, up → expand) instead of a fixed midpoint that yanks a down-scroll back up.

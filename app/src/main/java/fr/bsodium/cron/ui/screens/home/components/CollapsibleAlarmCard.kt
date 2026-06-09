@@ -1,5 +1,8 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -59,7 +62,6 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val progress = rememberLcdRevealProgress(alarmTime)
     val ink = rememberLcdInkMetrics()
-    // The alarm-type shape is sized to one expanded clock digit (see AlarmCardContent).
     val dateStyle = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp)
 
     AlarmShell(
@@ -156,7 +158,7 @@ internal fun CollapsibleAlarmCard(
 @Composable
 private fun CollapsedAlarmCardPreview() {
     CronTheme {
-        androidx.compose.foundation.layout.Box(modifier = Modifier.padding(Spacing.md)) {
+        Box(modifier = Modifier.padding(Spacing.md)) {
             CollapsibleAlarmCard(
                 dateLabel = "Saturday 6",
                 alarmTime = LocalTime(10, 0),
@@ -175,9 +177,9 @@ private fun CollapsedAlarmCardPreview() {
 @Composable
 private fun CollapsibleAlarmCardPreview() {
     CronTheme {
-        androidx.compose.foundation.layout.Column(
+        Column(
             modifier = Modifier.padding(Spacing.md),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { frac ->
                 CollapsibleAlarmCard(

@@ -12,10 +12,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
+
+/** Tab glyph for a run: the clock for the nightly base, play for a user-started base, else its trigger icon. */
+internal fun runSymbol(kind: RunKind): MaterialSymbol = when (kind) {
+    RunKind.ScheduledBase -> MaterialSymbol.Schedule
+    RunKind.ManualBase -> MaterialSymbol.PlayArrow
+    is RunKind.Replan -> triggerSymbol(kind.trigger)
+}
 
 /** The Material Symbol for a replan trigger. `null` is the original scheduled plan; `EveningPlan` is a
  *  user-run manual replan. The exhaustive `when` makes a new [TriggerType] a compile error. */

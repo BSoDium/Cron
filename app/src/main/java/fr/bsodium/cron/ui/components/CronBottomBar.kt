@@ -48,6 +48,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ROUTE_HISTORY
+import fr.bsodium.cron.ROUTE_HOME
+import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
@@ -147,10 +150,10 @@ private fun NavPill(
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavSlot(currentRoute, "home", MaterialSymbol.Alarm, "Home", onNavigate)
-            NavSlot(currentRoute, "history", MaterialSymbol.History, "History", onNavigate)
+            NavSlot(currentRoute, ROUTE_HOME, MaterialSymbol.Alarm, "Home", onNavigate)
+            NavSlot(currentRoute, ROUTE_HISTORY, MaterialSymbol.History, "History", onNavigate)
             // Settings landing route (the graph's start); sub-screen routes hide the pill entirely.
-            NavSlot(currentRoute, "settings/root", MaterialSymbol.Settings, "Settings", onNavigate)
+            NavSlot(currentRoute, SETTINGS_ROOT, MaterialSymbol.Settings, "Settings", onNavigate)
         }
     }
 }
@@ -308,7 +311,7 @@ fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier =
 private fun CronFloatingNavPreview() {
     CronTheme {
         CronFloatingNav(
-            currentRoute = "home",
+            currentRoute = ROUTE_HOME,
             onNavigate = {},
             fabAction = FabAction(onClick = {}),
         )
