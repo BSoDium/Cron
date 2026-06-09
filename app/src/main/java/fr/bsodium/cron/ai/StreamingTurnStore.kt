@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ai
 
 import fr.bsodium.cron.ai.wire.ContentBlock
+import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,6 +12,8 @@ data class StreamingTurn(
     val turnIndex: Int,
     val blocks: List<ContentBlock>,
     val startedAtMs: Long,
+    /** The trigger this turn was seeded with, so the UI labels it correctly before the real event lands. */
+    val trigger: TriggerType? = null,
 )
 
 /**
@@ -28,6 +31,14 @@ object StreamingTurnStore {
     fun update(turn: StreamingTurn) {
         _active.value = turn
     }
+
+    /**
+     * Seeds an empty placeholder for an upcoming turn so the UI shows it the instant a replan is
+     * triggered (before the worker spins up). The worker's first [update] for the same
+     * [sessionId]/[turnIndex] then replaces it seamlessly — one iteration, no add/remove flicker.
+     */
+    fun seedPending(sessionId: String, turnIndex: Int, startedAtMs: Long, trigger: TriggerType? = null) =
+        update(StreamingTurn(sessionId, turnIndex, blocks = emptyList(), startedAtMs = startedAtMs, trigger = trigger))
 
     /**
      * Clears the partial for [sessionId]/[turnIndex] — but only if it's still the active one, so a

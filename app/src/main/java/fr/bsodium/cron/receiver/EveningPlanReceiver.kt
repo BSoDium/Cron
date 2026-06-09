@@ -6,6 +6,7 @@ import android.content.Intent
 import android.util.Log
 import fr.bsodium.cron.alarm.EveningPlanScheduler
 import fr.bsodium.cron.service.SleepSessionService
+import fr.bsodium.cron.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,6 +30,11 @@ class EveningPlanReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // Defensive: a stale trigger could fire after the user disabled auto alarms — don't plan.
+                if (!SettingsRepository(context).autoAlarmsEnabledNow()) {
+                    Log.i(TAG, "Auto alarms disabled — skipping evening plan")
+                    return@launch
+                }
                 // Re-arm for tomorrow before doing anything else.
                 EveningPlanScheduler(context).armNext()
                 // An exact-alarm broadcast may start a foreground service from the background.

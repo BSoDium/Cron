@@ -4,6 +4,8 @@ import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.DayPlan
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.Instruction
+import fr.bsodium.cron.session.model.LocationPayload
+import fr.bsodium.cron.session.model.LocationSource
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SignalConfidence
@@ -43,6 +45,23 @@ object Fixtures {
         reason: String = "test instruction",
         issuedAt: Instant = T0,
     ) = Instruction(action = action, alarmTime = alarmTime, reason = reason, issuedAt = issuedAt)
+
+    fun eveningEvent(
+        lat: Double = 46.624,
+        lng: Double = 14.308,
+        address: String? = "Klagenfurt, Austria",
+        source: LocationSource = LocationSource.Gps,
+        at: Instant = T0,
+        isManual: Boolean = false,
+    ) = SessionEvent(
+        trigger = TriggerType.EveningPlan,
+        timestamp = at,
+        data = EventData.EveningPlan(
+            timezone = "Europe/Vienna",
+            location = LocationPayload(lat = lat, lng = lng, source = source, capturedAt = at, address = address),
+            isManual = isManual,
+        ),
+    )
 
     fun hcEvent(stage: SleepStage, start: Instant, end: Instant) = SessionEvent(
         trigger = TriggerType.HcStageUpdate,

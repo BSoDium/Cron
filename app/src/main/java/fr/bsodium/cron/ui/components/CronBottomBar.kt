@@ -3,14 +3,15 @@ package fr.bsodium.cron.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -27,37 +28,34 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Square
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ROUTE_HISTORY
+import fr.bsodium.cron.ROUTE_HOME
+import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 
 /**
  * Floating bottom action bar: a pill housing the three tab icons, optionally
@@ -96,9 +94,12 @@ fun CronFloatingNav(
 @Composable
 private fun FabSlot(fabAction: FabAction?) {
     val visible = fabAction != null
+    // One Expressive spatial spec drives BOTH the slot-width re-centre and the FAB scale/fade, so they
+    // move as a single motion instead of desyncing.
+    val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     val width by animateDpAsState(
         targetValue = if (visible) FAB_SLOT_WIDTH else 0.dp,
-        animationSpec = FAB_SLOT_SPEC,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "fab-slot-width",
     )
     Box(
@@ -108,9 +109,13 @@ private fun FabSlot(fabAction: FabAction?) {
         contentAlignment = Alignment.CenterEnd,
     ) {
         AnimatedVisibility(
+            // Measure the FAB at its full size even while the slot width animates, so the entrance reads
+            // as a scale-up + fade (not a horizontal squeeze). The width only reserves layout space to
+            // re-centre the pill when the FAB hides on non-Home tabs.
+            modifier = Modifier.wrapContentWidth(align = Alignment.End, unbounded = true),
             visible = visible,
-            enter = FAB_ENTER,
-            exit = FAB_EXIT,
+            enter = fadeIn(spatial) + scaleIn(spatial, initialScale = 0.5f),
+            exit = fadeOut(spatial) + scaleOut(spatial, targetScale = 0.5f),
         ) {
             PrimaryActionFab(fabAction)
         }
@@ -120,12 +125,6 @@ private fun FabSlot(fabAction: FabAction?) {
 private val FAB_SLOT_WIDTH = 68.dp // 56dp FAB + 12dp leading gap
 private val FAB_SLOT_HEIGHT = 56.dp
 private val NAV_SLOT_SIZE = 48.dp
-private val FAB_SLOT_SPEC = tween<Dp>(durationMillis = 200, easing = FastOutSlowInEasing)
-// A pronounced grow-from-centre + fade so the FAB pops rather than slides in.
-private val FAB_ENTER =
-    fadeIn(tween(180)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.5f)
-private val FAB_EXIT =
-    fadeOut(tween(140)) + scaleOut(tween(180, easing = FastOutSlowInEasing), targetScale = 0.5f)
 
 data class FabAction(
     val onClick: () -> Unit,
@@ -151,10 +150,10 @@ private fun NavPill(
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavSlot(currentRoute, "home", Icons.Filled.Home, Icons.Outlined.Home, "Home", onNavigate)
-            NavSlot(currentRoute, "history", Icons.Filled.History, Icons.Outlined.History, "History", onNavigate)
+            NavSlot(currentRoute, ROUTE_HOME, MaterialSymbol.Alarm, "Home", onNavigate)
+            NavSlot(currentRoute, ROUTE_HISTORY, MaterialSymbol.History, "History", onNavigate)
             // Settings landing route (the graph's start); sub-screen routes hide the pill entirely.
-            NavSlot(currentRoute, "settings/root", Icons.Filled.Settings, Icons.Outlined.Settings, "Settings", onNavigate)
+            NavSlot(currentRoute, SETTINGS_ROOT, MaterialSymbol.Settings, "Settings", onNavigate)
         }
     }
 }
@@ -163,18 +162,24 @@ private fun NavPill(
 private fun RowScope.NavSlot(
     currentRoute: String?,
     route: String,
-    selectedIcon: ImageVector,
-    unselectedIcon: ImageVector,
+    symbol: MaterialSymbol,
     label: String,
     onNavigate: (String) -> Unit,
 ) {
     val selected = currentRoute == route
-    // Selected: filled accent indicator (matches the FAB); unselected: outlined icon on the pill.
+    // Selected: filled accent indicator (matches the FAB) with the glyph morphing outline→filled along
+    // the FILL axis; unselected: outlined glyph on the pill.
     val targetContainer = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
     val targetTint = if (selected) MaterialTheme.colorScheme.onPrimary
         else MaterialTheme.colorScheme.onSurfaceVariant
-    val container by animateColorAsState(targetContainer, animationSpec = NAV_COLOR_SPEC, label = "nav-container")
-    val iconTint by animateColorAsState(targetTint, animationSpec = NAV_COLOR_SPEC, label = "nav-tint")
+    val colorSpec = MaterialTheme.motionScheme.fastEffectsSpec<Color>()
+    val container by animateColorAsState(targetContainer, animationSpec = colorSpec, label = "nav-container")
+    val iconTint by animateColorAsState(targetTint, animationSpec = colorSpec, label = "nav-tint")
+    val fill by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "nav-fill",
+    )
     val haptics = rememberCronHaptics()
     Box(
         modifier = Modifier
@@ -196,16 +201,16 @@ private fun RowScope.NavSlot(
                 .background(container),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = if (selected) selectedIcon else unselectedIcon,
+            Symbol(
+                symbol = symbol,
                 contentDescription = label,
                 tint = iconTint,
+                fill = fill,
             )
         }
     }
 }
 
-private val NAV_COLOR_SPEC = tween<Color>(durationMillis = 220, easing = FastOutSlowInEasing)
 private val NAV_INDICATOR_SIZE = 44.dp
 
 @Composable
@@ -213,6 +218,14 @@ private fun PrimaryActionFab(action: FabAction?) {
     if (action == null) return
     val working = action.working
     val haptics = rememberCronHaptics()
+    // Springy press feedback: squish on touch-down and bounce back on release (Expressive spatial spec).
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.88f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "fab-press",
+    )
     FloatingActionButton(
         onClick = {
             if (working) {
@@ -223,6 +236,10 @@ private fun PrimaryActionFab(action: FabAction?) {
                 action.onClick()
             }
         },
+        modifier = Modifier.graphicsLayer {
+            scaleX = pressScale
+            scaleY = pressScale
+        },
         shape = RoundedCornerShape(Radius.lg),
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -232,10 +249,12 @@ private fun PrimaryActionFab(action: FabAction?) {
             focusedElevation = 0.dp,
             hoveredElevation = 0.dp,
         ),
+        interactionSource = interaction,
     ) {
-        Icon(
-            imageVector = if (working) Icons.Outlined.Square else Icons.Outlined.PlayArrow,
+        Symbol(
+            symbol = if (working) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
             contentDescription = if (working) "Cancel" else "Run alarm plan",
+            fill = 1f,
         )
     }
 }
@@ -292,7 +311,7 @@ fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier =
 private fun CronFloatingNavPreview() {
     CronTheme {
         CronFloatingNav(
-            currentRoute = "home",
+            currentRoute = ROUTE_HOME,
             onNavigate = {},
             fabAction = FabAction(onClick = {}),
         )

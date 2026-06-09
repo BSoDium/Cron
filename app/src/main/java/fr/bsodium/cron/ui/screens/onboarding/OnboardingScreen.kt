@@ -12,11 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Alarm
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,7 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import fr.bsodium.cron.permissions.SystemPermissions
 import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 
 private val WELCOME_ICON_SIZE = 72.dp
 private val DONE_ICON_SIZE = 64.dp
@@ -102,10 +100,10 @@ private fun WelcomeStep(onNext: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Alarm,
+        Symbol(
+            symbol = MaterialSymbol.Alarm,
             contentDescription = null,
-            modifier = Modifier.size(WELCOME_ICON_SIZE),
+            size = WELCOME_ICON_SIZE,
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.height(Spacing.xxl))
@@ -345,8 +343,8 @@ private fun ReliabilityButton(
         }
         if (done) {
             Spacer(modifier = Modifier.size(Spacing.sm))
-            Icon(
-                imageVector = Icons.Outlined.Check,
+            Symbol(
+                symbol = MaterialSymbol.Check,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
             )
@@ -361,10 +359,10 @@ private fun DoneStep(onFinish: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Alarm,
+        Symbol(
+            symbol = MaterialSymbol.Alarm,
             contentDescription = null,
-            modifier = Modifier.size(DONE_ICON_SIZE),
+            size = DONE_ICON_SIZE,
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.height(Spacing.xxl))

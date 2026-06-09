@@ -1,22 +1,20 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import android.content.res.Configuration
-import android.graphics.Paint
-import android.graphics.Rect
-import android.graphics.Typeface
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -25,21 +23,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -47,24 +45,13 @@ import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.ui.components.PillBadge
-import fr.bsodium.cron.ui.theme.CodeFontFamily
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.DisplayFontFamily
-import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
-import fr.bsodium.cron.ui.theme.TightTextStyle
-import kotlinx.coroutines.delay
-import kotlinx.datetime.Clock
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
-import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.plus
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -72,60 +59,93 @@ import kotlin.math.roundToInt
 fun NextAlarmCard(
     dateLabel: String,
     alarmTime: LocalTime?,
+    sessionDate: LocalDate?,
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
 ) {
+    val timing = rememberAlarmTiming(alarmTime, sessionDate)
+    AlarmShell(modifier) {
+        AlarmCardContent(dateLabel, alarmTime, timing, sleepDurationLabel, sleepSegments)
+    }
+}
+
+/**
+ * The bold-filled card shell — Material You primary fill, flat, rounded. [shape] is a parameter so the
+ * collapsing variant can lerp its corner radius. Content renders in `onPrimary`.
+ */
+@Composable
+internal fun AlarmShell(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(Radius.xl),
+    content: @Composable () -> Unit,
+) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(Radius.xl),
-        tonalElevation = 6.dp,
+        color = MaterialTheme.colorScheme.primary,
+        shape = shape,
+        tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        content = content,
+    )
+}
+
+/** The expanded card body: bold date, hero LCD time, and the sleep block. Renders in `onPrimary`. */
+@Composable
+internal fun AlarmCardContent(
+    dateLabel: String,
+    alarmTime: LocalTime?,
+    timing: AlarmTiming,
+    sleepDurationLabel: String?,
+    sleepSegments: List<SleepSegment>,
+    modifier: Modifier = Modifier,
+    // The collapsing card hides this layer's time row (clock + countdown — both become moving copies
+    // drawn on top) while still measuring it, so this stays the single source of expanded geometry.
+    timeRowAlpha: Float = 1f,
+    // The date is hidden here (dateAlpha = 0) in the collapsing card and drawn as a moving copy that
+    // slides up out the top, so it leaves/enters opposite the time (which moves from the bottom).
+    dateAlpha: Float = 1f,
+) {
+    val onCard = MaterialTheme.colorScheme.onPrimary
+    Column(
+        modifier = modifier.padding(
+            start = Spacing.xxl,
+            top = Spacing.lg,
+            end = Spacing.xxl,
+            bottom = Spacing.lg,
+        ),
     ) {
-        Column(
-            modifier = Modifier.padding(
-                start = Spacing.xxl,
-                top = Spacing.xl,
-                end = Spacing.xxl,
-                bottom = Spacing.xl,
-            ),
-        ) {
-            AlignedFirstGlyph(
-                text = dateLabel.ifBlank { "—" },
-                color = MaterialTheme.colorScheme.onSurface,
-                style = CronTypography.dateLabel,
-            )
-            LcdTimeDisplay(alarmTime = alarmTime)
-            if (sleepSegments.isNotEmpty()) {
-                Spacer(Modifier.height(Spacing.xl))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Sleep",
-                        fontFamily = CodeFontFamily,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
+        AlignedFirstGlyph(
+            text = dateLabel.ifBlank { "—" },
+            color = onCard,
+            style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
+            modifier = Modifier.graphicsLayer { alpha = dateAlpha },
+        )
+        LcdTimeDisplay(alarmTime = alarmTime, timing = timing, base = onCard, timeRowAlpha = timeRowAlpha)
+        if (sleepSegments.isNotEmpty()) {
+            Spacer(Modifier.height(Spacing.xl))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Sleep",
+                    style = CronTypography.titleMono,
+                    color = onCard,
+                    modifier = Modifier.weight(1f),
+                )
+                if (sleepDurationLabel != null) {
+                    // Inverse pill on the bold card: on-color fill, primary text.
+                    PillBadge(
+                        text = sleepDurationLabel,
+                        containerColor = onCard,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        textStyle = CronTypography.labelMonoBold,
                     )
-                    if (sleepDurationLabel != null) {
-                        PillBadge(
-                            text = sleepDurationLabel,
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            textStyle = MaterialTheme.typography.labelMedium.copy(
-                                fontFamily = CodeFontFamily,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                        )
-                    }
                 }
-                Spacer(Modifier.height(Spacing.md + Spacing.xs))
-                SleepTimeline(segments = sleepSegments)
             }
+            Spacer(Modifier.height(Spacing.md + Spacing.xs))
+            SleepTimeline(segments = sleepSegments)
         }
     }
 }
@@ -137,6 +157,7 @@ private fun NextAlarmCardPendingPreview() {
         NextAlarmCard(
             dateLabel = "Monday 1",
             alarmTime = LocalTime(6, 40),
+            sessionDate = null,
             sleepDurationLabel = null,
             sleepSegments = emptyList(),
             modifier = Modifier.padding(Spacing.xl),
@@ -145,7 +166,7 @@ private fun NextAlarmCardPendingPreview() {
 }
 
 /** A representative night ending at the 06:40 alarm, for previewing the sleep-duration state. */
-private val PREVIEW_SLEEP_SEGMENTS = listOf(
+internal val PREVIEW_SLEEP_SEGMENTS = listOf(
     SleepStage.Awake to ("2026-06-01T23:00:00Z" to "2026-06-01T23:12:00Z"),
     SleepStage.Light to ("2026-06-01T23:12:00Z" to "2026-06-02T00:30:00Z"),
     SleepStage.Deep to ("2026-06-02T00:30:00Z" to "2026-06-02T02:05:00Z"),
@@ -164,6 +185,7 @@ private fun NextAlarmCardWithSleepPreview() {
         NextAlarmCard(
             dateLabel = "Monday 1",
             alarmTime = LocalTime(6, 40),
+            sessionDate = null,
             sleepDurationLabel = "7H 28M",
             sleepSegments = PREVIEW_SLEEP_SEGMENTS,
             modifier = Modifier.padding(Spacing.xl),
@@ -172,17 +194,101 @@ private fun NextAlarmCardWithSleepPreview() {
 }
 
 @Composable
-private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier) {
-    // Tick once a minute so the countdown stays current without flickering.
-    val countdown by produceState<HoursMinutes?>(initialValue = computeCountdown(alarmTime), alarmTime) {
-        while (true) {
-            value = computeCountdown(alarmTime)
-            delay(60_000)
+private fun LcdTimeDisplay(
+    alarmTime: LocalTime?,
+    timing: AlarmTiming,
+    base: Color,
+    modifier: Modifier = Modifier,
+    timeRowAlpha: Float = 1f,
+) {
+    val progress = rememberLcdRevealProgress(alarmTime)
+    // Only an upcoming alarm reads in full; no alarm and a passed alarm both render the grayed onset look.
+    val upcoming = timing is AlarmTiming.Upcoming
+    val digitColor = if (upcoming) base else base.copy(alpha = 0.30f)
+    val statusColor = if (upcoming) base.copy(alpha = 0.7f) else base.copy(alpha = 0.30f)
+
+    Row(
+        modifier = modifier.alpha(timeRowAlpha),
+        verticalAlignment = Alignment.Top,
+    ) {
+        LcdClock(alarmTime = alarmTime, progress = progress, color = digitColor)
+        RemainingOrStatus(
+            timing = timing,
+            progress = progress,
+            color = statusColor,
+            modifier = Modifier.padding(start = Spacing.xs + Spacing.xxs, top = Spacing.xs + Spacing.xxs),
+        )
+    }
+}
+
+/**
+ * The "HH:MM" LCD clock (custom-colon, side-bearing-trimmed). Reused both inline in [LcdTimeDisplay]
+ * and as one of the moving copies of the collapsing card, so [progress] (the reveal) is hoisted in.
+ */
+@Composable
+internal fun LcdClock(
+    alarmTime: LocalTime?,
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+    // The single-weight LCD face has no bold; [strokeWidthPx] (local px) overlays a stroke that
+    // thickens the glyphs as the clock shrinks, so the small digits read with more weight.
+    strokeWidthPx: Float = 0f,
+) {
+    val pending = alarmTime == null
+    // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
+    val hh = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
+    val mm = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
+    val lcdStyle = CronTypography.lcdHero
+    val ink = rememberLcdInkMetrics()
+    // IntrinsicSize.Min so the colon's fillMaxHeight matches the digit line box, not the viewport.
+    Row(modifier = modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
+        StrokeableLcdDigits(hh, color, lcdStyle, strokeWidthPx, alignFirstGlyph = true)
+        ColonSeparator(
+            color = color,
+            dotBoostPx = strokeWidthPx,
+            inkCenterFraction = ink.centerFraction,
+            inkHeightFraction = ink.heightFraction,
+            modifier = Modifier.padding(horizontal = Spacing.sm),
+        )
+        StrokeableLcdDigits(mm, color, lcdStyle, strokeWidthPx, alignFirstGlyph = false)
+    }
+}
+
+/** Filled digits with an optional same-color stroke overlaid on top to fake extra weight. */
+@Composable
+private fun StrokeableLcdDigits(
+    text: String,
+    color: Color,
+    style: TextStyle,
+    strokeWidthPx: Float,
+    alignFirstGlyph: Boolean,
+) {
+    Box {
+        if (alignFirstGlyph) {
+            AlignedFirstGlyph(text = text, color = color, style = style)
+        } else {
+            Text(text = text, color = color, style = style, maxLines = 1, softWrap = false)
+        }
+        if (strokeWidthPx > 0f) {
+            val stroked = style.copy(
+                drawStyle = Stroke(width = strokeWidthPx, join = StrokeJoin.Round, cap = StrokeCap.Round),
+            )
+            if (alignFirstGlyph) {
+                AlignedFirstGlyph(text = text, color = color, style = stroked)
+            } else {
+                Text(text = text, color = color, style = stroked, maxLines = 1, softWrap = false)
+            }
         }
     }
-    val pending = alarmTime == null
-    // Roll digits up from 0 (easeOut) only when the alarm VALUE changes. The animated key is
-    // rememberSaveable, so reopening or switching tabs with an unchanged value shows digits at rest.
+}
+
+/**
+ * The 700ms "roll up from 0" reveal progress, fired only when the alarm VALUE changes. The animated
+ * key is [rememberSaveable], so reopening or switching tabs with an unchanged value shows it at rest.
+ */
+@Composable
+internal fun rememberLcdRevealProgress(alarmTime: LocalTime?): Float {
     val valueKey = alarmTime?.let { it.hour * 60 + it.minute }
     var animatedKey by rememberSaveable { mutableStateOf<Int?>(null) }
     val progressAnim = remember { Animatable(if (valueKey == null || valueKey == animatedKey) 1f else 0f) }
@@ -190,263 +296,43 @@ private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier)
         if (valueKey == null) return@LaunchedEffect
         if (valueKey != animatedKey) {
             progressAnim.snapTo(0f)
+            // Sanctioned motionScheme exception (docs/expressive.md § Sanctioned exceptions): the reveal
+            // gates digit rolling on a 0→1 progress; a spring's overshoot past 1 would re-roll the digits.
             progressAnim.animateTo(1f, tween(durationMillis = LCD_REVEAL_MILLIS, easing = EaseOutCubic))
             animatedKey = valueKey
         } else {
             progressAnim.snapTo(1f)
         }
     }
-    val progress = progressAnim.value
-    // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
-    val hh = if (pending) "00"
-        else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
-    val mm = if (pending) "00"
-        else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
-    val base = MaterialTheme.colorScheme.onSurface
-    val digitColor = if (pending) base.copy(alpha = 0.22f) else base
-    // Pending: match the dimmed-digit alpha so "00H/00M" reads as a deliberate grayed twin; brighter once a real time shows.
-    val countdownColor = if (pending) base.copy(alpha = 0.22f) else base.copy(alpha = 0.6f)
-
-    val lcdStyle = TightTextStyle.copy(
-        fontFamily = LcdFontFamily,
-        fontSize = 76.sp,
-        lineHeight = 76.sp,
-    )
-
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.Top,
-    ) {
-        AlignedFirstGlyph(text = hh, color = digitColor, style = lcdStyle)
-        ColonSeparator(
-            color = digitColor,
-            modifier = Modifier
-                .align(Alignment.CenterVertically)
-                .padding(horizontal = Spacing.sm),
-        )
-        Text(text = mm, color = digitColor, style = lcdStyle, maxLines = 1, softWrap = false)
-        CountdownStack(
-            countdown = countdown,
-            progress = progress,
-            color = countdownColor,
-            modifier = Modifier.padding(start = Spacing.xs + Spacing.xxs, top = Spacing.xs + Spacing.xxs),
-        )
-    }
+    return progressAnim.value
 }
-
-private data class HoursMinutes(val hours: Long, val minutes: Long)
 
 private const val LCD_REVEAL_MILLIS = 700
 
-/**
- * Two-line LCD stack ("8H" / "12M") showing time remaining until the alarm.
- * Renders dim placeholders when no alarm is set.
- */
-@Composable
-private fun CountdownStack(
-    countdown: HoursMinutes?,
-    progress: Float,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    // Space Grotesk pairs with the LCD digits — legible, unlike Major Mono Display's art-deco H/M.
-    val smallLcd = TightTextStyle.copy(
-        fontFamily = DisplayFontFamily,
-        fontSize = 24.sp,
-        lineHeight = 26.sp,
-    )
-    // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
-    val (top, bottom) = if (countdown == null) "00H" to "00M"
-    else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
-        String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
-    Column(modifier = modifier) {
-        Text(text = top, color = color, style = smallLcd, maxLines = 1, softWrap = false)
-        Text(text = bottom, color = color, style = smallLcd, maxLines = 1, softWrap = false)
-    }
-}
-
-/**
- * Distance from `now` to the next occurrence of [alarmTime] (today if it's
- * still ahead, otherwise tomorrow). Returns null when no alarm is set.
- */
-private fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
-    if (alarmTime == null) return null
-    val tz = TimeZone.currentSystemDefault()
-    val nowLocal = Clock.System.now().toLocalDateTime(tz)
-    val targetDate = if (alarmTime > nowLocal.time) nowLocal.date else nowLocal.date.plus(1, DateTimeUnit.DAY)
-    val targetInstant = LocalDateTime(targetDate, alarmTime).toInstant(tz)
-    val remaining = targetInstant - Clock.System.now()
-    val totalMinutes = remaining.inWholeMinutes.coerceAtLeast(0)
-    return HoursMinutes(hours = totalMinutes / 60, minutes = totalMinutes % 60)
-}
-
 private val COLON_WIDTH = 8.dp
-private val COLON_HEIGHT = 56.dp
-private val TIMELINE_HEIGHT = 82.dp
-private val TICK_BAR_HEIGHT = 20.dp
 
-/** Two small filled dots stacked vertically — replaces the chunky Major Mono colon. */
+/** Two dots centred on the digit ink (fills the row height) so the colon shares the digits' centre. */
 @Composable
-private fun ColonSeparator(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(width = COLON_WIDTH, height = COLON_HEIGHT)) {
-        drawColonDot(color, yFraction = 0.35f)
-        drawColonDot(color, yFraction = 0.65f)
+private fun ColonSeparator(
+    color: Color,
+    inkCenterFraction: Float,
+    inkHeightFraction: Float,
+    modifier: Modifier = Modifier,
+    dotBoostPx: Float = 0f,
+) {
+    Canvas(modifier = modifier.width(COLON_WIDTH).fillMaxHeight()) {
+        val cy = size.height * inkCenterFraction
+        val gap = size.height * inkHeightFraction * 0.24f
+        drawColonDot(color, centerY = cy - gap, boostPx = dotBoostPx)
+        drawColonDot(color, centerY = cy + gap, boostPx = dotBoostPx)
     }
 }
 
-private fun DrawScope.drawColonDot(color: Color, yFraction: Float) {
-    val radius = size.width * 0.45f
+private fun DrawScope.drawColonDot(color: Color, centerY: Float, boostPx: Float = 0f) {
+    val radius = size.width * 0.45f + boostPx * 0.5f
     drawCircle(
         color = color,
         radius = radius,
-        center = Offset(x = size.width / 2f, y = size.height * yFraction),
+        center = Offset(x = size.width / 2f, y = centerY),
     )
-}
-
-/**
- * Shifts [text] left by the first glyph's side bearing so the painted ink
- * starts at x=0. Lets the Space Grotesk date label and the Major Mono Display
- * digits below it share the same visible left edge without per-font magic.
- */
-@Composable
-private fun AlignedFirstGlyph(
-    text: String,
-    color: Color,
-    style: TextStyle,
-    modifier: Modifier = Modifier,
-) {
-    val resolver = LocalFontFamilyResolver.current
-    val density = LocalDensity.current
-    val leftBearingPx = remember(text, style, density.density) {
-        if (text.isEmpty() || style.fontFamily == null) 0
-        else runCatching {
-            val typeface = resolver.resolve(
-                fontFamily = style.fontFamily,
-                fontWeight = style.fontWeight ?: FontWeight.Normal,
-                fontStyle = style.fontStyle ?: FontStyle.Normal,
-                fontSynthesis = FontSynthesis.None,
-            ).value as? Typeface ?: return@runCatching 0
-            val paint = Paint().apply {
-                this.typeface = typeface
-                this.textSize = with(density) { style.fontSize.toPx() }
-                this.isAntiAlias = true
-            }
-            val rect = Rect()
-            paint.getTextBounds(text, 0, 1, rect)
-            rect.left
-        }.getOrDefault(0)
-    }
-    Text(
-        text = text,
-        color = color,
-        style = style,
-        maxLines = 1,
-        softWrap = false,
-        modifier = modifier.layout { measurable, constraints ->
-            val placeable = measurable.measure(constraints)
-            val shift = leftBearingPx
-            val newWidth = (placeable.width - shift).coerceAtLeast(0)
-            layout(newWidth, placeable.height) {
-                placeable.place(-shift, 0)
-            }
-        },
-    )
-}
-
-/**
- * Solid brand-orange tile with white tick marks across the strip and
- * near-black bars for each sleep-stage segment. Two timestamp labels at
- * the top, two stage labels at the bottom.
- */
-@Composable
-private fun SleepTimeline(
-    segments: List<SleepSegment>,
-    modifier: Modifier = Modifier,
-) {
-    val tile = MaterialTheme.colorScheme.primary
-    val onTile = MaterialTheme.colorScheme.onPrimary
-    val barColor = onTile.copy(alpha = 0.95f)
-    // Martian Mono's line box runs taller than the condensed face it replaced; trim the font
-    // padding and pin line height to the point size so both label rows clear the fixed-height tile.
-    val timeStyle = TightTextStyle.copy(fontFamily = CodeFontFamily, fontSize = 16.sp, lineHeight = 16.sp, color = onTile)
-    val stageStyle = timeStyle.copy(fontSize = 14.sp, lineHeight = 14.sp)
-    Surface(
-        color = tile,
-        shape = RoundedCornerShape(Radius.lg),
-        modifier = modifier
-            .fillMaxWidth()
-            .height(TIMELINE_HEIGHT),
-    ) {
-        val tStart = segments.first().start
-        val tEnd = segments.last().end
-        val totalSpanMs = (tEnd - tStart).inWholeMilliseconds.coerceAtLeast(1)
-        val tz = TimeZone.currentSystemDefault()
-
-        // Two anchor segments for labels: the longest two by duration, sorted chronologically (left earlier).
-        val labelled = segments
-            .sortedByDescending { (it.end - it.start).inWholeMilliseconds }
-            .take(2)
-            .sortedBy { it.start }
-            .ifEmpty { listOf(segments.first()) }
-
-        Column(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm + Spacing.xxs)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (labelled.size == 1) Arrangement.Start else Arrangement.SpaceBetween,
-            ) {
-                labelled.forEach { seg ->
-                    val local = seg.start.toLocalDateTime(tz)
-                    Text(
-                        text = String.format(Locale.US, "%02d:%02d", local.hour, local.minute),
-                        style = timeStyle,
-                    )
-                }
-            }
-            Spacer(Modifier.height(Spacing.xs))
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(TICK_BAR_HEIGHT),
-            ) {
-                val w = size.width
-                val h = size.height
-                val midY = h * 0.5f
-                val tickCount = 80
-                val tickColor = onTile.copy(alpha = 0.65f)
-                for (i in 0 until tickCount) {
-                    val x = w * i / (tickCount - 1).toFloat()
-                    drawLine(
-                        color = tickColor,
-                        start = Offset(x, midY - 4f),
-                        end = Offset(x, midY + 4f),
-                        strokeWidth = 1.2f,
-                    )
-                }
-                segments.forEach { seg ->
-                    val frac0 = ((seg.start - tStart).inWholeMilliseconds.toFloat() / totalSpanMs).coerceIn(0f, 1f)
-                    val frac1 = ((seg.end - tStart).inWholeMilliseconds.toFloat() / totalSpanMs).coerceIn(0f, 1f)
-                    val x0 = w * frac0
-                    val x1 = w * frac1
-                    drawLine(
-                        color = barColor,
-                        start = Offset(x0, midY),
-                        end = Offset(x1, midY),
-                        strokeWidth = 3.5f,
-                    )
-                }
-            }
-            Spacer(Modifier.height(Spacing.xs))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (labelled.size == 1) Arrangement.Start else Arrangement.SpaceBetween,
-            ) {
-                labelled.forEach { seg ->
-                    Text(
-                        text = seg.stage.name.uppercase(Locale.ROOT),
-                        style = stageStyle,
-                    )
-                }
-            }
-        }
-    }
 }

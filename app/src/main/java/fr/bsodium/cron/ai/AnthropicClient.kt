@@ -89,6 +89,9 @@ class AnthropicClient(
             .url(messagesUrl)
             .header("x-api-key", apiKey)
             .header("anthropic-version", "2023-06-01")
+            // Lets the model think again after each tool result (e.g. reason over the actual calendar
+            // events before choosing the anchor). No-op on requests without thinking enabled (replans).
+            .header("anthropic-beta", "interleaved-thinking-2025-05-14")
             .header("content-type", "application/json")
             .post(body)
             .build()
