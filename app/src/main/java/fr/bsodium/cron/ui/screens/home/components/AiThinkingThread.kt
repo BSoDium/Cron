@@ -44,6 +44,8 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
@@ -198,12 +200,17 @@ private fun ThinkingDisclosure(
                 modifier = Modifier.weight(1f),
             )
             if (canExpand) {
+                // Anchored on ExpandMore so the EXPANDED state is the glyph's true direction (down) in both
+                // layout directions; collapsed rotates it ±90° toward the reading direction (right in LTR,
+                // left in RTL) — a direction-aware animation between the two states, not a faked icon.
+                val ltr = LocalLayoutDirection.current == LayoutDirection.Ltr
                 Symbol(
-                    symbol = MaterialSymbol.KeyboardArrowRight,
+                    symbol = MaterialSymbol.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    autoMirror = true,
-                    modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
+                    modifier = Modifier.graphicsLayer {
+                        rotationZ = (openFraction - 1f) * 90f * (if (ltr) 1f else -1f)
+                    },
                 )
             }
         }

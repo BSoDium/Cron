@@ -25,7 +25,9 @@ import java.util.concurrent.TimeUnit
 
 class CronApplication : Application() {
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** Process-lifetime IO scope for work that must outlive a screen's ViewModel (e.g. a replan kick-off
+     *  whose optimistic UI seed must be cleaned up even if the user navigates away mid-flight). */
+    internal val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
