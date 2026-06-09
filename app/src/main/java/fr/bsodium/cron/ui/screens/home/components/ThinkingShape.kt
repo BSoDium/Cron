@@ -70,8 +70,9 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
         label = "shape-stroke",
     )
     val fillColor = MaterialTheme.colorScheme.primary
-    // Bouncy Expressive spring for the thinking circle⇄arrow pulse (captured here, used in the effect below).
-    val thinkingMorphSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    // Bouncy Expressive spring shared by the thinking pulse and the resting settle (captured here, used in
+    // the effect below).
+    val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     // Each turn ([restKey]) settles to a different soft, low-corner shape.
     val rest = remember(restKey) { RESTING_SET.random() }
     var current by remember { mutableStateOf(rest) }
@@ -84,7 +85,7 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
     // Outline while thinking (no answer yet); fill in once the answer streams and at rest.
     val fill by animateFloatAsState(
         targetValue = if (phase == ShapePhase.Thinking) 0f else 1f,
-        animationSpec = FILL_SPEC,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "shape-fill",
     )
 
@@ -96,7 +97,7 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
         suspend fun morphTo(next: RoundedPolygon) {
             target = next
             progress.snapTo(0f)
-            progress.animateTo(1f, thinkingMorphSpec)
+            progress.animateTo(1f, spatialSpec)
         }
         when (phase) {
             ShapePhase.Thinking -> {
@@ -121,8 +122,8 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
                 target = rest
                 progress.snapTo(0f)
                 coroutineScope {
-                    launch { progress.animateTo(1f, REST_SPEC) }
-                    launch { rotation.animateTo(nearestUpright(rotation.value), REST_SPEC) }
+                    launch { progress.animateTo(1f, spatialSpec) }
+                    launch { rotation.animateTo(nearestUpright(rotation.value), spatialSpec) }
                 }
                 current = rest
                 target = rest
@@ -202,14 +203,12 @@ private const val ARROW_DOWN_DEG = 180f
 // Hold between thinking morphs so the arrow ⇄ random pulse lands at ~one change per second.
 private const val THINKING_HOLD_MS = 700L
 
-// Snappy cadence while the answer streams; a soft landing into the resting shape; a soft form-in for the arrow.
+/** Documented exception to the motionScheme-only rule: the writing morph and its spin must share an EXACT
+ *  duration so the spin lands precisely when the morph does, and springs expose no fixed duration — this
+ *  coupled pair is tween-based by design. Everything else in this file animates on motionScheme specs. */
 private const val WRITING_STEP_MS = 240
-private const val REST_MS = 420
 private val WRITING_STEP_SPEC = tween<Float>(durationMillis = WRITING_STEP_MS, easing = FastOutSlowInEasing)
-private val REST_SPEC = tween<Float>(durationMillis = REST_MS, easing = FastOutSlowInEasing)
-private val FILL_SPEC = tween<Float>(durationMillis = 360, easing = FastOutSlowInEasing)
-// The spin shares the morph's duration so it lasts exactly as long as the morph, with a mild
-// ease-out-back overshoot for a springy arrival.
+// Mild ease-out-back overshoot so the spin still arrives springily despite the fixed duration.
 private val SPIN_EASING = CubicBezierEasing(0.34f, 1.4f, 0.64f, 1f)
 private val WRITING_SPIN_SPEC = tween<Float>(durationMillis = WRITING_STEP_MS, easing = SPIN_EASING)
 

@@ -25,6 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -234,8 +235,9 @@ internal fun HomePlanContent(
             }
         }
     }
-    val collapse by collapseState
-    // Threshold haptic + magnetic snap, both keyed on listState.
+    // Threshold haptic + magnetic snap, both keyed on listState. NOTE: the collapse geometry is consumed
+    // only as State (here and in StickyAlarm) — never read in this composable's body, which would recompose
+    // the whole screen on every scroll frame.
     AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
 
     // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed thinking 1:1
@@ -243,7 +245,9 @@ internal fun HomePlanContent(
     // keeps its own reveal via its [PullState]. One reveal value drives the disclosure and the
     // release/tap animation, so there's no second source to dip against.
     val expandTriggerMaxPx = with(density) { THINKING_EXPAND_TRIGGER_MAX.toPx() }
-    val pullHaptics = rememberCronHaptics()
+    // State-wrapped so the remembered pullConnection below reads the pref-respecting instance live (a
+    // haptics-pref toggle swaps it) instead of capturing one stale at construction.
+    val pullHaptics = rememberUpdatedState(rememberCronHaptics(enabled = uiState.hapticsEnabled))
     val pullConnection = remember(listState, pagerState, expandTriggerMaxPx) {
         object : NestedScrollConnection {
             // The iteration the pull acts on — only while the pager rests on a page (no swipe mid-flight).
@@ -278,7 +282,7 @@ internal fun HomePlanContent(
                     val rubber = if (full > 0) (1f - s.reveal.value / full).coerceIn(THINKING_PULL_RUBBER_FLOOR, 1f) else 1f
                     val next = s.reveal.value + available.y * rubber
                     val nowPast = next >= triggerPx(s)
-                    if (nowPast && !s.pastThreshold) pullHaptics.tick() // click as the pull reaches the open point
+                    if (nowPast && !s.pastThreshold) pullHaptics.value.tick() // click as the pull reaches the open point
                     s.pastThreshold = nowPast
                     scope.launch { s.reveal.snapTo(next) }
                     return Offset(0f, available.y)
@@ -350,9 +354,7 @@ internal fun HomePlanContent(
         }
         StickyAlarm(
             safeTopPx = collapseSafeTopPx,
-            top = collapse.top,
-            gradientAlpha = collapse.gradientAlpha,
-            collapseFraction = collapse.fraction,
+            collapse = collapseState,
             // The history tabs ride in the overlay (above the scrim), sticky right below the card, so the
             // scroll gradient never fades them. Lifted out of the list for that reason. Always supplied so
             // the strip can animate IN/OUT (visibility = hasTabs) rather than popping the layout.
@@ -375,7 +377,7 @@ internal fun HomePlanContent(
                 sessionDate = uiState.sessionDisplay?.sessionDate,
                 sleepDurationLabel = uiState.sleepStats?.durationLabel,
                 sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-                collapseFraction = collapseFraction,
+                collapseFraction = collapseFraction, // () -> Float, read in the card's measure pass only
                 onFullHeight = { cardFullHeightPx = it },
             )
         }
@@ -384,20 +386,19 @@ internal fun HomePlanContent(
 
 /**
  * CSS-`sticky`-with-top-offset alarm card, rendered as an overlay over the list, consuming the
- * pre-computed [top]/[gradientAlpha]/[collapseFraction] (single source in the caller). A full-width
- * background→transparent gradient ([gradientAlpha]) fades in behind it as it pins, dissolving content
- * that slides under into the page background.
+ * pre-computed [collapse] geometry (single derived source in the caller). The per-frame fields are
+ * read only inside graphicsLayer blocks (offset/alpha) and handed to [card] as a provider for its
+ * measure pass — a scroll frame never recomposes this overlay. A full-width background→transparent
+ * gradient fades in behind the card as it pins, dissolving content that slides under.
  */
 @Composable
 private fun BoxScope.StickyAlarm(
     safeTopPx: Int,
-    top: Int,
-    gradientAlpha: Float,
-    collapseFraction: Float,
+    collapse: State<AlarmCollapse>,
     belowCardVisible: Boolean = false,
     belowCard: (@Composable () -> Unit)? = null,
     onBelowCardHeight: (Int) -> Unit = {},
-    card: @Composable (collapseFraction: Float) -> Unit,
+    card: @Composable (collapseFraction: () -> Float) -> Unit,
 ) {
     val density = LocalDensity.current
     val background = MaterialTheme.colorScheme.background
@@ -413,7 +414,7 @@ private fun BoxScope.StickyAlarm(
         modifier = Modifier
             .fillMaxWidth()
             .height(with(density) { totalPx.toDp() })
-            .graphicsLayer { alpha = gradientAlpha }
+            .graphicsLayer { alpha = collapse.value.gradientAlpha }
             .background(
                 Brush.verticalGradient(
                     0f to background,
@@ -425,14 +426,14 @@ private fun BoxScope.StickyAlarm(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { translationY = top.toFloat() }
+            .graphicsLayer { translationY = collapse.value.top.toFloat() }
             .onSizeChanged { if (it.height != visiblePx) visiblePx = it.height },
     ) {
         Column {
             // Card hugs at 12dp (tighter than the 20dp content), constant across collapse. The tab strip
             // below it gets a FULL-WIDTH scroll viewport (tabs clip at the screen edge) with its own
             // internal 12dp content padding, so at rest the tabs line up with the card.
-            Box(Modifier.padding(horizontal = Spacing.md)) { card(collapseFraction) }
+            Box(Modifier.padding(horizontal = Spacing.md)) { card { collapse.value.fraction } }
             if (belowCard != null) {
                 // The container animates its height on enter/exit; onSizeChanged reports that ramping
                 // height so the caller's spacer follows in lockstep (no jump). Gap padding is INSIDE so it

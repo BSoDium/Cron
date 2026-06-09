@@ -4,13 +4,18 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.receiver.AlarmReceiver
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
+
+private const val TAG = "HardLatestScheduler"
 
 /**
  * Schedules the **immutable** hard-latest alarm — the safety floor that
@@ -26,16 +31,19 @@ class HardLatestScheduler(private val context: Context) {
     private val alarmManager: AlarmManager =
         context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
+    /** Arms the hard-latest alarm and returns its target instant. A target already in the past is NOT
+     *  armed (a past `setAlarmClock` fires immediately) — logged and skipped instead. */
     fun arm(
         hardLatest: LocalTime,
         sessionDate: LocalDate,
         timezone: TimeZone,
         sessionId: String,
     ): Instant {
-        val target = kotlinx.datetime.LocalDateTime(
-            sessionDate.year, sessionDate.monthNumber, sessionDate.dayOfMonth,
-            hardLatest.hour, hardLatest.minute, hardLatest.second, hardLatest.nanosecond,
-        ).toInstant(timezone)
+        val target = sessionDate.atTime(hardLatest).toInstant(timezone)
+        if (target <= Clock.System.now()) {
+            Log.w(TAG, "Skipping hard-latest arm: target $target is already past")
+            return target
+        }
 
         val pi = requireNotNull(pendingIntent(sessionDate, sessionId, create = true)) {
             "Hard-latest PendingIntent is non-null when create = true"

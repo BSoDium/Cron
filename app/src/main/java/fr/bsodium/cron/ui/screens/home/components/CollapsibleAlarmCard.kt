@@ -39,6 +39,9 @@ internal val ALARM_BAR_HEIGHT = Radius.xl * 2
  * centered) as [collapseFraction] goes 0→1, its strokes thickening as it shrinks. The expanded extras
  * (date, countdown, sleep) fade out; the inline remaining slides in. [onFullHeight] reports the
  * expanded height so the caller reserves a stable slot.
+ *
+ * [collapseFraction] is a provider read only inside the measure pass, so a scroll frame re-lays-out
+ * the card without recomposing it.
  */
 @Composable
 internal fun CollapsibleAlarmCard(
@@ -47,11 +50,10 @@ internal fun CollapsibleAlarmCard(
     sessionDate: LocalDate?,
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
-    collapseFraction: Float,
+    collapseFraction: () -> Float,
     onFullHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val f = collapseFraction.coerceIn(0f, 1f)
     val timing = rememberAlarmTiming(alarmTime, sessionDate)
     val onCard = MaterialTheme.colorScheme.onPrimary
     // Only an upcoming alarm reads in full; no alarm and a passed alarm both render the grayed onset look.
@@ -69,6 +71,7 @@ internal fun CollapsibleAlarmCard(
         shape = RoundedCornerShape(Radius.xl),
     ) {
         SubcomposeLayout(modifier = Modifier.clipToBounds()) { constraints ->
+            val f = collapseFraction().coerceIn(0f, 1f)
             val cWrap = constraints.copy(minWidth = 0, minHeight = 0)
             // Extras fills the full card width (its sleep tile spans it) so the layout width — and the
             // right-aligned countdown — track the real card width, not the wrapped content width.
@@ -165,7 +168,7 @@ private fun CollapsedAlarmCardPreview() {
                 sessionDate = null,
                 sleepDurationLabel = "7H 28M",
                 sleepSegments = PREVIEW_SLEEP_SEGMENTS,
-                collapseFraction = 1f,
+                collapseFraction = { 1f },
                 onFullHeight = {},
             )
         }
@@ -188,7 +191,7 @@ private fun CollapsibleAlarmCardPreview() {
                     sessionDate = null,
                     sleepDurationLabel = "7H 28M",
                     sleepSegments = PREVIEW_SLEEP_SEGMENTS,
-                    collapseFraction = frac,
+                    collapseFraction = { frac },
                     onFullHeight = {},
                 )
             }

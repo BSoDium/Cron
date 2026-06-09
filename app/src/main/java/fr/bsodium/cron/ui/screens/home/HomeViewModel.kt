@@ -4,8 +4,8 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.Data
 import androidx.work.WorkInfo
+import fr.bsodium.cron.CronApplication
 import fr.bsodium.cron.ai.StreamingTurnStore
 import fr.bsodium.cron.alarm.AlarmScheduler
 import fr.bsodium.cron.alarm.EveningPlanScheduler
@@ -15,19 +15,15 @@ import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
-import fr.bsodium.cron.session.db.SessionEntity
-import fr.bsodium.cron.session.db.SessionEventEntity
-import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.session.db.toModel
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.EventData
-import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionEvent
-import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.worker.AiTurnWorker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,18 +37,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
-import kotlinx.datetime.toJavaLocalDate
-import java.time.LocalDate as JavaLocalDate
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
-import java.util.Locale
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.ZERO
 
 data class HomeUiState(
     val sessionDisplay: SessionDisplayState? = null,
@@ -240,25 +228,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (enabled) {
                 eveningPlanScheduler.armNext()
                 // Re-arm what the current session already decided — toggling ON must make Android aware
-                // of the alarm again (symmetry with the OFF teardown below). The clock pref alone did nothing.
+                // of the alarm again (symmetry with the OFF teardown below). Each target is gated on still
+                // being AHEAD: re-enabling after the wake window must not ring instantly (a past
+                // setAlarmClock fires at once, and the AI alarm would clamp to now + a minute).
                 repository.findCurrent()?.let { session ->
                     val tz = TimeZone.of(session.timezone)
-                    hardLatestScheduler.arm(session.plan.hardLatest, session.date, tz, session.id)
+                    val now = Clock.System.now()
+                    if (session.date.atTime(session.plan.hardLatest).toInstant(tz) > now) {
+                        hardLatestScheduler.arm(session.plan.hardLatest, session.date, tz, session.id)
+                    }
                     val instr = session.currentInstruction
                     val alarmTime = instr.alarmTime
                     if (instr.action == ActionType.SetAlarm && alarmTime != null) {
-                        val requested = LocalDateTime(
-                            session.date.year, session.date.monthNumber, session.date.dayOfMonth,
-                            alarmTime.hour, alarmTime.minute, alarmTime.second, alarmTime.nanosecond,
-                        ).toInstant(tz)
-                        alarmScheduler.schedule(
-                            requested = requested,
-                            hardLatest = session.plan.hardLatest,
-                            sessionDate = session.date,
-                            timezone = tz,
-                            label = instr.reason.ifBlank { "Cron Alarm" },
-                            sessionId = session.id,
-                        )
+                        val requested = session.date.atTime(alarmTime).toInstant(tz)
+                        if (requested > now) {
+                            alarmScheduler.schedule(
+                                requested = requested,
+                                hardLatest = session.plan.hardLatest,
+                                sessionDate = session.date,
+                                timezone = tz,
+                                label = instr.reason.ifBlank { "Cron Alarm" },
+                                sessionId = session.id,
+                            )
+                        }
                     }
                 }
             } else {
@@ -322,43 +314,66 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun retryAiPlan() {
         _isRetrying.value = true
-        viewModelScope.launch(Dispatchers.IO) {
-            val tz = TimeZone.currentSystemDefault()
-            val morning = SessionRepository.morningDate(Clock.System.now(), tz)
-            // A same-morning session means this is a replan of an existing plan, not a fresh bootstrap.
-            val replanSession = repository.findCurrent()?.takeIf { it.date == morning }
-            // Seed the upcoming turn FIRST (fast DB read) so its tab shows the instant the user taps —
-            // before the slow location fetch — and IS the real turn (the worker uses maxTurn+1 too, and
-            // appendEvent below adds an event, not an AiMessage, so the index stays correct).
-            if (replanSession != null) {
-                val nextTurn = (db.aiMessageDao().maxTurnIndex(replanSession.id) ?: -1) + 1
-                // Seed with the trigger we're about to fire, so the new tab reads "Re-planned" immediately
-                // instead of inheriting the prior event's label until our event is persisted.
-                StreamingTurnStore.seedPending(replanSession.id, nextTurn, Clock.System.now().toEpochMilliseconds(), TriggerType.EveningPlan)
-                _optimisticTurn.value = replanSession.id to nextTurn
-            }
-            // Nudge a calendar sync up front; the location fetch + AI round-trip below give it time to land.
-            requestCalendarSync()
-            // Manual replan captures a FRESH foreground fix — the user may have moved since the session began.
-            val location = locationProvider.acquireForEveningPlan()
-            val event = SessionEvent(
-                trigger = TriggerType.EveningPlan,
-                timestamp = Clock.System.now(),
-                // The FAB is always user-initiated — flags turn 0 as a manual plan in the UI.
-                data = EventData.EveningPlan(timezone = tz.id, location = location, isManual = true),
-            )
-            val fsm = SessionFsm(getApplication(), repository)
-            if (replanSession != null) {
-                // Same-morning replan: append the fresh evening-plan event (latest wins in the worker),
-                // pull in any plan-affecting setting changed since bootstrap, then re-run the turn.
-                repository.appendEvent(replanSession.id, event)
-                fsm.refreshPlanFromSettings(replanSession.id)
-                repository.triggerAiTurn(replanSession.id)
-            } else {
-                // No session, or a stale one targeting an earlier morning (e.g. a morning re-run of a
-                // session created last night) — let the FSM supersede the stale one and bootstrap a
-                // fresh session for the correct upcoming morning, so the alarm isn't pinned to today.
-                fsm.onEvent(event)
+        // Application-scoped, NOT viewModelScope: the seeded StreamingTurnStore placeholder is a
+        // process-global singleton, and ~tens of seconds of location/calendar suspension sit between the
+        // seed and the worker enqueue. A ViewModel clear (navigation, process trim) cancelling this block
+        // mid-flight would orphan the seed — a permanent phantom tab. The finally below guarantees the
+        // seed is cleared on every exit where the worker was never enqueued.
+        getApplication<CronApplication>().appScope.launch {
+            var seeded: Pair<String, Int>? = null
+            var enqueued = false
+            try {
+                val tz = TimeZone.currentSystemDefault()
+                val morning = SessionRepository.morningDate(Clock.System.now(), tz)
+                // A same-morning session means this is a replan of an existing plan, not a fresh bootstrap.
+                val replanSession = repository.findCurrent()?.takeIf { it.date == morning }
+                // Seed the upcoming turn FIRST (fast DB read) so its tab shows the instant the user taps —
+                // before the slow location fetch — and IS the real turn (the worker uses maxTurn+1 too, and
+                // appendEvent below adds an event, not an AiMessage, so the index stays correct).
+                if (replanSession != null) {
+                    val nextTurn = (db.aiMessageDao().maxTurnIndex(replanSession.id) ?: -1) + 1
+                    // Seed with the trigger we're about to fire, so the new tab reads "Re-planned" immediately
+                    // instead of inheriting the prior event's label until our event is persisted.
+                    StreamingTurnStore.seedPending(replanSession.id, nextTurn, Clock.System.now().toEpochMilliseconds(), TriggerType.EveningPlan)
+                    seeded = replanSession.id to nextTurn
+                    _optimisticTurn.value = seeded
+                }
+                // Nudge a calendar sync up front; the location fetch + AI round-trip below give it time to land.
+                requestCalendarSync()
+                // Manual replan captures a FRESH foreground fix — the user may have moved since the session began.
+                val location = locationProvider.acquireForEveningPlan()
+                val event = SessionEvent(
+                    trigger = TriggerType.EveningPlan,
+                    timestamp = Clock.System.now(),
+                    // The FAB is always user-initiated — flags turn 0 as a manual plan in the UI.
+                    data = EventData.EveningPlan(timezone = tz.id, location = location, isManual = true),
+                )
+                val fsm = SessionFsm(getApplication(), repository)
+                if (replanSession != null) {
+                    // Same-morning replan: append the fresh evening-plan event (latest wins in the worker),
+                    // pull in any plan-affecting setting changed since bootstrap, then re-run the turn.
+                    repository.appendEvent(replanSession.id, event)
+                    fsm.refreshPlanFromSettings(replanSession.id)
+                    repository.triggerAiTurn(replanSession.id)
+                } else {
+                    // No session, or a stale one targeting an earlier morning (e.g. a morning re-run of a
+                    // session created last night) — let the FSM supersede the stale one and bootstrap a
+                    // fresh session for the correct upcoming morning, so the alarm isn't pinned to today.
+                    fsm.onEvent(event)
+                }
+                enqueued = true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "retryAiPlan failed before the worker was enqueued", e)
+            } finally {
+                // Once enqueued, the worker's own finally owns the streaming-store lifecycle; until then,
+                // every exit must roll the optimistic UI back or the seed wedges the home screen.
+                if (!enqueued) {
+                    seeded?.let { (sessionId, turn) -> StreamingTurnStore.clear(sessionId, turn) }
+                    _optimisticTurn.value = null
+                    _isRetrying.value = false
+                }
             }
         }
     }
@@ -386,83 +401,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun clearOptimisticTurn() {
         _optimisticTurn.value?.let { (session, turn) -> StreamingTurnStore.clear(session, turn) }
         _optimisticTurn.value = null
-    }
-
-    private fun SessionEntity.toDisplayState(): SessionDisplayState? {
-        val instruction = runCatching {
-            SessionJson.decodeFromString<Instruction>(currentInstructionJson)
-        }
-            .onFailure { Log.w(TAG, "decode instruction failed for session $id", it) }
-            .getOrNull() ?: return null
-        val sessionDate = runCatching { LocalDate.parse(date) }
-            .onFailure { Log.w(TAG, "parse session date failed for session $id", it) }
-            .getOrNull() ?: return null
-        return SessionDisplayState(
-            status = runCatching { SessionStatus.valueOf(status) }
-                .onFailure { Log.w(TAG, "unknown session status '$status' for $id", it) }
-                .getOrElse { SessionStatus.Complete },
-            action = instruction.action,
-            alarmTime = instruction.alarmTime,
-            reason = instruction.reason,
-            sessionDate = sessionDate,
-            snoozeCount = snoozeCount,
-        )
-    }
-
-    private fun buildSleepStats(rows: List<SessionEventEntity>): SleepStatsUi? {
-        val segments = rows
-            .filter { it.trigger == TriggerType.HcStageUpdate.name }
-            .mapNotNull { row ->
-                val data = runCatching {
-                    SessionJson.decodeFromString<EventData>(row.dataJson)
-                }
-                    .onFailure { Log.w(TAG, "decode HcStageUpdate failed for event ${row.id}", it) }
-                    .getOrNull() as? EventData.HcStageUpdate ?: return@mapNotNull null
-                SleepSegment(
-                    stage = data.stage,
-                    start = data.recordStart,
-                    end = data.recordEnd,
-                )
-            }
-            .sortedBy { it.start }
-        if (segments.isEmpty()) return null
-        val totalSpan = segments.last().end - segments.first().start
-        return SleepStatsUi(
-            durationLabel = formatDuration(totalSpan),
-            segments = segments,
-        )
-    }
-
-    /** Maps an [AiTurnWorker] failure's output data to a UI failure. Unknown/absent reasons (open input
-     *  — future worker reasons) fall through to [AiTurnFailure.Generic]. */
-    private fun Data.toAiTurnFailure(): AiTurnFailure = when (getString(AiTurnWorker.KEY_REASON)) {
-        AiTurnWorker.REASON_BUDGET -> AiTurnFailure.BudgetExhausted(
-            used = getInt(AiTurnWorker.KEY_USED, 0),
-            limit = getInt(AiTurnWorker.KEY_LIMIT, 0),
-        )
-        AiTurnWorker.REASON_NO_API_KEY -> AiTurnFailure.MissingApiKey
-        else -> AiTurnFailure.Generic(getString(AiTurnWorker.KEY_REASON))
-    }
-
-    /** The card header reads the date the alarm fires (the session's morning), falling back to today
-     *  when idle. Relative when near — "Today" / "Tomorrow" — else "EEEE d" (e.g. "Tuesday 2");
-     *  locale-default for the human-language weekday name. */
-    private fun formatDateLabel(session: SessionDisplayState?): String {
-        val today = JavaLocalDate.now()
-        val date = session?.sessionDate?.toJavaLocalDate() ?: today
-        return when (ChronoUnit.DAYS.between(today, date)) {
-            0L -> "Today"
-            1L -> "Tomorrow"
-            else -> date.format(DateTimeFormatter.ofPattern("EEEE d", Locale.getDefault()))
-        }
-    }
-
-    private fun formatDuration(d: Duration): String {
-        if (d <= ZERO) return "0H 0M"
-        val total = d.inWholeMinutes
-        val h = total / 60
-        val m = total % 60
-        return "${h}H ${m}M"
     }
 
     private companion object {
