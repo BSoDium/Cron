@@ -88,6 +88,7 @@ class SessionFsm(
             wakeWindowEnd = settings.freeDayWakeEnd.first(),
             commuteBufferMinutes = settings.commuteBufferMinutes.first(),
             preparationBufferMinutes = settings.preparationBufferMinutes.first(),
+            allowedCommuteModes = settings.allowedCommuteModes.first(),
             isFreeDayFallback = true,
             generatedAt = Clock.System.now(),
         )
@@ -119,14 +120,16 @@ class SessionFsm(
             wakeWindowEnd = settings.freeDayWakeEnd.first(),
             commuteBufferMinutes = settings.commuteBufferMinutes.first(),
             preparationBufferMinutes = settings.preparationBufferMinutes.first(),
+            allowedCommuteModes = settings.allowedCommuteModes.first(),
             generatedAt = Clock.System.now(),
         )
-        // generatedAt always differs, so compare the five settings-derived fields explicitly.
+        // generatedAt always differs, so compare the settings-derived fields explicitly.
         val unchanged = refreshed.hardLatest == session.plan.hardLatest &&
             refreshed.wakeWindowStart == session.plan.wakeWindowStart &&
             refreshed.wakeWindowEnd == session.plan.wakeWindowEnd &&
             refreshed.commuteBufferMinutes == session.plan.commuteBufferMinutes &&
-            refreshed.preparationBufferMinutes == session.plan.preparationBufferMinutes
+            refreshed.preparationBufferMinutes == session.plan.preparationBufferMinutes &&
+            refreshed.allowedCommuteModes == session.plan.allowedCommuteModes
         if (unchanged) return@withContext
         repository.updatePlan(sessionId, refreshed)
         if (refreshed.hardLatest != session.plan.hardLatest) {

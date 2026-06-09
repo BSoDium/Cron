@@ -9,10 +9,10 @@ import androidx.compose.ui.graphics.vector.VectorNode
 import androidx.compose.ui.graphics.vector.VectorPath
 
 /**
- * Rebuilds this vector with every solid fill remapped by [map]. Used to retint a multi-color asset
- * (the onboarding illustration) onto the live Material You `colorScheme` at the Compose layer — the
- * app's framework `Theme.Cron` can't expose the dynamic palette to the drawable via `?attr/color*`.
- * Gradient fills and all strokes pass through unchanged; `fillAlpha`/`pathData` are preserved.
+ * Rebuilds this vector with every solid fill AND solid stroke remapped by [map]. Used to retint a
+ * multi-color asset (the onboarding illustration, the no-plan illustration) onto the live Material You
+ * `colorScheme` at the Compose layer — the app's framework `Theme.Cron` can't expose the dynamic palette
+ * to the drawable via `?attr/color*`. Gradient brushes pass through unchanged; alpha/`pathData` preserved.
  */
 fun ImageVector.recolored(map: (Color) -> Color): ImageVector {
     val builder = ImageVector.Builder(
@@ -37,7 +37,7 @@ private fun ImageVector.Builder.addNode(node: VectorNode, map: (Color) -> Color)
             name = node.name,
             fill = node.fill.remap(map),
             fillAlpha = node.fillAlpha,
-            stroke = node.stroke,
+            stroke = node.stroke.remap(map),
             strokeAlpha = node.strokeAlpha,
             strokeLineWidth = node.strokeLineWidth,
             strokeLineCap = node.strokeLineCap,

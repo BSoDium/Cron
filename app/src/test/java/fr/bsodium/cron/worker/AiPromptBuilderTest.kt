@@ -1,5 +1,6 @@
 package fr.bsodium.cron.worker
 
+import fr.bsodium.cron.session.model.CommuteMode
 import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.testutil.Fixtures
 import org.junit.Assert.assertFalse
@@ -47,5 +48,35 @@ class AiPromptBuilderTest {
         assertTrue(prompt.contains("## Event log"))
         assertTrue(prompt.contains("HcStageUpdate"))
         assertTrue(prompt.contains("Decide what the alarm system should do."))
+    }
+
+    @Test
+    fun overnight_replan_includes_the_captured_location_so_origin_is_never_guessed() {
+        val session = Fixtures.session(events = listOf(Fixtures.eveningEvent(lat = 46.624, lng = 14.308)))
+        val prompt = AiPromptBuilder.build(session, isEveningPlan = false, instructions = null)
+        assertTrue(prompt.contains("## Current location"))
+        assertTrue(prompt.contains("46.624"))
+        assertTrue(prompt.contains("14.308"))
+    }
+
+    @Test
+    fun both_messages_list_allowed_commute_modes_defaulting_to_all() {
+        val evening = AiPromptBuilder.build(Fixtures.session(), isEveningPlan = true, instructions = null)
+        val replan = AiPromptBuilder.build(Fixtures.session(), isEveningPlan = false, instructions = null)
+        assertTrue(evening.contains("Allowed commute modes"))
+        assertTrue(replan.contains("Allowed commute modes"))
+        assertTrue(evening.contains("DRIVE"))
+        assertTrue(evening.contains("TRANSIT"))
+    }
+
+    @Test
+    fun excluding_a_mode_omits_it_from_the_allowed_list() {
+        val plan = Fixtures.dayPlan().copy(
+            allowedCommuteModes = setOf(CommuteMode.Transit, CommuteMode.Bike, CommuteMode.Walk),
+        )
+        val prompt = AiPromptBuilder.build(Fixtures.session(plan = plan), isEveningPlan = true, instructions = null)
+        assertTrue(prompt.contains("Allowed commute modes"))
+        assertTrue(prompt.contains("TRANSIT"))
+        assertFalse(prompt.contains("DRIVE"))
     }
 }

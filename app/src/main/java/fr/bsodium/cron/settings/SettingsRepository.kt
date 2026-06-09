@@ -8,8 +8,10 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import fr.bsodium.cron.ai.BudgetStore
+import fr.bsodium.cron.session.model.CommuteMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -26,7 +28,7 @@ private val Context.dataStore by preferencesDataStore(name = "cron_settings")
 class SettingsRepository(private val context: Context) {
 
     val eveningTriggerLocalTime: Flow<LocalTime> = context.dataStore.data.map { prefs ->
-        prefs.localTime(EVENING_TRIGGER, default = LocalTime(22, 0))
+        prefs.localTime(EVENING_TRIGGER, default = LocalTime(20, 0))
     }
 
     val hardLatestDefault: Flow<LocalTime> = context.dataStore.data.map { prefs ->
@@ -49,6 +51,18 @@ class SettingsRepository(private val context: Context) {
         prefs[PREPARATION_BUFFER] ?: 15
     }
 
+    /** Transport modes the planner may use for commute estimates. Unset or empty → all modes allowed
+     *  (the planner auto-picks among them); the user excludes modes they don't want (e.g. no car). */
+    val allowedCommuteModes: Flow<Set<CommuteMode>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[ALLOWED_COMMUTE_MODES]
+        if (raw.isNullOrEmpty()) {
+            CommuteMode.entries.toSet()
+        } else {
+            raw.mapNotNull { name -> runCatching { CommuteMode.valueOf(name) }.getOrNull() }
+                .toSet().ifEmpty { CommuteMode.entries.toSet() }
+        }
+    }
+
     val homeAddressLat: Flow<Double?> = context.dataStore.data.map { prefs ->
         prefs[HOME_LAT]?.toDoubleOrNull()
     }
@@ -69,11 +83,6 @@ class SettingsRepository(private val context: Context) {
     /** Whether the app auto-plans and arms alarms each night. Off cancels every armed alarm. Defaults on. */
     val autoAlarmsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[AUTO_ALARMS_ENABLED] ?: true
-    }
-
-    /** True once the user has expanded the thinking block — hides the one-time pull-to-show hint. */
-    val thinkingHintSeen: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[THINKING_HINT_SEEN] ?: false
     }
 
     /** User-supplied display name shown in the home greeting. */
@@ -115,6 +124,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPreparationBufferMinutes(minutes: Int) =
         editPlanAffecting { it[PREPARATION_BUFFER] = minutes }
 
+    /** Persists the allowed set by enum name. An empty set is stored as-is and reads back as "all
+     *  allowed", so the user can never lock the planner out of every mode. */
+    suspend fun setAllowedCommuteModes(modes: Set<CommuteMode>) =
+        editPlanAffecting { it[ALLOWED_COMMUTE_MODES] = modes.map { mode -> mode.name }.toSet() }
+
     suspend fun setHomeAddress(lat: Double, lng: Double) =
         editPlanAffecting {
             it[HOME_LAT] = lat.toString()
@@ -141,9 +155,6 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[AUTO_ALARMS_ENABLED] = enabled }
 
     suspend fun autoAlarmsEnabledNow(): Boolean = autoAlarmsEnabled.first()
-
-    suspend fun setThinkingHintSeen() =
-        context.dataStore.edit { it[THINKING_HINT_SEEN] = true }
 
     suspend fun setDisplayName(name: String) =
         context.dataStore.edit { it[DISPLAY_NAME] = name.trim() }
@@ -175,12 +186,12 @@ class SettingsRepository(private val context: Context) {
         val FREE_DAY_WAKE_END = stringPreferencesKey("free_day_wake_end")
         val COMMUTE_BUFFER = intPreferencesKey("commute_buffer_minutes")
         val PREPARATION_BUFFER = intPreferencesKey("preparation_buffer_minutes")
+        val ALLOWED_COMMUTE_MODES = stringSetPreferencesKey("allowed_commute_modes")
         val HOME_LAT = stringPreferencesKey("home_address_lat")
         val HOME_LNG = stringPreferencesKey("home_address_lng")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         val AUTO_ALARMS_ENABLED = booleanPreferencesKey("auto_alarms_enabled")
-        val THINKING_HINT_SEEN = booleanPreferencesKey("thinking_hint_seen")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val USER_INSTRUCTIONS = stringPreferencesKey("user_instructions")
         val DAILY_TOKEN_LIMIT = intPreferencesKey("daily_token_limit")

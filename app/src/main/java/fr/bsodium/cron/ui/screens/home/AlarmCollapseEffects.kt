@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import kotlinx.coroutines.CancellationException
@@ -41,11 +44,25 @@ internal fun AlarmCollapseEffects(
     hapticsEnabled: Boolean,
 ) {
     val haptics = rememberCronHaptics(enabled = hapticsEnabled)
+    // The range resolves from the card's measured height a frame or two after this effect launches; read it
+    // live so the snap lands on the true full-collapse distance, not the fallback captured at launch.
+    val range = rememberUpdatedState(rangePx)
     LaunchedEffect(listState) {
         snapshotFlow { collapse.value.fraction >= 0.5f }
             .distinctUntilChanged()
             .drop(1)
             .collect { haptics.tick() }
+    }
+    // Latest scroll direction within the collapse range, so a settle-in-between completes toward where the
+    // user was headed (down → collapse, up → expand) instead of a fixed midpoint that yanks a down-scroll back up.
+    val scrollingDown = remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        var last = collapse.value.distancePx
+        snapshotFlow { collapse.value.distancePx }.collect { d ->
+            if (d > last + 0.5f) scrollingDown.value = true
+            else if (d < last - 0.5f) scrollingDown.value = false
+            last = d
+        }
     }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
@@ -56,17 +73,21 @@ internal fun AlarmCollapseEffects(
                 delay(SETTLE_DEBOUNCE_MS)
                 if (listState.isScrollInProgress) return@collect
                 val c = collapse.value
+                // Only nudge a scroll that came to REST between the two stable states — a momentum fling that
+                // already carried through to a stable end (or into the content below) is left untouched.
                 if (c.fraction <= 0.001f || c.fraction >= 0.999f) return@collect
                 try {
-                    if (c.fraction >= 0.5f && listState.canScrollForward) {
-                        listState.animateScrollBy(rangePx - c.distancePx, ALARM_SNAP_SPEC)
-                        // Hit the content bottom before fully collapsing → expand instead of stalling.
+                    if (scrollingDown.value && listState.canScrollForward) {
+                        listState.animateScrollBy(range.value - c.distancePx, ALARM_SNAP_SPEC)
+                        // Hit the content bottom before fully collapsing → expand to the very top instead of stalling.
                         val rest = collapse.value
                         if (rest.fraction > 0.001f && rest.fraction < 0.999f) {
-                            listState.animateScrollBy(-rest.distancePx, ALARM_SNAP_SPEC)
+                            listState.animateScrollToItem(0)
                         }
                     } else {
-                        listState.animateScrollBy(-c.distancePx, ALARM_SNAP_SPEC)
+                        // Headed up (or can't collapse further) → land at the very top so the greeting + full
+                        // card are visible (not just pinned under the status bar).
+                        listState.animateScrollToItem(0)
                     }
                 } catch (e: CancellationException) {
                     // User grabbed the list mid-snap → the SCROLL is cancelled, not us. Keep observing

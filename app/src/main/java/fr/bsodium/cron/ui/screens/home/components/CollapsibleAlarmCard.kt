@@ -1,22 +1,13 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,13 +17,17 @@ import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
-import kotlinx.coroutines.delay
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlin.math.roundToInt
 
 // Max stroke (local 76sp space) overlaid on the collapsed digits to fake weight as they shrink.
 // Conservative default — bump for bolder collapsed digits.
 private val MAX_CLOCK_STROKE = 1.5.dp
+
+/** Collapsed alarm-bar height: a perfect pill (= 2 × the corner radius). Shared with HomeContent's
+ *  collapse-range math so the card shrinks at exactly finger speed (range == full − bar height). */
+internal val ALARM_BAR_HEIGHT = Radius.xl * 2
 
 /**
  * The alarm card that collapses on scroll. Rather than crossfade two layouts, the **"HH:MM" clock**
@@ -46,6 +41,7 @@ private val MAX_CLOCK_STROKE = 1.5.dp
 internal fun CollapsibleAlarmCard(
     dateLabel: String,
     alarmTime: LocalTime?,
+    sessionDate: LocalDate?,
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
     collapseFraction: Float,
@@ -53,10 +49,12 @@ internal fun CollapsibleAlarmCard(
     modifier: Modifier = Modifier,
 ) {
     val f = collapseFraction.coerceIn(0f, 1f)
+    val timing = rememberAlarmTiming(alarmTime, sessionDate)
     val onCard = MaterialTheme.colorScheme.onPrimary
-    val digitColor = if (alarmTime == null) onCard.copy(alpha = 0.30f) else onCard
-    // Remaining keeps the dimmed countdown colour in BOTH states — colour alone conveys hierarchy.
-    val countdownColor = if (alarmTime == null) onCard.copy(alpha = 0.30f) else onCard.copy(alpha = 0.7f)
+    // Only an upcoming alarm reads in full; no alarm and a passed alarm both render the grayed onset look.
+    val upcoming = timing is AlarmTiming.Upcoming
+    val digitColor = if (upcoming) onCard else onCard.copy(alpha = 0.30f)
+    val countdownColor = if (upcoming) onCard.copy(alpha = 0.7f) else onCard.copy(alpha = 0.30f)
     // One reveal, shared by the moving clock + countdown (the hidden time row in extras keeps its own
     // deterministic copy, never drawn).
     val progress = rememberLcdRevealProgress(alarmTime)
@@ -64,23 +62,8 @@ internal fun CollapsibleAlarmCard(
     // The alarm-type shape is sized to one expanded clock digit (see AlarmCardContent).
     val dateStyle = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp)
 
-    // Springy entrance: the card eases in with a small scale + fade the first time it appears. Static
-    // @Preview never runs the effect, so start settled there (else the alpha gate renders it invisible).
-    val inPreview = LocalInspectionMode.current
-    val entrance = remember { Animatable(if (inPreview) 1f else 0f) }
-    if (!inPreview) {
-        LaunchedEffect(Unit) {
-            entrance.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow))
-        }
-    }
-
     AlarmShell(
-        modifier = modifier.graphicsLayer {
-            val e = entrance.value
-            alpha = e
-            scaleX = 0.97f + 0.03f * e
-            scaleY = 0.97f + 0.03f * e
-        },
+        modifier = modifier,
         shape = RoundedCornerShape(Radius.xl),
     ) {
         SubcomposeLayout(modifier = Modifier.clipToBounds()) { constraints ->
@@ -93,7 +76,7 @@ internal fun CollapsibleAlarmCard(
             // Full expanded layout with its time row and date hidden (still measured) → single source of
             // geometry; those are drawn as moving copies on top. The badge isn't in the expanded card.
             val extras = subcompose("extras") {
-                AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f, dateAlpha = 0f)
+                AlarmCardContent(dateLabel, alarmTime, timing, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f, dateAlpha = 0f)
             }.first().measure(cFill)
             onFullHeight(extras.height)
             // Date mover — the same AlignedFirstGlyph as extras, placed so it can slide up out the top.
@@ -101,7 +84,7 @@ internal fun CollapsibleAlarmCard(
                 AlignedFirstGlyph(dateLabel.ifBlank { "—" }, color = onCard, style = dateStyle)
             }.first().measure(cWrap)
             // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
-            val barHeight = (Radius.xl * 2).roundToPx()
+            val barHeight = ALARM_BAR_HEIGHT.roundToPx()
             // Inset > a tight fit so the shrunken digits gain a little spacing above and below in the pill.
             val innerInset = Spacing.md.roundToPx()
             // Centre on the digit INK, not the line box (Major Mono digits have no descenders → sit high).
@@ -120,13 +103,7 @@ internal fun CollapsibleAlarmCard(
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
             // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
             val countdown = subcompose("countdown") {
-                val cd by produceState<HoursMinutes?>(computeCountdown(alarmTime), alarmTime) {
-                    while (true) {
-                        value = computeCountdown(alarmTime)
-                        delay(60_000)
-                    }
-                }
-                CountdownStack(countdown = cd, progress = progress, color = countdownColor, alignFraction = f)
+                RemainingOrStatus(timing = timing, progress = progress, color = countdownColor, alignFraction = f)
             }.first().measure(cWrap)
 
             val w = extras.width
@@ -183,6 +160,7 @@ private fun CollapsedAlarmCardPreview() {
             CollapsibleAlarmCard(
                 dateLabel = "Saturday 6",
                 alarmTime = LocalTime(10, 0),
+                sessionDate = null,
                 sleepDurationLabel = "7H 28M",
                 sleepSegments = PREVIEW_SLEEP_SEGMENTS,
                 collapseFraction = 1f,
@@ -205,6 +183,7 @@ private fun CollapsibleAlarmCardPreview() {
                 CollapsibleAlarmCard(
                     dateLabel = "Saturday 6",
                     alarmTime = LocalTime(10, 0),
+                    sessionDate = null,
                     sleepDurationLabel = "7H 28M",
                     sleepSegments = PREVIEW_SLEEP_SEGMENTS,
                     collapseFraction = frac,

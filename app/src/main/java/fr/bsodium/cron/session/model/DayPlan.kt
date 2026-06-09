@@ -15,6 +15,7 @@ data class DayPlan(
     val firstEventLocation: String? = null,
     val commuteBufferMinutes: Int,
     val preparationBufferMinutes: Int = 15,
+    val allowedCommuteModes: Set<CommuteMode> = CommuteMode.entries.toSet(),
     val isFreeDayFallback: Boolean,
     val generatedAt: Instant,
 )

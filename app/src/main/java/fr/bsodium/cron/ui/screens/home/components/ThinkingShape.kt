@@ -5,9 +5,11 @@ package fr.bsodium.cron.ui.screens.home.components
 import android.graphics.Matrix
 import android.graphics.Path
 import android.graphics.RectF
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -36,6 +38,7 @@ import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
 import fr.bsodium.cron.ui.theme.CronTheme
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -46,13 +49,29 @@ import kotlin.math.roundToInt
 enum class ShapePhase { Resting, Thinking, Writing }
 
 /**
- * A small brand-tinted Material shape under the AI thread that morphs with the assistant's state,
- * spinning springily with each morph: an outlined cozy shape while thinking, a filled sharp star
- * while the answer streams in, settling to a filled heart at rest — like a logo under a message.
+ * A small brand-tinted Material shape under the AI thread that reacts to the assistant's state: a
+ * quiet, still, outlined shape while thinking, then — the moment the answer starts streaming — it fills
+ * in and comes alive, morphing and spinning springily through sharp stars, settling to a soft filled
+ * shape at rest. Like a logo under a message.
  */
 @Composable
 fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any? = null) {
-    val color = MaterialTheme.colorScheme.primary
+    // Smaller + muted while thinking (quiet, low-contrast), growing to full-size brand primary once the
+    // answer streams and at rest — so the shape visibly "wakes up" as it comes alive.
+    val shapeSize by animateDpAsState(
+        targetValue = if (phase == ShapePhase.Thinking) THINKING_SHAPE_SIZE else SHAPE_SIZE,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "shape-size",
+    )
+    val strokeColor by animateColorAsState(
+        targetValue = if (phase == ShapePhase.Thinking) MaterialTheme.colorScheme.onSurfaceVariant
+        else MaterialTheme.colorScheme.primary,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "shape-stroke",
+    )
+    val fillColor = MaterialTheme.colorScheme.primary
+    // Bouncy Expressive spring for the thinking circle⇄arrow pulse (captured here, used in the effect below).
+    val thinkingMorphSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     // Each turn ([restKey]) settles to a different soft, low-corner shape.
     val rest = remember(restKey) { RESTING_SET.random() }
     var current by remember { mutableStateOf(rest) }
@@ -70,44 +89,67 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
     )
 
     LaunchedEffect(phase) {
-        val cycle = when (phase) {
-            ShapePhase.Thinking -> COZY
-            ShapePhase.Writing -> SHARP
-            ShapePhase.Resting -> null
-        }
-        if (cycle == null) {
-            // Settle to the resting shape, upright (nearest full turn) so it lands level.
-            target = rest
-            progress.snapTo(0f)
-            coroutineScope {
-                launch { progress.animateTo(1f, REST_SPEC) }
-                launch { rotation.animateTo(nearestUpright(rotation.value), REST_SPEC) }
+        when (phase) {
+            ShapePhase.Thinking -> {
+                // Bouncily pulse the down-arrow ⇄ a random shape (~once a second) — the pull-to-show-thinking
+                // cue. (A MaterialShapes polygon in the morph canvas, not a vector icon; the downward
+                // orientation is the intended pull affordance, not an accidental icon flip. The pool shapes
+                // read fine at this fixed rotation, so there's no spin.)
+                rotation.snapTo(ARROW_DOWN_DEG)
+                // Form the down-arrow first, then idle: hold, morph to a random shape, hold, morph back — repeat.
+                // Each hold stays on the JUST-COMPLETED morph (current is reassigned only right before the next
+                // morph), so the static pause never renders a degenerate Morph(X, X) whose re-matched bounds
+                // would jump the fit-scale the instant the shape lands.
+                target = THINKING_ARROW
+                progress.snapTo(0f)
+                progress.animateTo(1f, thinkingMorphSpec)
+                while (true) {
+                    delay(THINKING_HOLD_MS)
+                    current = THINKING_ARROW
+                    val other = THINKING_POOL.random()
+                    target = other
+                    progress.snapTo(0f)
+                    progress.animateTo(1f, thinkingMorphSpec)
+                    delay(THINKING_HOLD_MS)
+                    current = other
+                    target = THINKING_ARROW
+                    progress.snapTo(0f)
+                    progress.animateTo(1f, thinkingMorphSpec)
+                }
             }
-            current = rest
-            target = rest
-            progress.snapTo(0f)
-            return@LaunchedEffect
-        }
-        val writing = phase == ShapePhase.Writing
-        val morphSpec = if (writing) WRITING_STEP_SPEC else THINKING_STEP_SPEC
-        val spinSpec = if (writing) WRITING_SPIN_SPEC else THINKING_SPIN_SPEC
-        var i = 0
-        while (true) {
-            val next = cycle[i % cycle.size]
-            target = next
-            progress.snapTo(0f)
-            // Morph and spin share a duration, so the spin lasts exactly as long as the morph.
-            coroutineScope {
-                launch { progress.animateTo(1f, morphSpec) }
-                launch { rotation.animateTo(rotation.value + STEP_DEG, spinSpec) }
+            ShapePhase.Resting -> {
+                // Settle to the resting shape, upright (nearest full turn) so it lands level.
+                target = rest
+                progress.snapTo(0f)
+                coroutineScope {
+                    launch { progress.animateTo(1f, REST_SPEC) }
+                    launch { rotation.animateTo(nearestUpright(rotation.value), REST_SPEC) }
+                }
+                current = rest
+                target = rest
+                progress.snapTo(0f)
             }
-            current = next
-            i++
+            ShapePhase.Writing -> {
+                // The answer is streaming: come alive — morph and spin through the sharp shapes (fill ramps in).
+                var i = 0
+                while (true) {
+                    val next = SHARP[i % SHARP.size]
+                    target = next
+                    progress.snapTo(0f)
+                    // Morph and spin share a duration, so the spin lasts exactly as long as the morph.
+                    coroutineScope {
+                        launch { progress.animateTo(1f, WRITING_STEP_SPEC) }
+                        launch { rotation.animateTo(rotation.value + STEP_DEG, WRITING_SPIN_SPEC) }
+                    }
+                    current = next
+                    i++
+                }
+            }
         }
     }
 
-    Canvas(modifier = modifier.size(SHAPE_SIZE)) {
-        drawMorph(morph, progress.value, rotation.value, fill, color, androidPath, matrix)
+    Canvas(modifier = modifier.size(shapeSize)) {
+        drawMorph(morph, progress.value, rotation.value, fill, fillColor, androidPath, matrix, strokeColor = strokeColor)
     }
 }
 
@@ -153,25 +195,28 @@ private fun nearestUpright(deg: Float): Float = (deg / 360f).roundToInt() * 360f
 
 // Canvas is a touch larger than the visible shape so a spun shape never clips at the edges.
 private val SHAPE_SIZE = 32.dp
+// Small, ~text-sized footprint while thinking (a down-arrow pull cue); grows to SHAPE_SIZE as it comes alive.
+private val THINKING_SHAPE_SIZE = 18.dp
 private const val SHAPE_FIT = 0.8f
-private val STROKE_WIDTH = 2.dp
+private val STROKE_WIDTH = 1.5.dp
 private const val STEP_DEG = 120f
+// Rotation that points MaterialShapes.Arrow downward (its 0° orientation points up); tune on device.
+private const val ARROW_DOWN_DEG = 180f
+// Hold between thinking morphs so the arrow ⇄ random pulse lands at ~one change per second.
+private const val THINKING_HOLD_MS = 700L
 
-// Slow, gentle cadence while thinking; snappy while the answer streams; a soft landing into the heart.
-private const val THINKING_STEP_MS = 1100
+// Snappy cadence while the answer streams; a soft landing into the resting shape; a soft form-in for the arrow.
 private const val WRITING_STEP_MS = 240
 private const val REST_MS = 420
-private val THINKING_STEP_SPEC = tween<Float>(durationMillis = THINKING_STEP_MS, easing = FastOutSlowInEasing)
 private val WRITING_STEP_SPEC = tween<Float>(durationMillis = WRITING_STEP_MS, easing = FastOutSlowInEasing)
 private val REST_SPEC = tween<Float>(durationMillis = REST_MS, easing = FastOutSlowInEasing)
 private val FILL_SPEC = tween<Float>(durationMillis = 360, easing = FastOutSlowInEasing)
-// The spin shares the morph's per-phase duration so it lasts exactly as long as the morph, with a
-// mild ease-out-back overshoot for a springy arrival.
+// The spin shares the morph's duration so it lasts exactly as long as the morph, with a mild
+// ease-out-back overshoot for a springy arrival.
 private val SPIN_EASING = CubicBezierEasing(0.34f, 1.4f, 0.64f, 1f)
-private val THINKING_SPIN_SPEC = tween<Float>(durationMillis = THINKING_STEP_MS, easing = SPIN_EASING)
 private val WRITING_SPIN_SPEC = tween<Float>(durationMillis = WRITING_STEP_MS, easing = SPIN_EASING)
 
-// At rest, a random soft low-corner shape; cozy round shapes for thinking; sharp star shapes streaming.
+// At rest, a random soft low-corner shape; a small down-arrow while thinking; sharp star shapes while streaming.
 private val RESTING_SET: List<RoundedPolygon> = listOf(
     MaterialShapes.Ghostish,
     MaterialShapes.Bun,
@@ -179,20 +224,17 @@ private val RESTING_SET: List<RoundedPolygon> = listOf(
     MaterialShapes.Flower,
     MaterialShapes.Clover4Leaf,
 )
-private val COZY: List<RoundedPolygon> = listOf(
-    MaterialShapes.Cookie9Sided,
-    MaterialShapes.Cookie6Sided,
-    MaterialShapes.SoftBurst,
-    MaterialShapes.Sunny,
-    MaterialShapes.Puffy,
-    MaterialShapes.Clover4Leaf,
-)
+// While thinking, the shape pulses between the downward arrow (rotated via ARROW_DOWN_DEG) and a random
+// shape from THINKING_POOL, as the pull-to-show cue.
+private val THINKING_ARROW: RoundedPolygon = MaterialShapes.Arrow
 private val SHARP: List<RoundedPolygon> = listOf(
     MaterialShapes.Burst,
     MaterialShapes.Boom,
     MaterialShapes.VerySunny,
     MaterialShapes.Gem,
 )
+// Any shape but the arrow — the thinking pulse morphs the arrow to a random one of these and back.
+private val THINKING_POOL: List<RoundedPolygon> = RESTING_SET + SHARP + MaterialShapes.Circle
 
 @Preview(showBackground = true)
 @Composable
@@ -203,7 +245,7 @@ private fun ThinkingShapePreview() {
             modifier = Modifier.padding(16.dp),
         ) {
             StaticShape(RESTING_SET.first(), fill = 1f)
-            StaticShape(COZY.first(), fill = 0f)
+            StaticShape(THINKING_ARROW, fill = 0f)
             StaticShape(SHARP.first(), fill = 1f)
         }
     }

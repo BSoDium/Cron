@@ -43,11 +43,13 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toJavaLocalDate
 import java.time.LocalDate as JavaLocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.ZERO
@@ -69,10 +71,10 @@ data class HomeUiState(
     val aiFailure: AiTurnFailure? = null,
     /** User preference: fire subtle haptic ticks while the assistant streams. */
     val hapticsEnabled: Boolean = true,
-    /** True once the user has expanded the thinking once — hides the one-time pull hint. */
-    val thinkingHintSeen: Boolean = false,
     /** User preference: auto-plan and arm alarms each night. Off cancels everything armed. */
     val autoAlarmsEnabled: Boolean = true,
+    /** The local time the nightly planning run fires — drives the resting screen's "next plan at …" line. */
+    val eveningTriggerTime: LocalTime = LocalTime(20, 0),
 )
 
 /** Why the most recent AI turn ended without updating the plan, for the home failure banner. */
@@ -99,6 +101,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val hardLatestScheduler = HardLatestScheduler(application)
 
     private val _isRetrying = MutableStateFlow(false)
+
+    /** The (sessionId, turnIndex) of the placeholder seeded into [StreamingTurnStore] when a user triggers
+     *  a replan, so the optimistic tab IS the real turn. Tracked only to clear it if the worker dies before
+     *  streaming (the normal path is cleared by TurnRunner's finally). Null when no replan is pending. */
+    private val _optimisticTurn = MutableStateFlow<Pair<String, Int>?>(null)
 
     /** Failure parsed from the latest FAILED turn; null while idle, running, or once dismissed. */
     private val _aiFailure = MutableStateFlow<AiTurnFailure?>(null)
@@ -163,10 +170,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // UX prefs pre-combined so statusFlow stays within combine's 5-arg arity.
     private val prefsFlow = combine(
         settings.hapticsEnabled,
-        settings.thinkingHintSeen,
         settings.autoAlarmsEnabled,
-    ) { haptics, hintSeen, autoAlarms ->
-        HomePrefs(hapticsEnabled = haptics, thinkingHintSeen = hintSeen, autoAlarmsEnabled = autoAlarms)
+        settings.eveningTriggerLocalTime,
+    ) { haptics, autoAlarms, eveningTrigger ->
+        HomePrefs(
+            hapticsEnabled = haptics,
+            autoAlarmsEnabled = autoAlarms,
+            eveningTriggerTime = eveningTrigger,
+        )
     }
 
     private val statusFlow = combine(
@@ -181,8 +192,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             settingsChanged = settingsChanged,
             failure = failure,
             hapticsEnabled = prefs.hapticsEnabled,
-            thinkingHintSeen = prefs.thinkingHintSeen,
             autoAlarmsEnabled = prefs.autoAlarmsEnabled,
+            eveningTriggerTime = prefs.eveningTriggerTime,
         )
     }
 
@@ -207,19 +218,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             settingsChangedSincePlan = status.settingsChanged && plan != null,
             aiFailure = status.failure,
             hapticsEnabled = status.hapticsEnabled,
-            thinkingHintSeen = status.thinkingHintSeen,
             autoAlarmsEnabled = status.autoAlarmsEnabled,
+            eveningTriggerTime = status.eveningTriggerTime,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     /** Hide the "settings changed" reminder until the next plan-affecting change. */
     fun dismissSettingsReminder() {
         _dismissedSettingsAt.value = Clock.System.now().toEpochMilliseconds()
-    }
-
-    /** Mark the one-time "pull to show thinking" hint as seen the first time the user expands it. */
-    fun markThinkingHintSeen() {
-        viewModelScope.launch { settings.setThinkingHintSeen() }
     }
 
     /**
@@ -287,7 +293,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 .collect { infos ->
                     when {
                         infos.any { !it.state.isFinished } -> _isRetrying.value = true
-                        infos.isNotEmpty() -> _isRetrying.value = false
+                        infos.isNotEmpty() -> {
+                            _isRetrying.value = false
+                            clearOptimisticTurn() // safety net if the worker died before streaming
+                        }
                     }
 
                     val failed = infos.firstOrNull { it.state == WorkInfo.State.FAILED }
@@ -314,25 +323,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun retryAiPlan() {
         _isRetrying.value = true
         viewModelScope.launch(Dispatchers.IO) {
+            val tz = TimeZone.currentSystemDefault()
+            val morning = SessionRepository.morningDate(Clock.System.now(), tz)
+            // A same-morning session means this is a replan of an existing plan, not a fresh bootstrap.
+            val replanSession = repository.findCurrent()?.takeIf { it.date == morning }
+            // Seed the upcoming turn FIRST (fast DB read) so its tab shows the instant the user taps —
+            // before the slow location fetch — and IS the real turn (the worker uses maxTurn+1 too, and
+            // appendEvent below adds an event, not an AiMessage, so the index stays correct).
+            if (replanSession != null) {
+                val nextTurn = (db.aiMessageDao().maxTurnIndex(replanSession.id) ?: -1) + 1
+                // Seed with the trigger we're about to fire, so the new tab reads "Re-planned" immediately instead
+            // of inheriting the prior event's label (e.g. "Your schedule changed") until our event is persisted.
+            StreamingTurnStore.seedPending(replanSession.id, nextTurn, Clock.System.now().toEpochMilliseconds(), TriggerType.EveningPlan)
+                _optimisticTurn.value = replanSession.id to nextTurn
+            }
             // Nudge a calendar sync up front; the location fetch + AI round-trip below give it time to land.
             requestCalendarSync()
             // Manual replan captures a FRESH foreground fix — the user may have moved since the session began.
-            val tz = TimeZone.currentSystemDefault()
             val location = locationProvider.acquireForEveningPlan()
             val event = SessionEvent(
                 trigger = TriggerType.EveningPlan,
                 timestamp = Clock.System.now(),
-                data = EventData.EveningPlan(timezone = tz.id, location = location),
+                // The FAB is always user-initiated — flags turn 0 as a manual plan in the UI.
+                data = EventData.EveningPlan(timezone = tz.id, location = location, isManual = true),
             )
             val fsm = SessionFsm(getApplication(), repository)
-            val current = repository.findCurrent()
-            val morning = SessionRepository.morningDate(Clock.System.now(), tz)
-            if (current != null && current.date == morning) {
+            if (replanSession != null) {
                 // Same-morning replan: append the fresh evening-plan event (latest wins in the worker),
                 // pull in any plan-affecting setting changed since bootstrap, then re-run the turn.
-                repository.appendEvent(current.id, event)
-                fsm.refreshPlanFromSettings(current.id)
-                repository.triggerAiTurn(current.id)
+                repository.appendEvent(replanSession.id, event)
+                fsm.refreshPlanFromSettings(replanSession.id)
+                repository.triggerAiTurn(replanSession.id)
             } else {
                 // No session, or a stale one targeting an earlier morning (e.g. a morning re-run of a
                 // session created last night) — let the FSM supersede the stale one and bootstrap a
@@ -348,6 +369,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun cancelAiPlan() {
         _isRetrying.value = false
+        clearOptimisticTurn()
         viewModelScope.launch(Dispatchers.IO) {
             val current = db.sessionDao().findCurrent() ?: return@launch
             repository.cancelAiTurn(current.id)
@@ -357,6 +379,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    /** Drops the seeded placeholder turn if the worker never streamed it (the normal path is cleared by
+     *  TurnRunner). Safe to call always: if the turn streamed/settled, the active entry no longer matches. */
+    private fun clearOptimisticTurn() {
+        _optimisticTurn.value?.let { (session, turn) -> StreamingTurnStore.clear(session, turn) }
+        _optimisticTurn.value = null
     }
 
     private fun SessionEntity.toDisplayState(): SessionDisplayState? {
@@ -416,10 +445,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** The card header reads the date the alarm fires (the session's morning), falling back to today
-     *  when idle. Format "EEEE d" (e.g. "Tuesday 2"); locale-default for human-language weekday names. */
+     *  when idle. Relative when near — "Today" / "Tomorrow" — else "EEEE d" (e.g. "Tuesday 2");
+     *  locale-default for the human-language weekday name. */
     private fun formatDateLabel(session: SessionDisplayState?): String {
-        val date = session?.sessionDate?.toJavaLocalDate() ?: JavaLocalDate.now()
-        return date.format(DateTimeFormatter.ofPattern("EEEE d", Locale.getDefault()))
+        val today = JavaLocalDate.now()
+        val date = session?.sessionDate?.toJavaLocalDate() ?: today
+        return when (ChronoUnit.DAYS.between(today, date)) {
+            0L -> "Today"
+            1L -> "Tomorrow"
+            else -> date.format(DateTimeFormatter.ofPattern("EEEE d", Locale.getDefault()))
+        }
     }
 
     private fun formatDuration(d: Duration): String {
@@ -441,13 +476,13 @@ private data class HomeStatus(
     val settingsChanged: Boolean,
     val failure: AiTurnFailure?,
     val hapticsEnabled: Boolean,
-    val thinkingHintSeen: Boolean,
     val autoAlarmsEnabled: Boolean,
+    val eveningTriggerTime: LocalTime,
 )
 
 /** The DataStore-backed UX prefs, pre-combined so [HomeStatus] stays within combine's arity. */
 private data class HomePrefs(
     val hapticsEnabled: Boolean,
-    val thinkingHintSeen: Boolean,
     val autoAlarmsEnabled: Boolean,
+    val eveningTriggerTime: LocalTime,
 )

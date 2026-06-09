@@ -31,6 +31,7 @@ class NextAlarmCardTest {
                 NextAlarmCard(
                     dateLabel = "Friday 22",
                     alarmTime = LocalTime(6, 40),
+                    sessionDate = null,
                     sleepDurationLabel = "7h 30m",
                     sleepSegments = listOf(
                         SleepSegment(SleepStage.Deep, Fixtures.at("2026-05-22T01:00:00Z"), Fixtures.at("2026-05-22T05:00:00Z")),
@@ -52,6 +53,7 @@ class NextAlarmCardTest {
                 NextAlarmCard(
                     dateLabel = "Friday 22",
                     alarmTime = null,
+                    sessionDate = null,
                     sleepDurationLabel = null,
                     sleepSegments = emptyList(),
                 )
