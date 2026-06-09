@@ -1,6 +1,7 @@
 package fr.bsodium.cron.worker
 
 import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.LocationPayload
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SignalConfidence
 import fr.bsodium.cron.session.model.SleepSession
@@ -43,22 +44,30 @@ object AiPromptBuilder {
             appendLine("- Wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
             appendLine("- Travel buffer (minimum commute floor, NOT prep): ${plan.commuteBufferMinutes} min")
             appendLine("- Morning preparation time (getting ready, separate from travel): ${plan.preparationBufferMinutes} min")
+            appendLine("- Allowed commute modes (only estimate with these): ${plan.allowedCommuteModes.joinToString { it.promptToken }}")
             appendLine("- Free day wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
             appendLine()
-            if (location != null) {
-                appendLine("## Current location")
-                appendLine("- Latitude: ${location.lat}, Longitude: ${location.lng}")
-                location.address?.let { appendLine("- Address: $it") }
-                appendLine("- Source: ${location.source.name.lowercase()}")
-                appendLine("- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}")
-                appendLine("- Captured at: ${location.capturedAt}")
-            } else {
-                appendLine("## Location")
-                appendLine("- Source: unavailable — apply a flat +30 min buffer and mention it in the reason")
-            }
+            appendLocation(location)
             appendLine()
             appendUserInstructions(userInstructions)
             appendLine("Plan tomorrow's alarm. Follow the process in your system prompt: read calendar, identify anchor event, estimate commute if applicable, then call set_alarm.")
+        }
+    }
+
+    /** Appends the device location block (the commute ORIGIN), or an unavailable note. Shared by the
+     *  evening plan and the overnight replan so both give the planner real coordinates — without this on
+     *  the replan path the model has no origin and invents a city. */
+    private fun StringBuilder.appendLocation(location: LocationPayload?) {
+        if (location != null) {
+            appendLine("## Current location")
+            appendLine("- Latitude: ${location.lat}, Longitude: ${location.lng}")
+            location.address?.let { appendLine("- Address: $it") }
+            appendLine("- Source: ${location.source.name.lowercase()}")
+            appendLine("- Accuracy: ±${location.accuracyMeters?.let { "${it.toInt()} m" } ?: "unknown"}")
+            appendLine("- Captured at: ${location.capturedAt}")
+        } else {
+            appendLine("## Location")
+            appendLine("- Source: unavailable — apply a flat +30 min buffer and mention it in the reason")
         }
     }
 
@@ -87,6 +96,10 @@ object AiPromptBuilder {
     ): String {
         val plan = session.plan
         val instr = session.currentInstruction
+        // Same origin the evening plan captured — without it the replan model has no coordinates and
+        // guesses a city.
+        val location = (session.events.lastOrNull { it.trigger == TriggerType.EveningPlan }
+            ?.data as? EventData.EveningPlan)?.location
 
         return buildString {
             appendLine("It is now $localNow (${session.timezone}).")
@@ -99,6 +112,7 @@ object AiPromptBuilder {
             appendLine("- Morning date: ${session.date}")
             appendLine("- Hard latest (never exceed): ${plan.hardLatest}")
             appendLine("- Wake window: ${plan.wakeWindowStart} – ${plan.wakeWindowEnd}")
+            appendLine("- Allowed commute modes (only estimate with these): ${plan.allowedCommuteModes.joinToString { it.promptToken }}")
             appendLine("- Snooze count so far: ${session.snoozeCount}")
             appendLine()
             appendLine("## Current instruction")
@@ -116,6 +130,8 @@ object AiPromptBuilder {
                 appendLine("## Triggering event")
                 appendLine("[${last.timestamp}] ${last.trigger.name}: ${summarizeEventData(last)}")
             }
+            appendLine()
+            appendLocation(location)
             appendLine()
             appendUserInstructions(userInstructions)
             appendLine("Decide what the alarm system should do. Call set_alarm if you want to adjust the wake time. If the current alarm is already optimal, respond with a brief explanation and do not call any tool.")

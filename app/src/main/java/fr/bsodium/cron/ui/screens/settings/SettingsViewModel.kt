@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.alarm.EveningPlanScheduler
+import fr.bsodium.cron.session.model.CommuteMode
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,12 +17,13 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalTime
 
 data class SettingsUiState(
-    val eveningTrigger: LocalTime = LocalTime(22, 0),
+    val eveningTrigger: LocalTime = LocalTime(20, 0),
     val hardLatest: LocalTime = LocalTime(10, 0),
     val freeDayWakeStart: LocalTime = LocalTime(8, 0),
     val freeDayWakeEnd: LocalTime = LocalTime(9, 30),
     val commuteBufferMinutes: Int = 15,
     val preparationBufferMinutes: Int = 15,
+    val allowedCommuteModes: Set<CommuteMode> = CommuteMode.entries.toSet(),
     val hasApiKey: Boolean = false,
     val displayName: String? = null,
     val userInstructions: String? = null,
@@ -62,6 +64,8 @@ class SettingsViewModel @JvmOverloads constructor(
         )
     }.combine(repo.preparationBufferMinutes) { state, prepBuffer ->
         state.copy(preparationBufferMinutes = prepBuffer)
+    }.combine(repo.allowedCommuteModes) { state, modes ->
+        state.copy(allowedCommuteModes = modes)
     }.combine(repo.displayName) { state, name ->
         state.copy(displayName = name)
     }.combine(repo.userInstructions) { state, instructions ->
@@ -95,6 +99,10 @@ class SettingsViewModel @JvmOverloads constructor(
 
     fun setPreparationBuffer(minutes: Int) {
         viewModelScope.launch { repo.setPreparationBufferMinutes(minutes) }
+    }
+
+    fun setAllowedCommuteModes(modes: Set<CommuteMode>) {
+        viewModelScope.launch { repo.setAllowedCommuteModes(modes) }
     }
 
     fun clearApiKey() {

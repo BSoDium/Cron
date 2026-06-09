@@ -1,7 +1,12 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateBounds
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -17,7 +22,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,13 +39,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -81,30 +87,37 @@ fun AiThinkingThread(
     // 0f = collapsed (chevron pointing right), 1f = fully open (chevron pointing down). Drives the
     // pivot animation; tracked to the live reveal value so the chevron rotates with the drag.
     expansionFraction: Float = 0f,
-    // One-time onboarding nudge, shown inline beside the thinking shape until the user first expands.
-    showPullHint: Boolean = false,
+    // The morphing shape represents where the assistant currently "is" — only meaningful on the latest
+    // iteration; older (settled) tabs end on their response.
+    showShape: Boolean = true,
+    // For an older (non-latest) tab: when it ran, and a jump-back-to-latest action shown in its footer.
+    ranAtEpochMs: Long? = null,
+    onJumpToLatest: (() -> Unit)? = null,
 ) {
     var internalExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
     val isExpanded = expanded ?: internalExpanded
     Column(modifier = modifier.fillMaxWidth()) {
         // Settled/running is the WorkManager signal, not response presence — a do_nothing turn settles with none.
         val inProgress = isRunning
-        if (thread.process.isNotEmpty() || inProgress) {
-            ThinkingDisclosure(
-                summary = thread.summary,
-                process = thread.process,
-                inProgress = inProgress,
-                durationSeconds = thread.durationSeconds,
-                expanded = isExpanded,
-                onToggle = {
-                    val next = !isExpanded
-                    if (onExpandedChange != null) onExpandedChange(next) else internalExpanded = next
-                },
-                expandPx = expandPx,
-                onFullHeight = onFullHeight,
-                expansionFraction = expansionFraction,
-            )
-        }
+        // Loader only while genuinely thinking — it stops the instant the answer starts streaming.
+        val thinking = inProgress && thread.response.isNullOrBlank()
+        // Always present, even with no tools/reasoning, so the block settles into a "Thought for Xs" header
+        // instead of vanishing the moment the response lands (canExpand still gates the chevron/reveal).
+        ThinkingDisclosure(
+            summary = thread.summary,
+            process = thread.process,
+            inProgress = inProgress,
+            pending = thinking,
+            durationSeconds = thread.durationSeconds,
+            expanded = isExpanded,
+            onToggle = {
+                val next = !isExpanded
+                if (onExpandedChange != null) onExpandedChange(next) else internalExpanded = next
+            },
+            expandPx = expandPx,
+            onFullHeight = onFullHeight,
+            expansionFraction = expansionFraction,
+        )
         // Alpha-only in AND out: any size-changing transition (e.g. shrinkVertically) makes
         // AnimatedVisibility clipToBounds the block, which clips the streaming markdown to its
         // first-frame (too-small) height as the answer appears. Pure fades never clip. Hold the last
@@ -115,56 +128,35 @@ fun AiThinkingThread(
             inProgress = inProgress,
             hasProcess = thread.process.isNotEmpty(),
         )
-        val phase = when {
-            !inProgress -> ShapePhase.Resting
-            thread.response.isNullOrBlank() -> ShapePhase.Thinking
-            else -> ShapePhase.Writing
-        }
-        Row(
-            modifier = Modifier.padding(top = Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            ThinkingShape(phase = phase, restKey = thread.turnIndex)
-            // Inline onboarding hint, below the revealed block and beside the shape; fades as you pull.
-            if (showPullHint && inProgress && thread.process.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.graphicsLayer { alpha = (1f - expansionFraction).coerceIn(0f, 1f) },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                ) {
-                    Symbol(
-                        symbol = MaterialSymbol.ArrowDownward,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        size = SPINNER_SIZE,
-                    )
+        if (showShape) {
+            val phase = when {
+                !inProgress -> ShapePhase.Resting
+                thread.response.isNullOrBlank() -> ShapePhase.Thinking
+                else -> ShapePhase.Writing
+            }
+            Row(
+                // Start inset centres the shape under the header's first tool disc: (disc 26 − shape 18)/2.
+                modifier = Modifier.padding(start = Spacing.xs, top = Spacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                ThinkingShape(phase = phase, restKey = thread.turnIndex)
+                // The shape itself is the down-arrow cue while thinking; this label sits beside it and fades
+                // out as the timeline is pulled open.
+                if (phase == ShapePhase.Thinking) {
                     Text(
-                        text = "Pull to show thinking",
+                        text = "Pull down to show thinking",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.graphicsLayer { alpha = (1f - expansionFraction).coerceIn(0f, 1f) },
                     )
                 }
             }
+        } else if (onJumpToLatest != null) {
+            // Older tabs hide the shape; show how long ago this ran + a tap back to the latest plan.
+            OldPlanFooter(ranAtEpochMs = ranAtEpochMs, onJumpToLatest = onJumpToLatest)
         }
     }
-}
-
-/**
- * Draws content [bleed] wider on each side than its slot — overflowing the parent's horizontal
- * content padding out to the screen edges — while still reporting the slot width to the parent
- * so siblings are unaffected. Compensate with extra start/end padding to keep inner content put.
- */
-private fun Modifier.bleedHorizontally(bleed: Dp): Modifier = layout { measurable, constraints ->
-    // Only meaningful under a bounded-width parent (our LazyColumn item); if width is unbounded
-    // there's nothing to bleed into, so measure and place normally.
-    if (constraints.maxWidth == Constraints.Infinity) {
-        val placeable = measurable.measure(constraints)
-        return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-    }
-    val bleedPx = bleed.roundToPx()
-    val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + bleedPx * 2))
-    layout(constraints.maxWidth, placeable.height) { placeable.place(-bleedPx, 0) }
 }
 
 @Composable
@@ -172,6 +164,7 @@ private fun ThinkingDisclosure(
     summary: String?,
     process: List<ProcessItem>,
     inProgress: Boolean,
+    pending: Boolean,
     durationSeconds: Int?,
     expanded: Boolean,
     onToggle: () -> Unit,
@@ -195,44 +188,26 @@ private fun ThinkingDisclosure(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            if (inProgress) {
-                // Live: the tools called so far (accumulating) + the current step + a spinner.
-                val tools = process.filterIsInstance<ProcessItem.Tool>()
-                if (tools.isNotEmpty()) ToolStack(tools)
-                Text(
-                    text = summary ?: "Thinking…",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+            // The tools called so far + a trailing pending loader disc; with no tools, a fallback assistant
+            // disc (inside ToolStack) so the header always leads with an icon, never floating text.
+            val tools = process.filterIsInstance<ProcessItem.Tool>()
+            ToolStack(tools, pending = pending)
+            Text(
+                text = if (inProgress) (summary ?: "Thinking…") else thoughtForLabel(durationSeconds),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (canExpand) {
+                Symbol(
+                    symbol = MaterialSymbol.KeyboardArrowRight,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    autoMirror = true,
+                    modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
                 )
-                CircularProgressIndicator(
-                    modifier = Modifier.size(SPINNER_SIZE),
-                    strokeWidth = SPINNER_STROKE,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                // Settled: an avatar-stack of the tools that ran + how long it took.
-                val tools = process.filterIsInstance<ProcessItem.Tool>()
-                if (tools.isNotEmpty()) ToolStack(tools)
-                Text(
-                    text = thoughtForLabel(durationSeconds),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                if (canExpand) {
-                    Symbol(
-                        symbol = MaterialSymbol.KeyboardArrowRight,
-                        contentDescription = if (expanded) "Collapse" else "Expand",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        autoMirror = true,
-                        modifier = Modifier.graphicsLayer { rotationZ = openFraction * 90f },
-                    )
-                }
             }
         }
         // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate
@@ -295,28 +270,24 @@ private val TOOL_DISC_RING = 1.5.dp
 private val TOOL_DISC_ICON = 13.dp
 private val TOOL_STACK_OVERLAP = 8.dp
 
+private val TOOL_DISC_LOADER = 18.dp
+
 /**
- * Avatar-stack of the tools that ran this turn. Each icon sits in a page-coloured ring, so where
- * the discs overlap (negative spacing) the later one occludes the earlier with a clean gap.
+ * Avatar-stack of the tools that ran this turn. Each icon sits in a page-coloured ring, so where the
+ * discs overlap (negative spacing) the later one occludes the earlier with a clean gap. While [pending], a
+ * trailing loader disc leads the stack; as real tools land they fade in and the loader slides right
+ * ([animateBounds] inside a [LookaheadScope] animates each disc's position/size).
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun ToolStack(tools: List<ProcessItem.Tool>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(-TOOL_STACK_OVERLAP)) {
-        tools.forEach { tool ->
-            Box(
-                modifier = Modifier
-                    .size(TOOL_DISC_SIZE)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(TOOL_DISC_SIZE - TOOL_DISC_RING * 2)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.Center,
-                ) {
+private fun ToolStack(tools: List<ProcessItem.Tool>, pending: Boolean = false) {
+    // Tools present when the stack first composes don't individually animate (its appearance is enough);
+    // any that arrive later fade in.
+    val seen = remember { tools.size }
+    LookaheadScope {
+        Row(horizontalArrangement = Arrangement.spacedBy(-TOOL_STACK_OVERLAP)) {
+            tools.forEachIndexed { index, tool ->
+                ToolDisc(modifier = Modifier.animateBounds(this@LookaheadScope), isNew = index >= seen) {
                     Symbol(
                         symbol = toolSymbol(tool.name),
                         contentDescription = null,
@@ -325,7 +296,50 @@ private fun ToolStack(tools: List<ProcessItem.Tool>) {
                     )
                 }
             }
+            if (pending) {
+                ToolDisc(modifier = Modifier.animateBounds(this@LookaheadScope)) {
+                    LoadingIndicator(
+                        modifier = Modifier.size(TOOL_DISC_LOADER),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (tools.isEmpty()) {
+                // No tools and not pending (a no-tool turn): a fallback assistant icon so the header always
+                // leads with a disc instead of floating text.
+                ToolDisc(modifier = Modifier.animateBounds(this@LookaheadScope)) {
+                    Symbol(
+                        symbol = MaterialSymbol.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        size = TOOL_DISC_ICON,
+                    )
+                }
+            }
         }
+    }
+}
+
+/** One disc in the [ToolStack]: a page-coloured ring around a content disc; fades in once when [isNew]. */
+@Composable
+private fun ToolDisc(modifier: Modifier = Modifier, isNew: Boolean = false, content: @Composable () -> Unit) {
+    val enter = remember { Animatable(if (isNew) 0f else 1f) }
+    val spec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    if (isNew) LaunchedEffect(Unit) { enter.animateTo(1f, spec) }
+    Box(
+        modifier = modifier
+            .graphicsLayer { alpha = enter.value }
+            .size(TOOL_DISC_SIZE)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(TOOL_DISC_SIZE - TOOL_DISC_RING * 2)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) { content() }
     }
 }
 
@@ -356,11 +370,16 @@ private fun AnswerArea(
     LaunchedEffect(response) { if (!response.isNullOrBlank()) lastResponse = response }
     val hasAnswer = !response.isNullOrBlank()
     val showFallback = !inProgress && !hasAnswer && hasProcess
-    Box(modifier = modifier.fillMaxWidth().animateContentSize()) {
+    // Animate the slot size only when settled (the answer↔fallback crossfade). While streaming, the
+    // typewriter outpaces the spring, so a lagging container clips the freshest lines — grow instantly.
+    Box(modifier = modifier.fillMaxWidth().then(if (inProgress) Modifier else Modifier.animateContentSize())) {
         AnimatedVisibility(visible = hasAnswer, enter = fadeIn(), exit = fadeOut()) {
             Column {
                 Spacer(Modifier.height(Spacing.sm))
                 ResponseBody(response?.takeIf { it.isNotBlank() } ?: lastResponse)
+                // Descender clearance: the serif body's last line extends below its measured line box, so
+                // without this the slot/pager (sized to the measured height) clips it.
+                Spacer(Modifier.height(Spacing.sm))
             }
         }
         AnimatedVisibility(visible = showFallback, enter = fadeIn(), exit = fadeOut()) {
@@ -368,7 +387,7 @@ private fun AnswerArea(
                 Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = "Cron didn't write a response.",
-                    style = CronTypography.bodySerif,
+                    style = CronTypography.bodySerif.copy(fontStyle = FontStyle.Italic),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -422,6 +441,7 @@ private fun ThinkingDisclosureExpandedPreview() {
                     summary = PREVIEW_THREAD.summary,
                     process = PREVIEW_THREAD.process,
                     inProgress = false,
+                    pending = false,
                     durationSeconds = PREVIEW_THREAD.durationSeconds,
                     expanded = true,
                     onToggle = {},

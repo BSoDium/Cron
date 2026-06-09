@@ -1,6 +1,12 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package fr.bsodium.cron.ui.screens.home
 
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,17 +20,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -39,13 +50,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
-import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
+import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.ReplanHistoryBar
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 // Pull-to-expand feel: the release fraction (of full height) past which it snaps open (springs back
 // below), and the rubber-band floor so the reveal still creeps near full instead of fully stalling.
@@ -55,14 +68,16 @@ private const val THINKING_PULL_RUBBER_FLOOR = 0.15f
 // exceeds the screen) is still openable with a short drag.
 private val THINKING_EXPAND_TRIGGER_MAX = 120.dp
 
-// Scroll distance (past the pin point) over which the alarm card collapses full → slim bar.
+// Pre-measurement fallback for the collapse range; the live range is the card's real shrinkage
+// (full height − collapsed bar), derived once the card reports its full height.
 private val ALARM_COLLAPSE_RANGE = 120.dp
 
 /**
  * The plan layout: the AI thread scrolls in a [LazyColumn] while the alarm card acts like CSS
  * `position: sticky` (top = statusBar + gap) via the [StickyAlarm] overlay; an "alarm-spacer" item
- * holds the card's flow slot. The collapse geometry is a single derived source feeding the sticky
- * card, the threshold haptic, and the magnetic snap.
+ * holds the card's flow slot. The thread item is a horizontal [ThreadPager] over the replan iterations,
+ * two-way bound to the tab selection. The collapse geometry is a single derived source feeding the
+ * sticky card, the threshold haptic, and the magnetic snap.
  */
 @Composable
 internal fun HomePlanContent(
@@ -72,30 +87,128 @@ internal fun HomePlanContent(
     navInsetBottom: Dp,
     hasNotificationPermission: Boolean,
     onNotifEnable: () -> Unit,
-    showPullHint: Boolean,
-    onFirstExpand: () -> Unit,
     onAutoAlarmsChange: (Boolean) -> Unit,
 ) {
-    // Only the selected iteration's thinking is shown (the scroll-to-reveal needs a single thread); the
-    // connected tab group above it navigates the history. Default to the latest; a fresh replan (new
-    // latest turnIndex) re-keys this back to newest while letting the user browse older iterations.
-    var selectedTurn by rememberSaveable(plan.iterations.last().turnIndex) {
-        mutableStateOf(plan.iterations.last().turnIndex)
+    val iterations = plan.iterations
+    // Default to the latest; a fresh replan (new latest turnIndex) re-keys this back to newest while
+    // letting the user browse older iterations.
+    var selectedTurn by rememberSaveable(iterations.last().turnIndex) {
+        mutableStateOf(iterations.last().turnIndex)
     }
-    val current = plan.iterations.firstOrNull { it.turnIndex == selectedTurn } ?: plan.iterations.last()
-    val thread = current.thread
     val listState = rememberLazyListState()
     val density = LocalDensity.current
-    // Reserves the FULL (expanded) card height (fed by the card's own measure), decoupled from the
-    // collapsing render height so collapse can't feed back.
+    val scope = rememberCoroutineScope()
     var cardFullHeightPx by remember { mutableIntStateOf(0) }
-    // Sticky tab strip height (fixed) — reserved below the card so scrolling content starts clear of it.
     var tabsHeightPx by remember { mutableIntStateOf(0) }
-    // The history strip only earns its space with more than one run; a single planning pass shows none.
-    val hasTabs = plan.iterations.size > 1
+    val hasTabs = iterations.size > 1
+    val iterationsState = rememberUpdatedState(iterations)
+    val selectedTurnState = rememberUpdatedState(selectedTurn)
+
+    // --- Interactive thread pager, two-way bound to the tab selection ---
+    val selectedIndex = iterations.indexOfFirst { it.turnIndex == selectedTurn }.coerceAtLeast(0)
+    val pagerState = rememberPagerState(initialPage = selectedIndex) { iterations.size }
+    val swipeHaptics = rememberCronHaptics(uiState.hapticsEnabled)
+    // True while the pager animates to a tap/auto-nav target — suppresses the swipe haptic so only real
+    // drags tick at the midpoint (a tap ticks immediately in ReplanHistoryBar).
+    var programmaticScroll by remember { mutableStateOf(false) }
+    // Pager → selection: commit on settle (so a mid-fling never fights the user). No tick here — the swipe
+    // haptic fires at the midpoint crossing below.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            val turn = iterationsState.value.getOrNull(page)?.turnIndex ?: return@collect
+            if (turn != selectedTurnState.value) selectedTurn = turn
+        }
+    }
+    // Selection → pager: a tab tap or a fresh-replan re-key animates the pager to match. No
+    // isScrollInProgress guard — a tap made while the pager is still settling must still win (drags never
+    // move selectedTurn mid-gesture, so this can't fight a drag).
+    LaunchedEffect(selectedTurn) {
+        val idx = iterations.indexOfFirst { it.turnIndex == selectedTurn }
+        if (idx >= 0 && idx != pagerState.currentPage) {
+            programmaticScroll = true
+            try {
+                pagerState.animateScrollToPage(idx)
+            } finally {
+                programmaticScroll = false
+            }
+        }
+    }
+    // Swipe haptic: tick exactly at the midpoint between tabs — the nearest index flips at the .5 boundary
+    // — but only for user drags, never while a tap/auto-nav animation drives the pager.
+    LaunchedEffect(pagerState) {
+        var lastNearest = pagerState.currentPage
+        snapshotFlow { (pagerState.currentPage + pagerState.currentPageOffsetFraction).roundToInt() }
+            .collect { nearest ->
+                if (nearest != lastNearest) {
+                    lastNearest = nearest
+                    if (!programmaticScroll) swipeHaptics.tick()
+                }
+            }
+    }
+    // Continuous pager position (page + offset) so the tabs cross-morph with the swipe rather than
+    // snapping at the midpoint.
+    val pagerPosition by remember {
+        derivedStateOf { pagerState.currentPage + pagerState.currentPageOffsetFraction }
+    }
+    // True only while the USER is dragging the pager (not a tap/auto-nav animation): the tab strip tracks the
+    // raw position 1:1 then; otherwise it cross-fades to the settled selection (so a tap's cross-fade finishes).
+    val draggingPager by remember {
+        derivedStateOf { pagerState.isScrollInProgress && !programmaticScroll }
+    }
+
+    // Per-iteration pull-to-expand state, shared between the pager pages and the pull connection below.
+    val pullStates = remember { mutableStateMapOf<Int, PullState>() }
+    // Size the pager to the SETTLED page's natural height: a fixed height keeps the pager draggable
+    // (`wrapContentHeight` disables the horizontal drag), and keying on the settled page keeps it stable
+    // through a swipe (no relayout spike). Pages measure unbounded, so an expanding page grows this map
+    // → the pager follows → the content isn't clipped.
+    val pageHeights = remember { mutableStateMapOf<Int, Int>() }
+    val pagerHeightPx by remember(iterations) {
+        derivedStateOf { pageHeights[iterations.getOrNull(pagerState.settledPage)?.turnIndex] ?: 0 }
+    }
+
+    // Scroll-independent layout metrics, kept as live derived state (heights are measured async). Both
+    // the swipe-target sizing and the collapse gate read these, so neither captures a stale value.
+    var rootHeightPx by remember { mutableIntStateOf(0) }
+    var greetingHeightPx by remember { mutableIntStateOf(0) }
+    val topPadPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
+    val mdPx = with(density) { Spacing.md.roundToPx() }
+    val stripGapPx = with(density) { Spacing.sm.roundToPx() }
+    // Track the strip's (animating) measured height so the reserve grows/shrinks in lockstep with the
+    // tab-group enter/exit animation instead of jumping when iterations cross 1.
+    val reservePx by remember(stripGapPx) {
+        derivedStateOf { cardFullHeightPx + if (tabsHeightPx > 0) tabsHeightPx + stripGapPx else 0 }
+    }
+    val threadTopPx by remember(topPadPx, mdPx) {
+        derivedStateOf { topPadPx + greetingHeightPx + mdPx + reservePx + mdPx }
+    }
+    // Collapse range = the card's real shrinkage (full height → collapsed bar), so the card shrinks at
+    // exactly finger speed and the response holds a constant gap below the tabs until the collapse
+    // completes. A fixed range that didn't match the shrinkage let a short card's response slide under
+    // the tabs mid-collapse and made the collapse feel slow. Falls back to the fixed range only until the
+    // card is first measured (NOT a permanent floor — flooring at 120 would re-break short cards).
+    val barHeightPx = with(density) { ALARM_BAR_HEIGHT.toPx() }
+    val fallbackRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
+    val collapseRangePx by remember(barHeightPx, fallbackRangePx) {
+        derivedStateOf {
+            if (cardFullHeightPx > 0) (cardFullHeightPx - barHeightPx).coerceAtLeast(1f) else fallbackRangePx
+        }
+    }
+    // Swipe target: a short page should still expose a tall, draggable strip (the pager catches drags
+    // across its whole height). Fill to the screen bottom, PLUS the greeting + its gap, PLUS any collapse
+    // range beyond the 120 baseline. The collapse needs `greeting + gap + range` of scroll to complete:
+    // the greeting + gap above the card scroll off FIRST, and a taller card (range > 120) needs more slack
+    // than the bottom contentPadding alone gives — so a short page always collapses fully and rests (no
+    // jump-back). Scroll-independent → constant across scroll.
+    val minGrabPx by remember {
+        derivedStateOf {
+            (rootHeightPx - threadTopPx).coerceAtLeast(0) + greetingHeightPx + mdPx +
+                (collapseRangePx - fallbackRangePx).coerceAtLeast(0f).roundToInt()
+        }
+    }
+    val effPagerPx = maxOf(pagerHeightPx, minGrabPx)
 
     val collapseSafeTopPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
-    val collapseRangePx = with(density) { ALARM_COLLAPSE_RANGE.toPx() }
     val collapseFadePx = with(density) { Spacing.xxl.toPx() }
     val collapseState = remember(collapseSafeTopPx, collapseRangePx, collapseFadePx) {
         derivedStateOf {
@@ -119,72 +232,71 @@ internal fun HomePlanContent(
     // Threshold haptic + magnetic snap, both keyed on listState.
     AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
 
-    // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed thinking
-    // 1:1 with the finger. One reveal value (revealed pixels) drives the disclosure and the
-    // release/tap animation, so there's no second source to dip against. Reset per turn.
-    val scope = rememberCoroutineScope()
-    var thinkingExpanded by rememberSaveable(thread.turnIndex) { mutableStateOf(false) }
-    val reveal = remember(thread.turnIndex) { Animatable(0f) }
-    val thinkingFullPx = remember(thread.turnIndex) { mutableIntStateOf(0) }
-    val canPull = rememberUpdatedState(thread.process.isNotEmpty() && !thinkingExpanded)
-    val pullHaptics = rememberCronHaptics()
+    // Pull-to-expand: at the top of the list, an overscroll-down drag unwraps the collapsed thinking 1:1
+    // with the finger — but only the SETTLED pager page (no horizontal swipe in flight), and each page
+    // keeps its own reveal via its [PullState]. One reveal value drives the disclosure and the
+    // release/tap animation, so there's no second source to dip against.
     val expandTriggerMaxPx = with(density) { THINKING_EXPAND_TRIGGER_MAX.toPx() }
-    // Tracks whether the pull is past the release-to-open threshold, so a click fires once per crossing.
-    val pastThreshold = remember(thread.turnIndex) { mutableStateOf(false) }
-    val pullConnection = remember(listState, reveal, expandTriggerMaxPx, pastThreshold) {
+    val pullHaptics = rememberCronHaptics()
+    val pullConnection = remember(listState, pagerState, expandTriggerMaxPx) {
         object : NestedScrollConnection {
-            // Pixels of pull past which releasing snaps the block open — the same point onPreFling tests.
-            fun triggerPx(): Float {
-                val full = thinkingFullPx.intValue
+            // The iteration the pull acts on — only while the pager rests on a page (no swipe mid-flight).
+            fun activeIter(): AiIterationUi? {
+                if (pagerState.isScrollInProgress || abs(pagerState.currentPageOffsetFraction) >= 0.01f) return null
+                return iterationsState.value.getOrNull(pagerState.currentPage)
+            }
+
+            fun stateFor(turn: Int): PullState = pullStates.getOrPut(turn) { PullState() }
+
+            fun triggerPx(s: PullState): Float {
+                val full = s.fullPx.intValue
                 return if (full > 0) minOf(full * THINKING_EXPAND_THRESHOLD, expandTriggerMaxPx) else Float.MAX_VALUE
             }
 
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
+                val iter = activeIter() ?: return Offset.Zero
+                val s = stateFor(iter.turnIndex)
                 // Dragging up while a partial peek is open unwinds it (1:1) before the list scrolls.
-                // Skip once fully expanded, or the upward scroll is eaten instead of moving the list.
-                if (available.y < 0f && reveal.value > 0f && !thinkingExpanded) {
-                    val next = (reveal.value + available.y).coerceAtLeast(0f)
-                    val consumed = next - reveal.value
-                    pastThreshold.value = next >= triggerPx()
-                    scope.launch { reveal.snapTo(next) }
+                if (available.y < 0f && s.reveal.value > 0f && !s.expanded) {
+                    val next = (s.reveal.value + available.y).coerceAtLeast(0f)
+                    val consumed = next - s.reveal.value
+                    s.pastThreshold = next >= triggerPx(s)
+                    scope.launch { s.reveal.snapTo(next) }
                     return Offset(0f, consumed)
                 }
-                // At the top, dragging down on a collapsible, collapsed thread grows the reveal in
-                // pixels (tracks the finger), gently resisting near full so it never runs ahead.
-                if (available.y > 0f && canPull.value && !listState.canScrollBackward) {
-                    val full = thinkingFullPx.intValue
-                    val rubber = if (full > 0) {
-                        (1f - reveal.value / full).coerceIn(THINKING_PULL_RUBBER_FLOOR, 1f)
-                    } else {
-                        1f
-                    }
-                    val next = reveal.value + available.y * rubber
-                    val nowPast = next >= triggerPx()
-                    if (nowPast && !pastThreshold.value) pullHaptics.tick() // click as the pull reaches the open point
-                    pastThreshold.value = nowPast
-                    scope.launch { reveal.snapTo(next) }
+                // At the top, dragging down on a collapsible, collapsed thread grows the reveal (rubber-banded).
+                val canPull = iter.thread.process.isNotEmpty() && !s.expanded
+                if (available.y > 0f && canPull && !listState.canScrollBackward) {
+                    val full = s.fullPx.intValue
+                    val rubber = if (full > 0) (1f - s.reveal.value / full).coerceIn(THINKING_PULL_RUBBER_FLOOR, 1f) else 1f
+                    val next = s.reveal.value + available.y * rubber
+                    val nowPast = next >= triggerPx(s)
+                    if (nowPast && !s.pastThreshold) pullHaptics.tick() // click as the pull reaches the open point
+                    s.pastThreshold = nowPast
+                    scope.launch { s.reveal.snapTo(next) }
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                if (reveal.value <= 0f) return Velocity.Zero
-                val full = thinkingFullPx.intValue
-                if (full > 0 && reveal.value >= triggerPx()) {
-                    reveal.animateTo(full.toFloat())
-                    thinkingExpanded = true
-                    onFirstExpand()
+                val iter = activeIter() ?: return Velocity.Zero
+                val s = stateFor(iter.turnIndex)
+                if (s.reveal.value <= 0f) return Velocity.Zero
+                val full = s.fullPx.intValue
+                if (full > 0 && s.reveal.value >= triggerPx(s)) {
+                    s.reveal.animateTo(full.toFloat())
+                    s.expanded = true
                 } else {
-                    reveal.animateTo(0f)
+                    s.reveal.animateTo(0f)
                 }
                 return available
             }
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().onSizeChanged { rootHeightPx = it.height }) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().nestedScroll(pullConnection),
@@ -206,43 +318,22 @@ internal fun HomePlanContent(
                     name = uiState.greetingName,
                     autoAlarmsEnabled = uiState.autoAlarmsEnabled,
                     onAutoAlarmsChange = onAutoAlarmsChange,
+                    modifier = Modifier.onSizeChanged { greetingHeightPx = it.height },
                 )
             }
             item(key = "alarm-spacer") {
                 // Reserve the expanded card AND the sticky tab strip below it, so scrolling content
                 // starts clear of both (the strip is rendered in the StickyAlarm overlay, not the list).
-                // When tabs show, add a gap below them matching the thread's thinking→response spacing so
-                // the strip sits symmetrically above the thinking block.
-                val stripGapPx = with(density) { Spacing.sm.roundToPx() }
-                val reservePx = cardFullHeightPx + if (hasTabs) tabsHeightPx + stripGapPx else 0
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }))
             }
             item(key = "thread") {
-                AiThinkingThread(
-                    thread = thread,
-                    isRunning = uiState.isRetrying,
-                    expanded = thinkingExpanded,
-                    // Tap animates the same reveal value (snap to full before a close so it eases
-                    // down from the natural height the expanded state was showing).
-                    onExpandedChange = { open ->
-                        scope.launch {
-                            if (open) {
-                                reveal.animateTo(thinkingFullPx.intValue.toFloat())
-                                thinkingExpanded = true
-                                onFirstExpand()
-                            } else {
-                                thinkingExpanded = false
-                                reveal.snapTo(thinkingFullPx.intValue.toFloat())
-                                reveal.animateTo(0f)
-                            }
-                        }
-                    },
-                    expandPx = reveal.value,
-                    onFullHeight = { if (it != thinkingFullPx.intValue) thinkingFullPx.intValue = it },
-                    expansionFraction = if (thinkingExpanded) 1f
-                        else (reveal.value / thinkingFullPx.intValue.toFloat().coerceAtLeast(1f))
-                            .coerceIn(0f, 1f),
-                    showPullHint = showPullHint,
+                ThreadPager(
+                    iterations = iterations,
+                    pagerState = pagerState,
+                    pullStates = pullStates,
+                    onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
+                    onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
+                    modifier = if (effPagerPx > 0) Modifier.height(with(density) { effPagerPx.toDp() }) else Modifier,
                 )
             }
             if (!hasNotificationPermission) {
@@ -257,24 +348,25 @@ internal fun HomePlanContent(
             gradientAlpha = collapse.gradientAlpha,
             collapseFraction = collapse.fraction,
             // The history tabs ride in the overlay (above the scrim), sticky right below the card, so the
-            // scroll gradient never fades them. Lifted out of the list for that reason.
-            belowCard = if (hasTabs) {
-                {
-                    ReplanHistoryBar(
-                        iterations = plan.iterations,
-                        selectedTurn = selectedTurn,
-                        onSelect = { selectedTurn = it },
-                        hapticsEnabled = uiState.hapticsEnabled,
-                    )
-                }
-            } else {
-                null
+            // scroll gradient never fades them. Lifted out of the list for that reason. Always supplied so
+            // the strip can animate IN/OUT (visibility = hasTabs) rather than popping the layout.
+            belowCardVisible = hasTabs,
+            belowCard = {
+                ReplanHistoryBar(
+                    iterations = iterations,
+                    position = pagerPosition,
+                    selectedTurn = selectedTurn,
+                    dragging = draggingPager,
+                    onSelect = { selectedTurn = it },
+                    hapticsEnabled = uiState.hapticsEnabled,
+                )
             },
             onBelowCardHeight = { tabsHeightPx = it },
         ) { collapseFraction ->
             CollapsibleAlarmCard(
                 dateLabel = uiState.dateLabel,
                 alarmTime = uiState.sessionDisplay?.alarmTime,
+                sessionDate = uiState.sessionDisplay?.sessionDate,
                 sleepDurationLabel = uiState.sleepStats?.durationLabel,
                 sleepSegments = uiState.sleepStats?.segments.orEmpty(),
                 collapseFraction = collapseFraction,
@@ -296,6 +388,7 @@ private fun BoxScope.StickyAlarm(
     top: Int,
     gradientAlpha: Float,
     collapseFraction: Float,
+    belowCardVisible: Boolean = false,
     belowCard: (@Composable () -> Unit)? = null,
     onBelowCardHeight: (Int) -> Unit = {},
     card: @Composable (collapseFraction: Float) -> Unit,
@@ -335,11 +428,19 @@ private fun BoxScope.StickyAlarm(
             // internal 12dp content padding, so at rest the tabs line up with the card.
             Box(Modifier.padding(horizontal = Spacing.md)) { card(collapseFraction) }
             if (belowCard != null) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = Spacing.sm)
-                        .onSizeChanged { onBelowCardHeight(it.height) },
-                ) { belowCard() }
+                // The container animates its height on enter/exit; onSizeChanged reports that ramping
+                // height so the caller's spacer follows in lockstep (no jump). Gap padding is INSIDE so it
+                // collapses to 0 when hidden.
+                AnimatedVisibility(
+                    visible = belowCardVisible,
+                    modifier = Modifier.onSizeChanged { onBelowCardHeight(it.height) },
+                    enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
+                        fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                    exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
+                        fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                ) {
+                    Box(Modifier.padding(top = Spacing.sm)) { belowCard() }
+                }
             }
         }
     }

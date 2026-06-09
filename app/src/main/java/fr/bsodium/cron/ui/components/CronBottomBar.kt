@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -90,13 +91,14 @@ fun CronFloatingNav(
 @Composable
 private fun FabSlot(fabAction: FabAction?) {
     val visible = fabAction != null
+    // One Expressive spatial spec drives BOTH the slot-width re-centre and the FAB scale/fade, so they
+    // move as a single motion instead of desyncing.
+    val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     val width by animateDpAsState(
         targetValue = if (visible) FAB_SLOT_WIDTH else 0.dp,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "fab-slot-width",
     )
-    // Springy grow-from-centre + fade so the FAB pops in (Expressive spatial spec, not a flat tween).
-    val spatial = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
     Box(
         modifier = Modifier
             .width(width)
@@ -104,6 +106,10 @@ private fun FabSlot(fabAction: FabAction?) {
         contentAlignment = Alignment.CenterEnd,
     ) {
         AnimatedVisibility(
+            // Measure the FAB at its full size even while the slot width animates, so the entrance reads
+            // as a scale-up + fade (not a horizontal squeeze). The width only reserves layout space to
+            // re-centre the pill when the FAB hides on non-Home tabs.
+            modifier = Modifier.wrapContentWidth(align = Alignment.End, unbounded = true),
             visible = visible,
             enter = fadeIn(spatial) + scaleIn(spatial, initialScale = 0.5f),
             exit = fadeOut(spatial) + scaleOut(spatial, targetScale = 0.5f),

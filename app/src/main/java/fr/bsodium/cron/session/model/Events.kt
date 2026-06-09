@@ -23,6 +23,8 @@ sealed class EventData {
     data class EveningPlan(
         val timezone: String,
         val location: LocationPayload,
+        /** True when the user kicked off this plan from the FAB (vs. the scheduled nightly job). */
+        val isManual: Boolean = false,
     ) : EventData()
 
     @Serializable

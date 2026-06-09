@@ -34,26 +34,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.session.model.ActionType
+import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
+import fr.bsodium.cron.ui.screens.home.components.AlarmTiming
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
+import fr.bsodium.cron.ui.screens.home.components.NextPlanHint
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
 import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
+import fr.bsodium.cron.ui.screens.home.components.rememberAlarmTiming
 import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 
 // Cross-dissolve between the loading / idle / plan layouts so first-load and re-plans fade in
 // instead of hard-cutting the card from one layout to another.
 private const val HOME_FADE_MS = 240
+
+// The onset card's header when no plan has run for the next alarm yet.
+private const val EMPTY_STATE_DATE_LABEL = "No alarm set"
 
 /** What the home body should show — kept coarse (not the thread content) so it only crossfades on a
  *  real state change, never on each streaming update. */
@@ -71,14 +84,21 @@ fun HomeScreen(
     val streamingThread = uiState.aiPlan?.iterations?.lastOrNull { it.thread.isStreaming }?.thread
     val revealed = rememberRevealedThread(streamingThread)
     val displayPlan = uiState.aiPlan?.withStreamingReplaced(revealed)
+    // Once the alarm has passed (out of date) or been dismissed (session Complete), the plan is spent:
+    // Home rests on the onset card + "next plan" line rather than the now-stale thread. Ticks live via
+    // rememberAlarmTiming, so it flips to resting the minute the alarm time passes.
+    val timing = rememberAlarmTiming(uiState.sessionDisplay?.alarmTime, uiState.sessionDisplay?.sessionDate)
+    val resting = uiState.sessionDisplay?.status == SessionStatus.Complete || timing is AlarmTiming.Past
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.
     StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
     DisposableEffect(viewModel, fabRegistry) {
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
         onDispose { fabRegistry.clear() }
     }
-    // Onboarding callout (rendered above EdgeFades in MainActivity): only in the loaded, no-plan, idle state.
-    val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying
+    // Onboarding callout (rendered above EdgeFades in MainActivity): only on a true first run — loaded,
+    // no plan, no session yet. The between-sessions resting state uses NextPlanHint instead, no tooltip.
+    val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying &&
+        uiState.sessionDisplay == null
     LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
         fabRegistry.set(
             FabAction(
@@ -131,8 +151,8 @@ fun HomeScreen(
         // straight into the right layout — no empty→thread pop / card jump on cold start.
         val homePhase = when {
             !uiState.initialized -> HomePhase.Loading
-            displayPlan != null -> HomePhase.Plan
-            lastPlan != null && uiState.isRetrying -> HomePhase.Plan
+            displayPlan != null && !resting -> HomePhase.Plan
+            lastPlan != null && uiState.isRetrying && !resting -> HomePhase.Plan
             else -> HomePhase.Idle
         }
         Crossfade(
@@ -159,8 +179,6 @@ fun HomeScreen(
                         navInsetBottom = navInsetBottom,
                         hasNotificationPermission = hasNotificationPermission,
                         onNotifEnable = onNotifEnable,
-                        showPullHint = !uiState.thinkingHintSeen,
-                        onFirstExpand = viewModel::markThinkingHintSeen,
                         onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                     )
                 }
@@ -241,15 +259,16 @@ private fun HomeIdleContent(
             modifier = Modifier.padding(horizontal = Spacing.xl),
         )
         Box(Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) {
+            // No active alarm in this state — render the blank onset card; "what's next" lives below it.
             NextAlarmCard(
-                dateLabel = uiState.dateLabel,
-                alarmTime = uiState.sessionDisplay?.alarmTime,
-                sleepDurationLabel = uiState.sleepStats?.durationLabel,
-                sleepSegments = uiState.sleepStats?.segments.orEmpty(),
+                dateLabel = EMPTY_STATE_DATE_LABEL,
+                alarmTime = null,
+                sessionDate = null,
+                sleepDurationLabel = null,
+                sleepSegments = emptyList(),
             )
         }
-        // Bias the hint toward the upper third so "Let's get started" sits near eye height
-        // rather than floating in the dead-centre of the gap.
+        // Bias the hint toward the upper third so it sits near eye height rather than dead-centre.
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -257,7 +276,15 @@ private fun HomeIdleContent(
                 .padding(horizontal = Spacing.xl),
             contentAlignment = BiasAlignment(0f, -0.4f),
         ) {
-            OnboardingHint()
+            // First run (no session ever) → the onboarding invite; otherwise the between-sessions rest state.
+            if (uiState.sessionDisplay == null) {
+                OnboardingHint()
+            } else {
+                NextPlanHint(
+                    autoAlarmsEnabled = uiState.autoAlarmsEnabled,
+                    eveningTriggerTime = uiState.eveningTriggerTime,
+                )
+            }
         }
         if (!hasNotificationPermission) {
             NotificationPermissionRow(
@@ -265,5 +292,35 @@ private fun HomeIdleContent(
                 modifier = Modifier.padding(horizontal = Spacing.xl),
             )
         }
+    }
+}
+
+@Preview(showBackground = true, name = "Home — resting (no plan yet)")
+@Composable
+private fun HomeRestingPreview() {
+    CronTheme {
+        HomeIdleContent(
+            uiState = HomeUiState(
+                initialized = true,
+                greetingPrefix = "Good evening",
+                greetingName = "Elliot",
+                // A completed (dismissed) session → the resting NextPlanHint branch, not first-run onboarding.
+                sessionDisplay = SessionDisplayState(
+                    status = SessionStatus.Complete,
+                    action = ActionType.DoNothing,
+                    alarmTime = null,
+                    reason = "",
+                    sessionDate = LocalDate(2026, 6, 8),
+                    snoozeCount = 0,
+                ),
+                autoAlarmsEnabled = true,
+                eveningTriggerTime = LocalTime(20, 0),
+            ),
+            statusInsetTop = 0.dp,
+            navInsetBottom = 0.dp,
+            hasNotificationPermission = true,
+            onNotifEnable = {},
+            onAutoAlarmsChange = {},
+        )
     }
 }

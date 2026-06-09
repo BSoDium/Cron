@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.AlignmentLine
@@ -17,8 +19,10 @@ import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.DisplayFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
+import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -27,6 +31,7 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.time.Duration
 
 internal data class HoursMinutes(val hours: Long, val minutes: Long)
 
@@ -43,17 +48,46 @@ internal fun CountdownStack(
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
 ) {
+    // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
+    val (top, bottom) = if (countdown == null) "00H" to "00M"
+    else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
+        String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
+    TwoLineLcdStack(top = top, bottom = bottom, color = color, modifier = modifier, alignFraction = alignFraction)
+}
+
+/** The live countdown, or a grayed "00H/00M" placeholder. A passed alarm reads as onset here — the
+ *  "out of date / no run yet" message lives below the card on the resting screen, not in this slot. */
+@Composable
+internal fun RemainingOrStatus(
+    timing: AlarmTiming,
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+    alignFraction: Float = 0f,
+) {
+    when (timing) {
+        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction)
+        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction)
+    }
+}
+
+/** Two short LCD lines stacked by baseline pitch, optionally slid left→right by [alignFraction]
+ *  (0 = left, expanded card; 1 = right, collapsed pill). */
+@Composable
+private fun TwoLineLcdStack(
+    top: String,
+    bottom: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    alignFraction: Float = 0f,
+) {
     // Space Grotesk (legible, unlike Major Mono's art-deco H/M); lineHeight < fontSize tightens the
-    // H↔M leading so the stack is compact and gains breathing room when centred in the collapsed pill.
+    // leading so the stack is compact and gains breathing room when centred in the collapsed pill.
     val smallLcd = TightTextStyle.copy(
         fontFamily = DisplayFontFamily,
         fontSize = 24.sp,
         lineHeight = 21.sp,
     )
-    // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
-    val (top, bottom) = if (countdown == null) "00H" to "00M"
-    else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
-        String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
     val align = alignFraction.coerceIn(0f, 1f)
     Layout(
         modifier = modifier,
@@ -79,19 +113,49 @@ internal fun CountdownStack(
     }
 }
 
+/** Where the planned wake moment sits relative to now, anchored to the session's morning date. */
+internal sealed interface AlarmTiming {
+    /** No alarm set. */
+    data object None : AlarmTiming
+    /** The wake moment is still ahead; [remaining] until it. */
+    data class Upcoming(val remaining: HoursMinutes) : AlarmTiming
+    /** `sessionDate + alarmTime` has already elapsed — the plan is stale and needs a replan. */
+    data object Past : AlarmTiming
+}
+
 /**
- * Distance from `now` to the next occurrence of [alarmTime] (today if it's
- * still ahead, otherwise tomorrow). Returns null when no alarm is set.
+ * Classifies [alarmTime] against now, anchored to [sessionDate] (the morning the plan targets) so a time
+ * that already passed today reads as [AlarmTiming.Past] rather than silently rolling forward to tomorrow.
+ * Falls back to the next-occurrence rule when no date is known.
  */
-internal fun computeCountdown(alarmTime: LocalTime?): HoursMinutes? {
-    if (alarmTime == null) return null
+internal fun computeAlarmTiming(alarmTime: LocalTime?, sessionDate: LocalDate?): AlarmTiming {
+    if (alarmTime == null) return AlarmTiming.None
     val tz = TimeZone.currentSystemDefault()
-    val nowLocal = Clock.System.now().toLocalDateTime(tz)
-    val targetDate = if (alarmTime > nowLocal.time) nowLocal.date else nowLocal.date.plus(1, DateTimeUnit.DAY)
-    val targetInstant = LocalDateTime(targetDate, alarmTime).toInstant(tz)
-    val remaining = targetInstant - Clock.System.now()
-    val totalMinutes = remaining.inWholeMinutes.coerceAtLeast(0)
-    return HoursMinutes(hours = totalMinutes / 60, minutes = totalMinutes % 60)
+    val now = Clock.System.now()
+    val target = if (sessionDate != null) {
+        LocalDateTime(sessionDate, alarmTime).toInstant(tz)
+    } else {
+        val nowLocal = now.toLocalDateTime(tz)
+        val date = if (alarmTime > nowLocal.time) nowLocal.date else nowLocal.date.plus(1, DateTimeUnit.DAY)
+        LocalDateTime(date, alarmTime).toInstant(tz)
+    }
+    val remaining = target - now
+    if (remaining <= Duration.ZERO) return AlarmTiming.Past
+    val totalMinutes = remaining.inWholeMinutes
+    return AlarmTiming.Upcoming(HoursMinutes(hours = totalMinutes / 60, minutes = totalMinutes % 60))
+}
+
+/** [computeAlarmTiming] re-evaluated each minute so the card flips to stale (and the countdown ticks)
+ *  without a manual refresh. */
+@Composable
+internal fun rememberAlarmTiming(alarmTime: LocalTime?, sessionDate: LocalDate?): AlarmTiming {
+    val timing by produceState(computeAlarmTiming(alarmTime, sessionDate), alarmTime, sessionDate) {
+        while (true) {
+            value = computeAlarmTiming(alarmTime, sessionDate)
+            delay(60_000)
+        }
+    }
+    return timing
 }
 
 @Preview(showBackground = true, name = "Countdown — left vs right align")

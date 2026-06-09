@@ -36,7 +36,7 @@ fun ScheduleSettingsScreen(
 private fun ScheduleSettingsScreenPreview() {
     CronTheme {
         ScheduleSettingsScreen(
-            eveningTrigger = LocalTime(22, 0),
+            eveningTrigger = LocalTime(20, 0),
             hardLatest = LocalTime(10, 0),
             onEveningTrigger = {},
             onHardLatest = {},

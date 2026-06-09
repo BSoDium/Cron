@@ -21,6 +21,7 @@ import fr.bsodium.cron.ui.screens.settings.categories.AboutSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.AccountSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.AssistantSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.BuffersSettingsScreen
+import fr.bsodium.cron.ui.screens.settings.categories.CommuteSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.FreeDaysSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.ReliabilitySettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.ScheduleSettingsScreen
@@ -30,6 +31,7 @@ const val SETTINGS_ROOT = "settings/root"
 const val SETTINGS_SCHEDULE = "settings/schedule"
 const val SETTINGS_FREE_DAYS = "settings/freeDays"
 const val SETTINGS_BUFFERS = "settings/buffers"
+const val SETTINGS_COMMUTE = "settings/commute"
 const val SETTINGS_ASSISTANT = "settings/assistant"
 const val SETTINGS_RELIABILITY = "settings/reliability"
 const val SETTINGS_ACCOUNT = "settings/account"
@@ -82,6 +84,15 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
                 preparationBufferMinutes = state.preparationBufferMinutes,
                 onCommuteBuffer = vm::setCommuteBuffer,
                 onPreparationBuffer = vm::setPreparationBuffer,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(SETTINGS_COMMUTE, enterTransition = settingsEnter, exitTransition = settingsExit) { entry ->
+            val vm = entry.settingsViewModel(navController)
+            val state by vm.uiState.collectAsState()
+            CommuteSettingsScreen(
+                allowedModes = state.allowedCommuteModes,
+                onAllowedModes = vm::setAllowedCommuteModes,
                 onBack = { navController.popBackStack() },
             )
         }

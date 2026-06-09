@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -53,8 +52,8 @@ import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
-import kotlinx.coroutines.delay
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -63,18 +62,20 @@ import kotlin.math.roundToInt
 fun NextAlarmCard(
     dateLabel: String,
     alarmTime: LocalTime?,
+    sessionDate: LocalDate?,
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
 ) {
+    val timing = rememberAlarmTiming(alarmTime, sessionDate)
     AlarmShell(modifier) {
-        AlarmCardContent(dateLabel, alarmTime, sleepDurationLabel, sleepSegments)
+        AlarmCardContent(dateLabel, alarmTime, timing, sleepDurationLabel, sleepSegments)
     }
 }
 
 /**
- * The bold-filled card shell — Material You primary fill, flat, rounded. [shape] is a parameter so
- * the collapsing variant can lerp its corner radius. Content renders in `onPrimary`.
+ * The bold-filled card shell — Material You primary fill, flat, rounded. [shape] is a parameter so the
+ * collapsing variant can lerp its corner radius. Content renders in `onPrimary`.
  */
 @Composable
 internal fun AlarmShell(
@@ -97,6 +98,7 @@ internal fun AlarmShell(
 internal fun AlarmCardContent(
     dateLabel: String,
     alarmTime: LocalTime?,
+    timing: AlarmTiming,
     sleepDurationLabel: String?,
     sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
@@ -111,9 +113,9 @@ internal fun AlarmCardContent(
     Column(
         modifier = modifier.padding(
             start = Spacing.xxl,
-            top = Spacing.xl,
+            top = Spacing.lg,
             end = Spacing.xxl,
-            bottom = Spacing.xl,
+            bottom = Spacing.lg,
         ),
     ) {
         AlignedFirstGlyph(
@@ -122,7 +124,7 @@ internal fun AlarmCardContent(
             style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
             modifier = Modifier.graphicsLayer { alpha = dateAlpha },
         )
-        LcdTimeDisplay(alarmTime = alarmTime, timeRowAlpha = timeRowAlpha)
+        LcdTimeDisplay(alarmTime = alarmTime, timing = timing, base = onCard, timeRowAlpha = timeRowAlpha)
         if (sleepSegments.isNotEmpty()) {
             Spacer(Modifier.height(Spacing.xl))
             Row(
@@ -162,6 +164,7 @@ private fun NextAlarmCardPendingPreview() {
         NextAlarmCard(
             dateLabel = "Monday 1",
             alarmTime = LocalTime(6, 40),
+            sessionDate = null,
             sleepDurationLabel = null,
             sleepSegments = emptyList(),
             modifier = Modifier.padding(Spacing.xl),
@@ -189,6 +192,7 @@ private fun NextAlarmCardWithSleepPreview() {
         NextAlarmCard(
             dateLabel = "Monday 1",
             alarmTime = LocalTime(6, 40),
+            sessionDate = null,
             sleepDurationLabel = "7H 28M",
             sleepSegments = PREVIEW_SLEEP_SEGMENTS,
             modifier = Modifier.padding(Spacing.xl),
@@ -197,30 +201,28 @@ private fun NextAlarmCardWithSleepPreview() {
 }
 
 @Composable
-private fun LcdTimeDisplay(alarmTime: LocalTime?, modifier: Modifier = Modifier, timeRowAlpha: Float = 1f) {
-    // Tick once a minute so the countdown stays current without flickering.
-    val countdown by produceState<HoursMinutes?>(initialValue = computeCountdown(alarmTime), alarmTime) {
-        while (true) {
-            value = computeCountdown(alarmTime)
-            delay(60_000)
-        }
-    }
-    val pending = alarmTime == null
+private fun LcdTimeDisplay(
+    alarmTime: LocalTime?,
+    timing: AlarmTiming,
+    base: Color,
+    modifier: Modifier = Modifier,
+    timeRowAlpha: Float = 1f,
+) {
     val progress = rememberLcdRevealProgress(alarmTime)
-    val base = MaterialTheme.colorScheme.onPrimary
-    val digitColor = if (pending) base.copy(alpha = 0.30f) else base
-    // Pending: match the dimmed-digit alpha so "00H/00M" reads as a deliberate grayed twin; brighter once a real time shows.
-    val countdownColor = if (pending) base.copy(alpha = 0.30f) else base.copy(alpha = 0.7f)
+    // Only an upcoming alarm reads in full; no alarm and a passed alarm both render the grayed onset look.
+    val upcoming = timing is AlarmTiming.Upcoming
+    val digitColor = if (upcoming) base else base.copy(alpha = 0.30f)
+    val statusColor = if (upcoming) base.copy(alpha = 0.7f) else base.copy(alpha = 0.30f)
 
     Row(
         modifier = modifier.alpha(timeRowAlpha),
         verticalAlignment = Alignment.Top,
     ) {
         LcdClock(alarmTime = alarmTime, progress = progress, color = digitColor)
-        CountdownStack(
-            countdown = countdown,
+        RemainingOrStatus(
+            timing = timing,
             progress = progress,
-            color = countdownColor,
+            color = statusColor,
             modifier = Modifier.padding(start = Spacing.xs + Spacing.xxs, top = Spacing.xs + Spacing.xxs),
         )
     }

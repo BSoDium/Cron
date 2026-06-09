@@ -115,4 +115,5 @@ class AiPlanMapperTest {
         val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, emptyList()))
         assertEquals(localHhMm(iso), plan.iterations.last().timeLabel)
     }
+
 }

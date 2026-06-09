@@ -8,13 +8,23 @@ import fr.bsodium.cron.receiver.EveningPlanReceiver
 import fr.bsodium.cron.settings.SettingsRepository
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.LocalDate
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+
+/** The next instant the evening-plan trigger fires for [trigger]: today's occurrence if still ahead,
+ *  otherwise tomorrow's. Shared by [EveningPlanScheduler] (to arm) and the home UI (the "next plan at …"
+ *  resting line) so both agree on when planning runs. */
+internal fun nextEveningPlanInstant(trigger: LocalTime, now: Instant, tz: TimeZone): Instant {
+    val nowLocal = now.toLocalDateTime(tz)
+    val firstCandidate = LocalDateTime(nowLocal.date, trigger)
+    val targetDate = if (firstCandidate <= nowLocal) nowLocal.date.plus(1, DateTimeUnit.DAY) else nowLocal.date
+    return LocalDateTime(targetDate, trigger).toInstant(tz)
+}
 
 /**
  * Arms the daily "start sleep session" trigger.
@@ -48,12 +58,7 @@ class EveningPlanScheduler(
         }
         val triggerLocal = settings.currentEveningTriggerLocalTime()
         val tz = TimeZone.currentSystemDefault()
-        val now = Clock.System.now().toLocalDateTime(tz)
-        val firstCandidate = LocalDateTime(now.date, triggerLocal)
-        val targetDate: LocalDate = if (firstCandidate <= now) {
-            now.date.plus(1, DateTimeUnit.DAY)
-        } else now.date
-        val targetInstant = LocalDateTime(targetDate, triggerLocal).toInstant(tz)
+        val targetInstant = nextEveningPlanInstant(triggerLocal, Clock.System.now(), tz)
 
         alarmManager.setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,

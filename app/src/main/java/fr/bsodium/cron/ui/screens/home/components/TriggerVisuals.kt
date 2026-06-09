@@ -21,10 +21,10 @@ import fr.bsodium.cron.ui.theme.Symbol
  *  user-run manual replan. The exhaustive `when` makes a new [TriggerType] a compile error. */
 internal fun triggerSymbol(trigger: TriggerType?): MaterialSymbol = when (trigger) {
     null -> MaterialSymbol.Schedule
-    TriggerType.EveningPlan -> MaterialSymbol.PlaylistPlay
+    TriggerType.EveningPlan -> MaterialSymbol.Autoplay
     TriggerType.CalendarChange -> MaterialSymbol.EventUpcoming
     TriggerType.SleepOnset -> MaterialSymbol.Bedtime
-    TriggerType.HcStageUpdate -> MaterialSymbol.MonitorHeart
+    TriggerType.HcStageUpdate -> MaterialSymbol.VitalSigns
     TriggerType.MidSleepActivity -> MaterialSymbol.Vibration
     TriggerType.OutOfBedConfirmed -> MaterialSymbol.DirectionsWalk
     TriggerType.WakeWindowOpportunity -> MaterialSymbol.LightMode

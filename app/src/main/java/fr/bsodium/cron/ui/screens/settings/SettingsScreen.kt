@@ -35,6 +35,7 @@ private val SETTINGS_GROUPS: List<List<SettingsCategory>> = listOf(
         SettingsCategory(SETTINGS_SCHEDULE, MaterialSymbol.Schedule, "Schedule", "When Cron plans tonight's alarm"),
         SettingsCategory(SETTINGS_FREE_DAYS, MaterialSymbol.Weekend, "Free days", "Wake window when you have no events"),
         SettingsCategory(SETTINGS_BUFFERS, MaterialSymbol.Timer, "Buffers", "Travel and preparation time"),
+        SettingsCategory(SETTINGS_COMMUTE, MaterialSymbol.DirectionsCar, "Commute", "How the planner estimates travel"),
     ),
     listOf(
         SettingsCategory(SETTINGS_ASSISTANT, MaterialSymbol.AutoAwesome, "Assistant", "Instructions, token budget, haptics"),
