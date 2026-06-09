@@ -40,12 +40,13 @@ enum class SignalConfidence {
     @SerialName("low") Low,
 }
 
+/** [wireToken] mirrors the @SerialName so prompt text speaks the same vocabulary as the wire format. */
 @Serializable
-enum class LocationSource {
-    @SerialName("gps") Gps,
-    @SerialName("last_known") LastKnown,
-    @SerialName("home_address") HomeAddress,
-    @SerialName("unavailable") Unavailable,
+enum class LocationSource(val wireToken: String) {
+    @SerialName("gps") Gps("gps"),
+    @SerialName("last_known") LastKnown("last_known"),
+    @SerialName("home_address") HomeAddress("home_address"),
+    @SerialName("unavailable") Unavailable("unavailable"),
 }
 
 @Serializable

@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.theme
 
 import android.graphics.Paint
+import android.util.Log
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -99,7 +100,9 @@ private fun rememberSymbolTypeface(): Typeface? {
                 fontStyle = FontStyle.Normal,
                 fontSynthesis = FontSynthesis.None,
             ).value as? Typeface
-        }.getOrNull()
+        }
+            .onFailure { Log.w("MaterialSymbols", "symbols font resolution failed — icons will not render", it) }
+            .getOrNull()
     }
 }
 

@@ -219,6 +219,11 @@ object AiThreadMapper {
             "cancel_alarm" -> "cancelled"
             "estimate_commute" -> obj["duration_sec"]?.jsonPrimitive?.content?.toLongOrNull()
                 ?.let { "${it / 60} min" }
+            // Nested per-mode output ({transit:{duration_sec,…},…}) — surface the fastest available mode.
+            "estimate_commute_multi_mode" -> obj.values
+                .mapNotNull { mode -> runCatching { mode.jsonObject["duration_sec"]?.jsonPrimitive?.content?.toLongOrNull() }.getOrNull() }
+                .minOrNull()
+                ?.let { "${it / 60} min" }
             "geocode_address" -> obj["formatted"]?.jsonPrimitive?.content?.take(28)
             else -> null
         }

@@ -45,13 +45,10 @@ import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.ui.components.PillBadge
-import fr.bsodium.cron.ui.theme.CodeFontFamily
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
-import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -133,8 +130,7 @@ internal fun AlarmCardContent(
             ) {
                 Text(
                     text = "Sleep",
-                    fontFamily = CodeFontFamily,
-                    fontSize = 18.sp,
+                    style = CronTypography.titleMono,
                     color = onCard,
                     modifier = Modifier.weight(1f),
                 )
@@ -144,10 +140,7 @@ internal fun AlarmCardContent(
                         text = sleepDurationLabel,
                         containerColor = onCard,
                         contentColor = MaterialTheme.colorScheme.primary,
-                        textStyle = MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = CodeFontFamily,
-                            fontWeight = FontWeight.Bold,
-                        ),
+                        textStyle = CronTypography.labelMonoBold,
                     )
                 }
             }
@@ -246,7 +239,7 @@ internal fun LcdClock(
     // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
     val hh = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
     val mm = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
-    val lcdStyle = TightTextStyle.copy(fontFamily = LcdFontFamily, fontSize = 76.sp, lineHeight = 76.sp)
+    val lcdStyle = CronTypography.lcdHero
     val ink = rememberLcdInkMetrics()
     // IntrinsicSize.Min so the colon's fillMaxHeight matches the digit line box, not the viewport.
     Row(modifier = modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
@@ -303,6 +296,8 @@ internal fun rememberLcdRevealProgress(alarmTime: LocalTime?): Float {
         if (valueKey == null) return@LaunchedEffect
         if (valueKey != animatedKey) {
             progressAnim.snapTo(0f)
+            // Sanctioned motionScheme exception (docs/expressive.md § Sanctioned exceptions): the reveal
+            // gates digit rolling on a 0→1 progress; a spring's overshoot past 1 would re-roll the digits.
             progressAnim.animateTo(1f, tween(durationMillis = LCD_REVEAL_MILLIS, easing = EaseOutCubic))
             animatedKey = valueKey
         } else {

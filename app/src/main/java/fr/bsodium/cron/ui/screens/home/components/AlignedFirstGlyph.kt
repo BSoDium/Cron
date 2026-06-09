@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import android.util.Log
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -47,7 +48,9 @@ internal fun AlignedFirstGlyph(
             val rect = Rect()
             paint.getTextBounds(text, 0, 1, rect)
             rect.left
-        }.getOrDefault(0)
+        }
+            .onFailure { Log.w("AlignedFirstGlyph", "left-bearing measurement failed — glyph unaligned", it) }
+            .getOrDefault(0)
     }
     Text(
         text = text,

@@ -37,6 +37,8 @@ const val SETTINGS_RELIABILITY = "settings/reliability"
 const val SETTINGS_ACCOUNT = "settings/account"
 const val SETTINGS_ABOUT = "settings/about"
 
+// NavGraphBuilder transition lambdas are not composable, so they cannot read MaterialTheme.motionScheme —
+// a sanctioned exception: see docs/expressive.md § Sanctioned exceptions.
 private val settingsTween = tween<Float>(durationMillis = 220, easing = EaseInOutCubic)
 private val settingsEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
     { fadeIn(settingsTween) }

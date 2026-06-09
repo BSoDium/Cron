@@ -32,7 +32,7 @@ class AiThinkingThreadTest {
     fun tapping_the_disclosure_toggles_expand_collapse() {
         composeTestRule.setContent {
             CronTheme {
-                AiThinkingThread(thread = thread, isRunning = false)
+                AiThinkingThread(thread = thread)
             }
         }
 

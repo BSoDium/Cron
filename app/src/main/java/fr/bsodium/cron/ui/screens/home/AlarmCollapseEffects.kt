@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.filter
 internal data class AlarmCollapse(val top: Int, val gradientAlpha: Float, val fraction: Float, val distancePx: Float)
 
 // Deterministic landing for the magnetic snap — a spring's asymptotic tail reads as a stall.
+// Sanctioned motionScheme exception: see docs/expressive.md § Sanctioned exceptions.
 private val ALARM_SNAP_SPEC = tween<Float>(durationMillis = 260, easing = FastOutSlowInEasing)
 // A drag-release flips isScrollInProgress false for a frame BEFORE the post-release fling starts.
 // Wait this gap out and re-check, so the snap runs from the TRUE settle — not the momentary gap, where

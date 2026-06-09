@@ -16,9 +16,8 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.theme.CronTheme
-import fr.bsodium.cron.ui.theme.DisplayFontFamily
+import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
-import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -81,13 +80,8 @@ private fun TwoLineLcdStack(
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
 ) {
-    // Space Grotesk (legible, unlike Major Mono's art-deco H/M); lineHeight < fontSize tightens the
-    // leading so the stack is compact and gains breathing room when centred in the collapsed pill.
-    val smallLcd = TightTextStyle.copy(
-        fontFamily = DisplayFontFamily,
-        fontSize = 24.sp,
-        lineHeight = 21.sp,
-    )
+    // Space Grotesk (legible, unlike Major Mono's art-deco H/M) — the shared compact-stack role.
+    val smallLcd = CronTypography.lcdStack
     val align = alignFraction.coerceIn(0f, 1f)
     Layout(
         modifier = modifier,

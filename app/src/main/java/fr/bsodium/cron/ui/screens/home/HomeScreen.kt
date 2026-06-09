@@ -7,7 +7,6 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -22,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -60,10 +60,6 @@ import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
-
-// Cross-dissolve between the loading / idle / plan layouts so first-load and re-plans fade in
-// instead of hard-cutting the card from one layout to another.
-private const val HOME_FADE_MS = 240
 
 // The onset card's header when no plan has run for the next alarm yet.
 private const val EMPTY_STATE_DATE_LABEL = "No alarm set"
@@ -157,7 +153,7 @@ fun HomeScreen(
         }
         Crossfade(
             targetState = homePhase,
-            animationSpec = tween(HOME_FADE_MS),
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
             label = "home-phase",
             modifier = Modifier.fillMaxSize(),
         ) { phase ->

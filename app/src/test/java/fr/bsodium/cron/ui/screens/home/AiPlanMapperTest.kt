@@ -7,6 +7,7 @@ import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.testutil.Fixtures
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -114,6 +115,39 @@ class AiPlanMapperTest {
         val rows = listOf(assistant(0, createdAt = 0L), assistant(1, createdAt = createdAt))
         val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, emptyList()))
         assertEquals(localHhMm(iso), plan.iterations.last().timeLabel)
+    }
+
+    @Test
+    fun manual_bootstrap_labels_the_base_plan_planned_manually() {
+        val rows = listOf(assistant(0, createdAt = 1000L))
+        val events = listOf(event(TriggerType.EveningPlan, 500L, Fixtures.eveningEvent(isManual = true).data))
+        val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, events))
+        assertEquals("Planned manually", plan.iterations.single().systemMessage)
+        assertEquals(RunKind.ManualBase, plan.iterations.single().kind)
+    }
+
+    @Test
+    fun scheduled_bootstrap_stays_planned_even_with_an_evening_event() {
+        val rows = listOf(assistant(0, createdAt = 1000L))
+        val events = listOf(event(TriggerType.EveningPlan, 500L, Fixtures.eveningEvent(isManual = false).data))
+        val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, events))
+        assertEquals("Planned", plan.iterations.single().systemMessage)
+        assertEquals(RunKind.ScheduledBase, plan.iterations.single().kind)
+    }
+
+    @Test
+    fun seeded_streaming_trigger_beats_a_stale_persisted_event() {
+        // A manual replan seeds its turn with EveningPlan BEFORE the event is persisted; the latest
+        // persisted event is still the prior CalendarChange — the seed must win or the tab mislabels.
+        val rows = listOf(assistant(0, createdAt = 0L))
+        val events = listOf(event(TriggerType.CalendarChange, 500L, EventData.CalendarChange("modified", "e1", true)))
+        val streaming = StreamingTurn(
+            sessionId = "s", turnIndex = 1, blocks = emptyList(), startedAtMs = 1000L,
+            trigger = TriggerType.EveningPlan,
+        )
+        val plan = requireNotNull(AiPlanMapper.buildPlan(rows, streaming, events))
+        assertEquals("Re-planned", plan.iterations.last().systemMessage)
+        assertEquals(RunKind.Replan(TriggerType.EveningPlan), plan.iterations.last().kind)
     }
 
 }

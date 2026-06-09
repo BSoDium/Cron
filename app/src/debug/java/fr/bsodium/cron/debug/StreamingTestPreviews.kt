@@ -37,7 +37,7 @@ private fun StreamingInteractivePreview() {
             LaunchedEffect(Unit) { StreamingSimulator.run { thread = it } }
             // Wrap in the reveal hook so the preview demonstrates the typewriter + directive-leak fix.
             val revealed = rememberRevealedThread(thread)
-            revealed?.let { AiThinkingThread(it, isRunning = true, modifier = Modifier.padding(Spacing.xl)) }
+            revealed?.let { AiThinkingThread(it, modifier = Modifier.padding(Spacing.xl)) }
         }
     }
 }
@@ -57,7 +57,7 @@ private fun StreamingMidFramePreview() {
     )
     CronTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
-            AiThinkingThread(thread, isRunning = true, modifier = Modifier.padding(Spacing.xl))
+            AiThinkingThread(thread, modifier = Modifier.padding(Spacing.xl))
         }
     }
 }

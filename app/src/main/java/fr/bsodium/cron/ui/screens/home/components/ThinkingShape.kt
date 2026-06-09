@@ -203,9 +203,9 @@ private const val ARROW_DOWN_DEG = 180f
 // Hold between thinking morphs so the arrow ⇄ random pulse lands at ~one change per second.
 private const val THINKING_HOLD_MS = 700L
 
-/** Documented exception to the motionScheme-only rule: the writing morph and its spin must share an EXACT
- *  duration so the spin lands precisely when the morph does, and springs expose no fixed duration — this
- *  coupled pair is tween-based by design. Everything else in this file animates on motionScheme specs. */
+/** Sanctioned motionScheme exception (docs/expressive.md § Sanctioned exceptions): the writing morph and
+ *  its spin must share an EXACT duration so the spin lands precisely when the morph does, and springs expose
+ *  no fixed duration — this coupled pair is tween-based by design. Everything else here uses motionScheme. */
 private const val WRITING_STEP_MS = 240
 private val WRITING_STEP_SPEC = tween<Float>(durationMillis = WRITING_STEP_MS, easing = FastOutSlowInEasing)
 // Mild ease-out-back overshoot so the spin still arrives springily despite the fixed duration.

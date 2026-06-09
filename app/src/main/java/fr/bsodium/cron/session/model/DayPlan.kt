@@ -35,3 +35,9 @@ data class SleepSession(
     val createdAt: Instant,
     val updatedAt: Instant,
 )
+
+/** The LATEST evening-plan location fix. A manual replan exists precisely to capture a fresh fix after
+ *  the user moved, so every consumer (prompt text, commute origin bias) must read this one helper —
+ *  reading the bootstrap's first event routes commutes from a stale location. */
+fun SleepSession.latestEveningPlanLocation(): LocationPayload? =
+    (events.lastOrNull { it.trigger == TriggerType.EveningPlan }?.data as? EventData.EveningPlan)?.location
