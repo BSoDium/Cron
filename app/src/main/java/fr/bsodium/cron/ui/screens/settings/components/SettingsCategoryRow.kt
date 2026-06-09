@@ -31,7 +31,7 @@ private val CATEGORY_ICON_CHIP = 40.dp
 private val CATEGORY_ICON_SIZE = 22.dp
 
 /**
- * One Settings category, rendered as its own `surfaceContainer` card so a group of rows reads as
+ * One Settings category, rendered as its own `surfaceContainerLow` card so a group of rows reads as
  * connected cards (the caller supplies a per-position [shape] with the group's outer corners rounded
  * and the seams between same-group cards barely rounded). A monochrome `surfaceContainerHigh` icon
  * chip nests inside; the card clips its own ripple, so there's no chevron.
@@ -48,7 +48,7 @@ internal fun SettingsCategoryRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
             modifier = Modifier
@@ -62,7 +62,7 @@ internal fun SettingsCategoryRow(
                 modifier = Modifier
                     .size(CATEGORY_ICON_CHIP)
                     .clip(RoundedCornerShape(Radius.md))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center,
             ) {
                 Symbol(
@@ -72,7 +72,10 @@ internal fun SettingsCategoryRow(
                     size = CATEGORY_ICON_SIZE,
                 )
             }
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+            ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
