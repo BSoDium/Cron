@@ -65,7 +65,9 @@ spring is *structurally* wrong for the job, not as a tuning preference. Anything
   the exact same frame. Springs expose no fixed duration, so the pair shares a `tween` duration.
 - **Magnetic settles** (`AlarmCollapseEffects.kt` `ALARM_SNAP_SPEC`): a snap that must land
   deterministically — a spring's asymptotic tail reads as a stall at the end of a scroll gesture.
-- **Navigation transitions** (`SettingsNavGraph.kt`): `NavGraphBuilder` transition lambdas are not
-  composable, so they structurally cannot read `MaterialTheme.motionScheme`.
+- **Navigation transitions** (`SettingsNavGraph.kt`, `MainActivity.kt`): `NavGraphBuilder` transition
+  lambdas are not composable, so they structurally cannot read `MaterialTheme.motionScheme`. The full
+  rule set for tab / push / pop / predictive-back motion lives in `docs/navigation.md` — read it before
+  adding a destination.
 - **Content-reveal choreography** (`NextAlarmCard.kt` LCD digit reveal): the reveal drives a 0→1
   progress that gates digit rolling; a spring's overshoot would push progress past 1 and re-roll digits.
