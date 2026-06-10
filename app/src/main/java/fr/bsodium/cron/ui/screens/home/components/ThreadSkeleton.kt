@@ -37,7 +37,8 @@ private const val SKELETON_PULSE_MS = 850
 private const val SKELETON_MIN_ALPHA = 0.35f
 private const val SKELETON_MAX_ALPHA = 0.70f
 private val HEADER_ICON = 18.dp
-private val LINE_HEIGHT = 13.dp
+private val HEADER_LINE_HEIGHT = 13.dp
+private val RESPONSE_LINE_HEIGHT = 16.dp
 
 // Mostly-full lines with a short last one, echoing the wrapped serif response paragraph.
 private val RESPONSE_LINES = listOf(1f, 1f, 0.92f, 1f, 0.66f)
@@ -73,12 +74,12 @@ internal fun ThreadSkeleton(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(start = Spacing.sm),
         ) {
             SkeletonBlock(pulse, Modifier.size(HEADER_ICON), CircleShape)
-            SkeletonBlock(pulse, Modifier.width(116.dp).height(LINE_HEIGHT))
+            SkeletonBlock(pulse, Modifier.width(116.dp).height(HEADER_LINE_HEIGHT))
         }
         // Response paragraph: tight, mostly-full lines with a short last one.
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             RESPONSE_LINES.forEach { fraction ->
-                SkeletonBlock(pulse, Modifier.fillMaxWidth(fraction).height(LINE_HEIGHT))
+                SkeletonBlock(pulse, Modifier.fillMaxWidth(fraction).height(RESPONSE_LINE_HEIGHT))
             }
         }
     }
