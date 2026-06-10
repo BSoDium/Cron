@@ -48,6 +48,7 @@ import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
 import fr.bsodium.cron.ui.screens.home.components.AlarmTiming
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
+import fr.bsodium.cron.ui.screens.home.components.HomeLoadingContent
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.NextPlanHint
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
@@ -158,7 +159,10 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize(),
         ) { phase ->
             when (phase) {
-                HomePhase.Loading -> Unit
+                HomePhase.Loading -> HomeLoadingContent(
+                    statusInsetTop = statusInsetTop,
+                    navInsetBottom = navInsetBottom,
+                )
                 HomePhase.Idle -> HomeIdleContent(
                     uiState = uiState,
                     statusInsetTop = statusInsetTop,

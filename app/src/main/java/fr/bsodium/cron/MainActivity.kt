@@ -4,17 +4,25 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -48,6 +57,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 private const val FORWARD_MS = 350
+private const val TAB_OUT_MS = 90
+private const val TAB_IN_MS = 160
+private const val TAB_SCALE = 0.92f
 private const val ROUTE_ONBOARDING = "onboarding"
 
 /** Tab destinations, shared with [CronBottomBar] so a route rename can't silently un-highlight a tab. */
@@ -56,8 +68,26 @@ const val ROUTE_HISTORY = "history"
 
 private val TAB_ROUTES = setOf(ROUTE_HOME, ROUTE_HISTORY, SETTINGS_ROOT)
 
-// Tab switches are instant; only the one-off onboarding → home hand-off fades. See docs/navigation.md.
 private val forwardTween = tween<Float>(durationMillis = FORWARD_MS, easing = EaseInOutCubic)
+
+/**
+ * Tab-to-tab transitions: Material **fade-through** — the convention for unrelated top-level destinations
+ * (a directional slide is the *shared-axis* pattern, reserved for hierarchical navigation). The incoming
+ * fade is delayed past the outgoing fade so the two screens never sit fully opaque at once — that's what
+ * removes the ghost overlap. `NavGraphBuilder` lambdas aren't composable, so this is a sanctioned `tween`
+ * exception (see docs/navigation.md). Shared with `SETTINGS_ROOT` via [settingsGraph].
+ */
+internal val tabEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+    fadeIn(tween(TAB_IN_MS, delayMillis = TAB_OUT_MS, easing = LinearOutSlowInEasing)) +
+        scaleIn(
+            tween(TAB_IN_MS, delayMillis = TAB_OUT_MS, easing = LinearOutSlowInEasing),
+            initialScale = TAB_SCALE,
+        )
+}
+internal val tabExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    fadeOut(tween(TAB_OUT_MS, easing = FastOutLinearInEasing)) +
+        scaleOut(tween(TAB_OUT_MS, easing = FastOutLinearInEasing), targetScale = TAB_SCALE)
+}
 
 /**
  * Lets a screen publish its primary action to the [CronFloatingNav] FAB while
@@ -83,6 +113,7 @@ class MainActivity : ComponentActivity() {
      * The Scaffold padding is intentionally unused: content draws edge-to-edge and each screen
      * folds the status-bar / nav insets into its own content padding.
      */
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -116,7 +147,11 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        if (showBottomBar) {
+                        AnimatedVisibility(
+                            visible = showBottomBar,
+                            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                        ) {
                             CronFloatingNav(
                                 currentRoute = currentRoute,
                                 onNavigate = { route ->
@@ -157,15 +192,13 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(
                             route = ROUTE_HOME,
-                            // Instant on tab switch; fade only when handed off from onboarding.
-                            enterTransition = {
-                                if (initialState.destination.route == ROUTE_ONBOARDING) {
-                                    fadeIn(animationSpec = forwardTween)
-                                } else {
-                                    EnterTransition.None
-                                }
-                            },
-                            exitTransition = { ExitTransition.None },
+                            // Directional tab slide (onboarding → home fades, handled inside tabEnter). All
+                            // four slots use the index-directional specs so push/pop both read correctly and
+                            // nothing ever stacks at the same position.
+                            enterTransition = tabEnter,
+                            exitTransition = tabExit,
+                            popEnterTransition = tabEnter,
+                            popExitTransition = tabExit,
                         ) {
                             HomeScreen(
                                 viewModel = viewModel<HomeViewModel>(),
@@ -184,12 +217,14 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(
                             route = ROUTE_HISTORY,
-                            enterTransition = { EnterTransition.None },
-                            exitTransition = { ExitTransition.None },
+                            enterTransition = tabEnter,
+                            exitTransition = tabExit,
+                            popEnterTransition = tabEnter,
+                            popExitTransition = tabExit,
                         ) {
                             HistoryScreen(viewModel = viewModel<HistoryViewModel>())
                         }
-                        settingsGraph(navController)
+                        settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                     }
                         EdgeFades()
                         // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the

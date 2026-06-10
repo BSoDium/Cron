@@ -43,7 +43,7 @@ internal fun OldPlanFooter(
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     Box(
         modifier = modifier
-            .offset(x = -Spacing.sm, y = -Spacing.xs)
+            .offset(x = -Spacing.sm, y = -Spacing.sm)
             .minimumInteractiveComponentSize()
             .clip(Radius.full)
             .clickable { onJumpToLatest() }
