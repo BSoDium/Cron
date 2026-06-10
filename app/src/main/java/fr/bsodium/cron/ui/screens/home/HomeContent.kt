@@ -3,7 +3,7 @@
 package fr.bsodium.cron.ui.screens.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
@@ -54,6 +54,7 @@ import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.ReplanHistoryBar
+import fr.bsodium.cron.ui.screens.home.components.ThreadSkeleton
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -242,25 +243,28 @@ internal fun HomePlanContent(
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }))
             }
             item(key = "thread") {
-                if (deferHeavy) {
-                    // Reserve the pager's slot so the list doesn't jump when the thread fades in.
-                    Spacer(Modifier.height(with(density) { effPagerPx.toDp() }))
-                } else {
-                    // Fades in when the deferred thread arrives (Animatable created fresh on appearance,
-                    // so it always animates 0→1) instead of popping in. Read in the layer pass.
-                    val appear = remember { Animatable(0f) }
-                    val fadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-                    LaunchedEffect(Unit) { appear.animateTo(1f, fadeSpec) }
-                    ThreadPager(
-                        iterations = iterations,
-                        pagerState = pagerState,
-                        pullStates = pullStates,
-                        onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
-                        onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
-                        modifier = Modifier
-                            .graphicsLayer { alpha = appear.value }
-                            .then(if (effPagerPx > 0) Modifier.height(with(density) { effPagerPx.toDp() }) else Modifier),
-                    )
+                // While the thread is deferred off the first frame, the page (greeting/card/strip) is up but
+                // the response isn't — show a thread-shaped skeleton there, then crossfade into the real
+                // pager when it composes. Reserve the known pager height so the list doesn't jump on
+                // re-entry; the first load wraps until the page reports its height.
+                Crossfade(
+                    targetState = deferHeavy,
+                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                    label = "thread",
+                    modifier = if (effPagerPx > 0) Modifier.height(with(density) { effPagerPx.toDp() }) else Modifier,
+                ) { deferred ->
+                    if (deferred) {
+                        ThreadSkeleton(Modifier.fillMaxWidth())
+                    } else {
+                        ThreadPager(
+                            iterations = iterations,
+                            pagerState = pagerState,
+                            pullStates = pullStates,
+                            onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
+                            onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
             if (!hasNotificationPermission) {
