@@ -7,4 +7,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Launch splash background — matches the app's light page background (values-night overrides for dark). -->
+    <color name="splash_background">#FFF8F5F0</color>
 </resources>

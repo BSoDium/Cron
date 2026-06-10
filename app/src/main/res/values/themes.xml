@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Cron" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Launch theme: a branded splash (icon on splash_background) shown until MainActivity resolves the
+         start destination off the main thread, then it hands off to Theme.Cron. splash_background adapts
+         via values-night, so dark-mode launches don't flash light. -->
+    <style name="Theme.Cron.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Cron</item>
+    </style>
 </resources>
