@@ -11,18 +11,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
@@ -31,7 +35,7 @@ import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.SessionEntity
 import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.session.model.Instruction
-import fr.bsodium.cron.ui.components.ScreenTitle
+import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,36 +53,43 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HistoryScreen(viewModel: HistoryViewModel) {
     val sessions by viewModel.sessions.collectAsState()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = Spacing.xl,
-            end = Spacing.xl,
-            top = statusInsetTop + Spacing.xxl,
-            bottom = navBottomInset + Spacing.navBarClearance,
-        ),
-        verticalArrangement = Arrangement.spacedBy(Spacing.md),
-    ) {
-        item(key = "title") {
-            ScreenTitle("History", modifier = Modifier.padding(bottom = Spacing.sm))
-        }
-        if (sessions.isEmpty()) {
-            item {
-                Text(
-                    text = "No past sessions yet — Cron will start logging them tonight.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0),
+        topBar = { PageAppBar(title = "History", scrollBehavior = scrollBehavior) },
+    ) { inner ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = Spacing.xl,
+                end = Spacing.xl,
+                top = inner.calculateTopPadding() + Spacing.sm,
+                bottom = navBottomInset + Spacing.navBarClearance,
+            ),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
+        ) {
+            if (sessions.isEmpty()) {
+                item {
+                    Text(
+                        text = "No past sessions yet — Cron will start logging them tonight.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-        }
-        items(sessions, key = { it.id }) { session ->
-            HistoryRow(session)
+            items(sessions, key = { it.id }) { session ->
+                HistoryRow(session)
+            }
         }
     }
 }
@@ -95,7 +106,7 @@ private fun HistoryRow(entity: SessionEntity) {
         tonalElevation = 0.dp,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.lg),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
