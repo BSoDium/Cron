@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import android.content.res.Configuration
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,21 +91,30 @@ private fun nextPlanSubline(autoAlarmsEnabled: Boolean, eveningTriggerTime: Loca
 }
 
 /**
- * The empty-state artwork, its fixed palette retinted onto Material You (three distinct roles, contrast
- * mirroring the original dark-ink / green / white-paper): ink + the few black strokes → `onSurface`
- * (line-art legible in light & dark), the green → `primary` (the lone chromatic accent), the white
- * surfaces → `surfaceVariant` (a soft raised fill). All 109 paths kept — `recolored` only swaps colors.
+ * The empty-state clock, its fixed palette retinted onto Material You across three accent hues so it tracks
+ * the wallpaper instead of reading monochrome: the dial → `primary`, the background "speed wings" →
+ * `tertiary` (their lighter overlay → `tertiaryContainer`), the bells + feet → `secondary`; the numbers,
+ * hands, ticks and shading → `onSurface` (line-art legible in light & dark); the dial face/sheen → `surface`
+ * and the ground shadow → `surfaceVariant`. `recolored` only swaps colors, preserving every path's alpha.
  */
 @Composable
 private fun NoPlanIllustration(modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val source = ImageVector.vectorResource(R.drawable.ic_no_plan_illustration)
-    val illustration = remember(source, scheme.onSurface, scheme.primary, scheme.surfaceVariant) {
+    val illustration = remember(
+        source,
+        scheme.onSurface, scheme.primary, scheme.secondary, scheme.tertiary,
+        scheme.tertiaryContainer, scheme.surface, scheme.surfaceVariant,
+    ) {
         source.recolored { original ->
             when (original) {
                 NO_PLAN_INK, NO_PLAN_BLACK -> scheme.onSurface
-                NO_PLAN_ACCENT -> scheme.primary
-                NO_PLAN_PAPER -> scheme.surfaceVariant
+                NO_PLAN_PRIMARY -> scheme.primary
+                NO_PLAN_SECONDARY -> scheme.secondary
+                NO_PLAN_TERTIARY -> scheme.tertiary
+                NO_PLAN_TERTIARY_LIGHT -> scheme.tertiaryContainer
+                NO_PLAN_PAPER -> scheme.surface
+                NO_PLAN_GROUND -> scheme.surfaceVariant
                 else -> original
             }
         }
@@ -111,17 +122,25 @@ private fun NoPlanIllustration(modifier: Modifier = Modifier) {
     Image(imageVector = illustration, contentDescription = null, modifier = modifier)
 }
 
-/** Source fills/strokes of `ic_no_plan_illustration`, remapped onto `colorScheme` (see [recolored]). */
+/** Source fills of `ic_no_plan_illustration` (sentinel hues assigned per region), remapped onto
+ *  `colorScheme` (see [recolored]). */
 private val NO_PLAN_INK = Color(0xFF263238)
-private val NO_PLAN_ACCENT = Color(0xFF92E3A9)
-private val NO_PLAN_PAPER = Color(0xFFFFFFFF)
 private val NO_PLAN_BLACK = Color(0xFF000000)
+private val NO_PLAN_PRIMARY = Color(0xFF407BFF)
+private val NO_PLAN_SECONDARY = Color(0xFFEE3377)
+private val NO_PLAN_TERTIARY = Color(0xFF11AA99)
+private val NO_PLAN_TERTIARY_LIGHT = Color(0xFF66E0D0)
+private val NO_PLAN_PAPER = Color(0xFFFFFFFF)
+private val NO_PLAN_GROUND = Color(0xFFF5F5F5)
 
-@Preview(showBackground = true, name = "No-plan illustration")
+@Preview(showBackground = true, name = "No-plan illustration — light")
+@Preview(showBackground = true, name = "No-plan illustration — dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun NoPlanIllustrationPreview() {
     CronTheme {
-        NoPlanIllustration(Modifier.padding(Spacing.xl).size(220.dp))
+        Surface(color = MaterialTheme.colorScheme.background) {
+            NoPlanIllustration(Modifier.padding(Spacing.xl).size(220.dp))
+        }
     }
 }
 
