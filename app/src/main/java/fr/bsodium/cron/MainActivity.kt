@@ -14,12 +14,13 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.Scaffold
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -40,7 +41,9 @@ import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.screens.settings.settingsGraph
 import fr.bsodium.cron.ui.theme.CronTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 private const val FORWARD_MS = 350
 private const val TAB_MS = 220
@@ -80,21 +83,29 @@ class MainActivity : ComponentActivity() {
      */
     @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         // System-driven bar styling — dark icons on a light page, light icons on dark.
         enableEdgeToEdge()
 
         val settings = SettingsRepository(this)
-        val secureStore = SecureKeyStore(this)
+        // Resolve the start destination off the main thread: SecureKeyStore init (keystore/Tink) and the
+        // DataStore read both block, and gating the first frame on them shows a white window. The branded
+        // splash stays up until this lands, then the NavHost composes immediately.
+        val startDestination = mutableStateOf<String?>(null)
+        splash.setKeepOnScreenCondition { startDestination.value == null }
 
         setContent {
             CronTheme {
-                val onboardingDone: Boolean? by produceState<Boolean?>(initialValue = null) {
-                    value = settings.onboardingComplete.first()
+                LaunchedEffect(Unit) {
+                    if (startDestination.value == null) {
+                        startDestination.value = withContext(Dispatchers.IO) {
+                            val done = settings.onboardingComplete.first()
+                            if (done && SecureKeyStore(this@MainActivity).hasAnthropicKey()) ROUTE_HOME else "onboarding"
+                        }
+                    }
                 }
-                val done = onboardingDone ?: return@CronTheme
-
-                val startDestination = if (done && secureStore.hasAnthropicKey()) ROUTE_HOME else "onboarding"
+                val start = startDestination.value ?: return@CronTheme
                 val navController = rememberNavController()
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = backStackEntry?.destination?.route
@@ -126,7 +137,7 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                     NavHost(
                         navController = navController,
-                        startDestination = startDestination,
+                        startDestination = start,
                     ) {
                         composable(
                             route = "onboarding",
