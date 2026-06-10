@@ -65,7 +65,9 @@ internal fun ThreadPager(
         key = { iterations.getOrNull(it)?.turnIndex ?: it },
         verticalAlignment = Alignment.Top,
         // No pageSpacing: each page's own xl padding forms a symmetric 2·xl gutter between adjacent content.
-        beyondViewportPageCount = 1, // pre-compose the neighbour so its markdown is parsed before it slides in
+        // 0 (not 1): entry parses only the visible page's markdown instead of two — the neighbour composes
+        // when a swipe starts, where a tiny cost is fine. Halves the thread's first-frame cost.
+        beyondViewportPageCount = 0,
     ) { page ->
         val iter = iterations.getOrNull(page) ?: return@HorizontalPager
         // getOrPut once per turnIndex; the current page always has its state ready for the caller's pull
