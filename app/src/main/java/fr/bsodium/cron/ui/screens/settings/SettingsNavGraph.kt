@@ -8,8 +8,6 @@ import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -43,16 +41,17 @@ const val SETTINGS_ACCOUNT = "settings/account"
 const val SETTINGS_ABOUT = "settings/about"
 
 private const val PUSH_MS = 240
-private const val POP_MS = 300
 
 private typealias EnterSpec = AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition
 private typealias ExitSpec = AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition
 
 /**
- * Drill-down + predictive-back transitions for the Settings graph. `NavGraphBuilder` lambdas are not
- * composable so they can't read `MaterialTheme.motionScheme` — a sanctioned `tween` exception (see
- * docs/expressive.md § Sanctioned exceptions). The pop pair is what Navigation Compose *seeks* during a
- * predictive-back gesture, producing the Google-Settings scale-into-card peek; see docs/navigation.md.
+ * Forward drill-down transitions for the Settings graph: the deeper screen pushes in from the right and
+ * covers the parent, which parallaxes left and dims. `NavGraphBuilder` lambdas are not composable so they
+ * can't read `MaterialTheme.motionScheme` — a sanctioned `tween` exception (see docs/expressive.md §
+ * Sanctioned exceptions). The *back* visual is not here: it's owned by [PredictiveBackCard] inside
+ * [SettingsDetailScaffold] (true two-phase predictive back), so every pop transition below is `None` and
+ * the NavHost swap happens invisibly under the card animation. See docs/navigation.md.
  */
 private val pushEnter: EnterSpec = {
     slideInHorizontally(tween(PUSH_MS, easing = EaseOutCubic)) { it } + fadeIn(tween(PUSH_MS / 2))
@@ -60,16 +59,6 @@ private val pushEnter: EnterSpec = {
 private val pushExit: ExitSpec = {
     slideOutHorizontally(tween(PUSH_MS, easing = EaseOutCubic)) { -it / 4 } +
         fadeOut(tween(PUSH_MS), targetAlpha = 0.65f)
-}
-private val popExit: ExitSpec = {
-    scaleOut(tween(POP_MS, easing = EaseOutCubic), targetScale = 0.90f) +
-        slideOutHorizontally(tween(POP_MS, easing = EaseOutCubic)) { it / 3 } +
-        fadeOut(tween(POP_MS))
-}
-private val popEnter: EnterSpec = {
-    scaleIn(tween(POP_MS, easing = EaseOutCubic), initialScale = 0.92f) +
-        slideInHorizontally(tween(POP_MS, easing = EaseOutCubic)) { -it / 6 } +
-        fadeIn(tween(POP_MS), initialAlpha = 0.55f)
 }
 
 private fun NavBackStackEntry.isSettingsChild() =
@@ -81,16 +70,23 @@ private fun NavBackStackEntry.isSettingsChild() =
  * sub-screens never flash defaults. Sub-screen routes sit outside the tab set, so the nav pill hides
  * on drill-down (see MainActivity's TAB_ROUTES).
  */
-fun NavGraphBuilder.settingsGraph(navController: NavController) {
+fun NavGraphBuilder.settingsGraph(
+    navController: NavController,
+    tabEnter: EnterSpec,
+    tabExit: ExitSpec,
+) {
     navigation(route = SETTINGS_GRAPH, startDestination = SETTINGS_ROOT) {
         composable(
             SETTINGS_ROOT,
-            // Entered via a tab switch → instant. Exits via a drill-down (push the child) or a tab switch
-            // back to Home/History (instant). Re-entered on a child pop → the scale-up-from-behind peek.
-            enterTransition = { EnterTransition.None },
-            exitTransition = { if (targetState.isSettingsChild()) pushExit() else ExitTransition.None },
-            popEnterTransition = popEnter,
-            popExitTransition = { ExitTransition.None },
+            // A tab destination: tab switch IN uses the fade-through (enter); tab switch AWAY uses it
+            // (popExit). Drilling into a child is the forward push (pushExit). On a child pop, the child's
+            // PredictiveBackCard already animates the root coming forward, so popEnter MUST be None — a
+            // transition here would re-scale the real root on top of the card's copy (a ghostly double
+            // entrance). See docs/navigation.md.
+            enterTransition = tabEnter,
+            exitTransition = { if (targetState.isSettingsChild()) pushExit() else tabExit() },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = tabExit,
         ) {
             SettingsScreen(onOpenCategory = { route -> navController.navigate(route) })
         }
@@ -172,8 +168,9 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
 }
 
 /**
- * A Settings sub-screen: pushes in from the right and is popped back with the predictive-back
- * scale-into-card. Sub-screens are never re-entered via a pop, so [popEnter] doesn't apply here.
+ * A Settings sub-screen: pushes in from the right on the way down. The back/pop visual is owned by
+ * [PredictiveBackCard] (the two-phase scale-into-card), so both pop transitions are `None` — the NavHost
+ * swap is invisible under the card animation.
  */
 private fun NavGraphBuilder.settingsDetail(
     route: String,
@@ -183,7 +180,7 @@ private fun NavGraphBuilder.settingsDetail(
     enterTransition = pushEnter,
     exitTransition = pushExit,
     popEnterTransition = { EnterTransition.None },
-    popExitTransition = popExit,
+    popExitTransition = { ExitTransition.None },
     content = content,
 )
 
