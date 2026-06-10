@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -8,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -39,7 +41,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,11 +98,19 @@ fun CronFloatingNav(
 @Composable
 private fun FabSlot(fabAction: FabAction?) {
     val visible = fabAction != null
-    // One Expressive spatial spec drives BOTH the slot-width re-centre and the FAB scale/fade, so they
-    // move as a single motion instead of desyncing.
-    val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    // Scale pops on a bouncy spatial spring; alpha rides a no-bounce effects spec so the fade reads clean
+    // (a bouncy alpha looks muddy). This mirrors how M3's own FAB show/hide separates the two.
+    val scaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+    val alphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    // Retain the last non-null action so the exit transition has a FAB to animate out — AnimatedVisibility
+    // recomposes its content with the new null the instant the action clears, which would otherwise leave
+    // the exit fading an empty box.
+    var lastShown by remember { mutableStateOf(fabAction) }
+    if (fabAction != null && fabAction != lastShown) lastShown = fabAction
+
     val width by animateDpAsState(
         targetValue = if (visible) FAB_SLOT_WIDTH else 0.dp,
+        // The pill re-centre stays on the smooth default spatial spec while the FAB itself pops.
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "fab-slot-width",
     )
@@ -106,25 +118,35 @@ private fun FabSlot(fabAction: FabAction?) {
         modifier = Modifier
             .width(width)
             .height(FAB_SLOT_HEIGHT),
-        contentAlignment = Alignment.CenterEnd,
+        contentAlignment = Alignment.CenterStart,
     ) {
         AnimatedVisibility(
             // Measure the FAB at its full size even while the slot width animates, so the entrance reads
-            // as a scale-up + fade (not a horizontal squeeze). The width only reserves layout space to
-            // re-centre the pill when the FAB hides on non-Home tabs.
-            modifier = Modifier.wrapContentWidth(align = Alignment.End, unbounded = true),
+            // as a scale-up + fade (not a horizontal squeeze). Aligning the overflow to the START (with the
+            // leading gap as start padding) makes the FAB collapse into the empty space to its right rather
+            // than drifting LEFT over the pill — End-alignment in a shrinking box pushes it onto the navbar.
+            modifier = Modifier
+                .wrapContentWidth(align = Alignment.Start, unbounded = true)
+                .padding(start = FAB_LEADING_GAP),
             visible = visible,
-            enter = fadeIn(spatial) + scaleIn(spatial, initialScale = 0.5f),
-            exit = fadeOut(spatial) + scaleOut(spatial, targetScale = 0.5f),
+            enter = scaleIn(scaleSpec, initialScale = FAB_HIDDEN_SCALE) + fadeIn(alphaSpec),
+            exit = scaleOut(scaleSpec, targetScale = FAB_HIDDEN_SCALE) + fadeOut(alphaSpec),
         ) {
-            PrimaryActionFab(fabAction)
+            PrimaryActionFab(lastShown)
         }
     }
 }
 
-private val FAB_SLOT_WIDTH = 68.dp // 56dp FAB + 12dp leading gap
+private val FAB_LEADING_GAP = Spacing.md // gap between the pill and the FAB
+private val FAB_SLOT_WIDTH = 56.dp + FAB_LEADING_GAP // 56dp FAB + leading gap
 private val FAB_SLOT_HEIGHT = 56.dp
 private val NAV_SLOT_SIZE = 48.dp
+
+// Hidden scale the FAB pops up from / collapses to on enter/exit (crisper than a half-size grow).
+private const val FAB_HIDDEN_SCALE = 0.3f
+
+// The play/stop glyph scales in from this as it crossfades on a working-state change.
+private const val FAB_ICON_SWAP_SCALE = 0.6f
 
 data class FabAction(
     val onClick: () -> Unit,
@@ -226,6 +248,9 @@ private fun PrimaryActionFab(action: FabAction?) {
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "fab-press",
     )
+    // Captured here because AnimatedContent's transitionSpec lambda is not composable.
+    val iconScaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+    val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     FloatingActionButton(
         onClick = {
             if (working) {
@@ -251,11 +276,21 @@ private fun PrimaryActionFab(action: FabAction?) {
         ),
         interactionSource = interaction,
     ) {
-        Symbol(
-            symbol = if (working) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
-            contentDescription = if (working) "Cancel" else "Run alarm plan",
-            fill = 1f,
-        )
+        AnimatedContent(
+            targetState = working,
+            transitionSpec = {
+                (scaleIn(iconScaleSpec, initialScale = FAB_ICON_SWAP_SCALE) + fadeIn(iconAlphaSpec)) togetherWith
+                    (scaleOut(iconScaleSpec, targetScale = FAB_ICON_SWAP_SCALE) + fadeOut(iconAlphaSpec))
+            },
+            contentAlignment = Alignment.Center,
+            label = "fab-icon",
+        ) { isWorking ->
+            Symbol(
+                symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
+                contentDescription = if (isWorking) "Cancel" else "Run alarm plan",
+                fill = 1f,
+            )
+        }
     }
 }
 
