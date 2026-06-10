@@ -41,6 +41,10 @@ This app targets **Material 3 Expressive**, not static M3. **Read `docs/expressi
 - Don't use `kotlinx.coroutines.delay(...)` as a stand-in for "show feedback until work finishes". If the underlying flow doesn't expose a completion signal, add one (a `StateFlow<Boolean>` on the repository) — don't paper over it with a fixed sleep. The current 2.5s spinner in `retryAiPlan` is a known wart; if you touch that code, fix it.
 - BroadcastReceivers using `goAsync()` must finish within ~10s. Don't add long-running work behind `CoroutineScope(Dispatchers.IO).launch` inside one — schedule a WorkManager job.
 
+## Performance
+
+- A screen that lags on open or tab re-entry **while other tabs are instant** is paying *first-composition* cost, not data cost (the VM survives nav, so the data's already loaded). **Read `docs/performance.md` before optimising a slow screen** — it's the playbook from the home-screen work (PRs #81–#84): the staged-render technique that fixed it (paint the cheap header + card on frame 1 via a `withFrameNanos`-gated `deferHeavy` flag, defer the markdown/`SubcomposeLayout` subtree to frame 2+), plus the supporting levers (build UI state off-main with `.flowOn(Dispatchers.Default)`, memoize immutable per-item work, bundle a font fallback for download-only families, splash + off-main start destination for cold start).
+
 ## Error handling
 
 - `runCatching { ... }.getOrNull()` is fine for tolerant parsing, but always chain `.onFailure { Log.w(TAG, "msg", it) }` first so production failures are diagnosable. Silent swallowing is a debugging trap.
