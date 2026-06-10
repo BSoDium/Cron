@@ -82,6 +82,11 @@ object AiPlanMapper {
         rows: List<AiMessageEntity>,
         streaming: StreamingTurn?,
         events: List<SessionEvent>,
+        // Builds a settled turn's thread from its rows. Defaulted to the direct mapping; callers pass a
+        // memoizing impl so immutable settled turns aren't re-decoded on every emission.
+        threadFor: (turn: Int, rows: List<AiMessageEntity>) -> AiThreadUi = { turn, turnRows ->
+            AiThreadMapper.build(turnRows) ?: AiThreadUi(turn, summary = null, process = emptyList(), response = null)
+        },
     ): AiPlanUi? {
         val byTurn = rows.groupBy { it.turnIndex }
         val streamingTurn = streaming?.turnIndex
@@ -91,7 +96,7 @@ object AiPlanMapper {
         // The live partial overrides the persisted rows of its turn → never a duplicate/stale iteration.
         fun threadOf(turn: Int): AiThreadUi =
             if (turn == streamingTurn && streaming != null) AiThreadMapper.buildFromBlocks(turn, streaming.blocks)
-            else AiThreadMapper.build(byTurn.getValue(turn)) ?: AiThreadUi(turn, summary = null, process = emptyList(), response = null)
+            else threadFor(turn, byTurn.getValue(turn))
 
         fun startOf(turn: Int): Long =
             byTurn[turn]?.minOfOrNull { it.createdAt }
