@@ -63,19 +63,20 @@ internal fun ThreadSkeleton(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.xl),
-        verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            .padding(top = Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xxxl),
     ) {
         // Thinking-disclosure header: a small tool icon + the "Thought for Xs" label.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            modifier = Modifier.padding(start = Spacing.sm),
         ) {
             SkeletonBlock(pulse, Modifier.size(HEADER_ICON), CircleShape)
             SkeletonBlock(pulse, Modifier.width(116.dp).height(LINE_HEIGHT))
         }
         // Response paragraph: tight, mostly-full lines with a short last one.
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             RESPONSE_LINES.forEach { fraction ->
                 SkeletonBlock(pulse, Modifier.fillMaxWidth(fraction).height(LINE_HEIGHT))
             }
