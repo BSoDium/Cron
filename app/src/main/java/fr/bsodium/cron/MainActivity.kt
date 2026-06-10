@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -46,7 +48,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 private const val FORWARD_MS = 350
-private const val TAB_MS = 220
+private const val ROUTE_ONBOARDING = "onboarding"
 
 /** Tab destinations, shared with [CronBottomBar] so a route rename can't silently un-highlight a tab. */
 const val ROUTE_HOME = "home"
@@ -54,8 +56,8 @@ const val ROUTE_HISTORY = "history"
 
 private val TAB_ROUTES = setOf(ROUTE_HOME, ROUTE_HISTORY, SETTINGS_ROOT)
 
+// Tab switches are instant; only the one-off onboarding → home hand-off fades. See docs/navigation.md.
 private val forwardTween = tween<Float>(durationMillis = FORWARD_MS, easing = EaseInOutCubic)
-private val tabTween = tween<Float>(durationMillis = TAB_MS, easing = EaseInOutCubic)
 
 /**
  * Lets a screen publish its primary action to the [CronFloatingNav] FAB while
@@ -101,7 +103,7 @@ class MainActivity : ComponentActivity() {
                     if (startDestination.value == null) {
                         startDestination.value = withContext(Dispatchers.IO) {
                             val done = settings.onboardingComplete.first()
-                            if (done && SecureKeyStore(this@MainActivity).hasAnthropicKey()) ROUTE_HOME else "onboarding"
+                            if (done && SecureKeyStore(this@MainActivity).hasAnthropicKey()) ROUTE_HOME else ROUTE_ONBOARDING
                         }
                     }
                 }
@@ -140,7 +142,7 @@ class MainActivity : ComponentActivity() {
                         startDestination = start,
                     ) {
                         composable(
-                            route = "onboarding",
+                            route = ROUTE_ONBOARDING,
                             enterTransition = { fadeIn(animationSpec = forwardTween) },
                             exitTransition = { fadeOut(animationSpec = forwardTween) },
                         ) {
@@ -148,15 +150,22 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel<OnboardingViewModel>(),
                                 onComplete = {
                                     navController.navigate(ROUTE_HOME) {
-                                        popUpTo("onboarding") { inclusive = true }
+                                        popUpTo(ROUTE_ONBOARDING) { inclusive = true }
                                     }
                                 },
                             )
                         }
                         composable(
                             route = ROUTE_HOME,
-                            enterTransition = { fadeIn(animationSpec = tabTween) },
-                            exitTransition = { fadeOut(animationSpec = tabTween) },
+                            // Instant on tab switch; fade only when handed off from onboarding.
+                            enterTransition = {
+                                if (initialState.destination.route == ROUTE_ONBOARDING) {
+                                    fadeIn(animationSpec = forwardTween)
+                                } else {
+                                    EnterTransition.None
+                                }
+                            },
+                            exitTransition = { ExitTransition.None },
                         ) {
                             HomeScreen(
                                 viewModel = viewModel<HomeViewModel>(),
@@ -175,8 +184,8 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(
                             route = ROUTE_HISTORY,
-                            enterTransition = { fadeIn(animationSpec = tabTween) },
-                            exitTransition = { fadeOut(animationSpec = tabTween) },
+                            enterTransition = { EnterTransition.None },
+                            exitTransition = { ExitTransition.None },
                         ) {
                             HistoryScreen(viewModel = viewModel<HistoryViewModel>())
                         }
