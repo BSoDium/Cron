@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launch splash background — matches the app's dark page background so dark-mode launches don't flash light. -->
+    <color name="splash_background">#FF0A0A0A</color>
+</resources>
