@@ -14,6 +14,7 @@ import fr.bsodium.cron.calendar.requestCalendarSync
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
+import fr.bsodium.cron.session.db.AiMessageEntity
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.toModel
 import fr.bsodium.cron.session.model.ActionType
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -113,7 +115,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         .distinctUntilChanged()
         .flatMapLatest { id ->
             if (id == null) flowOf(null)
-            else db.eventDao().observeBySession(id).map { events -> buildSleepStats(events) }
+            // Off the main thread: buildSleepStats decodes every event's JSON.
+            else db.eventDao().observeBySession(id).map { events -> buildSleepStats(events) }.flowOn(Dispatchers.Default)
         }
 
     /** Latest-turn AI thread — the live streaming partial overrides the settled DB state while a turn
@@ -125,13 +128,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (id == null) {
                 flowOf(null)
             } else {
+                // One cache per session so settled turns (immutable) build once instead of being
+                // re-decoded on every DB/streaming emission. Confined to this Default-dispatched flow.
+                val threadCache = TurnThreadCache()
                 combine(
                     db.aiMessageDao().observeBySession(id),
                     db.eventDao().observeBySession(id),
                     StreamingTurnStore.active,
                 ) { rows, events, streaming ->
-                    AiPlanMapper.buildPlan(rows, streaming?.takeIf { it.sessionId == id }, events.map { it.toModel() })
+                    AiPlanMapper.buildPlan(
+                        rows,
+                        streaming?.takeIf { it.sessionId == id },
+                        events.map { it.toModel() },
+                        threadFor = threadCache::threadFor,
+                    )
                 }.conflate()
+                    // Off the main thread: buildPlan decodes every turn's content JSON + every event's JSON.
+                    .flowOn(Dispatchers.Default)
             }
         }
 
@@ -424,3 +437,21 @@ private data class HomePrefs(
     val autoAlarmsEnabled: Boolean,
     val eveningTriggerTime: LocalTime,
 )
+
+/**
+ * Per-session memo for [AiPlanMapper.buildPlan]: a settled turn's rows are immutable, so its
+ * [AiThreadUi] is rebuilt only when the turn's rows change (keyed by their ids). Caps the per-emission
+ * cost at the streaming/changed turn instead of re-decoding every turn's JSON. One instance per session,
+ * confined to a single Default-dispatched flow, so a plain map needs no synchronization.
+ */
+private class TurnThreadCache {
+    private val cache = HashMap<Int, Pair<List<Long>, AiThreadUi>>()
+
+    fun threadFor(turn: Int, rows: List<AiMessageEntity>): AiThreadUi {
+        val signature = rows.map { it.id }
+        cache[turn]?.let { (sig, thread) -> if (sig == signature) return thread }
+        val thread = AiThreadMapper.build(rows) ?: AiThreadUi(turn, summary = null, process = emptyList(), response = null)
+        cache[turn] = signature to thread
+        return thread
+    }
+}
