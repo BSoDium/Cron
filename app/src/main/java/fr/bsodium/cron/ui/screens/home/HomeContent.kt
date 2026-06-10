@@ -24,6 +24,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -33,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -86,6 +88,16 @@ internal fun HomePlanContent(
     var cardFullHeightPx by remember { mutableIntStateOf(0) }
     var tabsHeightPx by remember { mutableIntStateOf(0) }
     val hasTabs = iterations.size > 1
+
+    // Staged render: paint the cheap header + alarm card on the first frame, then let the markdown-heavy
+    // thread pager and the SubcomposeLayout tab strip compose one frame later — off the critical paint
+    // path. withFrameNanos waits for that first frame to draw before flipping. Re-stages on every entry
+    // (plain remember, re-created when this composable is) so tab-switches feel instant too.
+    var deferHeavy by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        withFrameNanos {}
+        deferHeavy = false
+    }
 
     // Pager two-way bound to the tab selection (commit-on-settle, tap animation, midpoint haptic) — the
     // binding lives in PagerSelectionBinding.kt; it returns whether the user is actively dragging.
@@ -223,14 +235,19 @@ internal fun HomePlanContent(
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }))
             }
             item(key = "thread") {
-                ThreadPager(
-                    iterations = iterations,
-                    pagerState = pagerState,
-                    pullStates = pullStates,
-                    onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
-                    onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
-                    modifier = if (effPagerPx > 0) Modifier.height(with(density) { effPagerPx.toDp() }) else Modifier,
-                )
+                if (deferHeavy) {
+                    // Reserve the pager's slot so the list doesn't jump when the thread fades in next frame.
+                    Spacer(Modifier.height(with(density) { effPagerPx.toDp() }))
+                } else {
+                    ThreadPager(
+                        iterations = iterations,
+                        pagerState = pagerState,
+                        pullStates = pullStates,
+                        onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
+                        onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
+                        modifier = if (effPagerPx > 0) Modifier.height(with(density) { effPagerPx.toDp() }) else Modifier,
+                    )
+                }
             }
             if (!hasNotificationPermission) {
                 item(key = "notif-permission") {
@@ -243,8 +260,9 @@ internal fun HomePlanContent(
             collapse = collapseState,
             // The history tabs ride in the overlay (above the scrim), sticky right below the card, so the
             // scroll gradient never fades them. Lifted out of the list for that reason. Always supplied so
-            // the strip can animate IN/OUT (visibility = hasTabs) rather than popping the layout.
-            belowCardVisible = hasTabs,
+            // the strip can animate IN/OUT rather than popping the layout — and deferred off the first
+            // frame (its SubcomposeLayout probes are heavy) so it fades in with the thread.
+            belowCardVisible = hasTabs && !deferHeavy,
             belowCard = {
                 ReplanHistoryBar(
                     iterations = iterations,
