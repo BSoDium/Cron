@@ -3,6 +3,7 @@
 package fr.bsodium.cron.ui.screens.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
@@ -53,12 +54,18 @@ import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.ReplanHistoryBar
+import fr.bsodium.cron.ui.screens.home.components.ThreadSkeleton
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 // Pre-measurement fallback for the collapse range; the live range is the card's real shrinkage
 // (full height − collapsed bar), derived once the card reports its full height.
 private val ALARM_COLLAPSE_RANGE = 120.dp
+
+// Hold the markdown-heavy thread until the tab fade-through entrance (≈TAB_OUT_MS + TAB_IN_MS in
+// MainActivity) has settled, so its synchronous parse doesn't stutter the transition. Tuned on device.
+private const val HEAVY_DEFER_MS = 260L
 
 /**
  * The plan layout: the AI thread scrolls in a [LazyColumn] while the alarm card acts like CSS
@@ -89,13 +96,14 @@ internal fun HomePlanContent(
     var tabsHeightPx by remember { mutableIntStateOf(0) }
     val hasTabs = iterations.size > 1
 
-    // Staged render: paint the cheap header + alarm card on the first frame, then let the markdown-heavy
-    // thread pager and the SubcomposeLayout tab strip compose one frame later — off the critical paint
-    // path. withFrameNanos waits for that first frame to draw before flipping. Re-stages on every entry
-    // (plain remember, re-created when this composable is) so tab-switches feel instant too.
+    // Staged render: paint the cheap header + alarm card + tab strip on the first frame, then let the
+    // markdown-heavy thread pager compose once the tab-slide entrance has settled — so its synchronous
+    // parse lands on a still screen instead of stuttering mid-slide. withFrameNanos waits for frame 1 to
+    // draw, then we hold past the entrance. Re-stages on every entry (plain remember).
     var deferHeavy by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         withFrameNanos {}
+        delay(HEAVY_DEFER_MS)
         deferHeavy = false
     }
 
@@ -235,18 +243,28 @@ internal fun HomePlanContent(
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }))
             }
             item(key = "thread") {
-                if (deferHeavy) {
-                    // Reserve the pager's slot so the list doesn't jump when the thread fades in next frame.
-                    Spacer(Modifier.height(with(density) { effPagerPx.toDp() }))
-                } else {
-                    ThreadPager(
-                        iterations = iterations,
-                        pagerState = pagerState,
-                        pullStates = pullStates,
-                        onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
-                        onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
-                        modifier = if (effPagerPx > 0) Modifier.height(with(density) { effPagerPx.toDp() }) else Modifier,
-                    )
+                // While the thread is deferred off the first frame, the page (greeting/card/strip) is up but
+                // the response isn't — show a thread-shaped skeleton there, then crossfade into the real
+                // pager when it composes. Reserve the known pager height so the list doesn't jump on
+                // re-entry; the first load wraps until the page reports its height.
+                Crossfade(
+                    targetState = deferHeavy,
+                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                    label = "thread",
+                    modifier = if (effPagerPx > 0) Modifier.height(with(density) { effPagerPx.toDp() }) else Modifier,
+                ) { deferred ->
+                    if (deferred) {
+                        ThreadSkeleton(Modifier.fillMaxWidth())
+                    } else {
+                        ThreadPager(
+                            iterations = iterations,
+                            pagerState = pagerState,
+                            pullStates = pullStates,
+                            onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
+                            onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
             if (!hasNotificationPermission) {
@@ -259,10 +277,11 @@ internal fun HomePlanContent(
             safeTopPx = collapseSafeTopPx,
             collapse = collapseState,
             // The history tabs ride in the overlay (above the scrim), sticky right below the card, so the
-            // scroll gradient never fades them. Lifted out of the list for that reason. Always supplied so
-            // the strip can animate IN/OUT rather than popping the layout — and deferred off the first
-            // frame (its SubcomposeLayout probes are heavy) so it fades in with the thread.
-            belowCardVisible = hasTabs && !deferHeavy,
+            // scroll gradient never fades them. Lifted out of the list for that reason. Bound to hasTabs
+            // alone (not deferHeavy) so the strip is present from the first frame and slides in with the
+            // page: on a plain re-entry its AnimatedVisibility starts visible (no enter replay), and the
+            // expand/fade entrance only fires when a replan actually creates the 2nd tab (1 → multiple).
+            belowCardVisible = hasTabs,
             belowCard = {
                 ReplanHistoryBar(
                     iterations = iterations,

@@ -1,12 +1,15 @@
 package fr.bsodium.cron.ui.screens.settings
 
+import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,13 +40,29 @@ const val SETTINGS_RELIABILITY = "settings/reliability"
 const val SETTINGS_ACCOUNT = "settings/account"
 const val SETTINGS_ABOUT = "settings/about"
 
-// NavGraphBuilder transition lambdas are not composable, so they cannot read MaterialTheme.motionScheme —
-// a sanctioned exception: see docs/expressive.md § Sanctioned exceptions.
-private val settingsTween = tween<Float>(durationMillis = 220, easing = EaseInOutCubic)
-private val settingsEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
-    { fadeIn(settingsTween) }
-private val settingsExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition =
-    { fadeOut(settingsTween) }
+private const val PUSH_MS = 240
+
+private typealias EnterSpec = AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition
+private typealias ExitSpec = AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition
+
+/**
+ * Forward drill-down transitions for the Settings graph: the deeper screen pushes in from the right and
+ * covers the parent, which parallaxes left and dims. `NavGraphBuilder` lambdas are not composable so they
+ * can't read `MaterialTheme.motionScheme` — a sanctioned `tween` exception (see docs/expressive.md §
+ * Sanctioned exceptions). The *back* visual is not here: it's owned by [PredictiveBackCard] inside
+ * [SettingsDetailScaffold] (true two-phase predictive back), so every pop transition below is `None` and
+ * the NavHost swap happens invisibly under the card animation. See docs/navigation.md.
+ */
+private val pushEnter: EnterSpec = {
+    slideInHorizontally(tween(PUSH_MS, easing = EaseOutCubic)) { it } + fadeIn(tween(PUSH_MS / 2))
+}
+private val pushExit: ExitSpec = {
+    slideOutHorizontally(tween(PUSH_MS, easing = EaseOutCubic)) { -it / 4 } +
+        fadeOut(tween(PUSH_MS), targetAlpha = 0.65f)
+}
+
+private fun NavBackStackEntry.isSettingsChild() =
+    destination.parent?.route == SETTINGS_GRAPH && destination.route != SETTINGS_ROOT
 
 /**
  * Nested Settings graph: a category landing plus a sub-screen per category. Every destination shares
@@ -51,12 +70,27 @@ private val settingsExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -
  * sub-screens never flash defaults. Sub-screen routes sit outside the tab set, so the nav pill hides
  * on drill-down (see MainActivity's TAB_ROUTES).
  */
-fun NavGraphBuilder.settingsGraph(navController: NavController) {
+fun NavGraphBuilder.settingsGraph(
+    navController: NavController,
+    tabEnter: EnterSpec,
+    tabExit: ExitSpec,
+) {
     navigation(route = SETTINGS_GRAPH, startDestination = SETTINGS_ROOT) {
-        composable(SETTINGS_ROOT, enterTransition = settingsEnter, exitTransition = settingsExit) {
+        composable(
+            SETTINGS_ROOT,
+            // A tab destination: tab switch IN uses the fade-through (enter); tab switch AWAY uses it
+            // (popExit). Drilling into a child is the forward push (pushExit). On a child pop, the child's
+            // PredictiveBackCard already animates the root coming forward, so popEnter MUST be None — a
+            // transition here would re-scale the real root on top of the card's copy (a ghostly double
+            // entrance). See docs/navigation.md.
+            enterTransition = tabEnter,
+            exitTransition = { if (targetState.isSettingsChild()) pushExit() else tabExit() },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = tabExit,
+        ) {
             SettingsScreen(onOpenCategory = { route -> navController.navigate(route) })
         }
-        composable(SETTINGS_SCHEDULE, enterTransition = settingsEnter, exitTransition = settingsExit) { entry ->
+        settingsDetail(SETTINGS_SCHEDULE) { entry ->
             val vm = entry.settingsViewModel(navController)
             val state by vm.uiState.collectAsState()
             ScheduleSettingsScreen(
@@ -67,7 +101,7 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(SETTINGS_FREE_DAYS, enterTransition = settingsEnter, exitTransition = settingsExit) { entry ->
+        settingsDetail(SETTINGS_FREE_DAYS) { entry ->
             val vm = entry.settingsViewModel(navController)
             val state by vm.uiState.collectAsState()
             FreeDaysSettingsScreen(
@@ -78,7 +112,7 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(SETTINGS_BUFFERS, enterTransition = settingsEnter, exitTransition = settingsExit) { entry ->
+        settingsDetail(SETTINGS_BUFFERS) { entry ->
             val vm = entry.settingsViewModel(navController)
             val state by vm.uiState.collectAsState()
             BuffersSettingsScreen(
@@ -89,7 +123,7 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(SETTINGS_COMMUTE, enterTransition = settingsEnter, exitTransition = settingsExit) { entry ->
+        settingsDetail(SETTINGS_COMMUTE) { entry ->
             val vm = entry.settingsViewModel(navController)
             val state by vm.uiState.collectAsState()
             CommuteSettingsScreen(
@@ -98,7 +132,7 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(SETTINGS_ASSISTANT, enterTransition = settingsEnter, exitTransition = settingsExit) { entry ->
+        settingsDetail(SETTINGS_ASSISTANT) { entry ->
             val vm = entry.settingsViewModel(navController)
             val state by vm.uiState.collectAsState()
             AssistantSettingsScreen(
@@ -113,10 +147,10 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(SETTINGS_RELIABILITY, enterTransition = settingsEnter, exitTransition = settingsExit) {
+        settingsDetail(SETTINGS_RELIABILITY) {
             ReliabilitySettingsScreen(onBack = { navController.popBackStack() })
         }
-        composable(SETTINGS_ACCOUNT, enterTransition = settingsEnter, exitTransition = settingsExit) { entry ->
+        settingsDetail(SETTINGS_ACCOUNT) { entry ->
             val vm = entry.settingsViewModel(navController)
             val state by vm.uiState.collectAsState()
             AccountSettingsScreen(
@@ -127,11 +161,28 @@ fun NavGraphBuilder.settingsGraph(navController: NavController) {
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(SETTINGS_ABOUT, enterTransition = settingsEnter, exitTransition = settingsExit) {
+        settingsDetail(SETTINGS_ABOUT) {
             AboutSettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }
+
+/**
+ * A Settings sub-screen: pushes in from the right on the way down. The back/pop visual is owned by
+ * [PredictiveBackCard] (the two-phase scale-into-card), so both pop transitions are `None` — the NavHost
+ * swap is invisible under the card animation.
+ */
+private fun NavGraphBuilder.settingsDetail(
+    route: String,
+    content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit,
+) = composable(
+    route = route,
+    enterTransition = pushEnter,
+    exitTransition = pushExit,
+    popEnterTransition = { EnterTransition.None },
+    popExitTransition = { ExitTransition.None },
+    content = content,
+)
 
 /** The [SettingsViewModel] scoped to the whole settings graph, shared across landing + sub-screens. */
 @Composable
