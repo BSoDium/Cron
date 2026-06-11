@@ -63,10 +63,21 @@ class TurnRunner(
         initialUserMessage: String,
     ): Outcome {
         val startedAtMs = Clock.System.now().toEpochMilliseconds()
-        val messages = loadOrSeed(sessionId, turnIndex, initialUserMessage).toMutableList()
+        val (loaded, isFreshSeed) = loadOrSeed(sessionId, turnIndex, initialUserMessage)
+        val messages = loaded.toMutableList()
         // The turn's renderable blocks so far (assistant content + tool_result, never the user prompt),
         // seeded from any already-persisted messages on resume. Streamed deltas append onto this.
         var committedBlocks = renderableBlocks(messages)
+
+        // Mark the turn streaming BEFORE its seed row is persisted, so the home thread renders "thinking"
+        // from the first frame instead of briefly showing the bare user row as a settled turn ("Thought
+        // for a moment"). Skip if something already seeded this turn (the FAB path's seedPending carries a
+        // trigger label we mustn't clobber). The finally-clear ends the streaming state on completion.
+        val alreadySeeded = StreamingTurnStore.active.value
+            ?.let { it.sessionId == sessionId && it.turnIndex == turnIndex } == true
+        if (!alreadySeeded) publish(sessionId, turnIndex, committedBlocks, startedAtMs)
+        if (isFreshSeed) persistMessage(sessionId, turnIndex, role = "user", blocks = messages.first().content)
+
         var aggregateUsage = Usage()
 
         return try {
@@ -181,25 +192,29 @@ class TurnRunner(
         }
     }
 
+    /**
+     * Loads the persisted messages for the turn, or builds the initial user seed in memory. Returns the
+     * messages and whether a fresh seed still needs persisting — the caller persists it only *after*
+     * marking the turn streaming, so the seed row never renders as a settled turn before the first token.
+     */
     private suspend fun loadOrSeed(
         sessionId: String,
         turnIndex: Int,
         initialUserMessage: String,
-    ): List<MessageInput> {
+    ): Pair<List<MessageInput>, Boolean> {
         val persisted = aiMessageDao.findByTurn(sessionId, turnIndex)
         if (persisted.isNotEmpty()) {
-            return persisted.map { row ->
+            val messages = persisted.map { row ->
                 MessageInput(
                     role = row.role,
                     content = SessionJson.decodeFromString<List<ContentBlock>>(row.contentJson),
                 )
             }
+            return messages to false
         }
 
-        // Seed with the initial user message.
         val seedBlocks = listOf(ContentBlock.Text(initialUserMessage))
-        persistMessage(sessionId, turnIndex, role = "user", blocks = seedBlocks)
-        return listOf(MessageInput(role = "user", content = seedBlocks))
+        return listOf(MessageInput(role = "user", content = seedBlocks)) to true
     }
 
     private suspend fun persistMessage(
