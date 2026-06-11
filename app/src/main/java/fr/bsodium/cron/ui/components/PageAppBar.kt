@@ -51,13 +51,15 @@ fun PageAppBar(
         modifier = modifier,
         navigationIcon = {
             if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Symbol(
-                        symbol = MaterialSymbol.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        autoMirror = true,
-                    )
+                IconTooltip("Back") {
+                    IconButton(onClick = onBack) {
+                        Symbol(
+                            symbol = MaterialSymbol.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            autoMirror = true,
+                        )
+                    }
                 }
             }
         },
