@@ -262,7 +262,10 @@ internal fun HomePlanContent(
                             pullStates = pullStates,
                             onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
                             onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
-                            modifier = Modifier.fillMaxWidth(),
+                            // Fill the tall effPagerPx slot (not just content height) so the horizontal
+                            // plan-swipe is catchable across the whole area down to the nav bar — pages are
+                            // top-aligned and measured unbounded, so a long response still grows/scrolls.
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
