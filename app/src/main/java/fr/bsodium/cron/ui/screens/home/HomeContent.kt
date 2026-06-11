@@ -235,6 +235,7 @@ internal fun HomePlanContent(
                     autoAlarmsEnabled = uiState.autoAlarmsEnabled,
                     onAutoAlarmsChange = onAutoAlarmsChange,
                     modifier = Modifier.onSizeChanged { greetingHeightPx = it.height },
+                    hapticsEnabled = uiState.hapticsEnabled,
                 )
             }
             item(key = "alarm-spacer") {
