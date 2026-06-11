@@ -14,7 +14,6 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,11 +36,13 @@ fun PageAppBar(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
 ) {
-    // Fade the bar's surface shade in *in step with* the title's big→small collapse. M3's default snaps the
-    // container transparent→surfaceContainer the instant content overlaps, which popped a shade behind the
-    // mid-transition title (the "colour glitch"). Driving it off collapsedFraction keeps it synced + smooth.
+    // Fade the bar's surface shade in *in step with* the title's big→small collapse. Lerp between two
+    // OPAQUE colours — page background → surfaceContainer — never `Color.Transparent`: transparent is
+    // transparent *black*, so a mid-fade value composites as a near-black blip over the page (and M3's
+    // cross-faded layers stack it), reading as an elevation overshoot — the "weird gradient". Opaque
+    // endpoints ramp monotonically (very-low → slight elevation), matching the default app-bar feel.
     val barContainer = lerp(
-        Color.Transparent,
+        MaterialTheme.colorScheme.background,
         MaterialTheme.colorScheme.surfaceContainer,
         scrollBehavior.state.collapsedFraction,
     )
