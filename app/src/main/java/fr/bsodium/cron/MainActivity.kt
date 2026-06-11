@@ -17,6 +17,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -25,11 +26,14 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -149,95 +153,98 @@ class MainActivity : ComponentActivity() {
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
                     currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
+                val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
-                Scaffold(
-                    bottomBar = {
-                        AnimatedVisibility(
-                            visible = showBottomBar,
-                            enter = slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it / 3 } +
-                                fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
-                            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
-                        ) {
-                            CronFloatingNav(
-                                currentRoute = currentRoute,
-                                onNavigate = { route ->
-                                    navController.navigate(route) {
-                                        popUpTo(ROUTE_HOME) {
-                                            saveState = true
-                                            inclusive = false
+                CompositionLocalProvider(LocalSettingsListState provides settingsListState) {
+                    Scaffold(
+                        bottomBar = {
+                            AnimatedVisibility(
+                                visible = showBottomBar,
+                                enter = slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it / 3 } +
+                                    fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                                exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                            ) {
+                                CronFloatingNav(
+                                    currentRoute = currentRoute,
+                                    onNavigate = { route ->
+                                        navController.navigate(route) {
+                                            popUpTo(ROUTE_HOME) {
+                                                saveState = true
+                                                inclusive = false
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                fabAction = fabRegistry.action,
-                            )
-                        }
-                    },
-                ) { _ ->
-                    // Edge-to-edge: each screen folds the status-bar inset into its own top padding and
-                    // carries bottom padding for the nav pill; EdgeFades overlays soft top/bottom scrims.
-                    Box(modifier = Modifier.fillMaxSize()) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = start,
-                    ) {
-                        composable(
-                            route = ROUTE_ONBOARDING,
-                            enterTransition = { fadeIn(animationSpec = forwardTween) },
-                            exitTransition = { fadeOut(animationSpec = forwardTween) },
-                        ) {
-                            OnboardingScreen(
-                                viewModel = viewModel<OnboardingViewModel>(),
-                                onComplete = {
-                                    navController.navigate(ROUTE_HOME) {
-                                        popUpTo(ROUTE_ONBOARDING) { inclusive = true }
-                                    }
-                                },
-                            )
-                        }
-                        composable(
-                            route = ROUTE_HOME,
-                            // Directional tab slide (onboarding → home fades, handled inside tabEnter). All
-                            // four slots use the index-directional specs so push/pop both read correctly and
-                            // nothing ever stacks at the same position.
-                            enterTransition = tabEnter,
-                            exitTransition = tabExit,
-                            popEnterTransition = tabEnter,
-                            popExitTransition = tabExit,
-                        ) {
-                            HomeScreen(
-                                viewModel = viewModel<HomeViewModel>(),
-                                fabRegistry = fabRegistry,
-                                onNavigateToSettings = {
-                                    navController.navigate(SETTINGS_ROOT) {
-                                        popUpTo(ROUTE_HOME) {
-                                            saveState = true
-                                            inclusive = false
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                            )
-                        }
-                        composable(
-                            route = ROUTE_HISTORY,
-                            enterTransition = tabEnter,
-                            exitTransition = tabExit,
-                            popEnterTransition = tabEnter,
-                            popExitTransition = tabExit,
-                        ) {
-                            HistoryScreen(viewModel = viewModel<HistoryViewModel>())
-                        }
-                        settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
-                    }
-                        EdgeFades(showTopScrim = !hasTopAppBar)
-                        // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the
-                        // bottom scrim doesn't fade it out; HomeScreen requests it via FabAction.hint.
-                        if (currentRoute == ROUTE_HOME) {
-                            val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                            fabRegistry.action?.hint?.let { OnboardingTooltip(navBottom = navBottom, text = it) }
+                                    },
+                                    fabAction = fabRegistry.action,
+                                )
+                            }
+                        },
+                    ) { _ ->
+                        // Edge-to-edge: each screen folds the status-bar inset into its own top padding and
+                        // carries bottom padding for the nav pill; EdgeFades overlays soft top/bottom scrims.
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            NavHost(
+                                navController = navController,
+                                startDestination = start,
+                            ) {
+                                composable(
+                                    route = ROUTE_ONBOARDING,
+                                    enterTransition = { fadeIn(animationSpec = forwardTween) },
+                                    exitTransition = { fadeOut(animationSpec = forwardTween) },
+                                ) {
+                                    OnboardingScreen(
+                                        viewModel = viewModel<OnboardingViewModel>(),
+                                        onComplete = {
+                                            navController.navigate(ROUTE_HOME) {
+                                                popUpTo(ROUTE_ONBOARDING) { inclusive = true }
+                                            }
+                                        },
+                                    )
+                                }
+                                composable(
+                                    route = ROUTE_HOME,
+                                    // Directional tab slide (onboarding → home fades, handled inside tabEnter). All
+                                    // four slots use the index-directional specs so push/pop both read correctly and
+                                    // nothing ever stacks at the same position.
+                                    enterTransition = tabEnter,
+                                    exitTransition = tabExit,
+                                    popEnterTransition = tabEnter,
+                                    popExitTransition = tabExit,
+                                ) {
+                                    HomeScreen(
+                                        viewModel = viewModel<HomeViewModel>(),
+                                        fabRegistry = fabRegistry,
+                                        onNavigateToSettings = {
+                                            navController.navigate(SETTINGS_ROOT) {
+                                                popUpTo(ROUTE_HOME) {
+                                                    saveState = true
+                                                    inclusive = false
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
+                                    )
+                                }
+                                composable(
+                                    route = ROUTE_HISTORY,
+                                    enterTransition = tabEnter,
+                                    exitTransition = tabExit,
+                                    popEnterTransition = tabEnter,
+                                    popExitTransition = tabExit,
+                                ) {
+                                    HistoryScreen(viewModel = viewModel<HistoryViewModel>())
+                                }
+                                settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
+                            }
+                            EdgeFades(showTopScrim = !hasTopAppBar)
+                            // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the
+                            // bottom scrim doesn't fade it out; HomeScreen requests it via FabAction.hint.
+                            if (currentRoute == ROUTE_HOME) {
+                                val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                                fabRegistry.action?.hint?.let { OnboardingTooltip(navBottom = navBottom, text = it) }
+                            }
                         }
                     }
                 }

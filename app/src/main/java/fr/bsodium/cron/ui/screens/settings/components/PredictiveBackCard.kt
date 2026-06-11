@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.SettingsScreen
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Radius
@@ -145,7 +146,10 @@ private fun PredictiveBackLayers(
                         translationX = -sign * parentShiftPx * (1f - commit)
                     },
             ) {
-                SettingsScreen(onOpenCategory = {})
+                SettingsScreen(
+                    onOpenCategory = {},
+                    listState = LocalSettingsListState.current,
+                )
             }
             Box(
                 Modifier
