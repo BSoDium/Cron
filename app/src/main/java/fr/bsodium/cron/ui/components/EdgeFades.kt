@@ -23,20 +23,26 @@ import fr.bsodium.cron.ui.theme.Spacing
  * bottom one lifts the floating nav pill off the content. Placed as the last child
  * of a full-size [Box] so it overlays the screen; it has no pointer modifiers, so
  * touches pass straight through to the content below.
+ *
+ * [showTopScrim] is off for pages with a [PageAppBar]: the app bar already owns the
+ * status-bar strip, and its scrolled `surfaceContainer` shade would otherwise show a
+ * two-tone band under the `background`-tinted top scrim.
  */
 @Composable
-fun EdgeFades(modifier: Modifier = Modifier) {
+fun EdgeFades(modifier: Modifier = Modifier, showTopScrim: Boolean = true) {
     val background = MaterialTheme.colorScheme.background
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Box(modifier = modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(statusTop)
-                .background(Brush.verticalGradient(listOf(background, Color.Transparent))),
-        )
+        if (showTopScrim) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(statusTop)
+                    .background(Brush.verticalGradient(listOf(background, Color.Transparent))),
+            )
+        }
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
