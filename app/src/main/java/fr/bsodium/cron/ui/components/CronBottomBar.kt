@@ -49,6 +49,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -203,32 +208,41 @@ private fun RowScope.NavSlot(
         label = "nav-fill",
     )
     val haptics = rememberCronHaptics()
-    Box(
-        modifier = Modifier
-            // Square slot so the circular indicator nests with an equal margin on every side
-            // (x and y) inside the pill, rather than wider side gaps.
-            .size(NAV_SLOT_SIZE)
-            // Clip BEFORE clickable so the ripple respects the slot shape.
-            .clip(Radius.full)
-            .clickable(enabled = !selected) {
-                haptics.contextClick()
-                onNavigate(route)
-            },
-        contentAlignment = Alignment.Center,
-    ) {
+    IconTooltip(label) {
         Box(
             modifier = Modifier
-                .size(NAV_INDICATOR_SIZE)
-                .clip(CircleShape)
-                .background(container),
+                // Square slot so the circular indicator nests with an equal margin on every side
+                // (x and y) inside the pill, rather than wider side gaps.
+                .size(NAV_SLOT_SIZE)
+                // Clip BEFORE clickable so the ripple respects the slot shape.
+                .clip(Radius.full)
+                .clickable(enabled = !selected) {
+                    haptics.contextClick()
+                    onNavigate(route)
+                }
+                // Announce as a selected/unselected tab named [label] (the glyph itself is decorative);
+                // without this the inner Symbol's clearAndSetSemantics would report it as a plain image.
+                .semantics {
+                    role = Role.Tab
+                    this.selected = selected
+                    contentDescription = label
+                },
             contentAlignment = Alignment.Center,
         ) {
-            Symbol(
-                symbol = symbol,
-                contentDescription = label,
-                tint = iconTint,
-                fill = fill,
-            )
+            Box(
+                modifier = Modifier
+                    .size(NAV_INDICATOR_SIZE)
+                    .clip(CircleShape)
+                    .background(container),
+                contentAlignment = Alignment.Center,
+            ) {
+                Symbol(
+                    symbol = symbol,
+                    contentDescription = null,
+                    tint = iconTint,
+                    fill = fill,
+                )
+            }
         }
     }
 }
@@ -251,6 +265,7 @@ private fun PrimaryActionFab(action: FabAction?) {
     // Captured here because AnimatedContent's transitionSpec lambda is not composable.
     val iconScaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    IconTooltip(label = if (working) "Cancel" else "Run alarm plan") {
     FloatingActionButton(
         onClick = {
             if (working) {
@@ -291,6 +306,7 @@ private fun PrimaryActionFab(action: FabAction?) {
                 fill = 1f,
             )
         }
+    }
     }
 }
 

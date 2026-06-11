@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.components.IconTooltip
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -44,12 +45,14 @@ internal fun SettingsChangedPill(
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onRewrite) { Text("Replan alarm") }
-            IconButton(onClick = onDismiss) {
-                Symbol(
-                    symbol = MaterialSymbol.Close,
-                    contentDescription = "Dismiss",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            IconTooltip("Dismiss") {
+                IconButton(onClick = onDismiss) {
+                    Symbol(
+                        symbol = MaterialSymbol.Close,
+                        contentDescription = "Dismiss",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

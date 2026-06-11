@@ -18,6 +18,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.AiTurnFailure
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.components.IconTooltip
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -50,12 +51,14 @@ internal fun AiFailureBanner(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = { onOpenSettings(); onDismiss() }) { Text("Open settings") }
-                IconButton(onClick = onDismiss) {
-                    Symbol(
-                        symbol = MaterialSymbol.Close,
-                        contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                    )
+                IconTooltip("Dismiss") {
+                    IconButton(onClick = onDismiss) {
+                        Symbol(
+                            symbol = MaterialSymbol.Close,
+                            contentDescription = "Dismiss",
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
                 }
             }
         }
