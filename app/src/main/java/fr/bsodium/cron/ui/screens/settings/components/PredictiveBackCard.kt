@@ -136,12 +136,13 @@ private fun PredictiveBackLayers(
                     .fillMaxSize()
                     .graphicsLayer {
                         val commit = (progress() - 1f).coerceIn(0f, 1f)
+                        val sign = if (edgeLeft) -1f else 1f
                         val scale = lerp(PARENT_MIN_SCALE, 1f, commit)
                         scaleX = scale
                         scaleY = scale
-                        // Parked left for the whole hold so the destination is visible from the first frame,
-                        // sliding back to centre only on commit.
-                        translationX = -parentShiftPx * (1f - commit)
+                        // Parked on the side the card vacates (opposite the card, which moves toward the
+                        // gesture edge) so the geometry mirrors for both edges; slides to centre on commit.
+                        translationX = -sign * parentShiftPx * (1f - commit)
                     },
             ) {
                 SettingsScreen(onOpenCategory = {})
