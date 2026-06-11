@@ -1,24 +1,27 @@
 package fr.bsodium.cron.ui.screens.settings.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
 
-/** A title/subtitle row with a trailing [Switch] for a boolean preference. */
+/** A title/subtitle row with a leading [Checkbox]; the whole row is clickable. */
 @Composable
-internal fun SwitchRow(
+internal fun CheckboxRow(
     title: String,
     subtitle: String,
     checked: Boolean,
@@ -27,9 +30,14 @@ internal fun SwitchRow(
 ) {
     val haptics = rememberCronHaptics(enabled = hapticsEnabled)
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable { haptics.contextClick(); onCheckedChange(!checked) },
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Checkbox(checked = checked, onCheckedChange = null)
+        Spacer(Modifier.width(Spacing.sm))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -42,20 +50,16 @@ internal fun SwitchRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Spacer(Modifier.width(Spacing.md))
-        Switch(checked = checked, onCheckedChange = { v -> haptics.contextClick(); onCheckedChange(v) })
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-private fun SwitchRowPreview() {
+private fun CheckboxRowPreview() {
     CronTheme {
-        SwitchRow(
-            title = "Haptic feedback",
-            subtitle = "Subtle ticks while the assistant writes",
-            checked = true,
-            onCheckedChange = {},
-        )
+        Column {
+            CheckboxRow(title = "Drive", subtitle = "Estimate by car", checked = true, onCheckedChange = {})
+            CheckboxRow(title = "Transit", subtitle = "Estimate by bus, tram, or train", checked = false, onCheckedChange = {})
+        }
     }
 }

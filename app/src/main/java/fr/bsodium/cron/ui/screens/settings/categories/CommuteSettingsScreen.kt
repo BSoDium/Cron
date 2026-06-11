@@ -3,8 +3,8 @@ package fr.bsodium.cron.ui.screens.settings.categories
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.session.model.CommuteMode
+import fr.bsodium.cron.ui.screens.settings.components.CheckboxRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
-import fr.bsodium.cron.ui.screens.settings.components.SwitchRow
 import fr.bsodium.cron.ui.theme.CronTheme
 
 private fun CommuteMode.subtitle(): String = when (this) {
@@ -21,10 +21,11 @@ fun CommuteSettingsScreen(
     allowedModes: Set<CommuteMode>,
     onAllowedModes: (Set<CommuteMode>) -> Unit,
     onBack: () -> Unit,
+    hapticsEnabled: Boolean = true,
 ) {
     SettingsDetailScaffold(title = "Commute", onBack = onBack) {
         CommuteMode.entries.forEach { mode ->
-            SwitchRow(
+            CheckboxRow(
                 title = mode.label,
                 subtitle = mode.subtitle(),
                 checked = mode in allowedModes,
@@ -33,6 +34,7 @@ fun CommuteSettingsScreen(
                     // Keep at least one mode on — the planner needs something to estimate with.
                     if (next.isNotEmpty()) onAllowedModes(next)
                 },
+                hapticsEnabled = hapticsEnabled,
             )
         }
     }

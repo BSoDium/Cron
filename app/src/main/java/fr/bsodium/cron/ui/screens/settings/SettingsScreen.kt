@@ -58,13 +58,14 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = listOf(
     SettingsSection(
         "ASSISTANT",
         listOf(
-            SettingsCategory(SETTINGS_ASSISTANT, MaterialSymbol.AutoAwesome, "Assistant", "Instructions, token budget, haptics"),
+            SettingsCategory(SETTINGS_ASSISTANT, MaterialSymbol.AutoAwesome, "Assistant", "Instructions and token budget"),
             SettingsCategory(SETTINGS_RELIABILITY, MaterialSymbol.Shield, "Reliability", "Permissions that keep alarms on time"),
         ),
     ),
     SettingsSection(
         "APP",
         listOf(
+            SettingsCategory(SETTINGS_APP, MaterialSymbol.Settings, "Preferences", "Haptic feedback"),
             SettingsCategory(SETTINGS_ABOUT, MaterialSymbol.Info, "About", "Credits and attributions"),
         ),
     ),

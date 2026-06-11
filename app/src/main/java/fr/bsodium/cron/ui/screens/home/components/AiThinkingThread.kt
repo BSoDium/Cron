@@ -137,7 +137,7 @@ fun AiThinkingThread(
             }
             Row(
                 // Start inset centres the shape under the header's first tool disc: (disc 26 − shape 18)/2.
-                modifier = Modifier.padding(start = Spacing.xs, top = Spacing.md),
+                modifier = Modifier.padding(top = Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {

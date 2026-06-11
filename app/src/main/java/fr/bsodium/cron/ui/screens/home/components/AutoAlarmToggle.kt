@@ -11,6 +11,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
@@ -25,17 +26,19 @@ internal fun AutoAlarmToggle(
     enabled: Boolean,
     onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    hapticsEnabled: Boolean = true,
 ) {
+    val haptics = rememberCronHaptics(enabled = hapticsEnabled)
     // Opt out of the 48dp minimum-interactive reservation so the switch lays out at its natural ~32dp
     // height and doesn't inflate the greeting row (which would push the alarm card down).
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         Switch(
             checked = enabled,
-            onCheckedChange = onChange,
+            onCheckedChange = { v -> haptics.contextClick(); onChange(v) },
             modifier = modifier,
             thumbContent = {
                 Symbol(
-                    symbol = MaterialSymbol.Alarm,
+                    symbol = if (enabled) MaterialSymbol.Alarm else MaterialSymbol.AlarmOff,
                     contentDescription = if (enabled) "Auto alarms on" else "Auto alarms off",
                     size = SwitchDefaults.IconSize,
                 )

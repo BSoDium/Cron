@@ -53,6 +53,7 @@ fun HomeGreetingRow(
     autoAlarmsEnabled: Boolean,
     onAutoAlarmsChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    hapticsEnabled: Boolean = true,
 ) {
     val density = LocalDensity.current
     var switchHeight by remember { mutableStateOf(DEFAULT_SWITCH_HEIGHT) }
@@ -83,6 +84,7 @@ fun HomeGreetingRow(
                 enabled = autoAlarmsEnabled,
                 onChange = onAutoAlarmsChange,
                 modifier = Modifier.onSizeChanged { if (it.height > 0) switchHeight = with(density) { it.height.toDp() } },
+                hapticsEnabled = hapticsEnabled,
             )
         }
     }

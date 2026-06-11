@@ -10,7 +10,6 @@ import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.ui.screens.settings.components.CustomInstructionsRow
 import fr.bsodium.cron.ui.screens.settings.components.DailyBudgetRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
-import fr.bsodium.cron.ui.screens.settings.components.SwitchRow
 import fr.bsodium.cron.ui.theme.CronTheme
 
 @Composable
@@ -18,10 +17,8 @@ fun AssistantSettingsScreen(
     userInstructions: String?,
     dailyTokenLimit: Int,
     tokensUsedToday: Int,
-    hapticsEnabled: Boolean,
     onUserInstructions: (String) -> Unit,
     onDailyTokenLimit: (Int) -> Unit,
-    onHapticsEnabled: (Boolean) -> Unit,
     onRefreshUsage: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -46,12 +43,6 @@ fun AssistantSettingsScreen(
             usedToday = tokensUsedToday,
             onSelect = onDailyTokenLimit,
         )
-        SwitchRow(
-            title = "Haptic feedback",
-            subtitle = "Subtle ticks while the assistant writes",
-            checked = hapticsEnabled,
-            onCheckedChange = onHapticsEnabled,
-        )
     }
 }
 
@@ -63,10 +54,8 @@ private fun AssistantSettingsScreenPreview() {
             userInstructions = "Prefer earlier wake-ups on gym days.",
             dailyTokenLimit = BudgetStore.DEFAULT_DAILY_TOKEN_LIMIT,
             tokensUsedToday = 12_400,
-            hapticsEnabled = true,
             onUserInstructions = {},
             onDailyTokenLimit = {},
-            onHapticsEnabled = {},
             onRefreshUsage = {},
             onBack = {},
         )
