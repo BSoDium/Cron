@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -17,6 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -73,6 +75,13 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = listOf(
 
 // Connected-card group: large radius on a group's outer corners, a barely-rounded seam where
 // same-group cards meet, a tight gap within a group. Between sections the header carries the gap.
+/**
+ * Shared scroll state for the settings root list. Provided above the NavHost in MainActivity so
+ * both the real SettingsScreen and the PredictiveBackCard preview instance read the same object —
+ * preventing the scroll-position jump at the end of the back gesture.
+ */
+val LocalSettingsListState = compositionLocalOf { LazyListState() }
+
 private val CARD_GAP = Spacing.xs
 private val GROUP_OUTER_RADIUS = Radius.xl
 private val GROUP_INNER_RADIUS = Radius.sm
@@ -80,7 +89,10 @@ private val GROUP_INNER_RADIUS = Radius.sm
 /** Settings landing: tappable categories as labeled connected-card sections that drill into sub-screens. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SettingsScreen(onOpenCategory: (String) -> Unit) {
+fun SettingsScreen(
+    onOpenCategory: (String) -> Unit,
+    listState: LazyListState = LocalSettingsListState.current,
+) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -93,6 +105,7 @@ fun SettingsScreen(onOpenCategory: (String) -> Unit) {
         topBar = { PageAppBar(title = "Settings", scrollBehavior = scrollBehavior) },
     ) { inner ->
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = Spacing.xl,
