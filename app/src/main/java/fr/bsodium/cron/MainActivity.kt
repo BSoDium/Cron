@@ -143,6 +143,10 @@ class MainActivity : ComponentActivity() {
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = backStackEntry?.destination?.route
                 val showBottomBar = currentRoute in TAB_ROUTES
+                // Pages with a PageAppBar own the status-bar strip; the top edge-fade would two-tone it
+                // against the bar's scrolled surfaceContainer shade, so suppress it there.
+                val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
+                    currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
 
                 Scaffold(
@@ -226,7 +230,7 @@ class MainActivity : ComponentActivity() {
                         }
                         settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                     }
-                        EdgeFades()
+                        EdgeFades(showTopScrim = !hasTopAppBar)
                         // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the
                         // bottom scrim doesn't fade it out; HomeScreen requests it via FabAction.hint.
                         if (currentRoute == ROUTE_HOME) {
