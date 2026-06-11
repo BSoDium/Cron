@@ -33,9 +33,10 @@ internal class PullState {
 }
 
 /**
- * The thread, horizontally pageable: one page per replan iteration, bound to [pagerState] (two-way with
- * the tab selection in the caller). Each page carries its own [PullState] (from [pullStates]) so the
- * pull-to-expand reveal is per-iteration, and only the latest page shows the morphing thinking shape.
+ * The thread, horizontally pageable: one page per replan iteration, bound to [pagerState] — the single
+ * source of truth the caller derives the tab selection from. Each page carries its own [PullState] (from
+ * [pullStates]) so the pull-to-expand reveal is per-iteration, and only the latest page shows the morphing
+ * thinking shape.
  *
  * The caller sizes the pager to the settled page's height (a fixed height keeps the pager draggable —
  * `wrapContentHeight` silently disables the horizontal drag). Each page measures **unbounded** and
