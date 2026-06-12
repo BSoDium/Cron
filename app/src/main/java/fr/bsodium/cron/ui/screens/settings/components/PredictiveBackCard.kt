@@ -27,7 +27,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.SettingsScreen
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -134,10 +134,10 @@ private fun PredictiveBackLayers(
     Box(modifier = modifier.fillMaxSize()) {
         if (active) {
             val currentState = LocalSettingsListState.current
-            val previewState = rememberLazyListState(
-                initialFirstVisibleItemIndex = currentState.firstVisibleItemIndex,
-                initialFirstVisibleItemScrollOffset = currentState.firstVisibleItemScrollOffset,
-            )
+            val previewIndex = currentState.firstVisibleItemIndex
+            val previewOffset = currentState.firstVisibleItemScrollOffset
+            // plain remember: rememberSaveable would restore stale position from the previous gesture.
+            val previewState = remember { LazyListState(previewIndex, previewOffset) }
             Box(
                 Modifier
                     .fillMaxSize()
