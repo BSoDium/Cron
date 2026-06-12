@@ -155,7 +155,7 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
 
 /**
  * Renders [morph] at [progress], rotated by [rotationDeg] and fit-and-centered into the draw bounds
- * (spanning [SHAPE_FIT] of them, so a rotated shape never clips). [fillFraction] crossfades stroke→fill;
+ * (filling edge-to-edge minus stroke clearance). [fillFraction] crossfades stroke→fill;
  * the stroke can use a different colour ([strokeColor]) from the fill (defaults to the same [color]).
  */
 private fun DrawScope.drawMorph(
@@ -174,7 +174,8 @@ private fun DrawScope.drawMorph(
     path.computeBounds(bounds, true)
     val span = maxOf(bounds.width(), bounds.height())
     if (span <= 0f) return
-    val scale = size.minDimension * SHAPE_FIT / span
+    // Reserve only stroke-half-width clearance at each edge; the shape fills the canvas tightly.
+    val scale = (size.minDimension - STROKE_WIDTH.toPx()).coerceAtLeast(0f) / span
     matrix.reset()
     matrix.setScale(scale, scale)
     matrix.postTranslate(
@@ -191,11 +192,9 @@ private fun DrawScope.drawMorph(
 
 private fun nearestUpright(deg: Float): Float = (deg / 360f).roundToInt() * 360f
 
-// Canvas is a touch larger than the visible shape so a spun shape never clips at the edges.
 private val SHAPE_SIZE = 32.dp
 // Small, ~text-sized footprint while thinking (a down-arrow pull cue); grows to SHAPE_SIZE as it comes alive.
 private val THINKING_SHAPE_SIZE = 18.dp
-private const val SHAPE_FIT = 0.8f
 private val STROKE_WIDTH = 1.5.dp
 private const val STEP_DEG = 120f
 // Rotation that points MaterialShapes.Arrow downward (its 0° orientation points up); tune on device.

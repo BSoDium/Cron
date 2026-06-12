@@ -33,7 +33,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -85,11 +84,6 @@ internal fun HomePlanContent(
     onAutoAlarmsChange: (Boolean) -> Unit,
 ) {
     val iterations = plan.iterations
-    // Default to the latest; a fresh replan (new latest turnIndex) re-keys this back to newest while
-    // letting the user browse older iterations.
-    var selectedTurn by rememberSaveable(iterations.last().turnIndex) {
-        mutableStateOf(iterations.last().turnIndex)
-    }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     var cardFullHeightPx by remember { mutableIntStateOf(0) }
@@ -107,18 +101,24 @@ internal fun HomePlanContent(
         deferHeavy = false
     }
 
-    // Pager two-way bound to the tab selection (commit-on-settle, tap animation, midpoint haptic) — the
-    // binding lives in PagerSelectionBinding.kt; it returns whether the user is actively dragging.
-    val selectedIndex = iterations.indexOfFirst { it.turnIndex == selectedTurn }.coerceAtLeast(0)
-    val pagerState = rememberPagerState(initialPage = selectedIndex) { iterations.size }
+    // The pager is the single source of truth (see PagerNav.kt): the selection IS the settled page's
+    // turn, so the lit tab, the displayed thread, and the "jump to latest" footer can never diverge.
+    // pagerNav drives the pager one-way (tab tap / jump-to-latest / fresh-replan auto-advance) and reports
+    // active dragging. rememberPagerState's own Saver persists the page across config change.
+    val pagerState = rememberPagerState(initialPage = iterations.lastIndex.coerceAtLeast(0)) { iterations.size }
     val swipeHaptics = rememberCronHaptics(uiState.hapticsEnabled)
-    val draggingPager by rememberPagerSelectionBinding(
+    val pagerNav = rememberPagerNav(
         pagerState = pagerState,
         iterations = iterations,
-        selectedTurn = selectedTurn,
-        onSelectedTurnChange = { selectedTurn = it },
+        newestTurn = iterations.last().turnIndex,
         hapticsEnabled = uiState.hapticsEnabled,
     )
+    val draggingPager by pagerNav.dragging
+    // getOrNull guards the transient post-replan frame where settledPage can lead the list (mirrors
+    // pagerHeightPx below). Recomputes on settle, not per swipe frame, so the strip composes per selection.
+    val selectedTurn by remember(iterations) {
+        derivedStateOf { iterations.getOrNull(pagerState.settledPage)?.turnIndex ?: iterations.last().turnIndex }
+    }
     // Continuous pager position (page + offset) handed to the tab strip as a PROVIDER: the strip reads it
     // inside snapshot flows / derived state, so a swipe frame never recomposes this screen or the strip.
     val pagerPosition = { pagerState.currentPage + pagerState.currentPageOffsetFraction }
@@ -235,6 +235,7 @@ internal fun HomePlanContent(
                     autoAlarmsEnabled = uiState.autoAlarmsEnabled,
                     onAutoAlarmsChange = onAutoAlarmsChange,
                     modifier = Modifier.onSizeChanged { greetingHeightPx = it.height },
+                    hapticsEnabled = uiState.hapticsEnabled,
                 )
             }
             item(key = "alarm-spacer") {
@@ -260,7 +261,7 @@ internal fun HomePlanContent(
                             iterations = iterations,
                             pagerState = pagerState,
                             pullStates = pullStates,
-                            onJumpToLatest = { swipeHaptics.tick(); selectedTurn = iterations.last().turnIndex },
+                            onJumpToLatest = { swipeHaptics.tick(); pagerNav.scrollToTurn(iterations.last().turnIndex) },
                             onPageHeight = { turn, px -> if (pageHeights[turn] != px) pageHeights[turn] = px },
                             // Fill the tall effPagerPx slot (not just content height) so the horizontal
                             // plan-swipe is catchable across the whole area down to the nav bar — pages are
@@ -291,7 +292,7 @@ internal fun HomePlanContent(
                     position = pagerPosition,
                     selectedTurn = selectedTurn,
                     dragging = draggingPager,
-                    onSelect = { selectedTurn = it },
+                    onSelect = { pagerNav.scrollToTurn(it) },
                     hapticsEnabled = uiState.hapticsEnabled,
                 )
             },

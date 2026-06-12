@@ -253,6 +253,7 @@ private fun HomeIdleContent(
             autoAlarmsEnabled = uiState.autoAlarmsEnabled,
             onAutoAlarmsChange = onAutoAlarmsChange,
             modifier = Modifier.padding(horizontal = Spacing.xl),
+            hapticsEnabled = uiState.hapticsEnabled,
         )
         Box(Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) {
             // No active alarm in this state — render the blank onset card; "what's next" lives below it.
