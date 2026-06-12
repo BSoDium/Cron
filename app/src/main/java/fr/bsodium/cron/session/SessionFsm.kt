@@ -174,7 +174,10 @@ class SessionFsm(
 
     private fun transition(session: SleepSession, event: SessionEvent): SessionStatus =
         when (event.trigger) {
-            TriggerType.AlarmDismissed -> SessionStatus.Complete
+            TriggerType.AlarmDismissed -> when (session.status) {
+                SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
+                else -> SessionStatus.Complete
+            }
             TriggerType.SleepOnset -> when (session.status) {
                 SessionStatus.Planning, SessionStatus.Monitoring -> SessionStatus.Monitoring
                 SessionStatus.Awake -> SessionStatus.ReMonitoring

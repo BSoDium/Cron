@@ -163,6 +163,7 @@ object SystemPrompts {
         - NEVER set an alarm later than the hard latest.
         - If the user has been continuously out of bed for 10+ minutes (see event log): send_brief.
         - If a new sleep_onset fires after out_of_bed_confirmed: re-arm with a fresh set_alarm.
+        - If a new sleep_onset fires after alarm_dismissed: re-arm with a fresh set_alarm — the user fell back asleep after dismissing.
         - If snoozeCount >= 3: don't call any tools — the FSM has already handled this.
         - A mid_sleep_activity under 3 minutes is likely a bathroom trip: do_nothing unless
           followed by out_of_bed_confirmed.
