@@ -75,11 +75,7 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = listOf(
 
 // Connected-card group: large radius on a group's outer corners, a barely-rounded seam where
 // same-group cards meet, a tight gap within a group. Between sections the header carries the gap.
-/**
- * Shared scroll state for the settings root list. Provided above the NavHost in MainActivity so
- * both the real SettingsScreen and the PredictiveBackCard preview instance read the same object —
- * preventing the scroll-position jump at the end of the back gesture.
- */
+/** Scroll state for the settings root list, hoisted to MainActivity so PredictiveBackCard can snapshot it. */
 val LocalSettingsListState = compositionLocalOf { LazyListState() }
 
 private val CARD_GAP = Spacing.xs
