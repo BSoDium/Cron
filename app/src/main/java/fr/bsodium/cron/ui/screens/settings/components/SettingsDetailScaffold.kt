@@ -37,6 +37,7 @@ internal fun SettingsDetailScaffold(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -49,7 +50,7 @@ internal fun SettingsDetailScaffold(
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets(0),
-            topBar = { PageAppBar(title = title, scrollBehavior = scrollBehavior, onBack = animatedBack) },
+            topBar = { PageAppBar(title = title, subtitle = subtitle, scrollBehavior = scrollBehavior, onBack = animatedBack) },
         ) { inner ->
             Column(
                 modifier = Modifier
