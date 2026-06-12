@@ -34,6 +34,7 @@ fun PageAppBar(
     title: String,
     scrollBehavior: TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
     onBack: (() -> Unit)? = null,
 ) {
     // Fade the bar's surface shade in *in step with* the title's big→small collapse. Lerp between two
@@ -57,6 +58,9 @@ fun PageAppBar(
                     fontWeight = FontWeight.Normal,
                 ),
             )
+        },
+        subtitle = subtitle?.let { sub ->
+            { Text(text = sub, style = MaterialTheme.typography.bodyMedium) }
         },
         modifier = modifier,
         navigationIcon = {
@@ -109,6 +113,28 @@ private fun PageAppBarWithBackPreview() {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             topBar = { PageAppBar(title = "Schedule", scrollBehavior = scrollBehavior, onBack = {}) },
+        ) { inner ->
+            Text("body", modifier = Modifier.padding(inner))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Preview(showBackground = true, widthDp = 412, heightDp = 300)
+@Composable
+private fun PageAppBarWithSubtitlePreview() {
+    CronTheme {
+        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                PageAppBar(
+                    title = "Commute",
+                    subtitle = "Unchecking a mode blocks the planner from using it regardless of saved location data.",
+                    scrollBehavior = scrollBehavior,
+                    onBack = {},
+                )
+            },
         ) { inner ->
             Text("body", modifier = Modifier.padding(inner))
         }

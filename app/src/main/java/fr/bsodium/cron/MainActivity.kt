@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -153,7 +154,8 @@ class MainActivity : ComponentActivity() {
                     bottomBar = {
                         AnimatedVisibility(
                             visible = showBottomBar,
-                            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                            enter = slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it / 3 } +
+                                fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                             exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                         ) {
                             CronFloatingNav(

@@ -13,6 +13,7 @@ fun BuffersSettingsScreen(
     onCommuteBuffer: (Int) -> Unit,
     onPreparationBuffer: (Int) -> Unit,
     onBack: () -> Unit,
+    hapticsEnabled: Boolean = true,
 ) {
     SettingsDetailScaffold(title = "Buffers", onBack = onBack) {
         BufferSlider(
@@ -20,12 +21,14 @@ fun BuffersSettingsScreen(
             description = "Minimum commute time before the first event",
             value = commuteBufferMinutes,
             onChange = onCommuteBuffer,
+            hapticsEnabled = hapticsEnabled,
         )
         BufferSlider(
             label = "Preparation time",
             description = "Shower, breakfast, getting dressed",
             value = preparationBufferMinutes,
             onChange = onPreparationBuffer,
+            hapticsEnabled = hapticsEnabled,
         )
     }
 }
