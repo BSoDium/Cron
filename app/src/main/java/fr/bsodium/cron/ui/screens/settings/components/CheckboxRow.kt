@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.settings.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,9 +47,9 @@ internal fun CheckboxRow(
                 size = 24.dp,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.width(Spacing.sm))
+            Spacer(Modifier.width(Spacing.lg))
         }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,

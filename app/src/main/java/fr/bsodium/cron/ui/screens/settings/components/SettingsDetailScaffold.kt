@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -50,7 +51,7 @@ internal fun SettingsDetailScaffold(
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets(0),
-            topBar = { PageAppBar(title = title, subtitle = subtitle, scrollBehavior = scrollBehavior, onBack = animatedBack) },
+            topBar = { PageAppBar(title = title, scrollBehavior = scrollBehavior, onBack = animatedBack) },
         ) { inner ->
             Column(
                 modifier = Modifier
@@ -61,6 +62,13 @@ internal fun SettingsDetailScaffold(
                     .padding(bottom = navBottomInset + Spacing.xxxl),
                 verticalArrangement = Arrangement.spacedBy(Spacing.xxl),
             ) {
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 content()
             }
         }

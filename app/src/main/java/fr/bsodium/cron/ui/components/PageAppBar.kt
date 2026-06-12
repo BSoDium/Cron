@@ -14,14 +14,12 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
-import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 /**
@@ -36,7 +34,6 @@ fun PageAppBar(
     title: String,
     scrollBehavior: TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
-    subtitle: String? = null,
     onBack: (() -> Unit)? = null,
 ) {
     // Fade the bar's surface shade in *in step with* the title's big→small collapse. Lerp between two
@@ -60,17 +57,6 @@ fun PageAppBar(
                     fontWeight = FontWeight.Normal,
                 ),
             )
-        },
-        subtitle = subtitle?.let { sub ->
-            {
-                Text(
-                    text = sub,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier
-                        .padding(top = Spacing.sm)
-                        .alpha(1f - scrollBehavior.state.collapsedFraction),
-                )
-            }
         },
         modifier = modifier,
         navigationIcon = {
@@ -129,24 +115,3 @@ private fun PageAppBarWithBackPreview() {
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, widthDp = 412, heightDp = 300)
-@Composable
-private fun PageAppBarWithSubtitlePreview() {
-    CronTheme {
-        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                PageAppBar(
-                    title = "Commute",
-                    subtitle = "Unchecking a mode blocks the planner from using it regardless of saved location data.",
-                    scrollBehavior = scrollBehavior,
-                    onBack = {},
-                )
-            },
-        ) { inner ->
-            Text("body", modifier = Modifier.padding(inner))
-        }
-    }
-}
