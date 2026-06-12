@@ -14,12 +14,14 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
+import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 /**
@@ -60,7 +62,15 @@ fun PageAppBar(
             )
         },
         subtitle = subtitle?.let { sub ->
-            { Text(text = sub, style = MaterialTheme.typography.bodyMedium) }
+            {
+                Text(
+                    text = sub,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .padding(top = Spacing.sm)
+                        .alpha(1f - scrollBehavior.state.collapsedFraction),
+                )
+            }
         },
         modifier = modifier,
         navigationIcon = {

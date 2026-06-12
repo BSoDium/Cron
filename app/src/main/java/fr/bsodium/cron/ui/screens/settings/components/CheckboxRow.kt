@@ -39,17 +39,15 @@ internal fun CheckboxRow(
             .clickable { haptics.contextClick(); onCheckedChange(!checked) },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = checked, onCheckedChange = null)
         if (icon != null) {
-            Spacer(Modifier.width(Spacing.xs))
             Symbol(
                 symbol = icon,
                 contentDescription = null,
-                size = 20.dp,
+                size = 24.dp,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.width(Spacing.sm))
         }
-        Spacer(Modifier.width(Spacing.sm))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -62,6 +60,7 @@ internal fun CheckboxRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        Checkbox(checked = checked, onCheckedChange = null)
     }
 }
 
