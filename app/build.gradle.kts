@@ -15,7 +15,7 @@ fun gitVersionName(): String {
             .redirectErrorStream(true)
             .start()
         val tag = process.inputStream.bufferedReader().readText().trim()
-        process.waitFor()
+        if (process.waitFor() != 0) return "0.0.0"
         if (tag.startsWith("v")) tag.substring(1) else tag
     } catch (_: Exception) {
         "0.0.0"
