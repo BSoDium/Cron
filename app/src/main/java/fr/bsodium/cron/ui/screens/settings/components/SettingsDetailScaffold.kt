@@ -79,7 +79,7 @@ internal fun SettingsDetailScaffold(
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, name = "SettingsDetailScaffold — no description")
+@Preview(showBackground = true, widthDp = 412, heightDp = 300, name = "SettingsDetailScaffold — no description")
 @Composable
 private fun SettingsDetailScaffoldNoDescriptionPreview() {
     CronTheme {
@@ -95,7 +95,7 @@ private fun SettingsDetailScaffoldNoDescriptionPreview() {
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, name = "SettingsDetailScaffold — with description")
+@Preview(showBackground = true, widthDp = 412, heightDp = 300, name = "SettingsDetailScaffold — with description")
 @Composable
 private fun SettingsDetailScaffoldWithDescriptionPreview() {
     CronTheme {

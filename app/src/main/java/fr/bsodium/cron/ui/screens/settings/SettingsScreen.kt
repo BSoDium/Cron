@@ -162,7 +162,7 @@ private fun groupItemShape(isFirst: Boolean, isLast: Boolean): RoundedCornerShap
     return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 412, heightDp = 300)
 @Composable
 private fun SettingsScreenPreview() {
     CronTheme {

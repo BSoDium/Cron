@@ -70,7 +70,7 @@ internal fun CheckboxRow(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 412)
 @Composable
 private fun CheckboxRowPreview() {
     CronTheme {

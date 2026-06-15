@@ -91,7 +91,7 @@ internal fun SettingsCategoryRow(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 412)
 @Composable
 private fun SettingsCategoryRowPreview() {
     CronTheme {

@@ -23,7 +23,7 @@ fun AppSettingsScreen(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 412, heightDp = 300)
 @Composable
 private fun AppSettingsScreenPreview() {
     CronTheme {
