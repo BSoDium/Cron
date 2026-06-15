@@ -92,7 +92,7 @@ fun PageAppBar(
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, widthDp = 412, heightDp = 300)
+@Preview(showBackground = true, widthDp = 480, heightDp = 300)
 @Composable
 private fun PageAppBarPreview() {
     CronTheme {
@@ -107,7 +107,7 @@ private fun PageAppBarPreview() {
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, widthDp = 412, heightDp = 300)
+@Preview(showBackground = true, widthDp = 480, heightDp = 300)
 @Composable
 private fun PageAppBarWithBackPreview() {
     CronTheme {
