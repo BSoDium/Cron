@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
@@ -78,6 +79,9 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = listOf(
 /** Scroll state for the settings root list, hoisted to MainActivity so PredictiveBackCard can snapshot it. */
 val LocalSettingsListState = compositionLocalOf { LazyListState() }
 
+/** App-bar collapse state for the settings root, hoisted so the predictive back preview reflects the real bar height. */
+val LocalSettingsTopAppBarState = compositionLocalOf { TopAppBarState(0f, 0f, 1f) }
+
 private val CARD_GAP = Spacing.xs
 private val GROUP_OUTER_RADIUS = Radius.xl
 private val GROUP_INNER_RADIUS = Radius.sm
@@ -88,8 +92,9 @@ private val GROUP_INNER_RADIUS = Radius.sm
 fun SettingsScreen(
     onOpenCategory: (String) -> Unit,
     listState: LazyListState = LocalSettingsListState.current,
+    topAppBarState: TopAppBarState = LocalSettingsTopAppBarState.current,
 ) {
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topAppBarState)
     val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Scaffold(
