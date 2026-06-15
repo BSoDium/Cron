@@ -57,6 +57,7 @@ fun PageAppBar(
                     fontFamily = CronTypography.pageTitle.fontFamily,
                     fontWeight = FontWeight.Normal,
                 ),
+                softWrap = false,
             )
         },
         modifier = modifier,
