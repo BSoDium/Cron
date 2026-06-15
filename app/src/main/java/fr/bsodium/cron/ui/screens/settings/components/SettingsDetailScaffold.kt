@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
@@ -39,6 +40,7 @@ internal fun SettingsDetailScaffold(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    verticalSpacing: Dp = Spacing.xxl,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -60,13 +62,14 @@ internal fun SettingsDetailScaffold(
                     .verticalScroll(rememberScrollState())
                     .padding(start = Spacing.xl, end = Spacing.xl, top = Spacing.lg)
                     .padding(bottom = navBottomInset + Spacing.xxxl),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xxl),
+                verticalArrangement = Arrangement.spacedBy(verticalSpacing),
             ) {
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = Spacing.lg),
                     )
                 }
                 content()
@@ -76,11 +79,27 @@ internal fun SettingsDetailScaffold(
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true)
+@Preview(showBackground = true, name = "SettingsDetailScaffold — no description")
 @Composable
-private fun SettingsDetailScaffoldPreview() {
+private fun SettingsDetailScaffoldNoDescriptionPreview() {
     CronTheme {
         SettingsDetailScaffold(title = "Assistant", onBack = {}) {
+            SwitchRow(
+                title = "Haptic feedback",
+                subtitle = "Subtle ticks while the assistant writes",
+                checked = true,
+                onCheckedChange = {},
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Preview(showBackground = true, name = "SettingsDetailScaffold — with description")
+@Composable
+private fun SettingsDetailScaffoldWithDescriptionPreview() {
+    CronTheme {
+        SettingsDetailScaffold(title = "Assistant", subtitle = "Subtle feedback while writing an answer", onBack = {}) {
             SwitchRow(
                 title = "Haptic feedback",
                 subtitle = "Subtle ticks while the assistant writes",

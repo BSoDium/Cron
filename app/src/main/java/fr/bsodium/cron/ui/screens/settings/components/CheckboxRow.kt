@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -36,15 +38,18 @@ internal fun CheckboxRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable { haptics.contextClick(); onCheckedChange(!checked) },
+            .heightIn(min = 62.dp)
+            .bleedHorizontally(Spacing.xl)
+            .clickable { haptics.contextClick(); onCheckedChange(!checked) }
+            .padding(horizontal = Spacing.xl, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
             Symbol(
                 symbol = icon,
                 contentDescription = null,
-                size = 24.dp,
+                size = 32.dp,
+                weight = 300,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.width(Spacing.lg))

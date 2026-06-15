@@ -7,6 +7,7 @@ import fr.bsodium.cron.ui.screens.settings.components.CheckboxRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
+import fr.bsodium.cron.ui.theme.Spacing
 
 private fun CommuteMode.subtitle(): String = when (this) {
     CommuteMode.Drive -> "Estimate by car"
@@ -34,7 +35,7 @@ fun CommuteSettingsScreen(
     onBack: () -> Unit,
     hapticsEnabled: Boolean = true,
 ) {
-    SettingsDetailScaffold(title = "Commute", subtitle = COMMUTE_SUBTITLE, onBack = onBack) {
+    SettingsDetailScaffold(title = "Commute", subtitle = COMMUTE_SUBTITLE, onBack = onBack, verticalSpacing = Spacing.sm) {
         CommuteMode.entries.forEach { mode ->
             CheckboxRow(
                 icon = mode.icon(),
