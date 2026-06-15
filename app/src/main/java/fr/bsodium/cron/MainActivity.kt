@@ -18,6 +18,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.TopAppBarState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
+import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -154,8 +156,12 @@ class MainActivity : ComponentActivity() {
                     currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+                val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) { TopAppBarState(0f, 0f, 1f) }
 
-                CompositionLocalProvider(LocalSettingsListState provides settingsListState) {
+                CompositionLocalProvider(
+                    LocalSettingsListState provides settingsListState,
+                    LocalSettingsTopAppBarState provides settingsTopAppBarState,
+                ) {
                     Scaffold(
                         bottomBar = {
                             AnimatedVisibility(
