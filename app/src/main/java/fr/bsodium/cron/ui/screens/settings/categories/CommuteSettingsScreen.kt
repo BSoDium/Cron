@@ -53,7 +53,7 @@ fun CommuteSettingsScreen(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, fontScale = 1.0f)
 @Composable
 private fun CommuteSettingsScreenPreview() {
     CronTheme {

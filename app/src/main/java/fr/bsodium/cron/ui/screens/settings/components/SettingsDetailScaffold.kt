@@ -67,7 +67,7 @@ internal fun SettingsDetailScaffold(
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = Spacing.lg),
                     )
@@ -79,7 +79,7 @@ internal fun SettingsDetailScaffold(
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, name = "SettingsDetailScaffold — no description")
+@Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f, name = "SettingsDetailScaffold — no description")
 @Composable
 private fun SettingsDetailScaffoldNoDescriptionPreview() {
     CronTheme {
@@ -95,7 +95,7 @@ private fun SettingsDetailScaffoldNoDescriptionPreview() {
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, name = "SettingsDetailScaffold — with description")
+@Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f, name = "SettingsDetailScaffold — with description")
 @Composable
 private fun SettingsDetailScaffoldWithDescriptionPreview() {
     CronTheme {

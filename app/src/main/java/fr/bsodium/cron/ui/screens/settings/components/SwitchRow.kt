@@ -47,7 +47,7 @@ internal fun SwitchRow(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 412, fontScale = 1.0f)
 @Composable
 private fun SwitchRowPreview() {
     CronTheme {

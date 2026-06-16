@@ -31,7 +31,7 @@ fun ScheduleSettingsScreen(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun ScheduleSettingsScreenPreview() {
     CronTheme {
