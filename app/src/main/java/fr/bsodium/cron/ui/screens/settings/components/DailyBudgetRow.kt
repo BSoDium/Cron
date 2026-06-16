@@ -113,7 +113,7 @@ internal fun DailyBudgetRow(
 private fun formatTokenLimit(tokens: Int): String =
     if (tokens <= 0) "Unlimited" else String.format(Locale.US, "%,d tokens", tokens)
 
-@Preview(showBackground = true, widthDp = 412)
+@Preview(showBackground = true, widthDp = 412, fontScale = 1.0f)
 @Composable
 private fun DailyBudgetRowPreview() {
     CronTheme {
