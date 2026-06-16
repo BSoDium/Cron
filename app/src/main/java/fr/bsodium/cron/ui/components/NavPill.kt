@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -60,6 +61,7 @@ internal fun NavPill(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RowScope.NavSlot(
     currentRoute: String?,
@@ -77,7 +79,7 @@ private fun RowScope.NavSlot(
     val iconTint by animateColorAsState(targetTint, animationSpec = colorSpec, label = "nav-tint")
     val fill by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "nav-fill",
     )
     val haptics = rememberCronHaptics()

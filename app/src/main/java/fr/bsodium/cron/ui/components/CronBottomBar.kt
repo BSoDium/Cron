@@ -88,7 +88,7 @@ fun CronFloatingNav(
     }
     val fabSlotWidth by animateDpAsState(
         targetValue = targetFabWidth,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "fab-slot-width",
     )
     // Retain last non-null action so the FAB has content to fade out during the exit transition.
@@ -104,7 +104,7 @@ fun CronFloatingNav(
     ) {
         val pillBias by animateFloatAsState(
             targetValue = if (visible) -1f else 0f,
-            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
             label = "pill-bias",
         )
         Box(
@@ -130,7 +130,7 @@ private fun FabSlot(
     lastShown: FabAction?,
     fabChevron: FabChevronSlot?,
 ) {
-    val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
+    val spatialSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntOffset>()
     val alphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     Box(
         modifier = Modifier
@@ -153,7 +153,7 @@ private fun FabSlot(
 private val FAB_SLOT_WIDTH = 56.dp
 private val FAB_SLOT_HEIGHT = 56.dp
 private val SPLIT_MAIN_WIDTH = 108.dp
-private val SPLIT_CHEVRON_WIDTH = 52.dp
+private val SPLIT_CHEVRON_WIDTH = 56.dp
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val SPLIT_FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH + SplitButtonDefaults.Spacing + SPLIT_CHEVRON_WIDTH
 
@@ -234,14 +234,13 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                                Symbol(
-                                    symbol = if (isWorking) MaterialSymbol.Stop
-                                        else MaterialSymbol.PlayArrow,
-                                    contentDescription = null,
-                                    fill = 1f,
-                                )
-                            }
+                            Symbol(
+                                symbol = if (isWorking) MaterialSymbol.Stop
+                                    else MaterialSymbol.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
+                                fill = 1f,
+                            )
                             Text(
                                 text = if (isWorking) "Stop" else "Run",
                                 style = MaterialTheme.typography.labelLarge,
