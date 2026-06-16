@@ -17,7 +17,6 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,12 +41,7 @@ fun PageAppBar(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
 ) {
-    // Lerp OPAQUE endpoints only — Color.Transparent composites as black, which blips mid-fade.
-    val barContainer = lerp(
-        MaterialTheme.colorScheme.background,
-        MaterialTheme.colorScheme.surfaceContainer,
-        scrollBehavior.state.collapsedFraction,
-    )
+    val barContainer = MaterialTheme.colorScheme.surfaceContainerLow
     LargeFlexibleTopAppBar(
         title = {
             // Brand face at Medium — between the theme's SemiBold headline default (too heavy here) and

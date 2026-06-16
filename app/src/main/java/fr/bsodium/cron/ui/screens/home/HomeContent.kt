@@ -328,7 +328,7 @@ private fun BoxScope.StickyAlarm(
     card: @Composable (collapseFraction: () -> Float) -> Unit,
 ) {
     val density = LocalDensity.current
-    val background = MaterialTheme.colorScheme.background
+    val background = MaterialTheme.colorScheme.surfaceContainerLow
     // Scrim tracks the CURRENT (collapsing) visible height of the card + its sticky strip — independent
     // of the spacer's full reservation — so the solid band always hugs the bottom of what's pinned, and
     // the strip sits on solid background (never faded), with content below dissolving into the page.

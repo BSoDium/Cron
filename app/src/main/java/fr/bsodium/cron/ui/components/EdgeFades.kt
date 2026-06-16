@@ -30,7 +30,7 @@ import fr.bsodium.cron.ui.theme.Spacing
  */
 @Composable
 fun EdgeFades(modifier: Modifier = Modifier, showTopScrim: Boolean = true) {
-    val background = MaterialTheme.colorScheme.background
+    val background = MaterialTheme.colorScheme.surfaceContainerLow
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Box(modifier = modifier.fillMaxSize()) {

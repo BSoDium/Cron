@@ -7,11 +7,10 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,35 +29,34 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
-import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
@@ -67,91 +64,110 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 /**
- * Floating bottom action bar: a pill housing the three tab icons, optionally
- * paired with a square FAB to the right that hosts the primary action for the
- * current screen (currently only Home, which uses it to re-run the AI plan).
+ * Floating bottom action bar: a pill housing the three tab icons on the left, with the primary
+ * action FAB on the right. The pill centers when the FAB is absent and shifts left when it appears.
  *
- * Sits above the system gesture/navigation inset rather than docking to the
- * bottom edge, matching the Material 3 Expressive "floating" pattern.
+ * In debug builds the FAB becomes a split button (main action + chevron mode-selector) via the
+ * optional [fabChevron] slot populated by [rememberFabChevron].
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CronFloatingNav(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     fabAction: FabAction?,
     modifier: Modifier = Modifier,
+    fabChevron: FabChevronSlot? = null,
 ) {
     val systemBars: PaddingValues = WindowInsets.navigationBars.asPaddingValues()
+    val visible = fabAction != null
+    val targetFabWidth = when {
+        !visible -> 0.dp
+        fabChevron != null -> SPLIT_FAB_SLOT_WIDTH
+        else -> FAB_SLOT_WIDTH
+    }
+    val fabSlotWidth by animateDpAsState(
+        targetValue = targetFabWidth,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "fab-slot-width",
+    )
+    // Retain last non-null action so the FAB has content to fade out during the exit transition.
+    var lastShown by remember { mutableStateOf(fabAction) }
+    if (fabAction != null && fabAction != lastShown) lastShown = fabAction
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(bottom = systemBars.calculateBottomPadding())
             .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NavPill(currentRoute = currentRoute, onNavigate = onNavigate)
-        FabSlot(fabAction)
+        val pillBias by animateFloatAsState(
+            targetValue = if (visible) -1f else 0f,
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+            label = "pill-bias",
+        )
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = BiasAlignment(horizontalBias = pillBias, verticalBias = 0f),
+        ) {
+            NavPill(currentRoute = currentRoute, onNavigate = onNavigate)
+        }
+        FabSlot(
+            fabSlotWidth = fabSlotWidth,
+            visible = visible,
+            lastShown = lastShown,
+            fabChevron = fabChevron,
+        )
     }
 }
 
-/**
- * Slot for the play FAB whose width animates between [FAB_SLOT_WIDTH] (FAB +
- * leading gap) and 0.dp. With a `Arrangement.Center` parent Row, this lets the
- * pill+FAB block re-center smoothly when the FAB hides on non-Home tabs.
- */
+// Extracted from the Row lambda so RowScope.AnimatedVisibility is not in scope.
 @Composable
-private fun FabSlot(fabAction: FabAction?) {
-    val visible = fabAction != null
-    // Scale pops on a bouncy spatial spring; alpha rides a no-bounce effects spec so the fade reads clean
-    // (a bouncy alpha looks muddy). This mirrors how M3's own FAB show/hide separates the two.
-    val scaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+private fun FabSlot(
+    fabSlotWidth: Dp,
+    visible: Boolean,
+    lastShown: FabAction?,
+    fabChevron: FabChevronSlot?,
+) {
+    val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
     val alphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    // Retain the last non-null action so the exit transition has a FAB to animate out — AnimatedVisibility
-    // recomposes its content with the new null the instant the action clears, which would otherwise leave
-    // the exit fading an empty box.
-    var lastShown by remember { mutableStateOf(fabAction) }
-    if (fabAction != null && fabAction != lastShown) lastShown = fabAction
-
-    val width by animateDpAsState(
-        targetValue = if (visible) FAB_SLOT_WIDTH else 0.dp,
-        // The pill re-centre stays on the smooth default spatial spec while the FAB itself pops.
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "fab-slot-width",
-    )
     Box(
         modifier = Modifier
-            .width(width)
+            .width(fabSlotWidth)
             .height(FAB_SLOT_HEIGHT),
-        contentAlignment = Alignment.CenterStart,
+        contentAlignment = Alignment.CenterEnd,
     ) {
         AnimatedVisibility(
-            // Measure the FAB at its full size even while the slot width animates, so the entrance reads
-            // as a scale-up + fade (not a horizontal squeeze). Aligning the overflow to the START (with the
-            // leading gap as start padding) makes the FAB collapse into the empty space to its right rather
-            // than drifting LEFT over the pill — End-alignment in a shrinking box pushes it onto the navbar.
-            modifier = Modifier
-                .wrapContentWidth(align = Alignment.Start, unbounded = true)
-                .padding(start = FAB_LEADING_GAP),
+            modifier = Modifier.wrapContentWidth(align = Alignment.End, unbounded = true),
             visible = visible,
-            enter = scaleIn(scaleSpec, initialScale = FAB_HIDDEN_SCALE) + fadeIn(alphaSpec),
-            exit = scaleOut(scaleSpec, targetScale = FAB_HIDDEN_SCALE) + fadeOut(alphaSpec),
+            enter = slideInHorizontally(spatialSpec) { it } + fadeIn(alphaSpec),
+            exit = slideOutHorizontally(spatialSpec) { it } + fadeOut(alphaSpec),
         ) {
-            PrimaryActionFab(lastShown)
+            if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
+            else PrimaryActionFab(lastShown)
         }
     }
 }
 
-private val FAB_LEADING_GAP = Spacing.md // gap between the pill and the FAB
-private val FAB_SLOT_WIDTH = 56.dp + FAB_LEADING_GAP // 56dp FAB + leading gap
+private val FAB_SLOT_WIDTH = 56.dp
 private val FAB_SLOT_HEIGHT = 56.dp
-private val NAV_SLOT_SIZE = 48.dp
-
-// Hidden scale the FAB pops up from / collapses to on enter/exit (crisper than a half-size grow).
-private const val FAB_HIDDEN_SCALE = 0.3f
-
-// The play/stop glyph scales in from this as it crossfades on a working-state change.
-private const val FAB_ICON_SWAP_SCALE = 0.6f
+private val SPLIT_MAIN_WIDTH = 108.dp
+private val SPLIT_CHEVRON_WIDTH = 52.dp
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private val SPLIT_FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH + ButtonGroupDefaults.ConnectedSpaceBetween + SPLIT_CHEVRON_WIDTH
+private val SPLIT_MAIN_SHAPE = RoundedCornerShape(
+    topStart = CornerSize(50),
+    bottomStart = CornerSize(50),
+    topEnd = CornerSize(Radius.sm),
+    bottomEnd = CornerSize(Radius.sm),
+)
+private val SPLIT_CHEVRON_SHAPE = RoundedCornerShape(
+    topStart = CornerSize(Radius.sm),
+    bottomStart = CornerSize(Radius.sm),
+    topEnd = CornerSize(50),
+    bottomEnd = CornerSize(50),
+)
 
 data class FabAction(
     val onClick: () -> Unit,
@@ -161,100 +177,144 @@ data class FabAction(
     val hint: String? = null,
 )
 
-@Composable
-private fun NavPill(
-    currentRoute: String?,
-    onNavigate: (String) -> Unit,
+/**
+ * Carries the debug-only chevron slot for the split FAB. Defined in main so [CronFloatingNav] can
+ * accept it; populated by [rememberFabChevron] from the debug/release source sets.
+ *
+ * [isMockActiveState] is a [State] reference so reads of [isMockActive] inside [SplitActionFab]
+ * are tracked by Compose — changing the mock preference propagates the color change instantly.
+ */
+class FabChevronSlot(
+    private val isMockActiveState: State<Boolean>,
+    val onClick: () -> Unit,
+    val menuContent: @Composable () -> Unit,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = Radius.full,
-        tonalElevation = 6.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = Spacing.xs + Spacing.xxs, vertical = Spacing.xs + Spacing.xxs),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            NavSlot(currentRoute, ROUTE_HOME, MaterialSymbol.Alarm, "Home", onNavigate)
-            NavSlot(currentRoute, ROUTE_HISTORY, MaterialSymbol.History, "History", onNavigate)
-            // Settings landing route (the graph's start); sub-screen routes hide the pill entirely.
-            NavSlot(currentRoute, SETTINGS_ROOT, MaterialSymbol.Settings, "Settings", onNavigate)
-        }
-    }
+    val isMockActive: Boolean get() = isMockActiveState.value
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun RowScope.NavSlot(
-    currentRoute: String?,
-    route: String,
-    symbol: MaterialSymbol,
-    label: String,
-    onNavigate: (String) -> Unit,
-) {
-    val selected = currentRoute == route
-    // Selected: filled accent indicator (matches the FAB) with the glyph morphing outline→filled along
-    // the FILL axis; unselected: outlined glyph on the pill.
-    val targetContainer = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-    val targetTint = if (selected) MaterialTheme.colorScheme.onPrimary
-        else MaterialTheme.colorScheme.onSurfaceVariant
-    val colorSpec = MaterialTheme.motionScheme.fastEffectsSpec<Color>()
-    val container by animateColorAsState(targetContainer, animationSpec = colorSpec, label = "nav-container")
-    val iconTint by animateColorAsState(targetTint, animationSpec = colorSpec, label = "nav-tint")
-    val fill by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "nav-fill",
-    )
+private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
+    if (action == null) return
     val haptics = rememberCronHaptics()
-    IconTooltip(label) {
-        Box(
-            modifier = Modifier
-                // Square slot so the circular indicator nests with an equal margin on every side
-                // (x and y) inside the pill, rather than wider side gaps.
-                .size(NAV_SLOT_SIZE)
-                // Clip BEFORE clickable so the ripple respects the slot shape.
-                .clip(Radius.full)
-                .clickable(enabled = !selected) {
-                    haptics.contextClick()
-                    onNavigate(route)
-                }
-                // Announce as a selected/unselected tab named [label] (the glyph itself is decorative);
-                // without this the inner Symbol's clearAndSetSemantics would report it as a plain image.
-                .semantics {
-                    role = Role.Tab
-                    this.selected = selected
-                    contentDescription = label
+    val mainInteraction = remember { MutableInteractionSource() }
+    val mainPressed by mainInteraction.collectIsPressedAsState()
+    val chevronInteraction = remember { MutableInteractionSource() }
+    val chevronPressed by chevronInteraction.collectIsPressedAsState()
+    // Each button squishes on its own press; the neighbor reacts gently (0.94f) for the organic
+    // M3 Expressive neighbour-bounce effect without making them feel like one unit.
+    val mainScale by animateFloatAsState(
+        targetValue = when {
+            mainPressed -> 0.88f
+            chevronPressed -> 0.94f
+            else -> 1f
+        },
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "split-main-scale",
+    )
+    val chevronScale by animateFloatAsState(
+        targetValue = when {
+            chevronPressed -> 0.88f
+            mainPressed -> 0.94f
+            else -> 1f
+        },
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "split-chevron-scale",
+    )
+    val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val chevronColor by animateColorAsState(
+        targetValue = if (fabChevron.isMockActive) MaterialTheme.colorScheme.secondary
+            else MaterialTheme.colorScheme.primary,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "chevron-color",
+    )
+    val chevronContentColor by animateColorAsState(
+        targetValue = if (fabChevron.isMockActive) MaterialTheme.colorScheme.onSecondary
+            else MaterialTheme.colorScheme.onPrimary,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "chevron-content-color",
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Main action — pill-shaped, wider, shows icon + label
+        IconTooltip(label = if (action.working) "Cancel" else "Run alarm plan") {
+            FloatingActionButton(
+                onClick = {
+                    if (action.working) { haptics.reject(); action.onCancel?.invoke() }
+                    else { haptics.confirm(); action.onClick() }
                 },
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
                 modifier = Modifier
-                    .size(NAV_INDICATOR_SIZE)
-                    .clip(CircleShape)
-                    .background(container),
-                contentAlignment = Alignment.Center,
+                    .size(width = SPLIT_MAIN_WIDTH, height = 56.dp)
+                    .graphicsLayer { scaleX = mainScale; scaleY = mainScale },
+                shape = SPLIT_MAIN_SHAPE,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 0.dp,
+                    pressedElevation = 0.dp,
+                    focusedElevation = 0.dp,
+                    hoveredElevation = 0.dp,
+                ),
+                interactionSource = mainInteraction,
             ) {
-                Symbol(
-                    symbol = symbol,
-                    contentDescription = null,
-                    tint = iconTint,
-                    fill = fill,
-                )
+                AnimatedContent(
+                    targetState = action.working,
+                    transitionSpec = {
+                        (fadeIn(iconAlphaSpec)) togetherWith (fadeOut(iconAlphaSpec))
+                    },
+                    contentAlignment = Alignment.Center,
+                    label = "split-fab-icon",
+                ) { isWorking ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Symbol(
+                            symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
+                            contentDescription = null,
+                            fill = 1f,
+                        )
+                        Text(
+                            text = if (isWorking) "Stop" else "Run",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
             }
         }
+        // Chevron — opens the real/mock mode selector popup
+        Box {
+            Surface(
+                onClick = { haptics.contextClick(); fabChevron.onClick() },
+                modifier = Modifier
+                    .size(width = SPLIT_CHEVRON_WIDTH, height = 56.dp)
+                    .graphicsLayer { scaleX = chevronScale; scaleY = chevronScale }
+                    .semantics { contentDescription = if (fabChevron.isMockActive) "Mock run active — tap to change" else "Run mode — tap to change" },
+                shape = SPLIT_CHEVRON_SHAPE,
+                color = chevronColor,
+                contentColor = chevronContentColor,
+                interactionSource = chevronInteraction,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Symbol(
+                        symbol = MaterialSymbol.ExpandMore,
+                        contentDescription = null,
+                        fill = 1f,
+                    )
+                }
+            }
+            fabChevron.menuContent()
+        }
     }
 }
-
-private val NAV_INDICATOR_SIZE = 44.dp
 
 @Composable
 private fun PrimaryActionFab(action: FabAction?) {
     if (action == null) return
     val working = action.working
     val haptics = rememberCronHaptics()
-    // Springy press feedback: squish on touch-down and bounce back on release (Expressive spatial spec).
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
@@ -262,61 +322,57 @@ private fun PrimaryActionFab(action: FabAction?) {
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "fab-press",
     )
-    // Captured here because AnimatedContent's transitionSpec lambda is not composable.
-    val iconScaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     IconTooltip(label = if (working) "Cancel" else "Run alarm plan") {
-    FloatingActionButton(
-        onClick = {
-            if (working) {
-                haptics.reject()
-                action.onCancel?.invoke()
-            } else {
-                haptics.confirm()
-                action.onClick()
-            }
-        },
-        modifier = Modifier.graphicsLayer {
-            scaleX = pressScale
-            scaleY = pressScale
-        },
-        shape = RoundedCornerShape(Radius.lg),
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        elevation = FloatingActionButtonDefaults.elevation(
-            defaultElevation = 0.dp,
-            pressedElevation = 0.dp,
-            focusedElevation = 0.dp,
-            hoveredElevation = 0.dp,
-        ),
-        interactionSource = interaction,
-    ) {
-        AnimatedContent(
-            targetState = working,
-            transitionSpec = {
-                (scaleIn(iconScaleSpec, initialScale = FAB_ICON_SWAP_SCALE) + fadeIn(iconAlphaSpec)) togetherWith
-                    (scaleOut(iconScaleSpec, targetScale = FAB_ICON_SWAP_SCALE) + fadeOut(iconAlphaSpec))
+        FloatingActionButton(
+            onClick = {
+                if (working) {
+                    haptics.reject()
+                    action.onCancel?.invoke()
+                } else {
+                    haptics.confirm()
+                    action.onClick()
+                }
             },
-            contentAlignment = Alignment.Center,
-            label = "fab-icon",
-        ) { isWorking ->
-            Symbol(
-                symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
-                contentDescription = if (isWorking) "Cancel" else "Run alarm plan",
-                fill = 1f,
-            )
+            modifier = Modifier.graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            },
+            shape = RoundedCornerShape(Radius.lg),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            elevation = FloatingActionButtonDefaults.elevation(
+                defaultElevation = 0.dp,
+                pressedElevation = 0.dp,
+                focusedElevation = 0.dp,
+                hoveredElevation = 0.dp,
+            ),
+            interactionSource = interaction,
+        ) {
+            AnimatedContent(
+                targetState = working,
+                transitionSpec = {
+                    (fadeIn(iconAlphaSpec)) togetherWith (fadeOut(iconAlphaSpec))
+                },
+                contentAlignment = Alignment.Center,
+                label = "fab-icon",
+            ) { isWorking ->
+                Symbol(
+                    symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
+                    contentDescription = if (isWorking) "Cancel" else "Run alarm plan",
+                    fill = 1f,
+                )
+            }
         }
-    }
     }
 }
 
-// The play FAB's horizontal distance right of screen centre, derived from the centred nav row
-// (pill 164dp + 68dp FAB slot, FAB at the slot's far end). Device-width independent.
-private val FAB_CENTER_OFFSET = 88.dp
+// FAB sits at Spacing.lg from the right screen edge (within Row horizontal padding); its centre
+// is 28dp (half of 56dp) inward from there.
+private val FAB_RIGHT_INSET = Spacing.lg + 28.dp
 private val POINTER_WIDTH = 16.dp
 private val POINTER_HEIGHT = 8.dp
 
-// Downward-pointing triangle for the onboarding callout's tail.
 private val PointerDown = GenericShape { size, _ ->
     moveTo(0f, 0f)
     lineTo(size.width, 0f)
@@ -333,8 +389,8 @@ private val PointerDown = GenericShape { size, _ ->
 fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .align(Alignment.BottomCenter)
-            .offset(x = FAB_CENTER_OFFSET)
+            .align(Alignment.BottomEnd)
+            .offset(x = -FAB_RIGHT_INSET)
             .padding(bottom = navBottom + Spacing.navBarClearance - Spacing.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -357,6 +413,7 @@ fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier =
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Preview(showBackground = true)
 @Composable
 private fun CronFloatingNavPreview() {
@@ -365,6 +422,38 @@ private fun CronFloatingNavPreview() {
             currentRoute = ROUTE_HOME,
             onNavigate = {},
             fabAction = FabAction(onClick = {}),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Preview(showBackground = true)
+@Composable
+private fun CronFloatingNavNoFabPreview() {
+    CronTheme {
+        CronFloatingNav(
+            currentRoute = ROUTE_HISTORY,
+            onNavigate = {},
+            fabAction = null,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Preview(showBackground = true)
+@Composable
+private fun CronFloatingNavSplitPreview() {
+    CronTheme {
+        val mockState = remember { mutableStateOf(true) }
+        CronFloatingNav(
+            currentRoute = ROUTE_HOME,
+            onNavigate = {},
+            fabAction = FabAction(onClick = {}),
+            fabChevron = FabChevronSlot(
+                isMockActiveState = mockState,
+                onClick = {},
+                menuContent = {},
+            ),
         )
     }
 }

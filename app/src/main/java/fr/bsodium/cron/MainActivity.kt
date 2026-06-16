@@ -50,6 +50,7 @@ import fr.bsodium.cron.ui.components.CronFloatingNav
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.OnboardingTooltip
+import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
 import fr.bsodium.cron.ui.screens.home.HomeScreen
@@ -155,6 +156,7 @@ class MainActivity : ComponentActivity() {
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
                     currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
+                val fabChevron = rememberFabChevron()
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
                 val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) { TopAppBarState(0f, 0f, 1f) }
 
@@ -163,6 +165,7 @@ class MainActivity : ComponentActivity() {
                     LocalSettingsTopAppBarState provides settingsTopAppBarState,
                 ) {
                     Scaffold(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         bottomBar = {
                             AnimatedVisibility(
                                 visible = showBottomBar,
@@ -183,6 +186,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     fabAction = fabRegistry.action,
+                                    fabChevron = fabChevron,
                                 )
                             }
                         },

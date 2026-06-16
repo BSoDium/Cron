@@ -48,7 +48,7 @@ internal fun SettingsCategoryRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
             modifier = Modifier
