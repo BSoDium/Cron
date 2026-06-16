@@ -31,7 +31,7 @@ fun FreeDaysSettingsScreen(
     }
 }
 
-@Preview(showBackground = true, widthDp = 480, heightDp = 300)
+@Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun FreeDaysSettingsScreenPreview() {
     CronTheme {

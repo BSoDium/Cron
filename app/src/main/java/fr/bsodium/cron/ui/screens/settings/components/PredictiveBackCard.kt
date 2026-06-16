@@ -195,7 +195,7 @@ private fun decelerate(raw: Float): Float {
     return 1f - (1f - x) * (1f - x)
 }
 
-@Preview(showBackground = true, widthDp = 480, heightDp = 300)
+@Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun PredictiveBackCardPreview() {
     CronTheme {
