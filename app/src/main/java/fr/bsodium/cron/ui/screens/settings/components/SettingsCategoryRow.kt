@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
@@ -48,7 +49,7 @@ internal fun SettingsCategoryRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
-        color = MaterialTheme.colorScheme.surface,
+        color = CronColors.elementSurface,
     ) {
         Row(
             modifier = Modifier

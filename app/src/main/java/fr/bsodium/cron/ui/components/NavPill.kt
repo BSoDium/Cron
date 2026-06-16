@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -42,7 +43,7 @@ internal fun NavPill(
     onNavigate: (String) -> Unit,
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surface,
+        color = CronColors.elementSurface,
         shape = Radius.full,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,

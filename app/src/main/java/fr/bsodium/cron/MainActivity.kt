@@ -59,6 +59,7 @@ import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.screens.settings.settingsGraph
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -165,7 +166,7 @@ class MainActivity : ComponentActivity() {
                     LocalSettingsTopAppBarState provides settingsTopAppBarState,
                 ) {
                     Scaffold(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        containerColor = CronColors.pageBackground,
                         bottomBar = {
                             AnimatedVisibility(
                                 visible = showBottomBar,

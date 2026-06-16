@@ -13,7 +13,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -30,13 +29,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.GenericShape
-import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -155,19 +155,7 @@ private val FAB_SLOT_HEIGHT = 56.dp
 private val SPLIT_MAIN_WIDTH = 108.dp
 private val SPLIT_CHEVRON_WIDTH = 52.dp
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-private val SPLIT_FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH + ButtonGroupDefaults.ConnectedSpaceBetween + SPLIT_CHEVRON_WIDTH
-private val SPLIT_MAIN_SHAPE = RoundedCornerShape(
-    topStart = CornerSize(50),
-    bottomStart = CornerSize(50),
-    topEnd = CornerSize(Radius.sm),
-    bottomEnd = CornerSize(Radius.sm),
-)
-private val SPLIT_CHEVRON_SHAPE = RoundedCornerShape(
-    topStart = CornerSize(Radius.sm),
-    bottomStart = CornerSize(Radius.sm),
-    topEnd = CornerSize(50),
-    bottomEnd = CornerSize(50),
-)
+private val SPLIT_FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH + SplitButtonDefaults.Spacing + SPLIT_CHEVRON_WIDTH
 
 data class FabAction(
     val onClick: () -> Unit,
@@ -186,10 +174,12 @@ data class FabAction(
  */
 class FabChevronSlot(
     private val isMockActiveState: State<Boolean>,
-    val onClick: () -> Unit,
+    private val isExpandedState: State<Boolean>,
+    val onExpandedChange: (Boolean) -> Unit,
     val menuContent: @Composable () -> Unit,
 ) {
     val isMockActive: Boolean get() = isMockActiveState.value
+    val isExpanded: Boolean get() = isExpandedState.value
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -197,30 +187,6 @@ class FabChevronSlot(
 private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     if (action == null) return
     val haptics = rememberCronHaptics()
-    val mainInteraction = remember { MutableInteractionSource() }
-    val mainPressed by mainInteraction.collectIsPressedAsState()
-    val chevronInteraction = remember { MutableInteractionSource() }
-    val chevronPressed by chevronInteraction.collectIsPressedAsState()
-    // Each button squishes on its own press; the neighbor reacts gently (0.94f) for the organic
-    // M3 Expressive neighbour-bounce effect without making them feel like one unit.
-    val mainScale by animateFloatAsState(
-        targetValue = when {
-            mainPressed -> 0.88f
-            chevronPressed -> 0.94f
-            else -> 1f
-        },
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "split-main-scale",
-    )
-    val chevronScale by animateFloatAsState(
-        targetValue = when {
-            chevronPressed -> 0.88f
-            mainPressed -> 0.94f
-            else -> 1f
-        },
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "split-chevron-scale",
-    )
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val chevronColor by animateColorAsState(
         targetValue = if (fabChevron.isMockActive) MaterialTheme.colorScheme.secondary
@@ -234,80 +200,87 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "chevron-content-color",
     )
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Main action — pill-shaped, wider, shows icon + label
-        IconTooltip(label = if (action.working) "Cancel" else "Run alarm plan") {
-            FloatingActionButton(
-                onClick = {
-                    if (action.working) { haptics.reject(); action.onCancel?.invoke() }
-                    else { haptics.confirm(); action.onClick() }
-                },
-                modifier = Modifier
-                    .size(width = SPLIT_MAIN_WIDTH, height = 56.dp)
-                    .graphicsLayer { scaleX = mainScale; scaleY = mainScale },
-                shape = SPLIT_MAIN_SHAPE,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = 0.dp,
-                    pressedElevation = 0.dp,
-                    focusedElevation = 0.dp,
-                    hoveredElevation = 0.dp,
-                ),
-                interactionSource = mainInteraction,
-            ) {
-                AnimatedContent(
-                    targetState = action.working,
-                    transitionSpec = {
-                        (fadeIn(iconAlphaSpec)) togetherWith (fadeOut(iconAlphaSpec))
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (fabChevron.isExpanded) 180f else 0f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "chevron-rotation",
+    )
+    SplitButtonLayout(
+        leadingButton = {
+            IconTooltip(label = if (action.working) "Cancel" else "Run alarm plan") {
+                SplitButtonDefaults.LeadingButton(
+                    onClick = {
+                        if (action.working) { haptics.reject(); action.onCancel?.invoke() }
+                        else { haptics.confirm(); action.onClick() }
                     },
-                    contentAlignment = Alignment.Center,
-                    label = "split-fab-icon",
-                ) { isWorking ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Symbol(
-                            symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
-                            contentDescription = null,
-                            fill = 1f,
-                        )
-                        Text(
-                            text = if (isWorking) "Stop" else "Run",
-                            style = MaterialTheme.typography.labelLarge,
-                        )
+                    modifier = Modifier.size(width = SPLIT_MAIN_WIDTH, height = 56.dp),
+                    shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                    elevation = null,
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    AnimatedContent(
+                        targetState = action.working,
+                        transitionSpec = {
+                            fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec)
+                        },
+                        contentAlignment = Alignment.Center,
+                        label = "split-fab-icon",
+                    ) { isWorking ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                                Symbol(
+                                    symbol = if (isWorking) MaterialSymbol.Stop
+                                        else MaterialSymbol.PlayArrow,
+                                    contentDescription = null,
+                                    fill = 1f,
+                                )
+                            }
+                            Text(
+                                text = if (isWorking) "Stop" else "Run",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
                     }
                 }
             }
-        }
-        // Chevron — opens the real/mock mode selector popup
-        Box {
-            Surface(
-                onClick = { haptics.contextClick(); fabChevron.onClick() },
-                modifier = Modifier
-                    .size(width = SPLIT_CHEVRON_WIDTH, height = 56.dp)
-                    .graphicsLayer { scaleX = chevronScale; scaleY = chevronScale }
-                    .semantics { contentDescription = if (fabChevron.isMockActive) "Mock run active — tap to change" else "Run mode — tap to change" },
-                shape = SPLIT_CHEVRON_SHAPE,
-                color = chevronColor,
-                contentColor = chevronContentColor,
-                interactionSource = chevronInteraction,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
+        },
+        trailingButton = {
+            Box {
+                SplitButtonDefaults.TrailingButton(
+                    checked = fabChevron.isExpanded,
+                    onCheckedChange = { haptics.contextClick(); fabChevron.onExpandedChange(it) },
+                    modifier = Modifier
+                        .size(width = SPLIT_CHEVRON_WIDTH, height = 56.dp)
+                        .semantics {
+                            contentDescription = if (fabChevron.isMockActive)
+                                "Mock run active — tap to change"
+                            else "Run mode — tap to change"
+                        },
+                    shapes = SplitButtonDefaults.trailingButtonShapesFor(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = chevronColor,
+                        contentColor = chevronContentColor,
+                    ),
+                    elevation = null,
+                ) {
                     Symbol(
                         symbol = MaterialSymbol.ExpandMore,
                         contentDescription = null,
+                        modifier = Modifier.graphicsLayer { rotationZ = chevronRotation },
                         fill = 1f,
                     )
                 }
+                fabChevron.menuContent()
             }
-            fabChevron.menuContent()
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -445,13 +418,15 @@ private fun CronFloatingNavNoFabPreview() {
 private fun CronFloatingNavSplitPreview() {
     CronTheme {
         val mockState = remember { mutableStateOf(true) }
+        val expandedState = remember { mutableStateOf(false) }
         CronFloatingNav(
             currentRoute = ROUTE_HOME,
             onNavigate = {},
             fabAction = FabAction(onClick = {}),
             fabChevron = FabChevronSlot(
                 isMockActiveState = mockState,
-                onClick = {},
+                isExpandedState = expandedState,
+                onExpandedChange = { expandedState.value = it },
                 menuContent = {},
             ),
         )
