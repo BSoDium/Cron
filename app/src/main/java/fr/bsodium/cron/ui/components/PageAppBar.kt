@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.components
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -12,11 +13,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
@@ -53,11 +58,26 @@ fun PageAppBar(
             // the old Light page title; the bar's size + large→small interpolation are left intact.
             Text(
                 text = title,
-                style = LocalTextStyle.current.copy(
-                    fontFamily = CronTypography.pageTitle.fontFamily,
-                    fontWeight = FontWeight.Normal,
-                ),
+                style = if (LocalInspectionMode.current) {
+                    // Layoutlib's JVM text shaper applies the negative em-based letterSpacing from
+                    // the theme's displaySmall to ALL characters including the last, making the
+                    // measured advance slightly narrower than the terminal glyph's ink — clipping
+                    // the last character. Zeroing it here (along with pinning a synchronous font
+                    // and resetting fontWeight) gives the Preview a stable, correct render.
+                    LocalTextStyle.current.copy(
+                        fontFamily = FontFamily.SansSerif,
+                        fontWeight = FontWeight.Normal,
+                        letterSpacing = 0.sp,
+                    )
+                } else {
+                    LocalTextStyle.current.copy(
+                        fontFamily = CronTypography.pageTitle.fontFamily,
+                        fontWeight = FontWeight.Normal,
+                    )
+                },
                 softWrap = false,
+                maxLines = 1,
+                overflow = TextOverflow.Visible,
             )
         },
         modifier = modifier,
@@ -88,12 +108,16 @@ fun PageAppBar(
             containerColor = barContainer,
             scrolledContainerColor = barContainer,
         ),
+        // In Compose Preview the renderer simulates a status-bar inset that inflates the Scaffold's
+        // content padding, pushing content partially off a 300dp-tall canvas. Zeroing all insets in
+        // preview gives the content the full canvas height without affecting device behaviour.
+        windowInsets = if (LocalInspectionMode.current) WindowInsets(0) else TopAppBarDefaults.windowInsets,
         scrollBehavior = scrollBehavior,
     )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, widthDp = 480, heightDp = 300)
+@Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun PageAppBarPreview() {
     CronTheme {
@@ -108,7 +132,7 @@ private fun PageAppBarPreview() {
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview(showBackground = true, widthDp = 480, heightDp = 300)
+@Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun PageAppBarWithBackPreview() {
     CronTheme {
