@@ -42,11 +42,7 @@ fun PageAppBar(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
 ) {
-    // Fade the bar's surface shade in *in step with* the title's big→small collapse. Lerp between two
-    // OPAQUE colours — page background → surfaceContainer — never `Color.Transparent`: transparent is
-    // transparent *black*, so a mid-fade value composites as a near-black blip over the page (and M3's
-    // cross-faded layers stack it), reading as an elevation overshoot — the "weird gradient". Opaque
-    // endpoints ramp monotonically (very-low → slight elevation), matching the default app-bar feel.
+    // Lerp OPAQUE endpoints only — Color.Transparent composites as black, which blips mid-fade.
     val barContainer = lerp(
         MaterialTheme.colorScheme.background,
         MaterialTheme.colorScheme.surfaceContainer,
@@ -59,11 +55,7 @@ fun PageAppBar(
             Text(
                 text = title,
                 style = if (LocalInspectionMode.current) {
-                    // Layoutlib's JVM text shaper applies the negative em-based letterSpacing from
-                    // the theme's displaySmall to ALL characters including the last, making the
-                    // measured advance slightly narrower than the terminal glyph's ink — clipping
-                    // the last character. Zeroing it here (along with pinning a synchronous font
-                    // and resetting fontWeight) gives the Preview a stable, correct render.
+                    // See docs/preview-quirks.md — Layoutlib clips the last glyph when letterSpacing < 0.
                     LocalTextStyle.current.copy(
                         fontFamily = FontFamily.SansSerif,
                         fontWeight = FontWeight.Normal,
@@ -102,15 +94,11 @@ fun PageAppBar(
         },
         titleHorizontalAlignment = Alignment.Start,
         colors = TopAppBarDefaults.topAppBarColors(
-            // Same colour for both so M3 doesn't run its own (snapping) container transition — we drive the
-            // shade ourselves via [barContainer]: transparent expanded → surfaceContainer collapsed, synced
-            // to the title. A colour shade, never a shadow (the design is flat).
+            // Same for both: suppresses M3's snapping container transition; we drive the fade via barContainer.
             containerColor = barContainer,
             scrolledContainerColor = barContainer,
         ),
-        // In Compose Preview the renderer simulates a status-bar inset that inflates the Scaffold's
-        // content padding, pushing content partially off a 300dp-tall canvas. Zeroing all insets in
-        // preview gives the content the full canvas height without affecting device behaviour.
+        // See docs/preview-quirks.md — Layoutlib inflates status-bar inset, pushing content off canvas.
         windowInsets = if (LocalInspectionMode.current) WindowInsets(0) else TopAppBarDefaults.windowInsets,
         scrollBehavior = scrollBehavior,
     )

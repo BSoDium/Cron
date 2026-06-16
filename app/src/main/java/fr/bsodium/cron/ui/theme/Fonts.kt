@@ -46,9 +46,6 @@ val ExpressiveFontFamily: FontFamily = FontFamily(
     buildList {
         WEIGHTS.forEach { w -> add(Font(googleFont = GoogleSansFlex, fontProvider = Provider, weight = w)) }
         WEIGHTS.forEach { w -> add(Font(googleFont = RobotoFlex, fontProvider = Provider, weight = w)) }
-        // Bundled OFL Roboto Flex (a copy from the Google Fonts repo) as the final fallback, so the brand
-        // face renders in @Preview (no provider) and offline / before the download lands. Listed last, so
-        // the downloadable Google Sans Flex stays the primary on real devices.
         WEIGHTS.forEach { w ->
             add(Font(R.font.roboto_flex, weight = w, variationSettings = FontVariation.Settings(FontVariation.weight(w.weight))))
         }
