@@ -1,29 +1,28 @@
 name: PR Preview APK
 
-# Builds a debug APK for every ready-for-review PR and exposes it as a GitHub
-# pre-release so reviewers get a "View deployment" link in the PR sidebar that
-# leads directly to a one-click APK download — no branch checkout required.
-# The release is automatically deleted when the PR is closed or merged.
+# Builds a debug APK for every ready-for-review PR and attaches it as a
+# workflow-run artifact (7-day retention). A GitHub Deployment posts a
+# "View deployment" link in the PR sidebar pointing at the Actions run page
+# where the APK can be downloaded from the Artifacts section. The Releases
+# tab is never touched. The deployment is marked inactive when the PR closes.
 
 on:
   pull_request:
     types: [ready_for_review, synchronize, reopened, closed]
     branches: [main]
 
-# One run per PR at a time. If a build is in progress when the PR is merged,
-# the merge triggers the "closed" path in the same concurrency group, which
-# cancels the build and proceeds to cleanup — no wasted CI minutes.
+# One run per PR at a time. A merge/close fires the "closed" path in the same
+# concurrency group, cancelling any in-progress build before cleanup starts.
 concurrency:
   group: pr-apk-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   build-preview:
-    name: Build & publish debug APK
+    name: Build & upload debug APK
     runs-on: ubuntu-latest
     if: github.event.action != 'closed' && github.event.pull_request.draft == false
     permissions:
-      contents: write
       deployments: write
 
     steps:
@@ -53,61 +52,22 @@ jobs:
           echo "src=${SRC}" >> $GITHUB_OUTPUT
           echo "name=${NAME}" >> $GITHUB_OUTPUT
 
-      - name: Publish release and post deployment
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.src }}
+          retention-days: 7
+
+      - name: Post deployment
         uses: actions/github-script@v7
-        env:
-          APK_SRC: ${{ steps.apk.outputs.src }}
-          APK_NAME: ${{ steps.apk.outputs.name }}
         with:
           script: |
-            const fs = require('fs');
             const { owner, repo } = context.repo;
             const prNumber = context.issue.number;
-            const tagName = `preview-pr-${prNumber}`;
-            const releaseName = `Preview — PR #${prNumber}`;
-
-            // Replace any existing preview release for this PR.
-            const { data: releases } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
-            const old = releases.find(r => r.tag_name === tagName);
-            if (old) {
-              for (const asset of old.assets) {
-                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
-              }
-              await github.rest.repos.deleteRelease({ owner, repo, release_id: old.id });
-            }
-
-            // Upsert the lightweight tag to the current SHA.
-            try {
-              await github.rest.git.updateRef({ owner, repo, ref: `tags/${tagName}`, sha: context.sha, force: true });
-            } catch {
-              await github.rest.git.createRef({ owner, repo, ref: `refs/tags/${tagName}`, sha: context.sha });
-            }
-
-            // Create the pre-release.
-            const release = await github.rest.repos.createRelease({
-              owner, repo,
-              tag_name: tagName,
-              name: releaseName,
-              body: `Debug APK built from ${context.sha.slice(0, 7)} for [PR #${prNumber}](https://github.com/${owner}/${repo}/pull/${prNumber}).\n\n> Automatically deleted when the PR is closed.`,
-              prerelease: true,
-              draft: false,
-            });
-
-            // Upload the APK as a release asset.
-            const apkData = fs.readFileSync(process.env.APK_SRC);
-            await github.rest.repos.uploadReleaseAsset({
-              owner, repo,
-              release_id: release.data.id,
-              name: process.env.APK_NAME,
-              data: apkData,
-              headers: {
-                'content-type': 'application/vnd.android.package-archive',
-                'content-length': apkData.length,
-              },
-            });
-
-            // Post a GitHub Deployment so the PR sidebar shows "View deployment".
             const prBranch = context.payload.pull_request.head.ref;
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+
             const deployment = await github.rest.repos.createDeployment({
               owner, repo,
               ref: prBranch,
@@ -123,46 +83,26 @@ jobs:
               owner, repo,
               deployment_id: deployment.data.id,
               state: 'success',
-              environment_url: release.data.html_url,
-              log_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
-              description: 'Debug APK ready',
+              environment_url: runUrl,
+              log_url: runUrl,
+              description: 'Debug APK ready — download from the Artifacts section',
             });
 
   cleanup:
-    name: Remove preview release
+    name: Mark deployment inactive
     runs-on: ubuntu-latest
     if: github.event.action == 'closed'
     permissions:
-      contents: write
       deployments: write
 
     steps:
-      - name: Delete release, tag, and mark deployment inactive
+      - name: Mark pr-preview deployments inactive
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
-            const prNumber = context.issue.number;
-            const tagName = `preview-pr-${prNumber}`;
-
-            // Delete the pre-release and its assets.
-            const { data: releases } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
-            const release = releases.find(r => r.tag_name === tagName);
-            if (release) {
-              for (const asset of release.assets) {
-                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
-              }
-              await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
-              core.info(`Deleted release: ${release.html_url}`);
-            }
-
-            // Delete the tag.
-            try {
-              await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tagName}` });
-            } catch { /* tag may not exist if the build was cancelled before it ran */ }
-
-            // Mark the latest pr-preview deployment for this branch as inactive.
             const prBranch = context.payload.pull_request.head.ref;
+
             const { data: deployments } = await github.rest.repos.listDeployments({
               owner, repo,
               environment: 'pr-preview',
