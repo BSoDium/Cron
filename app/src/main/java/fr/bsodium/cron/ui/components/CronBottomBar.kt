@@ -4,11 +4,12 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -52,8 +53,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
@@ -81,6 +84,13 @@ fun CronFloatingNav(
 ) {
     val systemBars: PaddingValues = WindowInsets.navigationBars.asPaddingValues()
     val visible = fabAction != null
+    val density = LocalDensity.current
+    var measuredFabWidth by remember { mutableStateOf(0.dp) }
+    val fabSlotWidth by animateDpAsState(
+        targetValue = if (visible) measuredFabWidth else 0.dp,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "fab-slot-width",
+    )
     // Retain last non-null action so the FAB has content to fade out during the exit transition.
     var lastShown by remember { mutableStateOf(fabAction) }
     if (fabAction != null && fabAction != lastShown) lastShown = fabAction
@@ -104,29 +114,42 @@ fun CronFloatingNav(
             NavPill(currentRoute = currentRoute, onNavigate = onNavigate)
         }
         FabSlot(
+            fabSlotWidth = fabSlotWidth,
             visible = visible,
             lastShown = lastShown,
             fabChevron = fabChevron,
+            onWidthMeasured = { measuredFabWidth = with(density) { it.toDp() } },
         )
     }
 }
 
-// Extracted from the Row lambda so RowScope.AnimatedVisibility is not in scope.
 @Composable
 private fun FabSlot(
+    fabSlotWidth: Dp,
     visible: Boolean,
     lastShown: FabAction?,
     fabChevron: FabChevronSlot?,
+    onWidthMeasured: (Int) -> Unit,
 ) {
-    val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+    val spatialSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntOffset>()
     val alphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    AnimatedVisibility(
-        visible = visible,
-        enter = expandHorizontally(spatialSpec, expandFrom = Alignment.End) + fadeIn(alphaSpec),
-        exit = shrinkHorizontally(spatialSpec, shrinkTowards = Alignment.End) + fadeOut(alphaSpec),
+    Box(
+        modifier = Modifier
+            .width(fabSlotWidth)
+            .height(FAB_SLOT_HEIGHT),
+        contentAlignment = Alignment.CenterEnd,
     ) {
-        if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
-        else PrimaryActionFab(lastShown)
+        AnimatedVisibility(
+            modifier = Modifier.wrapContentWidth(align = Alignment.End, unbounded = true),
+            visible = visible,
+            enter = slideInHorizontally(spatialSpec) { it } + fadeIn(alphaSpec),
+            exit = slideOutHorizontally(spatialSpec) { it } + fadeOut(alphaSpec),
+        ) {
+            Box(Modifier.onSizeChanged { onWidthMeasured(it.width) }) {
+                if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
+                else PrimaryActionFab(lastShown)
+            }
+        }
     }
 }
 
