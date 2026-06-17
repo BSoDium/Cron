@@ -15,6 +15,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -54,7 +55,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -250,6 +253,13 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                     else -> "Re-plan"
                                 },
                                 style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                autoSize = TextAutoSize.StepBased(
+                                    minFontSize = 10.sp,
+                                    maxFontSize = MaterialTheme.typography.labelLarge.fontSize,
+                                    stepSize = 1.sp,
+                                ),
                             )
                         }
                     }
