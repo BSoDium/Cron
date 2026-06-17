@@ -353,7 +353,7 @@ private fun ToolDisc(modifier: Modifier = Modifier, isNew: Boolean = false, cont
             modifier = Modifier
                 .size(TOOL_DISC_SIZE - TOOL_DISC_RING * 2)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center,
         ) { content() }
     }
@@ -369,7 +369,7 @@ private fun ResponseBody(text: String) {
 }
 
 /**
- * The answer area below the timeline. The markdown response and the "no response" fallback share ONE
+ * The answer area below the timeline. The Markdown response and the "no response" fallback share ONE
  * overlapping slot and crossfade (`Box` + `animateContentSize`), so switching to a no-response iteration
  * doesn't pop the fallback in stacked under the still-fading old answer and then jump when it unmounts.
  * The fallback matches the serif response size. Lives in its own composable so the two `AnimatedVisibility`
