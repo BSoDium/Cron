@@ -20,3 +20,6 @@ local.properties
 # Signing keystores — never commit
 *.jks
 *.keystore
+
+# Claude Code local state
+.claude/

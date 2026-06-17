@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
+import fr.bsodium.cron.BuildConfig
 import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.screens.settings.components.SettingsCategoryRow
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -48,8 +49,8 @@ private val ACCOUNT_CATEGORY =
     SettingsCategory(SETTINGS_ACCOUNT, MaterialSymbol.Person, "Account", "Display name and API key")
 
 /** Categories grouped into labeled, connected-card sections: timing · assistant + system · app. */
-private val SETTINGS_SECTIONS: List<SettingsSection> = listOf(
-    SettingsSection(
+private val SETTINGS_SECTIONS: List<SettingsSection> = buildList {
+    add(SettingsSection(
         "TIMING",
         listOf(
             SettingsCategory(SETTINGS_SCHEDULE, MaterialSymbol.Schedule, "Schedule", "When Cron plans tonight's alarm"),
@@ -58,22 +59,30 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = listOf(
             SettingsCategory(SETTINGS_COMMUTE, MaterialSymbol.DirectionsCar, "Commute", "How the planner estimates travel"),
             SettingsCategory(SETTINGS_CALENDAR, MaterialSymbol.CalendarMonth, "Calendar", "Which events the planner sees"),
         ),
-    ),
-    SettingsSection(
+    ))
+    add(SettingsSection(
         "ASSISTANT",
         listOf(
             SettingsCategory(SETTINGS_ASSISTANT, MaterialSymbol.AutoAwesome, "Assistant", "Instructions and token budget"),
             SettingsCategory(SETTINGS_RELIABILITY, MaterialSymbol.Shield, "Reliability", "Permissions that keep alarms on time"),
         ),
-    ),
-    SettingsSection(
+    ))
+    add(SettingsSection(
         "APP",
         listOf(
             SettingsCategory(SETTINGS_APP, MaterialSymbol.Settings, "Preferences", "Haptic feedback"),
             SettingsCategory(SETTINGS_ABOUT, MaterialSymbol.Info, "About", "Credits and attributions"),
         ),
-    ),
-)
+    ))
+    if (BuildConfig.DEBUG) {
+        add(SettingsSection(
+            "DEVELOPER",
+            listOf(
+                SettingsCategory(SETTINGS_DEVELOPER, MaterialSymbol.Build, "Developer", "Mock mode and debug tools"),
+            ),
+        ))
+    }
+}
 
 // Connected-card group: large radius on a group's outer corners, a barely-rounded seam where
 // same-group cards meet, a tight gap within a group. Between sections the header carries the gap.
