@@ -45,6 +45,7 @@ import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.ui.components.FabAction
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
 import fr.bsodium.cron.ui.screens.home.components.AlarmTiming
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
@@ -87,14 +88,16 @@ fun HomeScreen(
     val resting = uiState.sessionDisplay?.status == SessionStatus.Complete || timing is AlarmTiming.Past
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.
     StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
-    val fabLabel = if (displayPlan == null) "Plan" else "Re-plan"
+    val isFirstRun = displayPlan == null
+    val fabLabel = if (isFirstRun) "Start planning" else "Re-plan"
+    val fabIcon = if (isFirstRun) MaterialSymbol.RocketLaunch else MaterialSymbol.Update
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel))
+        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, icon = fabIcon))
         onDispose { fabRegistry.clear() }
     }
     val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying &&
         uiState.sessionDisplay == null
-    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabLabel, fabRegistry) {
+    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabLabel, fabIcon, fabRegistry) {
         fabRegistry.set(
             FabAction(
                 onClick = viewModel::retryAiPlan,
@@ -102,6 +105,7 @@ fun HomeScreen(
                 onCancel = viewModel::cancelAiPlan,
                 hint = if (showOnboardingHint) "Click here to start" else null,
                 label = fabLabel,
+                icon = fabIcon,
             )
         )
     }

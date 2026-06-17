@@ -81,6 +81,7 @@ fun CronFloatingNav(
     fabAction: FabAction?,
     modifier: Modifier = Modifier,
     fabChevron: FabChevronSlot? = null,
+    onFabWidthChanged: (Dp) -> Unit = {},
 ) {
     val systemBars: PaddingValues = WindowInsets.navigationBars.asPaddingValues()
     val visible = fabAction != null
@@ -118,7 +119,11 @@ fun CronFloatingNav(
             visible = visible,
             lastShown = lastShown,
             fabChevron = fabChevron,
-            onWidthMeasured = { measuredFabWidth = with(density) { it.toDp() } },
+            onWidthMeasured = { w ->
+                val dp = with(density) { w.toDp() }
+                measuredFabWidth = dp
+                onFabWidthChanged(dp)
+            },
         )
     }
 }
@@ -162,8 +167,10 @@ data class FabAction(
     val onCancel: (() -> Unit)? = null,
     /** When set, an onboarding callout with this text points at the FAB (see [OnboardingTooltip]). */
     val hint: String? = null,
-    /** Idle label — "Plan" for the first run, "Re-plan" once a plan exists. */
+    /** Idle label — "Start planning" for the first run, "Re-plan" once a plan exists. */
     val label: String = "Re-plan",
+    /** Idle icon — overrides the default [MaterialSymbol.Update]. */
+    val icon: MaterialSymbol = MaterialSymbol.Update,
 )
 
 /**
@@ -241,8 +248,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Symbol(
-                                symbol = if (isWorking) MaterialSymbol.Stop
-                                    else MaterialSymbol.Update,
+                                symbol = if (isWorking) MaterialSymbol.Stop else action.icon,
                                 contentDescription = null,
                                 modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
                                 fill = 1f,
@@ -355,7 +361,7 @@ private fun PrimaryActionFab(action: FabAction?) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Symbol(
-                        symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.Update,
+                        symbol = if (isWorking) MaterialSymbol.Stop else action.icon,
                         contentDescription = null,
                         modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
                         fill = 1f,
@@ -370,9 +376,6 @@ private fun PrimaryActionFab(action: FabAction?) {
     }
 }
 
-// FAB sits at Spacing.lg from the right screen edge (within Row horizontal padding); its centre
-// is 28dp (half of 56dp) inward from there.
-private val FAB_RIGHT_INSET = Spacing.lg + 28.dp
 private val POINTER_WIDTH = 16.dp
 private val POINTER_HEIGHT = 8.dp
 
@@ -389,11 +392,11 @@ private val PointerDown = GenericShape { size, _ ->
  * [navBottom] is the navigation-bar inset so it clears the floating nav.
  */
 @Composable
-fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier = Modifier) {
+fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, fabWidth: Dp, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .align(Alignment.BottomEnd)
-            .offset(x = -FAB_RIGHT_INSET)
+            .offset(x = -(Spacing.lg + fabWidth / 2))
             .padding(bottom = navBottom + Spacing.navBarClearance - Spacing.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

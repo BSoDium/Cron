@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
@@ -106,6 +107,7 @@ internal val tabExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> Ex
 class FabRegistry {
     var action by mutableStateOf<FabAction?>(null)
         private set
+    var fabWidth by mutableStateOf(0.dp)
 
     fun set(action: FabAction?) {
         this.action = action
@@ -188,6 +190,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     fabAction = fabRegistry.action,
                                     fabChevron = fabChevron,
+                                    onFabWidthChanged = { fabRegistry.fabWidth = it },
                                 )
                             }
                         },
@@ -254,7 +257,7 @@ class MainActivity : ComponentActivity() {
                             // bottom scrim doesn't fade it out; HomeScreen requests it via FabAction.hint.
                             if (currentRoute == ROUTE_HOME) {
                                 val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                                fabRegistry.action?.hint?.let { OnboardingTooltip(navBottom = navBottom, text = it) }
+                                fabRegistry.action?.hint?.let { OnboardingTooltip(navBottom = navBottom, text = it, fabWidth = fabRegistry.fabWidth) }
                             }
                         }
                     }
