@@ -21,6 +21,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.PageAppBar
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -51,7 +52,7 @@ internal fun SettingsDetailScaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = CronColors.pageBackground,
             contentWindowInsets = WindowInsets(0),
             topBar = { PageAppBar(title = title, scrollBehavior = scrollBehavior, onBack = animatedBack) },
         ) { inner ->

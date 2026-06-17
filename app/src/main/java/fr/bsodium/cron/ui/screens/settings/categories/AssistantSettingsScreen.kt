@@ -43,6 +43,7 @@ fun AssistantSettingsScreen(
             usedToday = tokensUsedToday,
             onSelect = onDailyTokenLimit,
         )
+        DebugSettingsSection()
     }
 }
 

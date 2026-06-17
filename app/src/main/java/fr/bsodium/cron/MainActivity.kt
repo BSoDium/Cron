@@ -50,6 +50,7 @@ import fr.bsodium.cron.ui.components.CronFloatingNav
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.OnboardingTooltip
+import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
 import fr.bsodium.cron.ui.screens.home.HomeScreen
@@ -58,6 +59,7 @@ import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.screens.settings.settingsGraph
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -155,6 +157,7 @@ class MainActivity : ComponentActivity() {
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
                     currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
+                val fabChevron = rememberFabChevron()
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
                 val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) { TopAppBarState(0f, 0f, 1f) }
 
@@ -163,6 +166,7 @@ class MainActivity : ComponentActivity() {
                     LocalSettingsTopAppBarState provides settingsTopAppBarState,
                 ) {
                     Scaffold(
+                        containerColor = CronColors.pageBackground,
                         bottomBar = {
                             AnimatedVisibility(
                                 visible = showBottomBar,
@@ -183,6 +187,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     fabAction = fabRegistry.action,
+                                    fabChevron = fabChevron,
                                 )
                             }
                         },

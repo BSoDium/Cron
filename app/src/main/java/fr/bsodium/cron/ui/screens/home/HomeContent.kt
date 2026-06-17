@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
@@ -328,7 +329,7 @@ private fun BoxScope.StickyAlarm(
     card: @Composable (collapseFraction: () -> Float) -> Unit,
 ) {
     val density = LocalDensity.current
-    val background = MaterialTheme.colorScheme.background
+    val background = CronColors.pageBackground
     // Scrim tracks the CURRENT (collapsing) visible height of the card + its sticky strip — independent
     // of the spacer's full reservation — so the solid band always hugs the bottom of what's pinned, and
     // the strip sits on solid background (never faded), with content below dissolving into the page.
