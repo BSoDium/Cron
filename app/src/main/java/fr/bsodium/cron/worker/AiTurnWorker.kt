@@ -32,6 +32,7 @@ import fr.bsodium.cron.ai.tools.SendBriefTool
 import fr.bsodium.cron.ai.tools.SetAlarmTool
 import fr.bsodium.cron.alarm.AlarmScheduler
 import fr.bsodium.cron.calendar.CalendarReader
+import fr.bsodium.cron.calendar.RsvpStatus
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.model.ActionType
@@ -44,6 +45,7 @@ import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.travel.GeocodingClient
 import fr.bsodium.cron.travel.LatLng
 import fr.bsodium.cron.travel.RoutesClient
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.TimeZone
 
 /**
@@ -98,7 +100,8 @@ class AiTurnWorker(
         val model = if (isEveningPlan) TurnRunner.MODEL_SONNET else TurnRunner.MODEL_HAIKU
         val systemPrompt = if (isEveningPlan) SystemPrompts.EVENING_PLAN else SystemPrompts.OVERNIGHT_REPLAN
 
-        val tools = buildToolRegistry(session, apiKey)
+        val allowedRsvp = settingsRepository.allowedRsvpStatuses.first()
+        val tools = buildToolRegistry(session, apiKey, allowedRsvp)
         val client = AnthropicClientFactory.create(applicationContext, apiKeyProvider = { apiKey })
         // Anthropic requires max_tokens > thinking budget, so widen the ceiling on evening_plan turns.
         val thinking = if (isEveningPlan) ThinkingConfig(budgetTokens = THINKING_BUDGET) else null
@@ -141,9 +144,13 @@ class AiTurnWorker(
         }
     }
 
-    private fun buildToolRegistry(session: SleepSession, apiKey: String): ToolRegistry {
+    private fun buildToolRegistry(
+        session: SleepSession,
+        apiKey: String,
+        allowedRsvpStatuses: Set<RsvpStatus>,
+    ): ToolRegistry {
         val tools = mutableListOf<Tool>()
-        tools.add(ReadCalendarTool(CalendarReader(applicationContext.contentResolver)))
+        tools.add(ReadCalendarTool(CalendarReader(applicationContext.contentResolver), allowedRsvpStatuses))
 
         val routesKey = BuildConfig.GOOGLE_ROUTES_API_KEY.takeIf { it.isNotBlank() }
         if (routesKey != null) {

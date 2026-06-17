@@ -5,6 +5,7 @@ import fr.bsodium.cron.ai.ToolResult
 import fr.bsodium.cron.ai.toolSchema
 import fr.bsodium.cron.ai.wire.ToolDefinition
 import fr.bsodium.cron.calendar.CalendarReader
+import fr.bsodium.cron.calendar.RsvpStatus
 import fr.bsodium.cron.session.db.SessionJson
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -27,7 +28,10 @@ import kotlinx.serialization.json.jsonPrimitive
  * user's timezone rather than UTC. Location is always present (empty string when absent)
  * to work around SessionJson's explicitNulls=false omitting null fields.
  */
-class ReadCalendarTool(private val reader: CalendarReader) : Tool {
+class ReadCalendarTool(
+    private val reader: CalendarReader,
+    private val allowedRsvpStatuses: Set<RsvpStatus> = RsvpStatus.entries.toSet(),
+) : Tool {
 
     @Serializable
     private data class EventOut(
@@ -39,6 +43,7 @@ class ReadCalendarTool(private val reader: CalendarReader) : Tool {
         val start_utc_iso: String,
         val all_day: Boolean,
         val location: String,
+        val rsvp_status: String,
         val timezone: String,
     )
 
@@ -97,7 +102,7 @@ class ReadCalendarTool(private val reader: CalendarReader) : Tool {
         }
 
         val tz = TimeZone.currentSystemDefault()
-        val events = reader.readEvents(start, end)
+        val events = reader.readEvents(start, end, allowedRsvpStatuses = allowedRsvpStatuses)
         val eventsOut = events.map { e ->
             val startLdt = e.start.toLocalDateTime(tz)
             val endLdt = e.end.toLocalDateTime(tz)
@@ -110,6 +115,7 @@ class ReadCalendarTool(private val reader: CalendarReader) : Tool {
                 start_utc_iso = e.start.toString(),
                 all_day = e.allDay,
                 location = e.location ?: "",
+                rsvp_status = RsvpStatus.fromCode(e.selfAttendeeStatus)?.name?.lowercase(java.util.Locale.ROOT) ?: "unknown",
                 timezone = tz.id,
             )
         }
