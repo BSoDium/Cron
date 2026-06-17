@@ -19,6 +19,7 @@ import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.ai.SystemPrompts
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolRegistry
+import fr.bsodium.cron.ai.ToolRegistryFactory
 import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.wire.ThinkingConfig
 import fr.bsodium.cron.ai.tools.CancelAlarmTool
@@ -101,7 +102,8 @@ class AiTurnWorker(
         val systemPrompt = if (isEveningPlan) SystemPrompts.EVENING_PLAN else SystemPrompts.OVERNIGHT_REPLAN
 
         val allowedRsvp = settingsRepository.allowedRsvpStatuses.first()
-        val tools = buildToolRegistry(session, apiKey, allowedRsvp)
+        val tools = ToolRegistryFactory.mockOrNull(applicationContext)
+            ?: buildToolRegistry(session, apiKey, allowedRsvp)
         val client = AnthropicClientFactory.create(applicationContext, apiKeyProvider = { apiKey })
         // Anthropic requires max_tokens > thinking budget, so widen the ceiling on evening_plan turns.
         val thinking = if (isEveningPlan) ThinkingConfig(budgetTokens = THINKING_BUDGET) else null
