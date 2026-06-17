@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.Spacing
 
 private val GUTTER_WIDTH = 28.dp
@@ -45,7 +46,7 @@ internal fun TimelineRow(
     // Low-emphasis connector tone with enough contrast for a 2dp line against the page.
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHigh
     // The disc masks the connector rule behind the icon, so it matches the page it sits on.
-    val maskColor = MaterialTheme.colorScheme.background
+    val maskColor = CronColors.pageBackground
     // Centre the disc on the content's FIRST line (not the whole multi-line row): disc centre =
     // contentTopPad + firstLine/2, so its top inset is that minus half the disc.
     val discTop = (TIMELINE_CONTENT_VPAD + (firstLineHeight - ICON_MASK_SIZE) / 2)

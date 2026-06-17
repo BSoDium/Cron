@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -339,7 +340,7 @@ private fun ToolDisc(modifier: Modifier = Modifier, isNew: Boolean = false, cont
             .graphicsLayer { alpha = enter.value }
             .size(TOOL_DISC_SIZE)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.background),
+            .background(CronColors.pageBackground),
         contentAlignment = Alignment.Center,
     ) {
         Box(
