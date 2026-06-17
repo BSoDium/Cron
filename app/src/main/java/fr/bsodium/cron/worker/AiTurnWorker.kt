@@ -102,8 +102,8 @@ class AiTurnWorker(
         val systemPrompt = if (isEveningPlan) SystemPrompts.EVENING_PLAN else SystemPrompts.OVERNIGHT_REPLAN
 
         val allowedRsvp = settingsRepository.allowedRsvpStatuses.first()
-        val tools = ToolRegistryFactory.mockOrNull(applicationContext)
-            ?: buildToolRegistry(session, apiKey, allowedRsvp)
+        val mockTools = ToolRegistryFactory.mockOrNull(applicationContext)
+        val tools = mockTools ?: buildToolRegistry(session, apiKey, allowedRsvp)
         val client = AnthropicClientFactory.create(applicationContext, apiKeyProvider = { apiKey })
         // Anthropic requires max_tokens > thinking budget, so widen the ceiling on evening_plan turns.
         val thinking = if (isEveningPlan) ThinkingConfig(budgetTokens = THINKING_BUDGET) else null
@@ -116,6 +116,7 @@ class AiTurnWorker(
             tools = tools,
             maxTokens = maxTokens,
             thinking = thinking,
+            isMocked = mockTools != null,
         )
 
         val instructions = settingsRepository.currentUserInstructions()

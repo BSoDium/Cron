@@ -250,7 +250,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                 )
                                 if (!isWorking && fabChevron.isMockActive) {
                                     Text(
-                                        text = "mock",
+                                        text = "Mocked",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onPrimary.copy(
                                             alpha = 0.6f,

@@ -40,6 +40,7 @@ class TurnRunner(
     private val maxTokens: Int = 2048,
     private val toolChoice: ToolChoice? = null,
     private val thinking: ThinkingConfig? = null,
+    private val isMocked: Boolean = false,
 ) {
 
     sealed class Outcome {
@@ -125,7 +126,7 @@ class TurnRunner(
     }
 
     private fun publish(sessionId: String, turnIndex: Int, blocks: List<ContentBlock>, startedAtMs: Long) =
-        StreamingTurnStore.update(StreamingTurn(sessionId, turnIndex, blocks, startedAtMs))
+        StreamingTurnStore.update(StreamingTurn(sessionId, turnIndex, blocks, startedAtMs, isMocked = isMocked))
 
     /** Blocks the home thread renders: assistant content plus tool_result, excluding the user prompt. */
     private fun renderableBlocks(messages: List<MessageInput>): List<ContentBlock> = buildList {

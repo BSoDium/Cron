@@ -111,6 +111,7 @@ fun AiThinkingThread(
             inProgress = inProgress,
             pending = thinking,
             durationSeconds = thread.durationSeconds,
+            isMocked = thread.isMocked,
             expanded = isExpanded,
             onToggle = {
                 val next = !isExpanded
@@ -168,6 +169,7 @@ private fun ThinkingDisclosure(
     inProgress: Boolean,
     pending: Boolean,
     durationSeconds: Int?,
+    isMocked: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
     expandPx: () -> Float = { 0f },
@@ -202,6 +204,13 @@ private fun ThinkingDisclosure(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            if (isMocked) {
+                Text(
+                    text = "mock",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                )
+            }
             if (canExpand) {
                 // Anchored on ExpandMore so the EXPANDED state is the glyph's true direction (down) in both
                 // layout directions; collapsed rotates it ±90° toward the reading direction (right in LTR,
@@ -452,6 +461,7 @@ private fun ThinkingDisclosureExpandedPreview() {
                     inProgress = false,
                     pending = false,
                     durationSeconds = PREVIEW_THREAD.durationSeconds,
+                    isMocked = false,
                     expanded = true,
                     onToggle = {},
                 )
