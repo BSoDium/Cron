@@ -95,7 +95,7 @@ internal fun ReplanTab(
     val scheme = MaterialTheme.colorScheme
     val isMocked = iteration.thread.isMocked
     val unselectedContainer = when {
-        isMocked -> scheme.tertiaryContainer
+        isMocked -> scheme.surfaceContainerHigh
         isLatest -> scheme.primaryContainer
         else -> scheme.secondaryContainer
     }
@@ -105,7 +105,7 @@ internal fun ReplanTab(
         else -> scheme.secondary
     }
     val onUnselected = when {
-        isMocked -> scheme.onTertiaryContainer
+        isMocked -> scheme.onSurfaceVariant
         isLatest -> scheme.onPrimaryContainer
         else -> scheme.onSecondaryContainer
     }

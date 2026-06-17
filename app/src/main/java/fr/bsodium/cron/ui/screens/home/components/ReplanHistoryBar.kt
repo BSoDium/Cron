@@ -2,7 +2,6 @@
 
 package fr.bsodium.cron.ui.screens.home.components
 
-import android.util.Log
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.horizontalScroll
@@ -82,7 +81,6 @@ private fun rememberTabFraction(index: Int, turnIndex: Int, position: () -> Floa
     val target = if (turnIndex == selectedTurn) 1f else 0f
     val fraction = remember { Animatable(target) }
     LaunchedEffect(dragging, target) {
-        Log.d("ReplanTab", "turn=$turnIndex target=$target dragging=$dragging value=${fraction.value}")
         if (dragging) snapshotFlow { selectedFraction(index, position()) }.collect { fraction.snapTo(it) }
         else fraction.animateTo(target, spec)
     }
