@@ -212,7 +212,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                         label = "split-fab-icon",
                     ) { isWorking ->
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.padding(end = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Symbol(
