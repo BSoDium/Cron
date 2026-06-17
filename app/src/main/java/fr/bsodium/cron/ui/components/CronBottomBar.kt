@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -193,6 +194,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                         else { haptics.confirm(); action.onClick() }
                     },
                     modifier = Modifier
+                        .wrapContentWidth()
                         .height(56.dp)
                         .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
                     shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp),
@@ -299,6 +301,7 @@ private fun PrimaryActionFab(action: FabAction?) {
                 }
             },
             modifier = Modifier
+                .wrapContentWidth()
                 .height(FAB_SLOT_HEIGHT)
                 .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())
                 .graphicsLayer {
