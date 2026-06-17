@@ -42,8 +42,11 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -196,15 +199,31 @@ private fun ThinkingDisclosure(
             // disc (inside ToolStack) so the header always leads with an icon, never floating text.
             val tools = process.filterIsInstance<ProcessItem.Tool>()
             ToolStack(tools, pending = pending)
-            Text(
-                text = if (inProgress) (summary ?: "Thinking…") else thoughtForLabel(durationSeconds, isMocked),
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (isMocked) MaterialTheme.colorScheme.tertiary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
+            if (!inProgress && isMocked) {
+                val verb = "Faked thinking"
+                val full = thoughtForLabel(durationSeconds, isMocked = true)
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.tertiary)) { append(verb) }
+                        append(full.removePrefix(verb))
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = headerColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Text(
+                    text = if (inProgress) (summary ?: "Thinking…") else thoughtForLabel(durationSeconds),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = headerColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             if (canExpand) {
                 // Anchored on ExpandMore so the EXPANDED state is the glyph's true direction (down) in both
                 // layout directions; collapsed rotates it ±90° toward the reading direction (right in LTR,
