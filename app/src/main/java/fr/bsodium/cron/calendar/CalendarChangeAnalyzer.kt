@@ -38,7 +38,7 @@ class CalendarChangeAnalyzer(
         val dayEnd = dayStart + MORNING_WINDOW
         val events = CalendarReader(contentResolver).readEvents(dayStart, dayEnd, allowedRsvpStatuses = allowedRsvpStatuses)
         val first = events.firstOrNull { !it.allDay } ?: return null
-        return "${first.id}|${first.start.toEpochMilliseconds()}|${first.location.orEmpty()}"
+        return "${first.id}|${first.start.toEpochMilliseconds()}|${first.location.orEmpty()}|${first.selfAttendeeStatus}"
     }
 
     companion object {
