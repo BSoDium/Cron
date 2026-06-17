@@ -20,6 +20,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
+import fr.bsodium.cron.BuildConfig
 import fr.bsodium.cron.ui.screens.settings.categories.AboutSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.AccountSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.AppSettingsScreen
@@ -189,8 +190,10 @@ fun NavGraphBuilder.settingsGraph(
         settingsDetail(SETTINGS_ABOUT) {
             AboutSettingsScreen(onBack = { navController.popBackStack() })
         }
-        settingsDetail(SETTINGS_DEVELOPER) {
-            DeveloperSettingsScreen(onBack = { navController.popBackStack() })
+        if (BuildConfig.DEBUG) {
+            settingsDetail(SETTINGS_DEVELOPER) {
+                DeveloperSettingsScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

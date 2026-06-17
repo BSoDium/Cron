@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.bleedHorizontally
@@ -205,7 +206,7 @@ internal fun ThinkingDisclosure(
                 val full = thoughtForLabel(durationSeconds, isMocked = true)
                 Text(
                     text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.tertiary)) { append(verb) }
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)) { append(verb) }
                         append(full.removePrefix(verb))
                     },
                     style = MaterialTheme.typography.bodyLarge,
