@@ -26,9 +26,14 @@ class CalendarReader(private val contentResolver: ContentResolver) {
         val allDay: Boolean,
         val calendarId: Long,
         val location: String? = null,
+        val selfAttendeeStatus: Int = 0,
     )
 
-    fun readEvents(from: Instant, to: Instant): List<Event> {
+    fun readEvents(
+        from: Instant,
+        to: Instant,
+        allowedRsvpStatuses: Set<RsvpStatus> = RsvpStatus.entries.toSet(),
+    ): List<Event> {
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().apply {
             ContentUris.appendId(this, from.toEpochMilliseconds())
             ContentUris.appendId(this, to.toEpochMilliseconds())
@@ -59,13 +64,16 @@ class CalendarReader(private val contentResolver: ContentResolver) {
                             allDay = c.getInt(COL_ALL_DAY) == 1,
                             calendarId = c.getLong(COL_CALENDAR_ID),
                             location = c.getString(COL_LOCATION)?.ifBlank { null },
+                            selfAttendeeStatus = c.getInt(COL_SELF_ATTENDEE_STATUS),
                         )
                     )
                 }
             }
         }
-        Log.i(TAG, "read ${events.size} events in [$from .. $to]: ${events.map { it.title }}")
-        return events
+        val allowedCodes = allowedRsvpStatuses.flatMapTo(mutableSetOf()) { it.codes }
+        val filtered = events.filter { it.selfAttendeeStatus in allowedCodes }
+        Log.i(TAG, "read ${events.size} events in [$from .. $to], ${filtered.size} after RSVP filter: ${filtered.map { it.title }}")
+        return filtered
     }
 
     private companion object {
@@ -78,6 +86,7 @@ class CalendarReader(private val contentResolver: ContentResolver) {
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.CALENDAR_ID,
             CalendarContract.Instances.EVENT_LOCATION,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS,
         )
         const val COL_EVENT_ID = 0
         const val COL_TITLE = 1
@@ -86,6 +95,7 @@ class CalendarReader(private val contentResolver: ContentResolver) {
         const val COL_ALL_DAY = 4
         const val COL_CALENDAR_ID = 5
         const val COL_LOCATION = 6
+        const val COL_SELF_ATTENDEE_STATUS = 7
     }
 }
 

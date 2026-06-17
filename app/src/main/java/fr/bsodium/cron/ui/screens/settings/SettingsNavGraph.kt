@@ -25,6 +25,7 @@ import fr.bsodium.cron.ui.screens.settings.categories.AccountSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.AppSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.AssistantSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.BuffersSettingsScreen
+import fr.bsodium.cron.ui.screens.settings.categories.CalendarSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.CommuteSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.FreeDaysSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.ReliabilitySettingsScreen
@@ -41,6 +42,7 @@ const val SETTINGS_RELIABILITY = "settings/reliability"
 const val SETTINGS_ACCOUNT = "settings/account"
 const val SETTINGS_APP = "settings/app"
 const val SETTINGS_ABOUT = "settings/about"
+const val SETTINGS_CALENDAR = "settings/calendar"
 
 private const val PUSH_MS = 240
 
@@ -132,6 +134,16 @@ fun NavGraphBuilder.settingsGraph(
             CommuteSettingsScreen(
                 allowedModes = state.allowedCommuteModes,
                 onAllowedModes = vm::setAllowedCommuteModes,
+                onBack = { navController.popBackStack() },
+                hapticsEnabled = state.hapticsEnabled,
+            )
+        }
+        settingsDetail(SETTINGS_CALENDAR) { entry ->
+            val vm = entry.settingsViewModel(navController)
+            val state by vm.uiState.collectAsState()
+            CalendarSettingsScreen(
+                allowedStatuses = state.allowedRsvpStatuses,
+                onAllowedStatuses = vm::setAllowedRsvpStatuses,
                 onBack = { navController.popBackStack() },
                 hapticsEnabled = state.hapticsEnabled,
             )

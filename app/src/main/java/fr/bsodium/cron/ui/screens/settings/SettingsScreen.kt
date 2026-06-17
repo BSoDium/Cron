@@ -56,6 +56,7 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = listOf(
             SettingsCategory(SETTINGS_FREE_DAYS, MaterialSymbol.Weekend, "Free days", "Wake window when you have no events"),
             SettingsCategory(SETTINGS_BUFFERS, MaterialSymbol.Timer, "Buffers", "Travel and preparation time"),
             SettingsCategory(SETTINGS_COMMUTE, MaterialSymbol.DirectionsCar, "Commute", "How the planner estimates travel"),
+            SettingsCategory(SETTINGS_CALENDAR, MaterialSymbol.CalendarMonth, "Calendar", "Which events the planner sees"),
         ),
     ),
     SettingsSection(

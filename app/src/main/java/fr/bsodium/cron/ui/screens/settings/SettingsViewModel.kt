@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.alarm.EveningPlanScheduler
+import fr.bsodium.cron.calendar.DEFAULT_RSVP_STATUSES
+import fr.bsodium.cron.calendar.RsvpStatus
 import fr.bsodium.cron.session.model.CommuteMode
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
@@ -24,6 +26,7 @@ data class SettingsUiState(
     val commuteBufferMinutes: Int = 15,
     val preparationBufferMinutes: Int = 15,
     val allowedCommuteModes: Set<CommuteMode> = CommuteMode.entries.toSet(),
+    val allowedRsvpStatuses: Set<RsvpStatus> = DEFAULT_RSVP_STATUSES,
     val hasApiKey: Boolean = false,
     val displayName: String? = null,
     val userInstructions: String? = null,
@@ -66,6 +69,8 @@ class SettingsViewModel @JvmOverloads constructor(
         state.copy(preparationBufferMinutes = prepBuffer)
     }.combine(repo.allowedCommuteModes) { state, modes ->
         state.copy(allowedCommuteModes = modes)
+    }.combine(repo.allowedRsvpStatuses) { state, rsvp ->
+        state.copy(allowedRsvpStatuses = rsvp)
     }.combine(repo.displayName) { state, name ->
         state.copy(displayName = name)
     }.combine(repo.userInstructions) { state, instructions ->
@@ -103,6 +108,10 @@ class SettingsViewModel @JvmOverloads constructor(
 
     fun setAllowedCommuteModes(modes: Set<CommuteMode>) {
         viewModelScope.launch { repo.setAllowedCommuteModes(modes) }
+    }
+
+    fun setAllowedRsvpStatuses(statuses: Set<RsvpStatus>) {
+        viewModelScope.launch { repo.setAllowedRsvpStatuses(statuses) }
     }
 
     fun clearApiKey() {

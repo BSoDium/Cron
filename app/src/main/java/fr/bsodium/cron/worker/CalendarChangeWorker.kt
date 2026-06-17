@@ -6,6 +6,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import fr.bsodium.cron.calendar.CalendarChangeAnalyzer
 import fr.bsodium.cron.session.SessionRepository
+import fr.bsodium.cron.settings.SettingsRepository
+import kotlinx.coroutines.flow.first
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
@@ -31,7 +33,8 @@ class CalendarChangeWorker(
             return Result.success()
         }
 
-        val analyzer = CalendarChangeAnalyzer(applicationContext.contentResolver)
+        val allowedRsvp = SettingsRepository(applicationContext).allowedRsvpStatuses.first()
+        val analyzer = CalendarChangeAnalyzer(applicationContext.contentResolver, allowedRsvp)
         val diff = analyzer.analyze(session)
 
         if (!diff.firstEventChanged) {

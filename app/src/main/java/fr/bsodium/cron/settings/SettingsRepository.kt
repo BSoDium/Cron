@@ -12,6 +12,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import fr.bsodium.cron.ai.BudgetStore
+import fr.bsodium.cron.calendar.DEFAULT_RSVP_STATUSES
+import fr.bsodium.cron.calendar.RsvpStatus
 import fr.bsodium.cron.session.model.CommuteMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -67,6 +69,19 @@ class SettingsRepository(private val context: Context) {
                     .getOrNull()
             }
                 .toSet().ifEmpty { CommuteMode.entries.toSet() }
+        }
+    }
+
+    val allowedRsvpStatuses: Flow<Set<RsvpStatus>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[ALLOWED_RSVP_STATUSES]
+        if (raw.isNullOrEmpty()) {
+            DEFAULT_RSVP_STATUSES
+        } else {
+            raw.mapNotNull { name ->
+                runCatching { RsvpStatus.valueOf(name) }
+                    .onFailure { Log.w(TAG, "unknown RSVP status '$name' in prefs — dropped", it) }
+                    .getOrNull()
+            }.toSet().ifEmpty { DEFAULT_RSVP_STATUSES }
         }
     }
 
@@ -136,6 +151,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAllowedCommuteModes(modes: Set<CommuteMode>) =
         editPlanAffecting { it[ALLOWED_COMMUTE_MODES] = modes.map { mode -> mode.name }.toSet() }
 
+    suspend fun setAllowedRsvpStatuses(statuses: Set<RsvpStatus>) =
+        editPlanAffecting { it[ALLOWED_RSVP_STATUSES] = statuses.map { s -> s.name }.toSet() }
+
     suspend fun setHomeAddress(lat: Double, lng: Double) =
         editPlanAffecting {
             it[HOME_LAT] = lat.toString()
@@ -194,6 +212,7 @@ class SettingsRepository(private val context: Context) {
         val COMMUTE_BUFFER = intPreferencesKey("commute_buffer_minutes")
         val PREPARATION_BUFFER = intPreferencesKey("preparation_buffer_minutes")
         val ALLOWED_COMMUTE_MODES = stringSetPreferencesKey("allowed_commute_modes")
+        val ALLOWED_RSVP_STATUSES = stringSetPreferencesKey("allowed_rsvp_statuses")
         val HOME_LAT = stringPreferencesKey("home_address_lat")
         val HOME_LNG = stringPreferencesKey("home_address_lng")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")

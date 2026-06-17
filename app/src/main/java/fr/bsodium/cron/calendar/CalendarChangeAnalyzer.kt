@@ -14,7 +14,10 @@ import kotlin.time.Duration.Companion.hours
  * change, we treat the first anchor event as changed and trigger an AI replan.
  * All-day events are excluded because they are markers, not appointments.
  */
-class CalendarChangeAnalyzer(private val contentResolver: ContentResolver) {
+class CalendarChangeAnalyzer(
+    private val contentResolver: ContentResolver,
+    private val allowedRsvpStatuses: Set<RsvpStatus> = RsvpStatus.entries.toSet(),
+) {
 
     data class Result(
         val firstEventChanged: Boolean,
@@ -33,7 +36,7 @@ class CalendarChangeAnalyzer(private val contentResolver: ContentResolver) {
     private fun computeFirstEventSig(session: SleepSession, timezone: TimeZone): String? {
         val dayStart = session.date.atStartOfDayIn(timezone)
         val dayEnd = dayStart + MORNING_WINDOW
-        val events = CalendarReader(contentResolver).readEvents(dayStart, dayEnd)
+        val events = CalendarReader(contentResolver).readEvents(dayStart, dayEnd, allowedRsvpStatuses = allowedRsvpStatuses)
         val first = events.firstOrNull { !it.allDay } ?: return null
         return "${first.id}|${first.start.toEpochMilliseconds()}|${first.location.orEmpty()}"
     }
