@@ -3,7 +3,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,13 +26,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
@@ -93,35 +92,12 @@ internal fun ReplanTab(
     isNew: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val isMocked = iteration.thread.isMocked
-    val unselectedContainer = when {
-        isMocked -> lerp(scheme.surfaceContainerHigh, scheme.tertiaryContainer, 0.38f)
-        isLatest -> scheme.primaryContainer
-        else -> scheme.secondaryContainer
-    }
-    val selectedContainer = when {
-        isMocked -> scheme.tertiary
-        isLatest -> scheme.primary
-        else -> scheme.secondary
-    }
-    val onUnselected = when {
-        isMocked -> scheme.onTertiaryContainer
-        isLatest -> scheme.onPrimaryContainer
-        else -> scheme.onSecondaryContainer
-    }
-    val onSelected = when {
-        isMocked -> scheme.onTertiary
-        isLatest -> scheme.onPrimary
-        else -> scheme.onSecondary
-    }
-    // Colour inverts fast through the middle (quintic) so the label doesn't dwell at the muddy midpoint;
-    // the shape morph (in `shape`) stays linear with the swipe.
+    val unselectedContainer = if (isLatest) scheme.primaryContainer else scheme.secondaryContainer
+    val selectedContainer = if (isLatest) scheme.primary else scheme.secondary
+    val onUnselected = if (isLatest) scheme.onPrimaryContainer else scheme.onSecondaryContainer
+    val onSelected = if (isLatest) scheme.onPrimary else scheme.onSecondary
     val colorFraction = fastMiddle(fraction)
     val content = lerp(onUnselected, onSelected, colorFraction)
-    val border = if (isMocked) BorderStroke(
-        width = 1.dp,
-        color = lerp(scheme.tertiary, Color.Transparent, colorFraction),
-    ) else null
     // A tab added after the strip first appeared fades + scales in (once); the initial set starts settled.
     val enter = remember { Animatable(if (isNew) 0f else 1f) }
     val enterSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
@@ -139,7 +115,6 @@ internal fun ReplanTab(
         shape = shape,
         color = lerp(unselectedContainer, selectedContainer, colorFraction),
         contentColor = content,
-        border = border,
     ) {
         val streaming = iteration.thread.isStreaming
         Row(
@@ -160,7 +135,8 @@ internal fun ReplanTab(
                         indicatorColor = content,
                     )
                 } else {
-                    Symbol(symbol = runSymbol(iteration.kind), contentDescription = null, tint = content, size = ICON_GLYPH)
+                    val icon = if (iteration.thread.isMocked) MaterialSymbol.Science else runSymbol(iteration.kind)
+                    Symbol(symbol = icon, contentDescription = null, tint = content, size = ICON_GLYPH)
                 }
             }
             Spacer(Modifier.width(Spacing.xs))

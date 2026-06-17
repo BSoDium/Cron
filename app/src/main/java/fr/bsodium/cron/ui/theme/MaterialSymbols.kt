@@ -79,6 +79,7 @@ enum class MaterialSymbol(val code: String) {
     Person("\uF0D3"),
     PlayArrow("\uE037"),
     Schedule("\uEFD6"),
+    Science("\uEA4B"),
     SearchActivity("\uF3E5"),
     Settings("\uE8B8"),
     Shield("\uE9E0"),

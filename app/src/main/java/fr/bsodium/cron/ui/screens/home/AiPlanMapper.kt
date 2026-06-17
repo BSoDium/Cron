@@ -57,7 +57,7 @@ data class AiIterationUi(
     val ranAtEpochMs: Long? = null,
 ) {
     /** The tab label for this run. */
-    val systemMessage: String get() = kind.label
+    val systemMessage: String get() = if (thread.isMocked) "Mocked plan" else kind.label
 }
 
 /**
