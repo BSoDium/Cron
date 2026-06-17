@@ -3,6 +3,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,6 +118,10 @@ internal fun ReplanTab(
     // the shape morph (in `shape`) stays linear with the swipe.
     val colorFraction = fastMiddle(fraction)
     val content = lerp(onUnselected, onSelected, colorFraction)
+    val border = if (isMocked) BorderStroke(
+        width = 1.dp,
+        color = lerp(scheme.tertiary, Color.Transparent, colorFraction),
+    ) else null
     // A tab added after the strip first appeared fades + scales in (once); the initial set starts settled.
     val enter = remember { Animatable(if (isNew) 0f else 1f) }
     val enterSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
@@ -133,6 +139,7 @@ internal fun ReplanTab(
         shape = shape,
         color = lerp(unselectedContainer, selectedContainer, colorFraction),
         contentColor = content,
+        border = border,
     ) {
         val streaming = iteration.thread.isStreaming
         Row(
