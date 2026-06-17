@@ -135,7 +135,7 @@ internal fun ReplanTab(
                         indicatorColor = content,
                     )
                 } else {
-                    val icon = if (iteration.thread.isMocked) MaterialSymbol.Science else runSymbol(iteration.kind)
+                    val icon = if (iteration.thread.isMocked) MaterialSymbol.Code else runSymbol(iteration.kind)
                     Symbol(symbol = icon, contentDescription = null, tint = content, size = ICON_GLYPH)
                 }
             }
