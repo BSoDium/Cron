@@ -10,11 +10,11 @@ object CronColors {
         @Composable get() = if (isSystemInDarkTheme())
             MaterialTheme.colorScheme.surface
         else
-            MaterialTheme.colorScheme.surfaceContainerLow
+            MaterialTheme.colorScheme.surfaceContainer
 
     val elementSurface: Color
         @Composable get() = if (isSystemInDarkTheme())
-            MaterialTheme.colorScheme.surfaceContainerLow
+            MaterialTheme.colorScheme.surfaceContainer
         else
             MaterialTheme.colorScheme.surface
 }

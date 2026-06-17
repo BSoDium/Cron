@@ -1,6 +1,8 @@
 package fr.bsodium.cron.ui.components
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -11,9 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.debug.MockApiPrefs
 import fr.bsodium.cron.ui.theme.MaterialSymbol
+import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 /** DEBUG variant — returns a [FabChevronSlot] wired to [MockApiPrefs] for the split FAB. */
@@ -33,6 +37,7 @@ fun rememberFabChevron(): FabChevronSlot? {
                     expanded = showMenu.value,
                     onDismissRequest = { showMenu.value = false },
                     modifier = Modifier.widthIn(min = 166.dp),
+                    offset = DpOffset(0.dp, -Spacing.sm),
                 ) {
                     DropdownMenuItem(
                         text = {
@@ -45,9 +50,10 @@ fun rememberFabChevron(): FabChevronSlot? {
                                 )
                             }
                         },
-                        leadingIcon = if (!isMock.value) {
-                            { Symbol(MaterialSymbol.Check, contentDescription = null) }
-                        } else null,
+                        leadingIcon = {
+                            if (!isMock.value) Symbol(MaterialSymbol.Check, contentDescription = null)
+                            else Box(Modifier.size(24.dp))
+                        },
                         onClick = {
                             prefs.isEnabled = false
                             isMock.value = false
@@ -65,9 +71,10 @@ fun rememberFabChevron(): FabChevronSlot? {
                                 )
                             }
                         },
-                        leadingIcon = if (isMock.value) {
-                            { Symbol(MaterialSymbol.Check, contentDescription = null) }
-                        } else null,
+                        leadingIcon = {
+                            if (isMock.value) Symbol(MaterialSymbol.Check, contentDescription = null)
+                            else Box(Modifier.size(24.dp))
+                        },
                         onClick = {
                             prefs.isEnabled = true
                             isMock.value = true

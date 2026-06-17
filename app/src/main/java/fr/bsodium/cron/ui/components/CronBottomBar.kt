@@ -152,7 +152,7 @@ private fun FabSlot(
 
 private val FAB_SLOT_WIDTH = 56.dp
 private val FAB_SLOT_HEIGHT = 56.dp
-private val SPLIT_MAIN_WIDTH = 108.dp
+private val SPLIT_MAIN_WIDTH = 120.dp
 private val SPLIT_CHEVRON_WIDTH = 56.dp
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val SPLIT_FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH + SplitButtonDefaults.Spacing + SPLIT_CHEVRON_WIDTH
@@ -189,14 +189,16 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     val haptics = rememberCronHaptics()
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val chevronColor by animateColorAsState(
-        targetValue = if (fabChevron.isMockActive) MaterialTheme.colorScheme.secondary
-            else MaterialTheme.colorScheme.primary,
+        targetValue = if (fabChevron.isExpanded && fabChevron.isMockActive)
+            MaterialTheme.colorScheme.secondary
+        else MaterialTheme.colorScheme.primary,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "chevron-color",
     )
     val chevronContentColor by animateColorAsState(
-        targetValue = if (fabChevron.isMockActive) MaterialTheme.colorScheme.onSecondary
-            else MaterialTheme.colorScheme.onPrimary,
+        targetValue = if (fabChevron.isExpanded && fabChevron.isMockActive)
+            MaterialTheme.colorScheme.onSecondary
+        else MaterialTheme.colorScheme.onPrimary,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "chevron-content-color",
     )
@@ -207,7 +209,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     )
     SplitButtonLayout(
         leadingButton = {
-            IconTooltip(label = if (action.working) "Cancel" else "Run alarm plan") {
+            IconTooltip(label = if (action.working) "Cancel" else "Re-plan") {
                 SplitButtonDefaults.LeadingButton(
                     onClick = {
                         if (action.working) { haptics.reject(); action.onCancel?.invoke() }
@@ -236,13 +238,17 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                         ) {
                             Symbol(
                                 symbol = if (isWorking) MaterialSymbol.Stop
-                                    else MaterialSymbol.PlayArrow,
+                                    else MaterialSymbol.Update,
                                 contentDescription = null,
                                 modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
                                 fill = 1f,
                             )
                             Text(
-                                text = if (isWorking) "Stop" else "Run",
+                                text = when {
+                                    isWorking -> "Stop"
+                                    fabChevron.isMockActive -> "Mock re-plan"
+                                    else -> "Re-plan"
+                                },
                                 style = MaterialTheme.typography.labelLarge,
                             )
                         }

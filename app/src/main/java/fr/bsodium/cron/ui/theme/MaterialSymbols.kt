@@ -85,6 +85,7 @@ enum class MaterialSymbol(val code: String) {
     Snooze("\uE046"),
     Stop("\uE047"),
     Timer("\uE425"),
+    Update("\uE923"),
     Vibration("\uF2CB"),
     VitalSigns("\uE650"),
     Warning("\uF083"),
