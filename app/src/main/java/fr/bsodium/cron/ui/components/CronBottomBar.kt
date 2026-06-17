@@ -3,12 +3,12 @@ package fr.bsodium.cron.ui.components
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -53,7 +52,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
@@ -81,16 +80,6 @@ fun CronFloatingNav(
 ) {
     val systemBars: PaddingValues = WindowInsets.navigationBars.asPaddingValues()
     val visible = fabAction != null
-    val targetFabWidth = when {
-        !visible -> 0.dp
-        fabChevron != null -> SPLIT_FAB_SLOT_WIDTH
-        else -> FAB_SLOT_WIDTH
-    }
-    val fabSlotWidth by animateDpAsState(
-        targetValue = targetFabWidth,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "fab-slot-width",
-    )
     // Retain last non-null action so the FAB has content to fade out during the exit transition.
     var lastShown by remember { mutableStateOf(fabAction) }
     if (fabAction != null && fabAction != lastShown) lastShown = fabAction
@@ -114,7 +103,6 @@ fun CronFloatingNav(
             NavPill(currentRoute = currentRoute, onNavigate = onNavigate)
         }
         FabSlot(
-            fabSlotWidth = fabSlotWidth,
             visible = visible,
             lastShown = lastShown,
             fabChevron = fabChevron,
@@ -125,37 +113,24 @@ fun CronFloatingNav(
 // Extracted from the Row lambda so RowScope.AnimatedVisibility is not in scope.
 @Composable
 private fun FabSlot(
-    fabSlotWidth: Dp,
     visible: Boolean,
     lastShown: FabAction?,
     fabChevron: FabChevronSlot?,
 ) {
-    val spatialSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntOffset>()
+    val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
     val alphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    Box(
-        modifier = Modifier
-            .width(fabSlotWidth)
-            .height(FAB_SLOT_HEIGHT),
-        contentAlignment = Alignment.CenterEnd,
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandHorizontally(spatialSpec, expandFrom = Alignment.End) + fadeIn(alphaSpec),
+        exit = shrinkHorizontally(spatialSpec, shrinkTowards = Alignment.End) + fadeOut(alphaSpec),
     ) {
-        AnimatedVisibility(
-            modifier = Modifier.wrapContentWidth(align = Alignment.End, unbounded = true),
-            visible = visible,
-            enter = slideInHorizontally(spatialSpec) { it } + fadeIn(alphaSpec),
-            exit = slideOutHorizontally(spatialSpec) { it } + fadeOut(alphaSpec),
-        ) {
-            if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
-            else PrimaryActionFab(lastShown)
-        }
+        if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
+        else PrimaryActionFab(lastShown)
     }
 }
 
-private val SPLIT_MAIN_WIDTH = 120.dp
-private val FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH
 private val FAB_SLOT_HEIGHT = 56.dp
 private val SPLIT_CHEVRON_WIDTH = 56.dp
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-private val SPLIT_FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH + SplitButtonDefaults.Spacing + SPLIT_CHEVRON_WIDTH
 
 data class FabAction(
     val onClick: () -> Unit,
@@ -217,7 +192,9 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                         if (action.working) { haptics.reject(); action.onCancel?.invoke() }
                         else { haptics.confirm(); action.onClick() }
                     },
-                    modifier = Modifier.size(width = SPLIT_MAIN_WIDTH, height = 56.dp),
+                    modifier = Modifier
+                        .height(56.dp)
+                        .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
                     shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -322,7 +299,8 @@ private fun PrimaryActionFab(action: FabAction?) {
                 }
             },
             modifier = Modifier
-                .size(width = SPLIT_MAIN_WIDTH, height = FAB_SLOT_HEIGHT)
+                .height(FAB_SLOT_HEIGHT)
+                .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale
