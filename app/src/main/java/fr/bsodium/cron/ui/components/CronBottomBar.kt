@@ -163,6 +163,8 @@ data class FabAction(
     val onCancel: (() -> Unit)? = null,
     /** When set, an onboarding callout with this text points at the FAB (see [OnboardingTooltip]). */
     val hint: String? = null,
+    /** Idle label — "Plan" for the first run, "Re-plan" once a plan exists. */
+    val label: String = "Re-plan",
 )
 
 /**
@@ -209,7 +211,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     )
     SplitButtonLayout(
         leadingButton = {
-            IconTooltip(label = if (action.working) "Cancel" else "Re-plan") {
+            IconTooltip(label = if (action.working) "Cancel" else action.label) {
                 SplitButtonDefaults.LeadingButton(
                     onClick = {
                         if (action.working) { haptics.reject(); action.onCancel?.invoke() }
@@ -245,7 +247,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                             )
                             Column {
                                 Text(
-                                    text = if (isWorking) "Stop" else "Re-plan",
+                                    text = if (isWorking) "Stop" else action.label,
                                     style = MaterialTheme.typography.labelLarge,
                                 )
                                 if (!isWorking && fabChevron.isMockActive) {
@@ -308,7 +310,7 @@ private fun PrimaryActionFab(action: FabAction?) {
         label = "fab-press",
     )
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    IconTooltip(label = if (working) "Cancel" else "Re-plan") {
+    IconTooltip(label = if (working) "Cancel" else action.label) {
         FloatingActionButton(
             onClick = {
                 if (working) {
@@ -355,7 +357,7 @@ private fun PrimaryActionFab(action: FabAction?) {
                         fill = 1f,
                     )
                     Text(
-                        text = if (isWorking) "Stop" else "Re-plan",
+                        text = if (isWorking) "Stop" else action.label,
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }

@@ -87,21 +87,21 @@ fun HomeScreen(
     val resting = uiState.sessionDisplay?.status == SessionStatus.Complete || timing is AlarmTiming.Past
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.
     StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
+    val fabLabel = if (displayPlan == null) "Plan" else "Re-plan"
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
+        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel))
         onDispose { fabRegistry.clear() }
     }
-    // Onboarding callout (rendered above EdgeFades in MainActivity): only on a true first run — loaded,
-    // no plan, no session yet. The between-sessions resting state uses NextPlanHint instead, no tooltip.
     val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying &&
         uiState.sessionDisplay == null
-    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
+    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabLabel, fabRegistry) {
         fabRegistry.set(
             FabAction(
                 onClick = viewModel::retryAiPlan,
                 working = uiState.isRetrying,
                 onCancel = viewModel::cancelAiPlan,
                 hint = if (showOnboardingHint) "Click here to start" else null,
+                label = fabLabel,
             )
         )
     }
