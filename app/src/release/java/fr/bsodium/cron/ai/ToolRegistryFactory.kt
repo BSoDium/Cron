@@ -5,5 +5,8 @@ import android.content.Context
 /** RELEASE variant — mock tools are never available. */
 object ToolRegistryFactory {
     @Suppress("UNUSED_PARAMETER")
-    fun mockOrNull(context: Context): ToolRegistry? = null
+    fun shouldUseMock(context: Context): Boolean = false
+
+    @Suppress("UNUSED_PARAMETER")
+    fun mockOrNull(useMock: Boolean): ToolRegistry? = null
 }

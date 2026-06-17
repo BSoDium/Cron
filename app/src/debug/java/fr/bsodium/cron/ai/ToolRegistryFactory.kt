@@ -6,8 +6,11 @@ import fr.bsodium.cron.debug.MockApiPrefs
 
 /** DEBUG variant — returns [FakeToolRegistry] when mock mode is enabled and active; null otherwise. */
 object ToolRegistryFactory {
-    fun mockOrNull(context: Context): ToolRegistry? {
+    fun shouldUseMock(context: Context): Boolean {
         val prefs = MockApiPrefs(context)
-        return if (prefs.isEnabled && prefs.isMockActive) FakeToolRegistry.build() else null
+        return prefs.isEnabled && prefs.isMockActive
     }
+
+    fun mockOrNull(useMock: Boolean): ToolRegistry? =
+        if (useMock) FakeToolRegistry.build() else null
 }
