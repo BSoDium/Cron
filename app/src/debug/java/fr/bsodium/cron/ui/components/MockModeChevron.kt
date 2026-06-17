@@ -26,6 +26,8 @@ fun rememberFabChevron(): FabChevronSlot? {
     val context = LocalContext.current
     val prefs = remember { MockApiPrefs(context) }
     val isMock = remember { mutableStateOf(prefs.isEnabled) }
+    isMock.value = prefs.isEnabled
+    if (!isMock.value) return null
     val showMenu = remember { mutableStateOf(false) }
     return remember(prefs) {
         FabChevronSlot(
