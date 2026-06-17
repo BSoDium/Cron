@@ -1,22 +1,18 @@
 package fr.bsodium.cron.ai
 
-import android.content.Context
 import android.util.Log
 import fr.bsodium.cron.debug.FakeAnthropicClient
-import fr.bsodium.cron.debug.MockApiPrefs
 
-/** DEBUG variant — returns [FakeAnthropicClient] when the mock toggle is on; real client otherwise. */
+/** DEBUG variant — returns [FakeAnthropicClient] when [useMock] is true; real client otherwise. */
 object AnthropicClientFactory {
 
     private const val TAG = "AnthropicClientFactory"
 
-    fun create(context: Context, apiKeyProvider: () -> String?): AnthropicMessages {
-        val prefs = MockApiPrefs(context)
-        return if (prefs.isEnabled) {
+    fun create(useMock: Boolean, apiKeyProvider: () -> String?): AnthropicMessages =
+        if (useMock) {
             Log.i(TAG, "Using FakeAnthropicClient")
             FakeAnthropicClient()
         } else {
             AnthropicClient(apiKeyProvider = apiKeyProvider)
         }
-    }
 }

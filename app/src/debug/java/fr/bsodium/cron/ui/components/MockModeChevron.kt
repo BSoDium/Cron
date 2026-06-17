@@ -25,7 +25,9 @@ import fr.bsodium.cron.ui.theme.Symbol
 fun rememberFabChevron(): FabChevronSlot? {
     val context = LocalContext.current
     val prefs = remember { MockApiPrefs(context) }
-    val isMock = remember { mutableStateOf(prefs.isEnabled) }
+    if (!prefs.isEnabled) return null
+    val isMock = remember { mutableStateOf(prefs.isMockActive) }
+    isMock.value = prefs.isMockActive
     val showMenu = remember { mutableStateOf(false) }
     return remember(prefs) {
         FabChevronSlot(
@@ -55,7 +57,7 @@ fun rememberFabChevron(): FabChevronSlot? {
                             else Box(Modifier.size(24.dp))
                         },
                         onClick = {
-                            prefs.isEnabled = false
+                            prefs.isMockActive = false
                             isMock.value = false
                             showMenu.value = false
                         },
@@ -76,7 +78,7 @@ fun rememberFabChevron(): FabChevronSlot? {
                             else Box(Modifier.size(24.dp))
                         },
                         onClick = {
-                            prefs.isEnabled = true
+                            prefs.isMockActive = true
                             isMock.value = true
                             showMenu.value = false
                         },
