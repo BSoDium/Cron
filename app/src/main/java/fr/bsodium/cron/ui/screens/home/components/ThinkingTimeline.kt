@@ -44,7 +44,7 @@ internal fun TimelineRow(
     content: @Composable () -> Unit,
 ) {
     // Low-emphasis connector tone with enough contrast for a 2dp line against the page.
-    val ruleColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val ruleColor = MaterialTheme.colorScheme.outlineVariant
     // The disc masks the connector rule behind the icon, so it matches the page it sits on.
     val maskColor = CronColors.pageBackground
     // Centre the disc on the content's FIRST line (not the whole multi-line row): disc centre =

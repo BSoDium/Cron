@@ -197,20 +197,14 @@ private fun ThinkingDisclosure(
             val tools = process.filterIsInstance<ProcessItem.Tool>()
             ToolStack(tools, pending = pending)
             Text(
-                text = if (inProgress) (summary ?: "Thinking…") else thoughtForLabel(durationSeconds),
+                text = if (inProgress) (summary ?: "Thinking…") else thoughtForLabel(durationSeconds, isMocked),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isMocked) MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (isMocked) {
-                Text(
-                    text = "mock",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                )
-            }
             if (canExpand) {
                 // Anchored on ExpandMore so the EXPANDED state is the glyph's true direction (down) in both
                 // layout directions; collapsed rotates it ±90° toward the reading direction (right in LTR,
@@ -279,9 +273,12 @@ private fun ExpandReveal(
     }
 }
 
-private fun thoughtForLabel(durationSeconds: Int?): String = when {
-    durationSeconds == null || durationSeconds < 1 -> "Thought for a moment"
-    else -> "Thought for ${durationSeconds}s"
+private fun thoughtForLabel(durationSeconds: Int?, isMocked: Boolean = false): String {
+    val verb = if (isMocked) "Faked thinking" else "Thought"
+    return when {
+        durationSeconds == null || durationSeconds < 1 -> "$verb for a moment"
+        else -> "$verb for ${durationSeconds}s"
+    }
 }
 
 private val TOOL_DISC_SIZE = 26.dp
