@@ -150,9 +150,9 @@ private fun FabSlot(
     }
 }
 
-private val FAB_SLOT_WIDTH = 56.dp
-private val FAB_SLOT_HEIGHT = 56.dp
 private val SPLIT_MAIN_WIDTH = 120.dp
+private val FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH
+private val FAB_SLOT_HEIGHT = 56.dp
 private val SPLIT_CHEVRON_WIDTH = 56.dp
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val SPLIT_FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH + SplitButtonDefaults.Spacing + SPLIT_CHEVRON_WIDTH
@@ -308,7 +308,7 @@ private fun PrimaryActionFab(action: FabAction?) {
         label = "fab-press",
     )
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    IconTooltip(label = if (working) "Cancel" else "Run alarm plan") {
+    IconTooltip(label = if (working) "Cancel" else "Re-plan") {
         FloatingActionButton(
             onClick = {
                 if (working) {
@@ -319,10 +319,12 @@ private fun PrimaryActionFab(action: FabAction?) {
                     action.onClick()
                 }
             },
-            modifier = Modifier.graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            },
+            modifier = Modifier
+                .size(width = SPLIT_MAIN_WIDTH, height = FAB_SLOT_HEIGHT)
+                .graphicsLayer {
+                    scaleX = pressScale
+                    scaleY = pressScale
+                },
             shape = RoundedCornerShape(Radius.lg),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -337,16 +339,26 @@ private fun PrimaryActionFab(action: FabAction?) {
             AnimatedContent(
                 targetState = working,
                 transitionSpec = {
-                    (fadeIn(iconAlphaSpec)) togetherWith (fadeOut(iconAlphaSpec))
+                    fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec)
                 },
                 contentAlignment = Alignment.Center,
                 label = "fab-icon",
             ) { isWorking ->
-                Symbol(
-                    symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
-                    contentDescription = if (isWorking) "Cancel" else "Run alarm plan",
-                    fill = 1f,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Symbol(
+                        symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.Update,
+                        contentDescription = null,
+                        modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
+                        fill = 1f,
+                    )
+                    Text(
+                        text = if (isWorking) "Stop" else "Re-plan",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
         }
     }
