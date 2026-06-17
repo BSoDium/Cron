@@ -12,7 +12,7 @@ object AnthropicClientFactory {
 
     fun create(context: Context, apiKeyProvider: () -> String?): AnthropicMessages {
         val prefs = MockApiPrefs(context)
-        return if (prefs.isEnabled) {
+        return if (prefs.isEnabled && prefs.isMockActive) {
             Log.i(TAG, "Using FakeAnthropicClient")
             FakeAnthropicClient()
         } else {

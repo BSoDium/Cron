@@ -35,7 +35,7 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
     SettingsDetailScaffold(title = "Developer", onBack = onBack) {
         SwitchRow(
             title = "Mock API responses",
-            subtitle = "Use canned tool results instead of calling Anthropic",
+            subtitle = "Allow switching between mock and real API responses",
             checked = mockEnabled,
             onCheckedChange = { enabled ->
                 prefs.isEnabled = enabled
