@@ -2,8 +2,8 @@ package fr.bsodium.cron.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -54,6 +54,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
@@ -188,6 +189,10 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     if (action == null) return
     val haptics = rememberCronHaptics()
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val sizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
+    var idleLabel by remember { mutableStateOf(action.splitLabel) }
+    var idleIcon by remember { mutableStateOf(action.icon) }
+    if (!action.working) { idleLabel = action.splitLabel; idleIcon = action.icon }
     val chevronColor by animateColorAsState(
         targetValue = if (fabChevron.isExpanded && fabChevron.isMockActive)
             MaterialTheme.colorScheme.secondary
@@ -217,8 +222,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                     },
                     modifier = Modifier
                         .wrapContentWidth()
-                        .height(56.dp)
-                        .animateContentSize(MaterialTheme.motionScheme.fastSpatialSpec()),
+                        .height(56.dp),
                     shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -230,7 +234,8 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                     AnimatedContent(
                         targetState = action.working,
                         transitionSpec = {
-                            fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec)
+                            (fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec))
+                                .using(SizeTransform(clip = false) { _, _ -> sizeSpec })
                         },
                         contentAlignment = Alignment.Center,
                         label = "split-fab-icon",
@@ -240,14 +245,14 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Symbol(
-                                symbol = if (isWorking) MaterialSymbol.Stop else action.icon,
+                                symbol = if (isWorking) MaterialSymbol.Stop else idleIcon,
                                 contentDescription = null,
                                 modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
                                 fill = 1f,
                             )
                             Column {
                                 Text(
-                                    text = if (isWorking) "Stop" else action.splitLabel,
+                                    text = if (isWorking) "Stop" else idleLabel,
                                     style = MaterialTheme.typography.labelLarge,
                                 )
                                 AnimatedVisibility(
@@ -314,6 +319,10 @@ private fun PrimaryActionFab(action: FabAction?) {
         label = "fab-press",
     )
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val sizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
+    var idleLabel by remember { mutableStateOf(action.label) }
+    var idleIcon by remember { mutableStateOf(action.icon) }
+    if (!working) { idleLabel = action.label; idleIcon = action.icon }
     IconTooltip(label = if (working) "Cancel" else action.label) {
         FloatingActionButton(
             onClick = {
@@ -328,7 +337,6 @@ private fun PrimaryActionFab(action: FabAction?) {
             modifier = Modifier
                 .wrapContentWidth()
                 .height(FAB_SLOT_HEIGHT)
-                .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale
@@ -347,7 +355,8 @@ private fun PrimaryActionFab(action: FabAction?) {
             AnimatedContent(
                 targetState = working,
                 transitionSpec = {
-                    fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec)
+                    (fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec))
+                        .using(SizeTransform(clip = false) { _, _ -> sizeSpec })
                 },
                 contentAlignment = Alignment.Center,
                 label = "fab-icon",
@@ -357,13 +366,13 @@ private fun PrimaryActionFab(action: FabAction?) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Symbol(
-                        symbol = if (isWorking) MaterialSymbol.Stop else action.icon,
+                        symbol = if (isWorking) MaterialSymbol.Stop else idleIcon,
                         contentDescription = null,
                         modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
                         fill = 1f,
                     )
                     Text(
-                        text = if (isWorking) "Stop" else action.label,
+                        text = if (isWorking) "Stop" else idleLabel,
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }

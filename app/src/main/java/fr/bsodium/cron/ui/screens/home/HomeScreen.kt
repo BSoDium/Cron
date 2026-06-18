@@ -156,7 +156,7 @@ fun HomeScreen(
         }
         Crossfade(
             targetState = homePhase,
-            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
             label = "home-phase",
             modifier = Modifier.fillMaxSize(),
         ) { phase ->
