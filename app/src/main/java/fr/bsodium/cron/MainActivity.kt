@@ -12,6 +12,7 @@ import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -26,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +36,7 @@ import androidx.compose.runtime.setValue
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
@@ -44,8 +47,11 @@ import androidx.navigation.compose.rememberNavController
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.ui.components.CronFloatingNav
+import fr.bsodium.cron.ui.components.CronNavigationBar
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
+import fr.bsodium.cron.ui.components.PrimaryActionFab
+import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
@@ -154,8 +160,20 @@ class MainActivity : ComponentActivity() {
                     currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
                 val fabChevron = rememberFabChevron()
+                val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
+                val useCompactNav = compactNavPref
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
                 val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) { TopAppBarState(0f, 0f, 1f) }
+                val navigate: (String) -> Unit = { route ->
+                    navController.navigate(route) {
+                        popUpTo(ROUTE_HOME) {
+                            saveState = true
+                            inclusive = false
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
 
                 CompositionLocalProvider(
                     LocalSettingsListState provides settingsListState,
@@ -170,21 +188,38 @@ class MainActivity : ComponentActivity() {
                                     fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                                 exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                             ) {
-                                CronFloatingNav(
-                                    currentRoute = currentRoute,
-                                    onNavigate = { route ->
-                                        navController.navigate(route) {
-                                            popUpTo(ROUTE_HOME) {
-                                                saveState = true
-                                                inclusive = false
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                    fabAction = fabRegistry.action,
-                                    fabChevron = fabChevron,
+                                if (useCompactNav) {
+                                    CronFloatingNav(
+                                        currentRoute = currentRoute,
+                                        onNavigate = navigate,
+                                        fabAction = fabRegistry.action,
+                                        fabChevron = fabChevron,
+                                    )
+                                } else {
+                                    CronNavigationBar(
+                                        currentRoute = currentRoute,
+                                        onNavigate = navigate,
+                                    )
+                                }
+                            }
+                        },
+                        floatingActionButton = {
+                            if (!useCompactNav) {
+                                val action = fabRegistry.action
+                                var lastShown by remember { mutableStateOf(action) }
+                                if (action != null) lastShown = action
+                                val fabVisible = currentRoute == ROUTE_HOME && action != null
+                                val fabAlpha by animateFloatAsState(
+                                    targetValue = if (fabVisible) 1f else 0f,
+                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                    label = "fab-alpha",
                                 )
+                                if (lastShown != null && (fabVisible || fabAlpha > 0f)) {
+                                    Box(modifier = Modifier.graphicsLayer { alpha = fabAlpha }) {
+                                        if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
+                                        else PrimaryActionFab(lastShown)
+                                    }
+                                }
                             }
                         },
                     ) { _ ->

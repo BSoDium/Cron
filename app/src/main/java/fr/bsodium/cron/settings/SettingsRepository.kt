@@ -102,6 +102,10 @@ class SettingsRepository(private val context: Context) {
         prefs[HAPTICS_ENABLED] ?: true
     }
 
+    val compactNavEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[COMPACT_NAV_ENABLED] ?: false
+    }
+
     /** Whether the app auto-plans and arms alarms each night. Off cancels every armed alarm. Defaults on. */
     val autoAlarmsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[AUTO_ALARMS_ENABLED] ?: true
@@ -175,6 +179,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHapticsEnabled(enabled: Boolean) =
         context.dataStore.edit { it[HAPTICS_ENABLED] = enabled }
 
+    suspend fun setCompactNavEnabled(enabled: Boolean) =
+        context.dataStore.edit { it[COMPACT_NAV_ENABLED] = enabled }
+
     /** Plain edit: scheduling is (re)armed/cancelled by the caller, not by the "replan?" pill. */
     suspend fun setAutoAlarmsEnabled(enabled: Boolean) =
         context.dataStore.edit { it[AUTO_ALARMS_ENABLED] = enabled }
@@ -217,6 +224,7 @@ class SettingsRepository(private val context: Context) {
         val HOME_LNG = stringPreferencesKey("home_address_lng")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+        val COMPACT_NAV_ENABLED = booleanPreferencesKey("compact_nav_enabled")
         val AUTO_ALARMS_ENABLED = booleanPreferencesKey("auto_alarms_enabled")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val USER_INSTRUCTIONS = stringPreferencesKey("user_instructions")
