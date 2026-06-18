@@ -211,10 +211,8 @@ class MainActivity : ComponentActivity() {
                                 if (action != null) lastShown = action
                                 AnimatedVisibility(
                                     visible = action != null && showBottomBar,
-                                    enter = scaleIn(MaterialTheme.motionScheme.fastSpatialSpec()) +
-                                        fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
-                                    exit = scaleOut(MaterialTheme.motionScheme.fastSpatialSpec()) +
-                                        fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+                                    enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+                                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
                                 ) {
                                     if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
                                     else PrimaryActionFab(lastShown)
