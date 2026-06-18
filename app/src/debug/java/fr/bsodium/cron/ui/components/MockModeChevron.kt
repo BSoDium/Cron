@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
@@ -13,7 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.debug.MockApiPrefs
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -39,7 +40,6 @@ fun rememberFabChevron(): FabChevronSlot? {
                     expanded = showMenu.value,
                     onDismissRequest = { showMenu.value = false },
                     modifier = Modifier.widthIn(min = 166.dp),
-                    offset = DpOffset(0.dp, -Spacing.sm),
                 ) {
                     DropdownMenuItem(
                         text = {
@@ -56,6 +56,10 @@ fun rememberFabChevron(): FabChevronSlot? {
                             if (!isMock.value) Symbol(MaterialSymbol.Check, contentDescription = null)
                             else Box(Modifier.size(24.dp))
                         },
+                        modifier = Modifier.background(
+                            if (!isMock.value) MaterialTheme.colorScheme.secondaryContainer
+                            else Color.Transparent,
+                        ),
                         onClick = {
                             prefs.isMockActive = false
                             isMock.value = false
@@ -77,6 +81,10 @@ fun rememberFabChevron(): FabChevronSlot? {
                             if (isMock.value) Symbol(MaterialSymbol.Check, contentDescription = null)
                             else Box(Modifier.size(24.dp))
                         },
+                        modifier = Modifier.background(
+                            if (isMock.value) MaterialTheme.colorScheme.secondaryContainer
+                            else Color.Transparent,
+                        ),
                         onClick = {
                             prefs.isMockActive = true
                             isMock.value = true

@@ -13,6 +13,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -258,9 +260,11 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                 AnimatedVisibility(
                                     visible = !isWorking && fabChevron.isMockActive,
                                     enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                                        expandVertically(MaterialTheme.motionScheme.fastSpatialSpec()),
+                                        slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
+                                        expandVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), clip = false),
                                     exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                                        shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()),
+                                        slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
+                                        shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), clip = false),
                                 ) {
                                     Text(
                                         text = "Mocked",

@@ -220,7 +220,7 @@ internal fun HomePlanContent(
             contentPadding = PaddingValues(
                 start = Spacing.xl,
                 end = Spacing.xl,
-                top = statusInsetTop + Spacing.sm,
+                top = statusInsetTop + Spacing.xxl,
                 // navBarClearance clears the pill; the extra xxxl matches the EdgeFades bottom
                 // gradient's own xxxl so the last content (the thinking shape) rests above the fade.
                 bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
