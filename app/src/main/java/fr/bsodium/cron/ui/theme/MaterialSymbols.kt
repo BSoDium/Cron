@@ -63,8 +63,6 @@ enum class MaterialSymbol(val code: String) {
     CalendarMonth("\uEBCC"),
     Check("\uE668"),
     Close("\uE5CD"),
-    Cloud("\uE2BD"),
-    CloudOff("\uE2C0"),
     Code("\uE86F"),
     DirectionsBike("\uE52F"),
     DirectionsBus("\uEFF6"),
