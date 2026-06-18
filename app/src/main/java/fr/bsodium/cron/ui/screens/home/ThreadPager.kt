@@ -68,16 +68,17 @@ internal fun ThreadPager(
         key = { iterations.getOrNull(it)?.turnIndex ?: it },
         verticalAlignment = Alignment.Top,
         // No pageSpacing: each page's own xl padding forms a symmetric 2·xl gutter between adjacent content.
-        // 0 (not 1): entry parses only the visible page's markdown instead of two — the neighbour composes
-        // when a swipe starts, where a tiny cost is fine. Halves the thread's first-frame cost.
-        beyondViewportPageCount = 0,
+        // Pre-compose the immediate neighbor so the swipe never pays a cold-compose cost. Safe because
+        // deferHeavy (HomeContent) gates the whole pager at entry, and per-page deferContent (below)
+        // prevents two simultaneous markdown parses on the same frame.
+        beyondViewportPageCount = 1,
     ) { page ->
         val iter = iterations.getOrNull(page) ?: return@HorizontalPager
         // getOrPut once per turnIndex; the current page always has its state ready for the caller's pull
         // connection. Wrapping in remember keeps the map write off the per-frame recomposition path.
         val pull = remember(iter.turnIndex) { pullStates.getOrPut(iter.turnIndex) { PullState() } }
-        // Per-page staged render: the neighbor composes cold when a swipe starts (beyondViewportPageCount = 0),
-        // so defer its heavy subtree (markdown parse + ExpandReveal SubcomposeLayout) by one frame.
+        // Per-page staged render: each page defers its heavy subtree (markdown parse + ExpandReveal
+        // SubcomposeLayout) by one frame, so two pages never parse markdown on the same frame at entry.
         var deferContent by remember(iter.turnIndex) { mutableStateOf(true) }
         LaunchedEffect(iter.turnIndex) { withFrameNanos {}; deferContent = false }
         val scope = rememberCoroutineScope()
