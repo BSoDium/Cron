@@ -36,4 +36,7 @@ interface SessionDao {
 
     @Query("DELETE FROM sessions WHERE createdAt < :olderThanMillis")
     suspend fun deleteOlderThan(olderThanMillis: Long): Int
+
+    @Query("DELETE FROM sessions")
+    suspend fun deleteAll(): Int
 }

@@ -57,7 +57,7 @@ data class AiIterationUi(
     val ranAtEpochMs: Long? = null,
 ) {
     /** The tab label for this run. */
-    val systemMessage: String get() = kind.label
+    val systemMessage: String get() = if (thread.isMocked) "Mocked plan" else kind.label
 }
 
 /**
@@ -95,7 +95,7 @@ object AiPlanMapper {
 
         // The live partial overrides the persisted rows of its turn → never a duplicate/stale iteration.
         fun threadOf(turn: Int): AiThreadUi =
-            if (turn == streamingTurn && streaming != null) AiThreadMapper.buildFromBlocks(turn, streaming.blocks)
+            if (turn == streamingTurn && streaming != null) AiThreadMapper.buildFromBlocks(turn, streaming.blocks, isMocked = streaming.isMocked)
             else threadFor(turn, byTurn.getValue(turn))
 
         fun startOf(turn: Int): Long =

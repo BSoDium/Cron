@@ -154,6 +154,8 @@ class SessionRepository(private val context: Context) {
         ))
     }
 
+    suspend fun clearAll(): Int = db.sessionDao().deleteAll()
+
     companion object {
         /**
          * The "morning" date the session targets.

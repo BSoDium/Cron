@@ -2,6 +2,7 @@ package fr.bsodium.cron.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -10,11 +11,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,12 +26,10 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -37,7 +38,6 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.SplitButtonLayout
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -52,8 +52,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
@@ -81,13 +84,10 @@ fun CronFloatingNav(
 ) {
     val systemBars: PaddingValues = WindowInsets.navigationBars.asPaddingValues()
     val visible = fabAction != null
-    val targetFabWidth = when {
-        !visible -> 0.dp
-        fabChevron != null -> SPLIT_FAB_SLOT_WIDTH
-        else -> FAB_SLOT_WIDTH
-    }
+    val density = LocalDensity.current
+    var measuredFabWidth by remember { mutableStateOf(0.dp) }
     val fabSlotWidth by animateDpAsState(
-        targetValue = targetFabWidth,
+        targetValue = if (visible) measuredFabWidth else 0.dp,
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "fab-slot-width",
     )
@@ -118,17 +118,18 @@ fun CronFloatingNav(
             visible = visible,
             lastShown = lastShown,
             fabChevron = fabChevron,
+            onWidthMeasured = { measuredFabWidth = with(density) { it.toDp() } },
         )
     }
 }
 
-// Extracted from the Row lambda so RowScope.AnimatedVisibility is not in scope.
 @Composable
 private fun FabSlot(
     fabSlotWidth: Dp,
     visible: Boolean,
     lastShown: FabAction?,
     fabChevron: FabChevronSlot?,
+    onWidthMeasured: (Int) -> Unit,
 ) {
     val spatialSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntOffset>()
     val alphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
@@ -144,25 +145,27 @@ private fun FabSlot(
             enter = slideInHorizontally(spatialSpec) { it } + fadeIn(alphaSpec),
             exit = slideOutHorizontally(spatialSpec) { it } + fadeOut(alphaSpec),
         ) {
-            if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
-            else PrimaryActionFab(lastShown)
+            Box(Modifier.onSizeChanged { onWidthMeasured(it.width) }) {
+                if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
+                else PrimaryActionFab(lastShown)
+            }
         }
     }
 }
 
-private val FAB_SLOT_WIDTH = 56.dp
 private val FAB_SLOT_HEIGHT = 56.dp
-private val SPLIT_MAIN_WIDTH = 120.dp
 private val SPLIT_CHEVRON_WIDTH = 56.dp
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-private val SPLIT_FAB_SLOT_WIDTH = SPLIT_MAIN_WIDTH + SplitButtonDefaults.Spacing + SPLIT_CHEVRON_WIDTH
 
 data class FabAction(
     val onClick: () -> Unit,
     val working: Boolean = false,
     val onCancel: (() -> Unit)? = null,
-    /** When set, an onboarding callout with this text points at the FAB (see [OnboardingTooltip]). */
-    val hint: String? = null,
+    /** Idle label shown in the primary (non-split) FAB. */
+    val label: String = "Re-plan",
+    /** Shorter label for the split FAB (dev mode); falls back to [label]. */
+    val splitLabel: String = label,
+    /** Idle icon — overrides the default [MaterialSymbol.Update]. */
+    val icon: MaterialSymbol = MaterialSymbol.Update,
 )
 
 /**
@@ -188,6 +191,10 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     if (action == null) return
     val haptics = rememberCronHaptics()
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val sizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
+    var idleLabel by remember { mutableStateOf(action.splitLabel) }
+    var idleIcon by remember { mutableStateOf(action.icon) }
+    if (!action.working) { idleLabel = action.splitLabel; idleIcon = action.icon }
     val chevronColor by animateColorAsState(
         targetValue = if (fabChevron.isExpanded && fabChevron.isMockActive)
             MaterialTheme.colorScheme.secondary
@@ -209,13 +216,15 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     )
     SplitButtonLayout(
         leadingButton = {
-            IconTooltip(label = if (action.working) "Cancel" else "Re-plan") {
+            IconTooltip(label = if (action.working) "Cancel" else action.splitLabel) {
                 SplitButtonDefaults.LeadingButton(
                     onClick = {
                         if (action.working) { haptics.reject(); action.onCancel?.invoke() }
                         else { haptics.confirm(); action.onClick() }
                     },
-                    modifier = Modifier.size(width = SPLIT_MAIN_WIDTH, height = 56.dp),
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .height(56.dp),
                     shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -227,30 +236,43 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                     AnimatedContent(
                         targetState = action.working,
                         transitionSpec = {
-                            fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec)
+                            (fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec))
+                                .using(SizeTransform(clip = false) { _, _ -> sizeSpec })
                         },
                         contentAlignment = Alignment.Center,
                         label = "split-fab-icon",
                     ) { isWorking ->
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.padding(end = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Symbol(
-                                symbol = if (isWorking) MaterialSymbol.Stop
-                                    else MaterialSymbol.Update,
+                                symbol = if (isWorking) MaterialSymbol.Stop else idleIcon,
                                 contentDescription = null,
                                 modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
                                 fill = 1f,
                             )
-                            Text(
-                                text = when {
-                                    isWorking -> "Stop"
-                                    fabChevron.isMockActive -> "Mock re-plan"
-                                    else -> "Re-plan"
-                                },
-                                style = MaterialTheme.typography.labelLarge,
-                            )
+                            Column {
+                                Text(
+                                    text = if (isWorking) "Stop" else idleLabel,
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                                AnimatedVisibility(
+                                    visible = !isWorking && fabChevron.isMockActive,
+                                    enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                                        slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
+                                        expandVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), clip = false),
+                                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                                        slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
+                                        shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), clip = false),
+                                ) {
+                                    Text(
+                                        text = "Mocked",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -301,7 +323,11 @@ private fun PrimaryActionFab(action: FabAction?) {
         label = "fab-press",
     )
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    IconTooltip(label = if (working) "Cancel" else "Run alarm plan") {
+    val sizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
+    var idleLabel by remember { mutableStateOf(action.label) }
+    var idleIcon by remember { mutableStateOf(action.icon) }
+    if (!working) { idleLabel = action.label; idleIcon = action.icon }
+    IconTooltip(label = if (working) "Cancel" else action.label) {
         FloatingActionButton(
             onClick = {
                 if (working) {
@@ -312,10 +338,13 @@ private fun PrimaryActionFab(action: FabAction?) {
                     action.onClick()
                 }
             },
-            modifier = Modifier.graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            },
+            modifier = Modifier
+                .wrapContentWidth()
+                .height(FAB_SLOT_HEIGHT)
+                .graphicsLayer {
+                    scaleX = pressScale
+                    scaleY = pressScale
+                },
             shape = RoundedCornerShape(Radius.lg),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -330,66 +359,32 @@ private fun PrimaryActionFab(action: FabAction?) {
             AnimatedContent(
                 targetState = working,
                 transitionSpec = {
-                    (fadeIn(iconAlphaSpec)) togetherWith (fadeOut(iconAlphaSpec))
+                    (fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec))
+                        .using(SizeTransform(clip = false) { _, _ -> sizeSpec })
                 },
                 contentAlignment = Alignment.Center,
                 label = "fab-icon",
             ) { isWorking ->
-                Symbol(
-                    symbol = if (isWorking) MaterialSymbol.Stop else MaterialSymbol.PlayArrow,
-                    contentDescription = if (isWorking) "Cancel" else "Run alarm plan",
-                    fill = 1f,
-                )
+                Row(
+                    modifier = Modifier.padding(end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Symbol(
+                        symbol = if (isWorking) MaterialSymbol.Stop else idleIcon,
+                        contentDescription = null,
+                        modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
+                        fill = 1f,
+                    )
+                    Text(
+                        text = if (isWorking) "Stop" else idleLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
         }
     }
 }
 
-// FAB sits at Spacing.lg from the right screen edge (within Row horizontal padding); its centre
-// is 28dp (half of 56dp) inward from there.
-private val FAB_RIGHT_INSET = Spacing.lg + 28.dp
-private val POINTER_WIDTH = 16.dp
-private val POINTER_HEIGHT = 8.dp
-
-private val PointerDown = GenericShape { size, _ ->
-    moveTo(0f, 0f)
-    lineTo(size.width, 0f)
-    lineTo(size.width / 2f, size.height)
-    close()
-}
-
-/**
- * Onboarding callout whose pointer sits over the play FAB. Render as the LAST child of the
- * full-screen content [Box] — after [EdgeFades] — so the bottom scrim doesn't fade it out.
- * [navBottom] is the navigation-bar inset so it clears the floating nav.
- */
-@Composable
-fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .align(Alignment.BottomEnd)
-            .offset(x = -FAB_RIGHT_INSET)
-            .padding(bottom = navBottom + Spacing.navBarClearance - Spacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Surface(
-            color = MaterialTheme.colorScheme.primary,
-            shape = RoundedCornerShape(Radius.md),
-        ) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(width = POINTER_WIDTH, height = POINTER_HEIGHT)
-                .background(MaterialTheme.colorScheme.primary, PointerDown),
-        )
-    }
-}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Preview(showBackground = true)

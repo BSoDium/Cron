@@ -19,6 +19,7 @@ import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.ai.SystemPrompts
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolRegistry
+import fr.bsodium.cron.ai.ToolRegistryFactory
 import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.wire.ThinkingConfig
 import fr.bsodium.cron.ai.tools.CancelAlarmTool
@@ -78,15 +79,18 @@ class AiTurnWorker(
             return Result.failure()
         }
 
+        val useMock = ToolRegistryFactory.shouldUseMock(applicationContext)
+        Log.i(TAG, "Mock decision for $sessionId: useMock=$useMock")
+
         val apiKey = SecureKeyStore(applicationContext).anthropicApiKey
-        if (apiKey.isNullOrBlank()) {
+        if (!useMock && apiKey.isNullOrBlank()) {
             Log.w(TAG, "Anthropic API key not set — skipping AI turn for $sessionId")
             return Result.failure(workDataOf(KEY_REASON to REASON_NO_API_KEY))
         }
 
         val budget = BudgetStore(applicationContext)
         val limit = settingsRepository.currentDailyTokenLimit()
-        if (!budget.hasHeadroom(limit)) {
+        if (!useMock && !budget.hasHeadroom(limit)) {
             val used = budget.usedToday()
             Log.w(TAG, "Daily token budget exhausted ($used / $limit); skipping turn for $sessionId")
             return Result.failure(workDataOf(KEY_REASON to REASON_BUDGET, KEY_USED to used, KEY_LIMIT to limit))
@@ -101,8 +105,9 @@ class AiTurnWorker(
         val systemPrompt = if (isEveningPlan) SystemPrompts.EVENING_PLAN else SystemPrompts.OVERNIGHT_REPLAN
 
         val allowedRsvp = settingsRepository.allowedRsvpStatuses.first()
-        val tools = buildToolRegistry(session, apiKey, allowedRsvp)
-        val client = AnthropicClientFactory.create(applicationContext, apiKeyProvider = { apiKey })
+        val mockTools = ToolRegistryFactory.mockOrNull(useMock)
+        val tools = mockTools ?: buildToolRegistry(session, apiKey ?: "", allowedRsvp)
+        val client = AnthropicClientFactory.create(useMock, apiKeyProvider = { apiKey })
         // Anthropic requires max_tokens > thinking budget, so widen the ceiling on evening_plan turns.
         val thinking = if (isEveningPlan) ThinkingConfig(budgetTokens = THINKING_BUDGET) else null
         val maxTokens = if (isEveningPlan) THINKING_BUDGET + 2048 else 2048
@@ -114,6 +119,7 @@ class AiTurnWorker(
             tools = tools,
             maxTokens = maxTokens,
             thinking = thinking,
+            isMocked = mockTools != null,
         )
 
         val instructions = settingsRepository.currentUserInstructions()

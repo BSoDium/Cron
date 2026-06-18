@@ -45,6 +45,7 @@ import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.ui.components.FabAction
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
 import fr.bsodium.cron.ui.screens.home.components.AlarmTiming
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
@@ -87,21 +88,23 @@ fun HomeScreen(
     val resting = uiState.sessionDisplay?.status == SessionStatus.Complete || timing is AlarmTiming.Past
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.
     StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
+    val isFirstRun = displayPlan == null
+    val fabLabel = if (isFirstRun) "Start planning" else "Re-plan"
+    val fabSplitLabel = if (isFirstRun) "Run plan" else "Re-plan"
+    val fabIcon = if (isFirstRun) MaterialSymbol.RocketLaunch else MaterialSymbol.Update
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan))
+        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, splitLabel = fabSplitLabel, icon = fabIcon))
         onDispose { fabRegistry.clear() }
     }
-    // Onboarding callout (rendered above EdgeFades in MainActivity): only on a true first run — loaded,
-    // no plan, no session yet. The between-sessions resting state uses NextPlanHint instead, no tooltip.
-    val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying &&
-        uiState.sessionDisplay == null
-    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabRegistry) {
+    LaunchedEffect(uiState.isRetrying, fabLabel, fabSplitLabel, fabIcon, fabRegistry) {
         fabRegistry.set(
             FabAction(
                 onClick = viewModel::retryAiPlan,
                 working = uiState.isRetrying,
                 onCancel = viewModel::cancelAiPlan,
-                hint = if (showOnboardingHint) "Click here to start" else null,
+                label = fabLabel,
+                splitLabel = fabSplitLabel,
+                icon = fabIcon,
             )
         )
     }
@@ -153,7 +156,7 @@ fun HomeScreen(
         }
         Crossfade(
             targetState = homePhase,
-            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
             label = "home-phase",
             modifier = Modifier.fillMaxSize(),
         ) { phase ->

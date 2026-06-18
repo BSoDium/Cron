@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
@@ -91,14 +92,10 @@ internal fun ReplanTab(
     isNew: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    // The latest run wears the primary accent; older iterations stay quiet (secondary).
-    val accent = isLatest
-    val unselectedContainer = if (accent) scheme.primaryContainer else scheme.secondaryContainer
-    val selectedContainer = if (accent) scheme.primary else scheme.secondary
-    val onUnselected = if (accent) scheme.onPrimaryContainer else scheme.onSecondaryContainer
-    val onSelected = if (accent) scheme.onPrimary else scheme.onSecondary
-    // Colour inverts fast through the middle (quintic) so the label doesn't dwell at the muddy midpoint;
-    // the shape morph (in `shape`) stays linear with the swipe.
+    val unselectedContainer = if (isLatest) scheme.primaryContainer else scheme.secondaryContainer
+    val selectedContainer = if (isLatest) scheme.primary else scheme.secondary
+    val onUnselected = if (isLatest) scheme.onPrimaryContainer else scheme.onSecondaryContainer
+    val onSelected = if (isLatest) scheme.onPrimary else scheme.onSecondary
     val colorFraction = fastMiddle(fraction)
     val content = lerp(onUnselected, onSelected, colorFraction)
     // A tab added after the strip first appeared fades + scales in (once); the initial set starts settled.
@@ -138,7 +135,8 @@ internal fun ReplanTab(
                         indicatorColor = content,
                     )
                 } else {
-                    Symbol(symbol = runSymbol(iteration.kind), contentDescription = null, tint = content, size = ICON_GLYPH)
+                    val icon = if (iteration.thread.isMocked) MaterialSymbol.Code else runSymbol(iteration.kind)
+                    Symbol(symbol = icon, contentDescription = null, tint = content, size = ICON_GLYPH)
                 }
             }
             Spacer(Modifier.width(Spacing.xs))

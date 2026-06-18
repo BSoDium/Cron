@@ -42,15 +42,20 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -110,6 +115,7 @@ fun AiThinkingThread(
             inProgress = inProgress,
             pending = thinking,
             durationSeconds = thread.durationSeconds,
+            isMocked = thread.isMocked,
             expanded = isExpanded,
             onToggle = {
                 val next = !isExpanded
@@ -161,12 +167,13 @@ fun AiThinkingThread(
 }
 
 @Composable
-private fun ThinkingDisclosure(
+internal fun ThinkingDisclosure(
     summary: String?,
     process: List<ProcessItem>,
     inProgress: Boolean,
     pending: Boolean,
     durationSeconds: Int?,
+    isMocked: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
     expandPx: () -> Float = { 0f },
@@ -193,14 +200,31 @@ private fun ThinkingDisclosure(
             // disc (inside ToolStack) so the header always leads with an icon, never floating text.
             val tools = process.filterIsInstance<ProcessItem.Tool>()
             ToolStack(tools, pending = pending)
-            Text(
-                text = if (inProgress) (summary ?: "Thinking…") else thoughtForLabel(durationSeconds),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
+            if (!inProgress && isMocked) {
+                val verb = "Faked thinking"
+                val full = thoughtForLabel(durationSeconds, isMocked = true)
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)) { append(verb) }
+                        append(full.removePrefix(verb))
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = headerColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Text(
+                    text = if (inProgress) (summary ?: "Thinking…") else thoughtForLabel(durationSeconds),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = headerColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             if (canExpand) {
                 // Anchored on ExpandMore so the EXPANDED state is the glyph's true direction (down) in both
                 // layout directions; collapsed rotates it ±90° toward the reading direction (right in LTR,
@@ -269,9 +293,12 @@ private fun ExpandReveal(
     }
 }
 
-private fun thoughtForLabel(durationSeconds: Int?): String = when {
-    durationSeconds == null || durationSeconds < 1 -> "Thought for a moment"
-    else -> "Thought for ${durationSeconds}s"
+private fun thoughtForLabel(durationSeconds: Int?, isMocked: Boolean = false): String {
+    val verb = if (isMocked) "Faked thinking" else "Thought"
+    return when {
+        durationSeconds == null || durationSeconds < 1 -> "$verb for a moment"
+        else -> "$verb for ${durationSeconds}s"
+    }
 }
 
 private val TOOL_DISC_SIZE = 26.dp
@@ -339,14 +366,14 @@ private fun ToolDisc(modifier: Modifier = Modifier, isNew: Boolean = false, cont
             .graphicsLayer { alpha = enter.value }
             .size(TOOL_DISC_SIZE)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.background),
+            .background(CronColors.pageBackground),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
                 .size(TOOL_DISC_SIZE - TOOL_DISC_RING * 2)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center,
         ) { content() }
     }
@@ -362,7 +389,7 @@ private fun ResponseBody(text: String) {
 }
 
 /**
- * The answer area below the timeline. The markdown response and the "no response" fallback share ONE
+ * The answer area below the timeline. The Markdown response and the "no response" fallback share ONE
  * overlapping slot and crossfade (`Box` + `animateContentSize`), so switching to a no-response iteration
  * doesn't pop the fallback in stacked under the still-fading old answer and then jump when it unmounts.
  * The fallback matches the serif response size. Lives in its own composable so the two `AnimatedVisibility`
@@ -400,80 +427,6 @@ private fun AnswerArea(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-    }
-}
-
-/** Representative thread for previews: a long (collapsible) reasoning block, a few tool steps, and a
- *  markdown response with bold + inline code. */
-private val PREVIEW_THREAD = AiThreadUi(
-    turnIndex = 0,
-    summary = "Setting your alarm",
-    process = listOf(
-        ProcessItem.Reasoning(
-            "Let me read the calendar for the next 24-30 hours and find the first event you must be " +
-                "ready for. All-day markers like **Office** or a city set the day's working location; a " +
-                "virtual `#stand-up` is a real anchor with no commute. I subtract the travel buffer and " +
-                "`preparation_time` from the anchor, then nudge into a light-sleep window.",
-        ),
-        ProcessItem.Tool(name = "read_calendar", isComplete = true, contextLabel = "6 events"),
-        ProcessItem.Tool(name = "estimate_commute_multi_mode", isComplete = true, contextLabel = "13 min"),
-        ProcessItem.Tool(name = "set_alarm", isComplete = true, contextLabel = "set for 06:40"),
-    ),
-    response = "Set a **6:40** alarm so you make your 9:00 stand-up.\n\n" +
-        "Your first anchor is at the office, about a 25 min drive. I took the commute plus 45 min of " +
-        "`preparation_time` off the start, then landed on a light-sleep moment just before.",
-    durationSeconds = 15,
-)
-
-@Preview(showBackground = true, name = "Thread — settled")
-@Composable
-private fun AiThinkingThreadPreview() {
-    CronTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            AiThinkingThread(
-                thread = PREVIEW_THREAD,
-                modifier = Modifier.padding(Spacing.xl),
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, name = "Disclosure — expanded")
-@Composable
-private fun ThinkingDisclosureExpandedPreview() {
-    CronTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            Column(modifier = Modifier.padding(horizontal = Spacing.xl, vertical = Spacing.xl)) {
-                ThinkingDisclosure(
-                    summary = PREVIEW_THREAD.summary,
-                    process = PREVIEW_THREAD.process,
-                    inProgress = false,
-                    pending = false,
-                    durationSeconds = PREVIEW_THREAD.durationSeconds,
-                    expanded = true,
-                    onToggle = {},
-                )
-            }
-        }
-    }
-}
-
-@Preview(showBackground = true, name = "Thread — running")
-@Composable
-private fun AiThinkingThreadRunningPreview() {
-    CronTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            AiThinkingThread(
-                thread = AiThreadUi(
-                    turnIndex = 0,
-                    summary = "Reading your calendar",
-                    process = listOf(ProcessItem.Tool(name = "read_calendar", isComplete = false)),
-                    response = null,
-                    isStreaming = true,
-                ),
-                modifier = Modifier.padding(Spacing.xl),
-            )
         }
     }
 }

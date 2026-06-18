@@ -21,6 +21,8 @@ data class AiThreadUi(
     val durationSeconds: Int? = null,
     /** True while this thread is being streamed live (vs. read back from the DB). Drives haptics. */
     val isStreaming: Boolean = false,
+    /** True when this turn was produced by the FakeAnthropicClient (debug mock mode). */
+    val isMocked: Boolean = false,
 )
 
 /** One ordered step of the assistant's thinking process, shown inside the collapsible. */
@@ -59,7 +61,8 @@ object AiThreadMapper {
             response = null,
         )
         val durationSeconds = ((turnRows.maxOf { it.createdAt } - turnRows.minOf { it.createdAt }) / 1000).toInt()
-        return buildFromBlocks(latestTurn, assistantBlocks, toolResultBlocks, durationSeconds, isStreaming = false)
+        val isMocked = assistantBlocks.any { it is ContentBlock.Thinking && it.signature == MOCK_SIGNATURE }
+        return buildFromBlocks(latestTurn, assistantBlocks, toolResultBlocks, durationSeconds, isStreaming = false, isMocked = isMocked)
     }
 
     /**
@@ -67,7 +70,7 @@ object AiThreadMapper {
      * already in hand. Produces the same [AiThreadUi] shape as [build] so the live last frame and the
      * settled first frame render identically — no flicker at hand-off.
      */
-    fun buildFromBlocks(turnIndex: Int, blocks: List<ContentBlock>): AiThreadUi {
+    fun buildFromBlocks(turnIndex: Int, blocks: List<ContentBlock>, isMocked: Boolean = false): AiThreadUi {
         val assistantBlocks = blocks.filterNot { it is ContentBlock.ToolResult }
         val toolResultBlocks = blocks.filterIsInstance<ContentBlock.ToolResult>()
         if (assistantBlocks.isEmpty()) return AiThreadUi(
@@ -78,7 +81,7 @@ object AiThreadMapper {
             isStreaming = true,
         )
         // "Thought for Xs" is a settled-only affordance — duration stays null while streaming.
-        return buildFromBlocks(turnIndex, assistantBlocks, toolResultBlocks, durationSeconds = null, isStreaming = true)
+        return buildFromBlocks(turnIndex, assistantBlocks, toolResultBlocks, durationSeconds = null, isStreaming = true, isMocked = isMocked)
     }
 
     private fun buildFromBlocks(
@@ -87,6 +90,7 @@ object AiThreadMapper {
         toolResultBlocks: List<ContentBlock.ToolResult>,
         durationSeconds: Int?,
         isStreaming: Boolean,
+        isMocked: Boolean = false,
     ): AiThreadUi {
         val toolResults = toolResultBlocks.associateBy { it.tool_use_id }
 
@@ -184,6 +188,7 @@ object AiThreadMapper {
             response = answer,
             durationSeconds = durationSeconds,
             isStreaming = isStreaming,
+            isMocked = isMocked,
         )
     }
 
@@ -230,6 +235,7 @@ object AiThreadMapper {
     }.onFailure { Log.w(TAG, "summarize tool result failed for $name", it) }.getOrNull()
 
     private const val TAG = "AiThreadMapper"
+    private const val MOCK_SIGNATURE = "sim-sig"
 }
 
 /**

@@ -20,6 +20,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
+import fr.bsodium.cron.BuildConfig
 import fr.bsodium.cron.ui.screens.settings.categories.AboutSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.AccountSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.AppSettingsScreen
@@ -27,6 +28,7 @@ import fr.bsodium.cron.ui.screens.settings.categories.AssistantSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.BuffersSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.CalendarSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.CommuteSettingsScreen
+import fr.bsodium.cron.ui.screens.settings.categories.DeveloperSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.FreeDaysSettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.ReliabilitySettingsScreen
 import fr.bsodium.cron.ui.screens.settings.categories.ScheduleSettingsScreen
@@ -43,6 +45,7 @@ const val SETTINGS_ACCOUNT = "settings/account"
 const val SETTINGS_APP = "settings/app"
 const val SETTINGS_ABOUT = "settings/about"
 const val SETTINGS_CALENDAR = "settings/calendar"
+const val SETTINGS_DEVELOPER = "settings/developer"
 
 private const val PUSH_MS = 240
 
@@ -186,6 +189,11 @@ fun NavGraphBuilder.settingsGraph(
         }
         settingsDetail(SETTINGS_ABOUT) {
             AboutSettingsScreen(onBack = { navController.popBackStack() })
+        }
+        if (BuildConfig.DEBUG) {
+            settingsDetail(SETTINGS_DEVELOPER) {
+                DeveloperSettingsScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

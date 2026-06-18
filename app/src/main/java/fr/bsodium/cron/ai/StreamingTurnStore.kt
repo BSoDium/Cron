@@ -14,6 +14,8 @@ data class StreamingTurn(
     val startedAtMs: Long,
     /** The trigger this turn was seeded with, so the UI labels it correctly before the real event lands. */
     val trigger: TriggerType? = null,
+    /** True when produced by the FakeAnthropicClient (debug mock mode). */
+    val isMocked: Boolean = false,
 )
 
 /**

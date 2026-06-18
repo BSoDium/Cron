@@ -81,7 +81,6 @@ private fun rememberTabFraction(index: Int, turnIndex: Int, position: () -> Floa
     val target = if (turnIndex == selectedTurn) 1f else 0f
     val fraction = remember { Animatable(target) }
     LaunchedEffect(dragging, target) {
-        // position() reads the pager's state INSIDE the flow — per-frame tracking never touches composition.
         if (dragging) snapshotFlow { selectedFraction(index, position()) }.collect { fraction.snapTo(it) }
         else fraction.animateTo(target, spec)
     }
@@ -340,11 +339,11 @@ private fun ReplanHistoryBarOverflowPreview() {
     }
 }
 
-private fun previewIteration(turn: Int, time: String, kind: RunKind, streaming: Boolean = false) = AiIterationUi(
+private fun previewIteration(turn: Int, time: String, kind: RunKind, streaming: Boolean = false, isMocked: Boolean = false) = AiIterationUi(
     turnIndex = turn,
     timeLabel = time,
     kind = kind,
-    thread = AiThreadUi(turnIndex = turn, summary = kind.label, process = emptyList(), response = null, isStreaming = streaming),
+    thread = AiThreadUi(turnIndex = turn, summary = kind.label, process = emptyList(), response = null, isStreaming = streaming, isMocked = isMocked),
 )
 
 @Preview(showBackground = true, name = "Tabs — streaming (loader)")
@@ -358,6 +357,42 @@ private fun ReplanHistoryBarStreamingPreview() {
             ),
             position = { 1f },
             selectedTurn = 1,
+            dragging = false,
+            onSelect = {},
+            hapticsEnabled = false,
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Tabs — mocked selected")
+@Composable
+private fun ReplanHistoryBarMockedSelectedPreview() {
+    CronTheme {
+        ReplanHistoryBar(
+            iterations = listOf(
+                previewIteration(0, "21:30", RunKind.ScheduledBase),
+                previewIteration(1, "23:10", RunKind.Replan(TriggerType.CalendarChange), isMocked = true),
+            ),
+            position = { 1f },
+            selectedTurn = 1,
+            dragging = false,
+            onSelect = {},
+            hapticsEnabled = false,
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Tabs — mocked unselected")
+@Composable
+private fun ReplanHistoryBarMockedUnselectedPreview() {
+    CronTheme {
+        ReplanHistoryBar(
+            iterations = listOf(
+                previewIteration(0, "21:30", RunKind.ScheduledBase),
+                previewIteration(1, "23:10", RunKind.Replan(TriggerType.CalendarChange), isMocked = true),
+            ),
+            position = { 0f },
+            selectedTurn = 0,
             dragging = false,
             onSelect = {},
             hapticsEnabled = false,

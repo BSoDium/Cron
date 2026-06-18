@@ -20,10 +20,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.TopAppBarState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -49,7 +46,6 @@ import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.ui.components.CronFloatingNav
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
-import fr.bsodium.cron.ui.components.OnboardingTooltip
 import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
@@ -250,12 +246,6 @@ class MainActivity : ComponentActivity() {
                                 settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                             }
                             EdgeFades(showTopScrim = !hasTopAppBar)
-                            // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the
-                            // bottom scrim doesn't fade it out; HomeScreen requests it via FabAction.hint.
-                            if (currentRoute == ROUTE_HOME) {
-                                val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                                fabRegistry.action?.hint?.let { OnboardingTooltip(navBottom = navBottom, text = it) }
-                            }
                         }
                     }
                 }

@@ -113,7 +113,7 @@ internal fun CollapsibleAlarmCard(
 
             val w = extras.width
             val startPad = Spacing.xxl.roundToPx()
-            val topPad = Spacing.xl.roundToPx()
+            val topPad = Spacing.lg.roundToPx()
             val endPad = Spacing.xxl.roundToPx()
             val cdGap = (Spacing.xs + Spacing.xxs).roundToPx()
             val height = lerp(extras.height, barHeight, f)
