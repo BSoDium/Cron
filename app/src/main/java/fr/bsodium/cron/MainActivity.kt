@@ -33,7 +33,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalConfiguration
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
@@ -68,7 +67,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
-private const val COMPACT_NAV_MIN_WIDTH_DP = 360
 private const val FORWARD_MS = 350
 private const val TAB_OUT_MS = 90
 private const val TAB_IN_MS = 160
@@ -163,8 +161,7 @@ class MainActivity : ComponentActivity() {
                 val fabRegistry = remember { FabRegistry() }
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
-                val screenWidthDp = LocalConfiguration.current.screenWidthDp
-                val useCompactNav = compactNavPref && screenWidthDp >= COMPACT_NAV_MIN_WIDTH_DP
+                val useCompactNav = compactNavPref
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
                 val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) { TopAppBarState(0f, 0f, 1f) }
                 val navigate: (String) -> Unit = { route ->
