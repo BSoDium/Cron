@@ -245,7 +245,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                 modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
                                 fill = 1f,
                             )
-                            Column {
+                            Column(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
                                 Text(
                                     text = if (isWorking) "Stop" else action.splitLabel,
                                     style = MaterialTheme.typography.labelLarge,
