@@ -26,11 +26,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
@@ -44,8 +46,11 @@ import androidx.navigation.compose.rememberNavController
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.ui.components.CronFloatingNav
+import fr.bsodium.cron.ui.components.CronNavigationBar
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
+import fr.bsodium.cron.ui.components.PrimaryActionFab
+import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
@@ -61,6 +66,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
+private const val COMPACT_NAV_MIN_WIDTH_DP = 360
 private const val FORWARD_MS = 350
 private const val TAB_OUT_MS = 90
 private const val TAB_IN_MS = 160
@@ -154,8 +160,21 @@ class MainActivity : ComponentActivity() {
                     currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
                 val fabChevron = rememberFabChevron()
+                val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
+                val screenWidthDp = LocalConfiguration.current.screenWidthDp
+                val useCompactNav = compactNavPref && screenWidthDp >= COMPACT_NAV_MIN_WIDTH_DP
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
                 val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) { TopAppBarState(0f, 0f, 1f) }
+                val navigate: (String) -> Unit = { route ->
+                    navController.navigate(route) {
+                        popUpTo(ROUTE_HOME) {
+                            saveState = true
+                            inclusive = false
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
 
                 CompositionLocalProvider(
                     LocalSettingsListState provides settingsListState,
@@ -170,21 +189,36 @@ class MainActivity : ComponentActivity() {
                                     fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                                 exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                             ) {
-                                CronFloatingNav(
-                                    currentRoute = currentRoute,
-                                    onNavigate = { route ->
-                                        navController.navigate(route) {
-                                            popUpTo(ROUTE_HOME) {
-                                                saveState = true
-                                                inclusive = false
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                    fabAction = fabRegistry.action,
-                                    fabChevron = fabChevron,
-                                )
+                                if (useCompactNav) {
+                                    CronFloatingNav(
+                                        currentRoute = currentRoute,
+                                        onNavigate = navigate,
+                                        fabAction = fabRegistry.action,
+                                        fabChevron = fabChevron,
+                                    )
+                                } else {
+                                    CronNavigationBar(
+                                        currentRoute = currentRoute,
+                                        onNavigate = navigate,
+                                    )
+                                }
+                            }
+                        },
+                        floatingActionButton = {
+                            if (!useCompactNav) {
+                                val action = fabRegistry.action
+                                var lastShown by remember { mutableStateOf(action) }
+                                if (action != null) lastShown = action
+                                AnimatedVisibility(
+                                    visible = action != null && showBottomBar,
+                                    enter = scaleIn(MaterialTheme.motionScheme.fastSpatialSpec()) +
+                                        fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+                                    exit = scaleOut(MaterialTheme.motionScheme.fastSpatialSpec()) +
+                                        fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+                                ) {
+                                    if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
+                                    else PrimaryActionFab(lastShown)
+                                }
                             }
                         },
                     ) { _ ->

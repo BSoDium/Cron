@@ -9,7 +9,9 @@ import fr.bsodium.cron.ui.theme.CronTheme
 @Composable
 fun AppSettingsScreen(
     hapticsEnabled: Boolean,
+    compactNavEnabled: Boolean,
     onHapticsEnabled: (Boolean) -> Unit,
+    onCompactNavEnabled: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     SettingsDetailScaffold(title = "Preferences", onBack = onBack) {
@@ -20,6 +22,13 @@ fun AppSettingsScreen(
             onCheckedChange = onHapticsEnabled,
             hapticsEnabled = hapticsEnabled,
         )
+        SwitchRow(
+            title = "Compact navigation",
+            subtitle = "Use a floating pill instead of the standard navigation bar",
+            checked = compactNavEnabled,
+            onCheckedChange = onCompactNavEnabled,
+            hapticsEnabled = hapticsEnabled,
+        )
     }
 }
 
@@ -27,6 +36,12 @@ fun AppSettingsScreen(
 @Composable
 private fun AppSettingsScreenPreview() {
     CronTheme {
-        AppSettingsScreen(hapticsEnabled = true, onHapticsEnabled = {}, onBack = {})
+        AppSettingsScreen(
+            hapticsEnabled = true,
+            compactNavEnabled = false,
+            onHapticsEnabled = {},
+            onCompactNavEnabled = {},
+            onBack = {},
+        )
     }
 }

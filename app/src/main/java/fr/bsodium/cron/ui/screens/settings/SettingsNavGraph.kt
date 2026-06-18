@@ -169,7 +169,9 @@ fun NavGraphBuilder.settingsGraph(
             val state by vm.uiState.collectAsState()
             AppSettingsScreen(
                 hapticsEnabled = state.hapticsEnabled,
+                compactNavEnabled = state.compactNavEnabled,
                 onHapticsEnabled = vm::setHapticsEnabled,
+                onCompactNavEnabled = vm::setCompactNavEnabled,
                 onBack = { navController.popBackStack() },
             )
         }

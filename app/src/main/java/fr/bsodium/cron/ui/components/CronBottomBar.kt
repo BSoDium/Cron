@@ -187,7 +187,7 @@ class FabChevronSlot(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
+internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     if (action == null) return
     val haptics = rememberCronHaptics()
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
@@ -311,7 +311,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
 }
 
 @Composable
-private fun PrimaryActionFab(action: FabAction?) {
+internal fun PrimaryActionFab(action: FabAction?) {
     if (action == null) return
     val working = action.working
     val haptics = rememberCronHaptics()
