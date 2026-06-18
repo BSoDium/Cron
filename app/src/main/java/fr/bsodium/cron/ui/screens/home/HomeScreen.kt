@@ -90,14 +90,15 @@ fun HomeScreen(
     StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
     val isFirstRun = displayPlan == null
     val fabLabel = if (isFirstRun) "Start planning" else "Re-plan"
+    val fabSplitLabel = if (isFirstRun) "Run plan" else "Re-plan"
     val fabIcon = if (isFirstRun) MaterialSymbol.RocketLaunch else MaterialSymbol.Update
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, icon = fabIcon))
+        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, splitLabel = fabSplitLabel, icon = fabIcon))
         onDispose { fabRegistry.clear() }
     }
     val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying &&
         uiState.sessionDisplay == null
-    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabLabel, fabIcon, fabRegistry) {
+    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabLabel, fabSplitLabel, fabIcon, fabRegistry) {
         fabRegistry.set(
             FabAction(
                 onClick = viewModel::retryAiPlan,
@@ -105,6 +106,7 @@ fun HomeScreen(
                 onCancel = viewModel::cancelAiPlan,
                 hint = if (showOnboardingHint) "Click here to start" else null,
                 label = fabLabel,
+                splitLabel = fabSplitLabel,
                 icon = fabIcon,
             )
         )

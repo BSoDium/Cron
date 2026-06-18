@@ -167,8 +167,10 @@ data class FabAction(
     val onCancel: (() -> Unit)? = null,
     /** When set, an onboarding callout with this text points at the FAB (see [OnboardingTooltip]). */
     val hint: String? = null,
-    /** Idle label — "Start planning" for the first run, "Re-plan" once a plan exists. */
+    /** Idle label shown in the primary (non-split) FAB. */
     val label: String = "Re-plan",
+    /** Shorter label for the split FAB (dev mode); falls back to [label]. */
+    val splitLabel: String = label,
     /** Idle icon — overrides the default [MaterialSymbol.Update]. */
     val icon: MaterialSymbol = MaterialSymbol.Update,
 )
@@ -217,7 +219,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     )
     SplitButtonLayout(
         leadingButton = {
-            IconTooltip(label = if (action.working) "Cancel" else action.label) {
+            IconTooltip(label = if (action.working) "Cancel" else action.splitLabel) {
                 SplitButtonDefaults.LeadingButton(
                     onClick = {
                         if (action.working) { haptics.reject(); action.onCancel?.invoke() }
@@ -255,7 +257,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                             )
                             Column {
                                 Text(
-                                    text = if (isWorking) "Stop" else action.label,
+                                    text = if (isWorking) "Stop" else action.splitLabel,
                                     style = MaterialTheme.typography.labelLarge,
                                 )
                                 if (!isWorking && fabChevron.isMockActive) {
