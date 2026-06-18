@@ -11,8 +11,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -218,7 +218,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                     modifier = Modifier
                         .wrapContentWidth()
                         .height(56.dp)
-                        .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                        .animateContentSize(MaterialTheme.motionScheme.fastSpatialSpec()),
                     shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -245,7 +245,7 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                 modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
                                 fill = 1f,
                             )
-                            Column(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
+                            Column {
                                 Text(
                                     text = if (isWorking) "Stop" else action.splitLabel,
                                     style = MaterialTheme.typography.labelLarge,
@@ -253,9 +253,9 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                 AnimatedVisibility(
                                     visible = !isWorking && fabChevron.isMockActive,
                                     enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                                        slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { -it / 2 },
+                                        expandVertically(MaterialTheme.motionScheme.fastSpatialSpec()),
                                     exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                                        slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { -it / 2 },
+                                        shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()),
                                 ) {
                                     Text(
                                         text = "Mocked",
