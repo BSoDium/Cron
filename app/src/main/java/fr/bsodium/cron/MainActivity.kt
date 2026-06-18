@@ -20,10 +20,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.TopAppBarState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -37,7 +34,6 @@ import androidx.compose.runtime.setValue
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
@@ -50,7 +46,6 @@ import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.ui.components.CronFloatingNav
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
-import fr.bsodium.cron.ui.components.OnboardingTooltip
 import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
@@ -107,7 +102,6 @@ internal val tabExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> Ex
 class FabRegistry {
     var action by mutableStateOf<FabAction?>(null)
         private set
-    var fabWidth by mutableStateOf(0.dp)
 
     fun set(action: FabAction?) {
         this.action = action
@@ -190,7 +184,6 @@ class MainActivity : ComponentActivity() {
                                     },
                                     fabAction = fabRegistry.action,
                                     fabChevron = fabChevron,
-                                    onFabWidthChanged = { fabRegistry.fabWidth = it },
                                 )
                             }
                         },
@@ -253,12 +246,6 @@ class MainActivity : ComponentActivity() {
                                 settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                             }
                             EdgeFades(showTopScrim = !hasTopAppBar)
-                            // Onboarding callout for the play FAB — drawn AFTER EdgeFades so the
-                            // bottom scrim doesn't fade it out; HomeScreen requests it via FabAction.hint.
-                            if (currentRoute == ROUTE_HOME) {
-                                val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                                fabRegistry.action?.hint?.let { OnboardingTooltip(navBottom = navBottom, text = it, fabWidth = fabRegistry.fabWidth) }
-                            }
                         }
                     }
                 }

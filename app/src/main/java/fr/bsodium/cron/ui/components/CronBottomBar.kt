@@ -11,11 +11,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,12 +24,10 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -38,7 +36,6 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.SplitButtonLayout
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -81,7 +78,6 @@ fun CronFloatingNav(
     fabAction: FabAction?,
     modifier: Modifier = Modifier,
     fabChevron: FabChevronSlot? = null,
-    onFabWidthChanged: (Dp) -> Unit = {},
 ) {
     val systemBars: PaddingValues = WindowInsets.navigationBars.asPaddingValues()
     val visible = fabAction != null
@@ -119,11 +115,7 @@ fun CronFloatingNav(
             visible = visible,
             lastShown = lastShown,
             fabChevron = fabChevron,
-            onWidthMeasured = { w ->
-                val dp = with(density) { w.toDp() }
-                measuredFabWidth = dp
-                onFabWidthChanged(dp)
-            },
+            onWidthMeasured = { measuredFabWidth = with(density) { it.toDp() } },
         )
     }
 }
@@ -165,8 +157,6 @@ data class FabAction(
     val onClick: () -> Unit,
     val working: Boolean = false,
     val onCancel: (() -> Unit)? = null,
-    /** When set, an onboarding callout with this text points at the FAB (see [OnboardingTooltip]). */
-    val hint: String? = null,
     /** Idle label shown in the primary (non-split) FAB. */
     val label: String = "Re-plan",
     /** Shorter label for the split FAB (dev mode); falls back to [label]. */
@@ -260,13 +250,17 @@ private fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                     text = if (isWorking) "Stop" else action.splitLabel,
                                     style = MaterialTheme.typography.labelLarge,
                                 )
-                                if (!isWorking && fabChevron.isMockActive) {
+                                AnimatedVisibility(
+                                    visible = !isWorking && fabChevron.isMockActive,
+                                    enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                                        slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { -it / 2 },
+                                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                                        slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { -it / 2 },
+                                ) {
                                     Text(
                                         text = "Mocked",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimary.copy(
-                                            alpha = 0.6f,
-                                        ),
+                                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f),
                                     )
                                 }
                             }
@@ -378,48 +372,6 @@ private fun PrimaryActionFab(action: FabAction?) {
     }
 }
 
-private val POINTER_WIDTH = 16.dp
-private val POINTER_HEIGHT = 8.dp
-
-private val PointerDown = GenericShape { size, _ ->
-    moveTo(0f, 0f)
-    lineTo(size.width, 0f)
-    lineTo(size.width / 2f, size.height)
-    close()
-}
-
-/**
- * Onboarding callout whose pointer sits over the play FAB. Render as the LAST child of the
- * full-screen content [Box] — after [EdgeFades] — so the bottom scrim doesn't fade it out.
- * [navBottom] is the navigation-bar inset so it clears the floating nav.
- */
-@Composable
-fun BoxScope.OnboardingTooltip(navBottom: Dp, text: String, fabWidth: Dp, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .align(Alignment.BottomEnd)
-            .offset(x = -(Spacing.lg + fabWidth / 2))
-            .padding(bottom = navBottom + Spacing.navBarClearance - Spacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Surface(
-            color = MaterialTheme.colorScheme.primary,
-            shape = RoundedCornerShape(Radius.md),
-        ) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(width = POINTER_WIDTH, height = POINTER_HEIGHT)
-                .background(MaterialTheme.colorScheme.primary, PointerDown),
-        )
-    }
-}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Preview(showBackground = true)

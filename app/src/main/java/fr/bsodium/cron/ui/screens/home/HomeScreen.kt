@@ -96,15 +96,12 @@ fun HomeScreen(
         fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, splitLabel = fabSplitLabel, icon = fabIcon))
         onDispose { fabRegistry.clear() }
     }
-    val showOnboardingHint = uiState.initialized && displayPlan == null && !uiState.isRetrying &&
-        uiState.sessionDisplay == null
-    LaunchedEffect(uiState.isRetrying, showOnboardingHint, fabLabel, fabSplitLabel, fabIcon, fabRegistry) {
+    LaunchedEffect(uiState.isRetrying, fabLabel, fabSplitLabel, fabIcon, fabRegistry) {
         fabRegistry.set(
             FabAction(
                 onClick = viewModel::retryAiPlan,
                 working = uiState.isRetrying,
                 onCancel = viewModel::cancelAiPlan,
-                hint = if (showOnboardingHint) "Click here to start" else null,
                 label = fabLabel,
                 splitLabel = fabSplitLabel,
                 icon = fabIcon,
