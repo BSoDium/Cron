@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +76,10 @@ internal fun ThreadPager(
         // getOrPut once per turnIndex; the current page always has its state ready for the caller's pull
         // connection. Wrapping in remember keeps the map write off the per-frame recomposition path.
         val pull = remember(iter.turnIndex) { pullStates.getOrPut(iter.turnIndex) { PullState() } }
+        // Per-page staged render: the neighbor composes cold when a swipe starts (beyondViewportPageCount = 0),
+        // so defer its heavy subtree (markdown parse + ExpandReveal SubcomposeLayout) by one frame.
+        var deferContent by remember(iter.turnIndex) { mutableStateOf(true) }
+        LaunchedEffect(iter.turnIndex) { withFrameNanos {}; deferContent = false }
         val scope = rememberCoroutineScope()
         val isLatest = page == iterations.lastIndex
         // unbounded so the page measures its NATURAL height even when the pager is momentarily shorter
@@ -86,6 +92,7 @@ internal fun ThreadPager(
             AiThinkingThread(
                 thread = iter.thread,
                 modifier = Modifier.padding(horizontal = Spacing.xl), // re-inset after the pager's full-screen bleed
+                deferContent = deferContent,
                 expanded = pull.expanded,
                 onExpandedChange = { open ->
                     scope.launch {

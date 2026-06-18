@@ -88,6 +88,7 @@ sealed interface ThreadRole {
 fun AiThinkingThread(
     thread: AiThreadUi,
     modifier: Modifier = Modifier,
+    deferContent: Boolean = false,
     // Controlled/uncontrolled: when [expanded] is null the disclosure manages its own state (previews,
     // tests); HomeScreen hoists it so the pull gesture can drive it. [expandPx] peeks the timeline open
     // by an absolute pixel height (1:1 with the drag); [onFullHeight] reports its measured full height.
@@ -124,6 +125,7 @@ fun AiThinkingThread(
             expandPx = expandPx,
             onFullHeight = onFullHeight,
             expansionFraction = expansionFraction,
+            deferContent = deferContent,
         )
         // Alpha-only in AND out: any size-changing transition (e.g. shrinkVertically) makes
         // AnimatedVisibility clipToBounds the block, which clips the streaming markdown to its
@@ -134,6 +136,7 @@ fun AiThinkingThread(
             response = thread.response,
             inProgress = inProgress,
             hasProcess = thread.process.isNotEmpty(),
+            deferContent = deferContent,
         )
         if (role is ThreadRole.Latest) {
             val phase = when {
@@ -179,6 +182,7 @@ internal fun ThinkingDisclosure(
     expandPx: () -> Float = { 0f },
     onFullHeight: (Int) -> Unit = {},
     expansionFraction: () -> Float = { 0f },
+    deferContent: Boolean = false,
 ) {
     val canExpand = process.isNotEmpty()
     // Chevron pivot from the live reveal, resolved lazily so the drag only invalidates the draw layer.
@@ -248,7 +252,7 @@ internal fun ThinkingDisclosure(
         val revealing by remember(expanded, inProgress) {
             derivedStateOf { expanded || expandPx() > 0f || !inProgress }
         }
-        if (canExpand && revealing) {
+        if (canExpand && revealing && !deferContent) {
             ExpandReveal(
                 targetPx = { if (expanded) Float.MAX_VALUE else expandPx() },
                 peeking = !expanded,
@@ -400,6 +404,7 @@ private fun AnswerArea(
     response: String?,
     inProgress: Boolean,
     hasProcess: Boolean,
+    deferContent: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var lastResponse by remember { mutableStateOf("") }
@@ -412,9 +417,16 @@ private fun AnswerArea(
         AnimatedVisibility(visible = hasAnswer, enter = fadeIn(), exit = fadeOut()) {
             Column {
                 Spacer(Modifier.height(Spacing.sm))
-                ResponseBody(response?.takeIf { it.isNotBlank() } ?: lastResponse)
-                // Descender clearance: the serif body's last line extends below its measured line box, so
-                // without this the slot/pager (sized to the measured height) clips it.
+                val text = response?.takeIf { it.isNotBlank() } ?: lastResponse
+                if (deferContent) {
+                    Text(
+                        text = text,
+                        style = CronTypography.bodySerif,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                } else {
+                    ResponseBody(text)
+                }
                 Spacer(Modifier.height(Spacing.sm))
             }
         }
