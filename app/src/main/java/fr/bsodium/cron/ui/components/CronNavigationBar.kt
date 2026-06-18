@@ -1,13 +1,22 @@
 package fr.bsodium.cron.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HISTORY
@@ -16,6 +25,8 @@ import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
+import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 private data class NavDestination(
@@ -48,6 +59,12 @@ fun CronNavigationBar(
                 animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                 label = "nav-fill-${dest.route}",
             )
+            val indicatorColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                    else Color.Transparent,
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                label = "nav-indicator-${dest.route}",
+            )
             NavigationBarItem(
                 selected = selected,
                 onClick = {
@@ -56,7 +73,20 @@ fun CronNavigationBar(
                         onNavigate(dest.route)
                     }
                 },
-                icon = { Symbol(symbol = dest.symbol, contentDescription = null, fill = fill) },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = Color.Transparent,
+                ),
+                icon = {
+                    Box(
+                        modifier = Modifier
+                            .clip(Radius.full)
+                            .background(indicatorColor)
+                            .padding(horizontal = Spacing.xl, vertical = Spacing.xs),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Symbol(symbol = dest.symbol, contentDescription = null, fill = fill)
+                    }
+                },
                 label = { Text(dest.label) },
             )
         }

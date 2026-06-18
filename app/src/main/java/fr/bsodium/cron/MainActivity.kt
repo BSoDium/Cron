@@ -211,7 +211,7 @@ class MainActivity : ComponentActivity() {
                                 val action = fabRegistry.action
                                 var lastShown by remember { mutableStateOf(action) }
                                 if (action != null) lastShown = action
-                                val fabVisible = action != null && showBottomBar
+                                val fabVisible = currentRoute == ROUTE_HOME && action != null
                                 val fabAlpha by animateFloatAsState(
                                     targetValue = if (fabVisible) 1f else 0f,
                                     animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
