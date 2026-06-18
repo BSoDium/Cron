@@ -47,6 +47,7 @@ internal fun MarkdownBlock(
     bodyStyle: TextStyle,
     serif: Boolean,
     modifier: Modifier = Modifier,
+    immediate: Boolean = true,
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
@@ -89,7 +90,7 @@ internal fun MarkdownBlock(
     // retainState keeps the last successful render on screen while the next parse runs off-thread, and
     // immediate parses the first frame synchronously — together they kill the blank-flash the library
     // otherwise shows on every content change (per streamed token) and on first compose (expand/load).
-    val markdownState = rememberMarkdownState(content = text, retainState = true, immediate = true)
+    val markdownState = rememberMarkdownState(content = text, retainState = true, immediate = immediate)
     Markdown(
         markdownState = markdownState,
         colors = colors,

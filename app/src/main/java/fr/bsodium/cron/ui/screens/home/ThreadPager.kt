@@ -13,8 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,7 +26,12 @@ import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.screens.home.components.ThreadRole
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+
+// isScrollInProgress flips false for a frame between drag-release and fling start (see
+// AlarmCollapseEffects.kt:28). Wait this out before treating the pager as settled.
+private const val SETTLE_DEBOUNCE_MS = 50L
 
 /** Per-iteration pull-to-expand state for the thinking disclosure — one instance per `turnIndex`, so
  *  each pager page keeps its own reveal/expanded state and the pull gesture drives only the settled page. */
@@ -77,10 +85,19 @@ internal fun ThreadPager(
         // getOrPut once per turnIndex; the current page always has its state ready for the caller's pull
         // connection. Wrapping in remember keeps the map write off the per-frame recomposition path.
         val pull = remember(iter.turnIndex) { pullStates.getOrPut(iter.turnIndex) { PullState() } }
-        // Per-page staged render: each page defers its heavy subtree (markdown parse + ExpandReveal
-        // SubcomposeLayout) by one frame, so two pages never parse markdown on the same frame at entry.
+        // Per-page staged render: defer heavy subtree (markdown parse + ExpandReveal SubcomposeLayout)
+        // until the pager is idle. During a swipe, new neighbors compose cheap; the heavy content
+        // composes only after the settle animation completes, off the gesture's critical path.
         var deferContent by remember(iter.turnIndex) { mutableStateOf(true) }
-        LaunchedEffect(iter.turnIndex) { withFrameNanos {}; deferContent = false }
+        LaunchedEffect(iter.turnIndex) {
+            withFrameNanos {}
+            snapshotFlow { pagerState.isScrollInProgress }
+                .filter { !it }
+                .collectLatest {
+                    delay(SETTLE_DEBOUNCE_MS)
+                    if (!pagerState.isScrollInProgress) deferContent = false
+                }
+        }
         val scope = rememberCoroutineScope()
         val isLatest = page == iterations.lastIndex
         // unbounded so the page measures its NATURAL height even when the pager is momentarily shorter

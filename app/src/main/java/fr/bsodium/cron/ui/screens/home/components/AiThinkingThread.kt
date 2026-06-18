@@ -384,11 +384,12 @@ private fun ToolDisc(modifier: Modifier = Modifier, isNew: Boolean = false, cont
 }
 
 @Composable
-private fun ResponseBody(text: String) {
+private fun ResponseBody(text: String, immediate: Boolean = true) {
     MarkdownBlock(
         text = text,
         bodyStyle = CronTypography.bodySerif.copy(color = MaterialTheme.colorScheme.onSurface),
         serif = true,
+        immediate = immediate,
     )
 }
 
@@ -425,7 +426,7 @@ private fun AnswerArea(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 } else {
-                    ResponseBody(text)
+                    ResponseBody(text, immediate = inProgress)
                 }
                 Spacer(Modifier.height(Spacing.sm))
             }
