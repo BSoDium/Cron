@@ -12,6 +12,7 @@ import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -36,6 +37,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
@@ -209,13 +211,17 @@ class MainActivity : ComponentActivity() {
                                 val action = fabRegistry.action
                                 var lastShown by remember { mutableStateOf(action) }
                                 if (action != null) lastShown = action
-                                AnimatedVisibility(
-                                    visible = action != null && showBottomBar,
-                                    enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
-                                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
-                                ) {
-                                    if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
-                                    else PrimaryActionFab(lastShown)
+                                val fabVisible = action != null && showBottomBar
+                                val fabAlpha by animateFloatAsState(
+                                    targetValue = if (fabVisible) 1f else 0f,
+                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                    label = "fab-alpha",
+                                )
+                                if (lastShown != null && (fabVisible || fabAlpha > 0f)) {
+                                    Box(modifier = Modifier.graphicsLayer { alpha = fabAlpha }) {
+                                        if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
+                                        else PrimaryActionFab(lastShown)
+                                    }
                                 }
                             }
                         },
