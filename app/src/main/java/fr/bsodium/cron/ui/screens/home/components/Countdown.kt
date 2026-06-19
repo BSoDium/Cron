@@ -6,8 +6,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.AlignmentLine
@@ -30,6 +33,7 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.compose.ui.util.lerp
 import kotlin.time.Duration
 
 internal data class HoursMinutes(val hours: Long, val minutes: Long)
@@ -47,10 +51,16 @@ internal fun CountdownStack(
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
 ) {
+    val prevCountdown = remember { mutableStateOf(countdown) }
+    val fromH = prevCountdown.value?.hours ?: 0L
+    val fromM = prevCountdown.value?.minutes ?: 0L
+    val targetH = countdown?.hours ?: 0L
+    val targetM = countdown?.minutes ?: 0L
+    if (progress >= 1f) SideEffect { prevCountdown.value = countdown }
     // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
     val (top, bottom) = if (countdown == null) "00H" to "00M"
-    else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
-        String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
+    else String.format(Locale.US, "%dH", lerp(fromH.toFloat(), targetH.toFloat(), progress).roundToInt()) to
+        String.format(Locale.US, "%dM", lerp(fromM.toFloat(), targetM.toFloat(), progress).roundToInt())
     TwoLineLcdStack(top = top, bottom = bottom, color = color, modifier = modifier, alignFraction = alignFraction)
 }
 

@@ -22,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.compose.ui.util.lerp
 
 @Composable
 fun NextAlarmCard(
@@ -252,9 +254,15 @@ internal fun LcdClock(
     strokeWidthPx: Float = 0f,
 ) {
     val pending = alarmTime == null
+    val prevAlarmTime = remember { mutableStateOf(alarmTime) }
+    val fromH = prevAlarmTime.value?.hour ?: 0
+    val fromM = prevAlarmTime.value?.minute ?: 0
+    val targetH = alarmTime?.hour ?: 0
+    val targetM = alarmTime?.minute ?: 0
+    SideEffect { prevAlarmTime.value = alarmTime }
     // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
-    val hh = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
-    val mm = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
+    val hh = if (pending) "00" else String.format(Locale.US, "%02d", lerp(fromH.toFloat(), targetH.toFloat(), progress).roundToInt())
+    val mm = if (pending) "00" else String.format(Locale.US, "%02d", lerp(fromM.toFloat(), targetM.toFloat(), progress).roundToInt())
     val lcdStyle = CronTypography.lcdHero
     val ink = rememberLcdInkMetrics()
     // IntrinsicSize.Min so the colon's fillMaxHeight matches the digit line box, not the viewport.
@@ -310,7 +318,10 @@ internal fun rememberLcdRevealProgress(alarmTime: LocalTime?): Float {
     val progressAnim = remember { Animatable(if (valueKey == null || valueKey == animatedKey) 1f else 0f) }
     LaunchedEffect(valueKey) {
         if (valueKey == null) return@LaunchedEffect
-        if (valueKey != animatedKey) {
+        if (animatedKey == null) {
+            progressAnim.snapTo(1f)
+            animatedKey = valueKey
+        } else if (valueKey != animatedKey) {
             progressAnim.snapTo(0f)
             // Sanctioned motionScheme exception (docs/expressive.md § Sanctioned exceptions): the reveal
             // gates digit rolling on a 0→1 progress; a spring's overshoot past 1 would re-roll the digits.
