@@ -22,6 +22,7 @@ import fr.bsodium.cron.ai.ToolRegistry
 import fr.bsodium.cron.ai.ToolRegistryFactory
 import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.wire.ThinkingConfig
+import fr.bsodium.cron.ai.wire.ToolChoice
 import fr.bsodium.cron.ai.tools.CancelAlarmTool
 import fr.bsodium.cron.ai.tools.DoNothingTool
 import fr.bsodium.cron.ai.tools.EstimateCommuteMultiModeTool
@@ -111,6 +112,7 @@ class AiTurnWorker(
         // Anthropic requires max_tokens > thinking budget, so widen the ceiling on evening_plan turns.
         val thinking = if (isEveningPlan) ThinkingConfig(budgetTokens = THINKING_BUDGET) else null
         val maxTokens = if (isEveningPlan) THINKING_BUDGET + 2048 else 2048
+        val toolChoice = if (thinking == null) ToolChoice.Any else null
         val runner = TurnRunner(
             client = client,
             aiMessageDao = db.aiMessageDao(),
@@ -118,6 +120,7 @@ class AiTurnWorker(
             systemPrompt = systemPrompt,
             tools = tools,
             maxTokens = maxTokens,
+            toolChoice = toolChoice,
             thinking = thinking,
             isMocked = mockTools != null,
         )
