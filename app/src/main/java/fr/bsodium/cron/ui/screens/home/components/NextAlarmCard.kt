@@ -259,7 +259,7 @@ internal fun LcdClock(
     val fromM = prevAlarmTime.value?.minute ?: 0
     val targetH = alarmTime?.hour ?: 0
     val targetM = alarmTime?.minute ?: 0
-    SideEffect { prevAlarmTime.value = alarmTime }
+    if (progress >= 1f) SideEffect { prevAlarmTime.value = alarmTime }
     // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
     val hh = if (pending) "00" else String.format(Locale.US, "%02d", lerp(fromH.toFloat(), targetH.toFloat(), progress).roundToInt())
     val mm = if (pending) "00" else String.format(Locale.US, "%02d", lerp(fromM.toFloat(), targetM.toFloat(), progress).roundToInt())
