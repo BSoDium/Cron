@@ -17,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,12 +86,19 @@ internal fun TimePickerDialog(
     initial: LocalTime,
     onDismiss: () -> Unit,
     onConfirm: (LocalTime) -> Unit,
+    hardLatest: LocalTime? = null,
 ) {
     val pickerState = rememberTimePickerState(
         initialHour = initial.hour,
         initialMinute = initial.minute,
         is24Hour = true,
     )
+    val overLimit by remember(hardLatest) {
+        derivedStateOf {
+            hardLatest != null && (pickerState.hour > hardLatest.hour ||
+                (pickerState.hour == hardLatest.hour && pickerState.minute > hardLatest.minute))
+        }
+    }
     val lighterTypography = MaterialTheme.typography.copy(
         displayLarge = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Normal),
     )
@@ -107,6 +115,14 @@ internal fun TimePickerDialog(
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (hardLatest != null) {
+                    Text(
+                        text = String.format(Locale.US, "Latest: %02d:%02d", hardLatest.hour, hardLatest.minute),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (overLimit) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.height(Spacing.lg))
                 MaterialTheme(typography = lighterTypography) {
                     TimePicker(state = pickerState)
@@ -116,7 +132,10 @@ internal fun TimePickerDialog(
                     horizontalArrangement = Arrangement.End,
                 ) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
-                    TextButton(onClick = { onConfirm(LocalTime(pickerState.hour, pickerState.minute)) }) {
+                    TextButton(
+                        onClick = { onConfirm(LocalTime(pickerState.hour, pickerState.minute)) },
+                        enabled = !overLimit,
+                    ) {
                         Text("OK")
                     }
                 }

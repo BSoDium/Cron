@@ -243,6 +243,7 @@ fun HomeScreen(
                     viewModel.updateAlarmTime(newTime)
                     showTimePicker = false
                 },
+                hardLatest = uiState.sessionDisplay?.hardLatest,
             )
         }
     }
