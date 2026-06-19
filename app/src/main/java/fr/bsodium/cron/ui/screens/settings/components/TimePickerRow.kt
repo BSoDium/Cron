@@ -72,7 +72,7 @@ internal fun TimePickerRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimePickerDialog(
+internal fun TimePickerDialog(
     initial: LocalTime,
     onDismiss: () -> Unit,
     onConfirm: (LocalTime) -> Unit,

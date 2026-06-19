@@ -19,6 +19,7 @@ import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.toModel
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.TriggerType
@@ -43,6 +44,7 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 
 data class HomeUiState(
     val sessionDisplay: SessionDisplayState? = null,
@@ -307,6 +309,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 }
+        }
+    }
+
+    fun updateAlarmTime(newTime: LocalTime) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val session = repository.findCurrent() ?: return@launch
+            val tz = TimeZone.of(session.timezone)
+            val requested = session.date.atTime(newTime).toInstant(tz)
+            val plan = alarmScheduler.schedule(
+                requested = requested,
+                hardLatest = session.plan.hardLatest,
+                sessionDate = session.date,
+                timezone = tz,
+                label = session.currentInstruction.reason.ifBlank { "Cron Alarm" },
+                sessionId = session.id,
+            )
+            val actualTime = plan.actualInstant.toLocalDateTime(tz).time
+            repository.updateInstruction(
+                session.id,
+                Instruction(
+                    action = ActionType.SetAlarm,
+                    alarmTime = actualTime,
+                    reason = session.currentInstruction.reason,
+                    issuedAt = Clock.System.now(),
+                ),
+            )
         }
     }
 

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,19 +76,34 @@ fun NextAlarmCard(
  * collapsing variant can lerp its corner radius. Content renders in `onPrimary`.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun AlarmShell(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(Radius.xl),
+    onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primary,
-        shape = shape,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        content = content,
-    )
+    val mod = modifier.fillMaxWidth()
+    if (onClick != null) {
+        Surface(
+            onClick = onClick,
+            modifier = mod,
+            color = MaterialTheme.colorScheme.primary,
+            shape = shape,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            content = content,
+        )
+    } else {
+        Surface(
+            modifier = mod,
+            color = MaterialTheme.colorScheme.primary,
+            shape = shape,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            content = content,
+        )
+    }
 }
 
 /** The expanded card body: bold date, hero LCD time, and the sleep block. Renders in `onPrimary`. */

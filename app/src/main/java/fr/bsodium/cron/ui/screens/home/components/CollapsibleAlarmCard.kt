@@ -53,6 +53,7 @@ internal fun CollapsibleAlarmCard(
     collapseFraction: () -> Float,
     onFullHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    onAlarmTimeClick: (() -> Unit)? = null,
 ) {
     val timing = rememberAlarmTiming(alarmTime, sessionDate)
     val onCard = MaterialTheme.colorScheme.onPrimary
@@ -69,6 +70,7 @@ internal fun CollapsibleAlarmCard(
     AlarmShell(
         modifier = modifier,
         shape = RoundedCornerShape(Radius.xl),
+        onClick = onAlarmTimeClick,
     ) {
         SubcomposeLayout(modifier = Modifier.clipToBounds()) { constraints ->
             val f = collapseFraction().coerceIn(0f, 1f)

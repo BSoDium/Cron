@@ -83,6 +83,7 @@ internal fun HomePlanContent(
     hasNotificationPermission: Boolean,
     onNotifEnable: () -> Unit,
     onAutoAlarmsChange: (Boolean) -> Unit,
+    onAlarmTimeClick: (() -> Unit)? = null,
 ) {
     val iterations = plan.iterations
     val listState = rememberLazyListState()
@@ -307,6 +308,7 @@ internal fun HomePlanContent(
                 sleepSegments = uiState.sleepStats?.segments.orEmpty(),
                 collapseFraction = collapseFraction, // () -> Float, read in the card's measure pass only
                 onFullHeight = { cardFullHeightPx = it },
+                onAlarmTimeClick = onAlarmTimeClick,
             )
         }
     }
