@@ -202,21 +202,8 @@ internal fun ThinkingDisclosure(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            // The tools called so far + a trailing pending loader disc; with no tools, a fallback assistant
-            // disc (inside ToolStack) so the header always leads with an icon, never floating text.
-            if (!deferContent) {
-                val tools = process.filterIsInstance<ProcessItem.Tool>()
-                ToolStack(tools, pending = pending)
-            } else {
-                ToolDisc {
-                    Symbol(
-                        symbol = MaterialSymbol.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        size = TOOL_DISC_ICON,
-                    )
-                }
-            }
+            val tools = process.filterIsInstance<ProcessItem.Tool>()
+            ToolStack(tools, pending = pending, animated = !deferContent)
             val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
             if (!inProgress && isMocked) {
                 val verb = "Faked thinking"
@@ -330,17 +317,19 @@ private val TOOL_DISC_LOADER = 18.dp
  * discs overlap (negative spacing) the later one occludes the earlier with a clean gap. While [pending], a
  * trailing loader disc leads the stack; as real tools land they fade in and the loader slides right
  * ([animateBounds] inside a [LookaheadScope] animates each disc's position/size).
+ *
+ * When [animated] is `false` the layout is identical but skips [LookaheadScope]/[animateBounds], avoiding
+ * the double-measure cost on deferred (off-screen) pages while keeping the correct disc count and width.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun ToolStack(tools: List<ProcessItem.Tool>, pending: Boolean = false) {
-    // Tools present when the stack first composes don't individually animate (its appearance is enough);
-    // any that arrive later fade in.
+private fun ToolStack(tools: List<ProcessItem.Tool>, pending: Boolean = false, animated: Boolean = true) {
     val seen = remember { tools.size }
-    LookaheadScope {
+    @Composable
+    fun Discs(boundsModifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(-TOOL_STACK_OVERLAP)) {
             tools.forEachIndexed { index, tool ->
-                ToolDisc(modifier = Modifier.animateBounds(this@LookaheadScope), isNew = index >= seen) {
+                ToolDisc(modifier = boundsModifier, isNew = animated && index >= seen) {
                     Symbol(
                         symbol = toolSymbol(tool.name),
                         contentDescription = null,
@@ -350,16 +339,14 @@ private fun ToolStack(tools: List<ProcessItem.Tool>, pending: Boolean = false) {
                 }
             }
             if (pending) {
-                ToolDisc(modifier = Modifier.animateBounds(this@LookaheadScope)) {
+                ToolDisc(modifier = boundsModifier) {
                     LoadingIndicator(
                         modifier = Modifier.size(TOOL_DISC_LOADER),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else if (tools.isEmpty()) {
-                // No tools and not pending (a no-tool turn): a fallback assistant icon so the header always
-                // leads with a disc instead of floating text.
-                ToolDisc(modifier = Modifier.animateBounds(this@LookaheadScope)) {
+                ToolDisc(modifier = boundsModifier) {
                     Symbol(
                         symbol = MaterialSymbol.AutoAwesome,
                         contentDescription = null,
@@ -369,6 +356,11 @@ private fun ToolStack(tools: List<ProcessItem.Tool>, pending: Boolean = false) {
                 }
             }
         }
+    }
+    if (animated) {
+        LookaheadScope { Discs(Modifier.animateBounds(this@LookaheadScope)) }
+    } else {
+        Discs()
     }
 }
 

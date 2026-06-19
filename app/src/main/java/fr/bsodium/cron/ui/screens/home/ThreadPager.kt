@@ -82,14 +82,18 @@ internal fun ThreadPager(
         beyondViewportPageCount = 1,
     ) { page ->
         val iter = iterations.getOrNull(page) ?: return@HorizontalPager
-        // getOrPut once per turnIndex; the current page always has its state ready for the caller's pull
-        // connection. Wrapping in remember keeps the map write off the per-frame recomposition path.
-        val pull = remember(iter.turnIndex) { pullStates.getOrPut(iter.turnIndex) { PullState() } }
+        val pull = remember(iter.turnIndex) {
+            pullStates.getOrPut(iter.turnIndex) { PullState() }.also {
+                it.expanded = false
+                it.pastThreshold = false
+            }
+        }
         // Per-page staged render: defer heavy subtree (markdown parse + ExpandReveal SubcomposeLayout)
         // until the pager is idle. During a swipe, new neighbors compose cheap; the heavy content
         // composes only after the settle animation completes, off the gesture's critical path.
         var deferContent by remember(iter.turnIndex) { mutableStateOf(true) }
         LaunchedEffect(iter.turnIndex) {
+            pull.reveal.snapTo(0f)
             withFrameNanos {}
             snapshotFlow { pagerState.isScrollInProgress }
                 .filter { !it }
