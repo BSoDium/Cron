@@ -176,7 +176,7 @@ class SessionFsm(
         when (event.trigger) {
             TriggerType.AlarmDismissed -> when (session.status) {
                 SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
-                else -> SessionStatus.Complete
+                SessionStatus.Planning, SessionStatus.Awake, SessionStatus.Complete -> SessionStatus.Complete
             }
             TriggerType.SleepOnset -> when (session.status) {
                 SessionStatus.Planning, SessionStatus.Monitoring -> SessionStatus.Monitoring
