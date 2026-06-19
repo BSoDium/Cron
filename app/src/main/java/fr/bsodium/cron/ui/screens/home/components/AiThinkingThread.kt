@@ -433,15 +433,7 @@ private fun AnswerArea(
             Column {
                 Spacer(Modifier.height(Spacing.sm))
                 val text = response?.takeIf { it.isNotBlank() } ?: lastResponse
-                if (deferContent) {
-                    Text(
-                        text = text,
-                        style = CronTypography.bodySerif,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                } else {
-                    ResponseBody(text, immediate = immediateMarkdown)
-                }
+                ResponseBody(text, immediate = immediateMarkdown)
                 Spacer(Modifier.height(Spacing.sm))
             }
         }
