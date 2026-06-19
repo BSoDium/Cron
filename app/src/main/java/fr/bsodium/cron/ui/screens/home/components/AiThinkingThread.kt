@@ -89,6 +89,7 @@ fun AiThinkingThread(
     thread: AiThreadUi,
     modifier: Modifier = Modifier,
     deferContent: Boolean = false,
+    immediateMarkdown: Boolean = true,
     // Controlled/uncontrolled: when [expanded] is null the disclosure manages its own state (previews,
     // tests); HomeScreen hoists it so the pull gesture can drive it. [expandPx] peeks the timeline open
     // by an absolute pixel height (1:1 with the drag); [onFullHeight] reports its measured full height.
@@ -137,6 +138,7 @@ fun AiThinkingThread(
             inProgress = inProgress,
             hasProcess = thread.process.isNotEmpty(),
             deferContent = deferContent,
+            immediateMarkdown = immediateMarkdown,
         )
         if (role is ThreadRole.Latest) {
             val phase = when {
@@ -202,8 +204,19 @@ internal fun ThinkingDisclosure(
         ) {
             // The tools called so far + a trailing pending loader disc; with no tools, a fallback assistant
             // disc (inside ToolStack) so the header always leads with an icon, never floating text.
-            val tools = process.filterIsInstance<ProcessItem.Tool>()
-            ToolStack(tools, pending = pending)
+            if (!deferContent) {
+                val tools = process.filterIsInstance<ProcessItem.Tool>()
+                ToolStack(tools, pending = pending)
+            } else {
+                ToolDisc {
+                    Symbol(
+                        symbol = MaterialSymbol.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        size = TOOL_DISC_ICON,
+                    )
+                }
+            }
             val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
             if (!inProgress && isMocked) {
                 val verb = "Faked thinking"
@@ -406,6 +419,7 @@ private fun AnswerArea(
     inProgress: Boolean,
     hasProcess: Boolean,
     deferContent: Boolean = false,
+    immediateMarkdown: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     var lastResponse by remember { mutableStateOf("") }
@@ -426,7 +440,7 @@ private fun AnswerArea(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 } else {
-                    ResponseBody(text, immediate = inProgress)
+                    ResponseBody(text, immediate = immediateMarkdown)
                 }
                 Spacer(Modifier.height(Spacing.sm))
             }

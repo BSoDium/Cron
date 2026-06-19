@@ -98,6 +98,7 @@ internal fun ThreadPager(
                     if (!pagerState.isScrollInProgress) deferContent = false
                 }
         }
+        val immediateMarkdown = page == pagerState.settledPage || iter.thread.isStreaming
         val scope = rememberCoroutineScope()
         val isLatest = page == iterations.lastIndex
         // unbounded so the page measures its NATURAL height even when the pager is momentarily shorter
@@ -111,6 +112,7 @@ internal fun ThreadPager(
                 thread = iter.thread,
                 modifier = Modifier.padding(horizontal = Spacing.xl), // re-inset after the pager's full-screen bleed
                 deferContent = deferContent,
+                immediateMarkdown = immediateMarkdown,
                 expanded = pull.expanded,
                 onExpandedChange = { open ->
                     scope.launch {
