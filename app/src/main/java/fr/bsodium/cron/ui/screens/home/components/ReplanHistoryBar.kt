@@ -242,20 +242,9 @@ private fun ScrollableTabs(
     val padPx = with(LocalDensity.current) { Spacing.md.roundToPx() }
     // Expressive spatial spring so the tap-to-centre scroll glides rather than snapping.
     val scrollSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
-    // Derived, not a raw read: position() changes every swipe frame, but the ROUNDED nearest tab only
-    // changes at midpoint crossings — so this recomposes the strip at crossings, never per frame.
-    val activeTurn by remember(iterations) {
-        derivedStateOf { iterations[position().roundToInt().coerceIn(0, iterations.lastIndex)].turnIndex }
-    }
-
-    // Centre the active tab (keyed on the rounded position, so it tracks the swipe at each boundary).
-    LaunchedEffect(activeTurn, viewportPx) {
+    LaunchedEffect(selectedTurn, viewportPx) {
         if (viewportPx <= 0) return@LaunchedEffect
-        // Await the (possibly just-added) tab's measured span. A freshly-added tab widens the content via
-        // animateContentSize, so the scroll range (maxValue) ramps up over several frames; clamping
-        // centreTarget to a mid-ramp maxValue leaves the new tab clipped. Wait until the range is wide
-        // enough to reach the desired (unclamped) centre — capped so a full strip can't hang us.
-        val span = snapshotFlow { spans[activeTurn] }.filterNotNull().first()
+        val span = snapshotFlow { spans[selectedTurn] }.filterNotNull().first()
         val wanted = (span.first + span.last) / 2 + padPx - viewportPx / 2
         var frames = 0
         while (scrollState.maxValue < wanted && frames < MAX_SETTLE_FRAMES) {

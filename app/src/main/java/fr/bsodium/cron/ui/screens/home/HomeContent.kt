@@ -119,7 +119,7 @@ internal fun HomePlanContent(
     // getOrNull guards the transient post-replan frame where settledPage can lead the list (mirrors
     // pagerHeightPx below). Recomputes on settle, not per swipe frame, so the strip composes per selection.
     val selectedTurn by remember(iterations) {
-        derivedStateOf { iterations.getOrNull(pagerState.settledPage)?.turnIndex ?: iterations.last().turnIndex }
+        derivedStateOf { iterations.getOrNull(pagerState.targetPage)?.turnIndex ?: iterations.last().turnIndex }
     }
     // Continuous pager position (page + offset) handed to the tab strip as a PROVIDER: the strip reads it
     // inside snapshot flows / derived state, so a swipe frame never recomposes this screen or the strip.
