@@ -63,7 +63,7 @@ internal fun CollapsibleAlarmCard(
     val countdownColor = if (upcoming) onCard.copy(alpha = 0.7f) else onCard.copy(alpha = 0.30f)
     // One reveal, shared by the moving clock + countdown (the hidden time row in extras keeps its own
     // deterministic copy, never drawn).
-    val progress = rememberLcdRevealProgress(alarmTime)
+    val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
     val dateStyle = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp)
 
@@ -105,12 +105,12 @@ internal fun CollapsibleAlarmCard(
             // glyph scale cancels the dilution from shrinking, so the RENDERED stroke tracks f directly.
             val strokePx = MAX_CLOCK_STROKE.toPx() * f / clockScale
             val clock = subcompose("clock") {
-                LcdClock(alarmTime, progress, digitColor, strokeWidthPx = strokePx)
+                LcdClock(alarmTime, reveal, digitColor, strokeWidthPx = strokePx)
             }.first().measure(cWrap)
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
             // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
             val countdown = subcompose("countdown") {
-                RemainingOrStatus(timing = timing, progress = progress, color = countdownColor, alignFraction = f)
+                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f)
             }.first().measure(cWrap)
 
             val w = extras.width
