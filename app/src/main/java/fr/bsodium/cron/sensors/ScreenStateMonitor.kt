@@ -94,7 +94,7 @@ class ScreenStateMonitor(
 
     private fun onScreenOff() {
         screenOffSince = Clock.System.now()
-        scheduleOnsetCheck()
+        scheduleOnsetCheck(currentOnsetThreshold)
     }
 
     private fun onScreenOn() {

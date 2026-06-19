@@ -81,7 +81,7 @@ class SleepSessionService : Service() {
             }
             ACTION_REARM -> {
                 screenStateMonitor?.rearm()
-                return START_NOT_STICKY
+                return START_STICKY
             }
         }
         val eveningPlan = intent?.action == ACTION_EVENING_PLAN
