@@ -6,6 +6,7 @@ import fr.bsodium.cron.session.db.SessionEntity
 import fr.bsodium.cron.session.db.SessionEventEntity
 import fr.bsodium.cron.session.db.SessionJson
 import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.DayPlan
 import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSegment
@@ -34,6 +35,9 @@ internal fun SessionEntity.toDisplayState(): SessionDisplayState? {
     val sessionDate = runCatching { LocalDate.parse(date) }
         .onFailure { Log.w(TAG, "parse session date failed for session $id", it) }
         .getOrNull() ?: return null
+    val plan = runCatching { SessionJson.decodeFromString<DayPlan>(planJson) }
+        .onFailure { Log.w(TAG, "decode plan failed for session $id", it) }
+        .getOrNull()
     return SessionDisplayState(
         status = runCatching { SessionStatus.valueOf(status) }
             .onFailure { Log.w(TAG, "unknown session status '$status' for $id", it) }
@@ -43,6 +47,7 @@ internal fun SessionEntity.toDisplayState(): SessionDisplayState? {
         reason = instruction.reason,
         sessionDate = sessionDate,
         snoozeCount = snoozeCount,
+        hardLatest = plan?.hardLatest,
     )
 }
 

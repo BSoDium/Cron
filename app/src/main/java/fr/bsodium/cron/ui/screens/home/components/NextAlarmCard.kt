@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,6 +55,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.compose.ui.util.lerp
 
 @Composable
 fun NextAlarmCard(
@@ -75,19 +77,34 @@ fun NextAlarmCard(
  * collapsing variant can lerp its corner radius. Content renders in `onPrimary`.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun AlarmShell(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(Radius.xl),
+    onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primary,
-        shape = shape,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        content = content,
-    )
+    val mod = modifier.fillMaxWidth()
+    if (onClick != null) {
+        Surface(
+            onClick = onClick,
+            modifier = mod,
+            color = MaterialTheme.colorScheme.primary,
+            shape = shape,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            content = content,
+        )
+    } else {
+        Surface(
+            modifier = mod,
+            color = MaterialTheme.colorScheme.primary,
+            shape = shape,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            content = content,
+        )
+    }
 }
 
 /** The expanded card body: bold date, hero LCD time, and the sleep block. Renders in `onPrimary`. */
@@ -201,7 +218,7 @@ private fun LcdTimeDisplay(
     modifier: Modifier = Modifier,
     timeRowAlpha: Float = 1f,
 ) {
-    val progress = rememberLcdRevealProgress(alarmTime)
+    val reveal = rememberLcdReveal(alarmTime)
     // Only an upcoming alarm reads in full; no alarm and a passed alarm both render the grayed onset look.
     val upcoming = timing is AlarmTiming.Upcoming
     val digitColor = if (upcoming) base else base.copy(alpha = 0.30f)
@@ -211,10 +228,10 @@ private fun LcdTimeDisplay(
         modifier = modifier.alpha(timeRowAlpha),
         verticalAlignment = Alignment.Top,
     ) {
-        LcdClock(alarmTime = alarmTime, progress = progress, color = digitColor)
+        LcdClock(alarmTime = alarmTime, reveal = reveal, color = digitColor)
         RemainingOrStatus(
             timing = timing,
-            progress = progress,
+            progress = reveal.progress,
             color = statusColor,
             modifier = Modifier.padding(start = Spacing.xs + Spacing.xxs, top = Spacing.xs + Spacing.xxs),
         )
@@ -228,7 +245,7 @@ private fun LcdTimeDisplay(
 @Composable
 internal fun LcdClock(
     alarmTime: LocalTime?,
-    progress: Float,
+    reveal: LcdReveal,
     color: Color,
     modifier: Modifier = Modifier,
     // The single-weight LCD face has no bold; [strokeWidthPx] (local px) overlays a stroke that
@@ -237,8 +254,8 @@ internal fun LcdClock(
 ) {
     val pending = alarmTime == null
     // Locale.US so the digits render as ASCII 0-9 on Arabic/Farsi/Bengali devices.
-    val hh = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.hour * progress).roundToInt())
-    val mm = if (pending) "00" else String.format(Locale.US, "%02d", (alarmTime.minute * progress).roundToInt())
+    val hh = if (pending) "00" else String.format(Locale.US, "%02d", lerp(reveal.fromHour.toFloat(), alarmTime.hour.toFloat(), reveal.progress).roundToInt())
+    val mm = if (pending) "00" else String.format(Locale.US, "%02d", lerp(reveal.fromMinute.toFloat(), alarmTime.minute.toFloat(), reveal.progress).roundToInt())
     val lcdStyle = CronTypography.lcdHero
     val ink = rememberLcdInkMetrics()
     // IntrinsicSize.Min so the colon's fillMaxHeight matches the digit line box, not the viewport.
@@ -283,28 +300,41 @@ private fun StrokeableLcdDigits(
     }
 }
 
-/**
- * The 700ms "roll up from 0" reveal progress, fired only when the alarm VALUE changes. The animated
- * key is [rememberSaveable], so reopening or switching tabs with an unchanged value shows it at rest.
- */
+internal data class LcdReveal(
+    val fromHour: Int,
+    val fromMinute: Int,
+    val progress: Float,
+)
+
 @Composable
-internal fun rememberLcdRevealProgress(alarmTime: LocalTime?): Float {
+internal fun rememberLcdReveal(alarmTime: LocalTime?): LcdReveal {
     val valueKey = alarmTime?.let { it.hour * 60 + it.minute }
     var animatedKey by rememberSaveable { mutableStateOf<Int?>(null) }
+    var fromKey by rememberSaveable { mutableStateOf(valueKey ?: 0) }
     val progressAnim = remember { Animatable(if (valueKey == null || valueKey == animatedKey) 1f else 0f) }
     LaunchedEffect(valueKey) {
         if (valueKey == null) return@LaunchedEffect
-        if (valueKey != animatedKey) {
+        if (animatedKey == null) {
+            fromKey = valueKey
+            progressAnim.snapTo(1f)
+            animatedKey = valueKey
+        } else if (valueKey != animatedKey) {
+            fromKey = animatedKey!!
             progressAnim.snapTo(0f)
             // Sanctioned motionScheme exception (docs/expressive.md § Sanctioned exceptions): the reveal
             // gates digit rolling on a 0→1 progress; a spring's overshoot past 1 would re-roll the digits.
             progressAnim.animateTo(1f, tween(durationMillis = LCD_REVEAL_MILLIS, easing = EaseOutCubic))
+            fromKey = valueKey
             animatedKey = valueKey
         } else {
             progressAnim.snapTo(1f)
         }
     }
-    return progressAnim.value
+    return LcdReveal(
+        fromHour = fromKey / 60,
+        fromMinute = fromKey % 60,
+        progress = progressAnim.value,
+    )
 }
 
 private const val LCD_REVEAL_MILLIS = 700

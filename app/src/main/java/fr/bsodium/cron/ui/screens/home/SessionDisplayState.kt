@@ -13,4 +13,5 @@ data class SessionDisplayState(
     val reason: String,
     val sessionDate: LocalDate,
     val snoozeCount: Int,
+    val hardLatest: LocalTime? = null,
 )

@@ -56,6 +56,7 @@ import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
 import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
 import fr.bsodium.cron.ui.screens.home.components.rememberAlarmTiming
+import fr.bsodium.cron.ui.screens.settings.components.TimePickerDialog
 import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
@@ -130,6 +131,12 @@ fun HomeScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    var showTimePicker by remember { mutableStateOf(false) }
+    val alarmEditable = uiState.autoAlarmsEnabled
+        && uiState.sessionDisplay?.alarmTime != null
+        && timing is AlarmTiming.Upcoming
+    val onAlarmTimeClick: (() -> Unit)? = if (alarmEditable) {{ showTimePicker = true }} else null
+
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val onNotifEnable = {
@@ -179,6 +186,7 @@ fun HomeScreen(
                         hasNotificationPermission = hasNotificationPermission,
                         onNotifEnable = onNotifEnable,
                         onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
+                        onAlarmTimeClick = onAlarmTimeClick,
                     )
                 }
             }
@@ -225,6 +233,18 @@ fun HomeScreen(
                     onDismiss = viewModel::dismissSettingsReminder,
                 )
             }
+        }
+
+        if (showTimePicker) {
+            TimePickerDialog(
+                initial = uiState.sessionDisplay?.alarmTime ?: LocalTime(7, 0),
+                onDismiss = { showTimePicker = false },
+                onConfirm = { newTime ->
+                    viewModel.updateAlarmTime(newTime)
+                    showTimePicker = false
+                },
+                hardLatest = uiState.sessionDisplay?.hardLatest,
+            )
         }
     }
 }
