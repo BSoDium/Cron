@@ -173,7 +173,8 @@ class SessionFsm(
             }
             TriggerType.OutOfBedConfirmed -> when (session.status) {
                 SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
-                else -> session.status // only Monitoring/ReMonitoring wake to Awake
+                SessionStatus.Awake -> SessionStatus.Complete
+                else -> session.status
             }
             else -> session.status // other triggers don't change status
         }
