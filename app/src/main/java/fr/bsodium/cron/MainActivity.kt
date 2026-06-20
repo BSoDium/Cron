@@ -60,6 +60,7 @@ import fr.bsodium.cron.ui.screens.home.HomeViewModel
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
+import fr.bsodium.cron.ui.screens.settings.SETTINGS_SCHEDULE
 import fr.bsodium.cron.ui.screens.settings.settingsGraph
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -265,6 +266,11 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 launchSingleTop = true
                                                 restoreState = true
+                                            }
+                                        },
+                                        onNavigateToScheduleSettings = {
+                                            navController.navigate(SETTINGS_SCHEDULE) {
+                                                launchSingleTop = true
                                             }
                                         },
                                     )
