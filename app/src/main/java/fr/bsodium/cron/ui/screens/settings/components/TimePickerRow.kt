@@ -1,10 +1,6 @@
 package fr.bsodium.cron.ui.screens.settings.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -124,7 +119,11 @@ internal fun TimePickerDialog(
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
-            Column {
+            Column(
+                modifier = Modifier.animateContentSize(
+                    MaterialTheme.motionScheme.defaultEffectsSpec(),
+                ),
+            ) {
                 Text(
                     text = "Select time",
                     style = MaterialTheme.typography.labelLarge,
@@ -170,14 +169,7 @@ internal fun TimePickerDialog(
                         Text("Save")
                     }
                 }
-                // ponytail: effects spec (non-bouncy) for clip-based expand — spatial spec's bounce oscillates the clip height
-                val sizeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<IntSize>()
-                val fadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-                AnimatedVisibility(
-                    visible = overLimit && hardLatest != null,
-                    enter = expandVertically(sizeSpec) + fadeIn(fadeSpec),
-                    exit = shrinkVertically(sizeSpec) + fadeOut(fadeSpec),
-                ) {
+                if (overLimit && hardLatest != null) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -204,7 +196,7 @@ internal fun TimePickerDialog(
                                 text = String.format(
                                     Locale.US,
                                     "Must be before %02d:%02d",
-                                    hardLatest!!.hour,
+                                    hardLatest.hour,
                                     hardLatest.minute,
                                 ),
                                 style = MaterialTheme.typography.bodyMedium,
