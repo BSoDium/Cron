@@ -35,9 +35,6 @@ fun gitVersionCode(): Int {
     }
 }
 
-// Fixed debug versionCode so switching branches never triggers a version-downgrade error on device.
-val isReleaseBuild = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
-
 // Read local.properties for sensitive config (file is gitignored)
 val localProps = Properties().apply {
     rootProject.file("local.properties")
@@ -57,7 +54,7 @@ android {
         applicationId = "fr.bsodium.cron"
         minSdk = 26
         targetSdk = 36
-        versionCode = if (isReleaseBuild) gitVersionCode() else Int.MAX_VALUE
+        versionCode = gitVersionCode()
         versionName = gitVersionName()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
