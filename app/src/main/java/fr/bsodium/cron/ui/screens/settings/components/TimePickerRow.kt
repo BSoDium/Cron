@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -27,8 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 import java.util.Locale
 import kotlinx.datetime.LocalTime
 
@@ -102,6 +106,7 @@ internal fun TimePickerDialog(
     val lighterTypography = MaterialTheme.typography.copy(
         displayLarge = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Normal),
     )
+    var showDial by remember { mutableStateOf(true) }
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(Radius.xl),
@@ -109,21 +114,19 @@ internal fun TimePickerDialog(
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
-            Column(modifier = Modifier.padding(Spacing.xl)) {
-                Text(
-                    text = "Select time",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(Spacing.xl))
-                MaterialTheme(typography = lighterTypography) {
-                    TimePicker(state = pickerState)
-                }
+            Column {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = Spacing.xl, end = Spacing.xl, top = Spacing.xl),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Text(
+                        text = "Select time",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     if (hardLatest != null) {
                         Text(
                             text = String.format(Locale.US, "Latest: %02d:%02d", hardLatest.hour, hardLatest.minute),
@@ -131,8 +134,35 @@ internal fun TimePickerDialog(
                             color = if (overLimit) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(Modifier.weight(1f))
                     }
+                }
+                Spacer(Modifier.height(Spacing.xl))
+                MaterialTheme(typography = lighterTypography) {
+                    if (showDial) {
+                        TimePicker(
+                            state = pickerState,
+                            modifier = Modifier.padding(horizontal = Spacing.xl),
+                        )
+                    } else {
+                        TimeInput(
+                            state = pickerState,
+                            modifier = Modifier.padding(horizontal = Spacing.xl),
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = Spacing.md, end = Spacing.sm, bottom = Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { showDial = !showDial }) {
+                        Symbol(
+                            symbol = if (showDial) MaterialSymbol.Keyboard else MaterialSymbol.Schedule,
+                            contentDescription = if (showDial) "Switch to keyboard" else "Switch to dial",
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                     TextButton(
                         onClick = { onConfirm(LocalTime(pickerState.hour, pickerState.minute)) },
