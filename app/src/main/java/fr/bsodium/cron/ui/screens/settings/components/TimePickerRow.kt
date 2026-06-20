@@ -170,12 +170,13 @@ internal fun TimePickerDialog(
                         Text("Save")
                     }
                 }
-                val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
-                val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+                // ponytail: effects spec (non-bouncy) for clip-based expand — spatial spec's bounce oscillates the clip height
+                val sizeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<IntSize>()
+                val fadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
                 AnimatedVisibility(
                     visible = overLimit && hardLatest != null,
-                    enter = expandVertically(spatialSpec, expandFrom = Alignment.Bottom) + fadeIn(effectsSpec),
-                    exit = shrinkVertically(spatialSpec, shrinkTowards = Alignment.Bottom) + fadeOut(effectsSpec),
+                    enter = expandVertically(sizeSpec) + fadeIn(fadeSpec),
+                    exit = shrinkVertically(sizeSpec) + fadeOut(fadeSpec),
                 ) {
                     Surface(
                         modifier = Modifier
