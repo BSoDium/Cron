@@ -14,13 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
@@ -33,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp as colorLerp
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
@@ -75,14 +77,15 @@ internal fun TimePickerOverlay(
 
     LaunchedEffect(visible) {
         if (visible) {
+            onShowingChanged(true)
             progress.animateTo(1f, spatialSpec)
         } else if (progress.value > 0f) {
             progress.animateTo(0f, spatialSpec)
+            onShowingChanged(false)
         }
     }
 
     val showing = progress.value > 0f || visible
-    LaunchedEffect(showing) { onShowingChanged(showing) }
     if (!showing) return
 
     var dismissing by remember { mutableStateOf(false) }
@@ -113,9 +116,16 @@ internal fun TimePickerOverlay(
     val primary = MaterialTheme.colorScheme.primary
     val onPrimary = MaterialTheme.colorScheme.onPrimary
     val surfaceHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val density = LocalDensity.current
     val radiusPx = with(density) { Radius.xl.toPx() }
     val narrowingPx = with(density) { (Spacing.md * 2).toPx() }.roundToInt()
+
+    val p = progress.value.coerceIn(0f, 1f)
+    val surfaceColor = colorLerp(primary, surfaceHigh, p)
+    val textColor = colorLerp(onPrimary, onSurface, p)
+    val subTextColor = colorLerp(onPrimary.copy(alpha = 0.7f), onSurfaceVariant, p)
 
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var contentSize by remember { mutableStateOf(IntSize.Zero) }
@@ -154,17 +164,18 @@ internal fun TimePickerOverlay(
                     targetTop = targetTop,
                     targetW = targetW.toFloat(),
                     targetH = targetH.toFloat(),
-                    color = primary,
+                    color = surfaceColor,
                     radiusPx = radiusPx,
                 ),
         ) {
             Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .onSizeChanged { contentSize = it }
+                    .width(with(density) { targetW.toDp() })
                     .graphicsLayer {
-                        val p = progress.value.coerceIn(0f, 1f)
-                        translationX = lerp(origin.left, targetLeft, p)
-                        translationY = lerp(origin.top, targetTop, p)
+                        translationX = lerp(origin.left, targetLeft, progress.value.coerceIn(0f, 1f))
+                        translationY = lerp(origin.top, targetTop, progress.value.coerceIn(0f, 1f))
                     }
                     .padding(
                         start = Spacing.xxl,
@@ -180,7 +191,7 @@ internal fun TimePickerOverlay(
                 ) {
                     AlignedFirstGlyph(
                         text = dateLabel.ifBlank { "—" },
-                        color = onPrimary,
+                        color = textColor,
                         style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
                     )
                     Button(
@@ -190,15 +201,15 @@ internal fun TimePickerOverlay(
                             alpha = ((progress.value - 0.5f) * 2f).coerceIn(0f, 1f)
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = onPrimary,
-                            contentColor = primary,
+                            containerColor = primary,
+                            contentColor = onPrimary,
                         ),
                     ) { Text("Save") }
                 }
 
                 val upcoming = pickerTiming is AlarmTiming.Upcoming
-                val digitColor = if (upcoming) onPrimary else onPrimary.copy(alpha = 0.30f)
-                val countdownColor = if (upcoming) onPrimary.copy(alpha = 0.7f) else onPrimary.copy(alpha = 0.30f)
+                val digitColor = if (upcoming) textColor else textColor.copy(alpha = 0.30f)
+                val countdownColor = if (upcoming) subTextColor else subTextColor.copy(alpha = 0.30f)
 
                 Row(verticalAlignment = Alignment.Top) {
                     LcdClock(
@@ -222,16 +233,27 @@ internal fun TimePickerOverlay(
                         alpha = ((progress.value - 0.5f) * 2f).coerceIn(0f, 1f)
                     },
                 )
-                Surface(
-                    color = surfaceHigh,
-                    shape = RoundedCornerShape(Radius.lg),
+
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clipToBounds()
                         .graphicsLayer {
                             alpha = ((progress.value - 0.5f) * 2f).coerceIn(0f, 1f)
                         },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    TimePicker(state = pickerState)
+                    TimePicker(
+                        state = pickerState,
+                        modifier = Modifier.layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            val dialH = placeable.width
+                            val offset = (placeable.height - dialH).coerceAtLeast(0)
+                            layout(placeable.width, dialH) {
+                                placeable.place(0, -offset)
+                            }
+                        },
+                    )
                 }
             }
         }
