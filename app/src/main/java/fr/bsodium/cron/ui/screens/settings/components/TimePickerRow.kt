@@ -130,12 +130,12 @@ internal fun TimePickerDialog(
                     if (showDial) {
                         TimePicker(
                             state = pickerState,
-                            modifier = Modifier.padding(horizontal = Spacing.xl),
+                            modifier = Modifier.padding(horizontal = Spacing.xl).fillMaxWidth(),
                         )
                     } else {
                         TimeInput(
                             state = pickerState,
-                            modifier = Modifier.padding(horizontal = Spacing.xl),
+                            modifier = Modifier.padding(horizontal = Spacing.xl).fillMaxWidth(),
                         )
                     }
                 }
