@@ -70,18 +70,15 @@ internal fun TimePickerOverlay(
     hardLatest: LocalTime?,
     onDismiss: () -> Unit,
     onConfirm: (LocalTime) -> Unit,
-    onShowingChanged: (Boolean) -> Unit,
 ) {
     val progress = remember { Animatable(0f) }
     val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
 
     LaunchedEffect(visible) {
         if (visible) {
-            onShowingChanged(true)
             progress.animateTo(1f, spatialSpec)
         } else if (progress.value > 0f) {
             progress.animateTo(0f, spatialSpec)
-            onShowingChanged(false)
         }
     }
 
@@ -169,8 +166,12 @@ internal fun TimePickerOverlay(
                 ),
         ) {
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
                 modifier = Modifier
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    ) {}
                     .onSizeChanged { contentSize = it }
                     .width(with(density) { targetW.toDp() })
                     .graphicsLayer {
@@ -211,7 +212,10 @@ internal fun TimePickerOverlay(
                 val digitColor = if (upcoming) textColor else textColor.copy(alpha = 0.30f)
                 val countdownColor = if (upcoming) subTextColor else subTextColor.copy(alpha = 0.30f)
 
-                Row(verticalAlignment = Alignment.Top) {
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     LcdClock(
                         alarmTime = pickerTime,
                         reveal = LcdReveal(pickerState.hour, pickerState.minute, 1f),
@@ -247,9 +251,10 @@ internal fun TimePickerOverlay(
                         state = pickerState,
                         modifier = Modifier.layout { measurable, constraints ->
                             val placeable = measurable.measure(constraints)
-                            val dialH = placeable.width
-                            val offset = (placeable.height - dialH).coerceAtLeast(0)
-                            layout(placeable.width, dialH) {
+                            val dialPadding = Spacing.md.roundToPx()
+                            val displayH = (placeable.height - placeable.width).coerceAtLeast(0)
+                            val offset = (displayH - dialPadding).coerceAtLeast(0)
+                            layout(placeable.width, placeable.height - offset) {
                                 placeable.place(0, -offset)
                             }
                         },

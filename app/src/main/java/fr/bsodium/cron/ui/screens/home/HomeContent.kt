@@ -86,7 +86,6 @@ internal fun HomePlanContent(
     onAutoAlarmsChange: (Boolean) -> Unit,
     onAlarmTimeClick: (() -> Unit)? = null,
     onCardBounds: ((Rect) -> Unit)? = null,
-    cardHidden: Boolean = false,
 ) {
     val iterations = plan.iterations
     val listState = rememberLazyListState()
@@ -313,7 +312,6 @@ internal fun HomePlanContent(
                 onFullHeight = { cardFullHeightPx = it },
                 onAlarmTimeClick = onAlarmTimeClick,
                 onBoundsChanged = onCardBounds,
-                modifier = if (cardHidden) Modifier.graphicsLayer { alpha = 0f } else Modifier,
             )
         }
     }

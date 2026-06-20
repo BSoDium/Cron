@@ -135,7 +135,6 @@ fun HomeScreen(
     }
 
     var showTimePicker by remember { mutableStateOf(false) }
-    var overlayShowing by remember { mutableStateOf(false) }
     var cardBounds by remember { mutableStateOf<Rect?>(null) }
     val alarmEditable = uiState.autoAlarmsEnabled
         && uiState.sessionDisplay?.alarmTime != null
@@ -193,7 +192,6 @@ fun HomeScreen(
                         onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                         onAlarmTimeClick = onAlarmTimeClick,
                         onCardBounds = { cardBounds = it },
-                        cardHidden = overlayShowing,
                     )
                 }
             }
@@ -255,7 +253,6 @@ fun HomeScreen(
                     viewModel.updateAlarmTime(newTime)
                     showTimePicker = false
                 },
-                onShowingChanged = { overlayShowing = it },
             )
         }
         DisposableEffect(Unit) {
