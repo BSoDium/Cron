@@ -19,10 +19,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import fr.bsodium.cron.debug.MockApiPrefs
 import fr.bsodium.cron.session.SessionRepository
+import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.SessionEvent
+import fr.bsodium.cron.session.model.SignalConfidence
+import fr.bsodium.cron.session.model.SleepStage
+import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
 import fr.bsodium.cron.ui.screens.settings.components.SwitchRow
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.minutes
 
 @Composable
 fun DeveloperSettingsScreen(onBack: () -> Unit) {
@@ -63,6 +70,63 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
                     text = "Clear",
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Inject sleep data",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "Insert a mock 7.5h sleep cycle into the current session",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = {
+                scope.launch {
+                    val repo = SessionRepository(context)
+                    val session = repo.findCurrent() ?: return@launch
+                    val now = Clock.System.now()
+                    val totalMinutes = 460
+                    val start = now - totalMinutes.minutes
+                    val stages = listOf(
+                        SleepStage.Awake to 12,
+                        SleepStage.Light to 78,
+                        SleepStage.Deep to 95,
+                        SleepStage.Rem to 45,
+                        SleepStage.Light to 80,
+                        SleepStage.Deep to 65,
+                        SleepStage.Rem to 50,
+                        SleepStage.Light to 35,
+                    )
+                    var cursor = start
+                    for ((stage, mins) in stages) {
+                        val end = cursor + mins.minutes
+                        repo.appendEvent(
+                            session.id,
+                            SessionEvent(
+                                trigger = TriggerType.HcStageUpdate,
+                                timestamp = cursor,
+                                data = EventData.HcStageUpdate(
+                                    stage = stage,
+                                    source = "debug",
+                                    confidence = SignalConfidence.High,
+                                    recordStart = cursor,
+                                    recordEnd = end,
+                                ),
+                            ),
+                        )
+                        cursor = end
+                    }
+                }
+            }) {
+                Text(text = "Inject")
             }
         }
     }
