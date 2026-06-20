@@ -2,10 +2,13 @@ package fr.bsodium.cron.ui.screens.settings.components
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -117,17 +120,18 @@ internal fun TimePickerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.xxl)
-                .animateContentSize(MaterialTheme.motionScheme.defaultEffectsSpec()),
-            shape = RoundedCornerShape(Radius.xl),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
         ) {
-            Column {
+            Surface(
+                modifier = Modifier.animateContentSize(tween(300)),
+                shape = RoundedCornerShape(Radius.xl),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+            ) {
+                Column {
                 Text(
                     text = "Select time",
                     style = MaterialTheme.typography.labelLarge,
@@ -219,6 +223,7 @@ internal fun TimePickerDialog(
                     }
                 }
             }
+        }
         }
     }
 }
