@@ -42,6 +42,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.OverlayPortal
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.ui.components.FabAction
@@ -75,6 +76,7 @@ private enum class HomePhase { Loading, Idle, Plan }
 fun HomeScreen(
     viewModel: HomeViewModel,
     fabRegistry: FabRegistry,
+    overlayPortal: OverlayPortal,
     onNavigateToSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -239,21 +241,26 @@ fun HomeScreen(
             }
         }
 
-        TimePickerOverlay(
-            visible = showTimePicker,
-            cardBounds = cardBounds,
-            dateLabel = uiState.dateLabel,
-            alarmTime = uiState.sessionDisplay?.alarmTime,
-            sessionDate = uiState.sessionDisplay?.sessionDate,
-            sleepDurationLabel = uiState.sleepStats?.durationLabel,
-            sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-            hardLatest = uiState.sessionDisplay?.hardLatest,
-            onDismiss = { showTimePicker = false },
-            onConfirm = { newTime ->
-                viewModel.updateAlarmTime(newTime)
-                showTimePicker = false
-            },
-        )
+        overlayPortal.content = {
+            TimePickerOverlay(
+                visible = showTimePicker,
+                cardBounds = cardBounds,
+                dateLabel = uiState.dateLabel,
+                alarmTime = uiState.sessionDisplay?.alarmTime,
+                sessionDate = uiState.sessionDisplay?.sessionDate,
+                sleepDurationLabel = uiState.sleepStats?.durationLabel,
+                sleepSegments = uiState.sleepStats?.segments.orEmpty(),
+                hardLatest = uiState.sessionDisplay?.hardLatest,
+                onDismiss = { showTimePicker = false },
+                onConfirm = { newTime ->
+                    viewModel.updateAlarmTime(newTime)
+                    showTimePicker = false
+                },
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose { overlayPortal.content = null }
+        }
     }
 }
 

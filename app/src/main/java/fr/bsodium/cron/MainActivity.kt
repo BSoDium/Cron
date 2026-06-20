@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -118,6 +119,10 @@ class FabRegistry {
     }
 }
 
+class OverlayPortal {
+    var content: (@Composable () -> Unit)? by mutableStateOf(null)
+}
+
 class MainActivity : ComponentActivity() {
 
     /**
@@ -159,6 +164,7 @@ class MainActivity : ComponentActivity() {
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
                     currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
+                val overlayPortal = remember { OverlayPortal() }
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
                 val useCompactNav = compactNavPref
@@ -179,6 +185,7 @@ class MainActivity : ComponentActivity() {
                     LocalSettingsListState provides settingsListState,
                     LocalSettingsTopAppBarState provides settingsTopAppBarState,
                 ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                     Scaffold(
                         containerColor = CronColors.pageBackground,
                         bottomBar = {
@@ -257,6 +264,7 @@ class MainActivity : ComponentActivity() {
                                     HomeScreen(
                                         viewModel = viewModel<HomeViewModel>(),
                                         fabRegistry = fabRegistry,
+                                        overlayPortal = overlayPortal,
                                         onNavigateToSettings = {
                                             navController.navigate(SETTINGS_ROOT) {
                                                 popUpTo(ROUTE_HOME) {
@@ -282,6 +290,8 @@ class MainActivity : ComponentActivity() {
                             }
                             EdgeFades(showTopScrim = !hasTopAppBar)
                         }
+                    }
+                    overlayPortal.content?.invoke()
                     }
                 }
             }

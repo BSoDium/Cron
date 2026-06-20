@@ -47,11 +47,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.SleepSegment
+import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
-import java.util.Locale
 import kotlin.math.roundToInt
 
 private const val SCRIM_ALPHA = 0.32f
@@ -116,7 +116,7 @@ internal fun TimePickerOverlay(
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var pickerSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val pickerW = pickerSize.width + (paddingPx * 2).roundToInt()
+    val pickerW = cardBounds?.width?.roundToInt() ?: (pickerSize.width + (paddingPx * 2).roundToInt())
     val pickerH = pickerSize.height + (paddingPx * 2).roundToInt()
     val origin = cardBounds ?: Rect(
         left = (containerSize.width - pickerW) / 2f,
@@ -189,7 +189,6 @@ internal fun TimePickerOverlay(
             ) {
                 PickerDialogContent(
                     pickerState = pickerState,
-                    hardLatest = hardLatest,
                     overLimit = overLimit,
                     onDismiss = { dismiss() },
                     onConfirm = { onConfirm(LocalTime(pickerState.hour, pickerState.minute)) },
@@ -231,30 +230,18 @@ private fun Modifier.drawWithMorphSurface(
 @Composable
 private fun PickerDialogContent(
     pickerState: TimePickerState,
-    hardLatest: LocalTime?,
     overLimit: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    val lighterTypography = MaterialTheme.typography.copy(
-        displayLarge = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Normal),
+    val lcdTypography = MaterialTheme.typography.copy(
+        displayLarge = MaterialTheme.typography.displayLarge.copy(
+            fontFamily = LcdFontFamily,
+            fontWeight = FontWeight.Normal,
+        ),
     )
     Column {
-        Text(
-            text = "Select time",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (hardLatest != null) {
-            Text(
-                text = String.format(Locale.US, "Latest: %02d:%02d", hardLatest.hour, hardLatest.minute),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (overLimit) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.height(Spacing.lg))
-        MaterialTheme(typography = lighterTypography) {
+        MaterialTheme(typography = lcdTypography) {
             TimePicker(state = pickerState)
         }
         Row(
