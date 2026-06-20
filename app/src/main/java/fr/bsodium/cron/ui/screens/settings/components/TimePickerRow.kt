@@ -1,5 +1,10 @@
 package fr.bsodium.cron.ui.screens.settings.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -139,53 +144,6 @@ internal fun TimePickerDialog(
                         )
                     }
                 }
-                if (overLimit && hardLatest != null) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(Spacing.xs),
-                        shape = RoundedCornerShape(Radius.lg),
-                        color = MaterialTheme.colorScheme.primary,
-                        tonalElevation = 0.dp,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(
-                                start = Spacing.md,
-                                top = Spacing.xs,
-                                bottom = Spacing.xs,
-                                end = Spacing.sm,
-                            ),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                        ) {
-                            Symbol(
-                                symbol = MaterialSymbol.Schedule,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                size = 16.dp,
-                            )
-                            Text(
-                                text = String.format(
-                                    Locale.US,
-                                    "Must be before %02d:%02d",
-                                    hardLatest.hour,
-                                    hardLatest.minute,
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (onEditLimit != null) {
-                                TextButton(onClick = { onEditLimit(); onDismiss() }) {
-                                    Text(
-                                        text = "Edit",
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -209,6 +167,55 @@ internal fun TimePickerDialog(
                         ),
                     ) {
                         Text("Save")
+                    }
+                }
+                AnimatedVisibility(
+                    visible = overLimit && hardLatest != null,
+                    enter = slideInVertically { it } + fadeIn(),
+                    exit = slideOutVertically { it } + fadeOut(),
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm),
+                        shape = RoundedCornerShape(Radius.lg),
+                        color = MaterialTheme.colorScheme.primary,
+                        tonalElevation = 0.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(
+                                start = Spacing.md,
+                                end = Spacing.sm,
+                            ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        ) {
+                            Symbol(
+                                symbol = MaterialSymbol.Error,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                size = 20.dp,
+                            )
+                            Text(
+                                text = String.format(
+                                    Locale.US,
+                                    "Must be before %02d:%02d",
+                                    hardLatest!!.hour,
+                                    hardLatest.minute,
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (onEditLimit != null) {
+                                TextButton(onClick = { onEditLimit(); onDismiss() }) {
+                                    Text(
+                                        text = "Edit",
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

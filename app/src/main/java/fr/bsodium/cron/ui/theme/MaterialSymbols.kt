@@ -65,6 +65,7 @@ enum class MaterialSymbol(val code: String) {
     Close("\uE5CD"),
     Code("\uE86F"),
     DirectionsBike("\uE52F"),
+    Error("\uE000"),
     DirectionsBus("\uEFF6"),
     DirectionsCar("\uEFF7"),
     DirectionsTransit("\uEFFA"),
