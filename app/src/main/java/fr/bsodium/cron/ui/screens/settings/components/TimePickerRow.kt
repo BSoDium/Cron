@@ -1,14 +1,10 @@
 package fr.bsodium.cron.ui.screens.settings.components
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,7 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -109,29 +104,21 @@ internal fun TimePickerDialog(
     val overLimit by remember(hardLatest) {
         derivedStateOf {
             hardLatest != null && (pickerState.hour > hardLatest.hour ||
-                (pickerState.hour == hardLatest.hour && pickerState.minute > hardLatest.minute))
+                    (pickerState.hour == hardLatest.hour && pickerState.minute > hardLatest.minute))
         }
     }
     val lighterTypography = MaterialTheme.typography.copy(
         displayLarge = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Normal),
     )
     var showDial by remember { mutableStateOf(true) }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(Radius.xl),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
         ) {
-            Surface(
-                modifier = Modifier.animateContentSize(tween(300)),
-                shape = RoundedCornerShape(Radius.xl),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp,
-            ) {
-                Column {
+            Column {
                 Text(
                     text = "Select time",
                     style = MaterialTheme.typography.labelLarge,
@@ -155,7 +142,7 @@ internal fun TimePickerDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm),
+                        .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = { showDial = !showDial }) {
@@ -178,27 +165,32 @@ internal fun TimePickerDialog(
                     }
                 }
                 if (overLimit && hardLatest != null) {
+                    Spacer(
+                        Modifier
+                            .height(2.dp)
+                            .fillMaxWidth()
+                    )
                     Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm),
-                        shape = RoundedCornerShape(Radius.lg),
-                        color = MaterialTheme.colorScheme.primary,
-                        tonalElevation = 0.dp,
                     ) {
                         Row(
-                            modifier = Modifier.padding(
-                                start = Spacing.md,
-                                end = Spacing.sm,
-                            ),
+                            modifier = Modifier
+                                .padding(
+                                    start = Spacing.lg,
+                                    end = Spacing.sm,
+                                    top = Spacing.xs,
+                                    bottom = Spacing.xs
+                                ),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Symbol(
                                 symbol = MaterialSymbol.Error,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                size = 18.dp,
+                                tint = MaterialTheme.colorScheme.onBackground,
+                                size = 20.dp,
                             )
                             Text(
                                 text = String.format(
@@ -208,14 +200,15 @@ internal fun TimePickerDialog(
                                     hardLatest.minute,
                                 ),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 modifier = Modifier.weight(1f),
                             )
                             if (onEditLimit != null) {
                                 TextButton(onClick = { onEditLimit(); onDismiss() }) {
                                     Text(
-                                        text = "Edit",
-                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        text = "Edit settings",
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
                                     )
                                 }
                             }
@@ -223,7 +216,6 @@ internal fun TimePickerDialog(
                     }
                 }
             }
-        }
         }
     }
 }
