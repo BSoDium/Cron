@@ -1,10 +1,10 @@
 package fr.bsodium.cron.ui.screens.settings.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -147,7 +148,7 @@ internal fun TimePickerDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = Spacing.md, end = Spacing.sm, bottom = Spacing.sm),
+                        .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = { showDial = !showDial }) {
@@ -169,10 +170,12 @@ internal fun TimePickerDialog(
                         Text("Save")
                     }
                 }
+                val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+                val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
                 AnimatedVisibility(
                     visible = overLimit && hardLatest != null,
-                    enter = slideInVertically { it } + fadeIn(),
-                    exit = slideOutVertically { it } + fadeOut(),
+                    enter = expandVertically(spatialSpec, expandFrom = Alignment.Bottom) + fadeIn(effectsSpec),
+                    exit = shrinkVertically(spatialSpec, shrinkTowards = Alignment.Bottom) + fadeOut(effectsSpec),
                 ) {
                     Surface(
                         modifier = Modifier
@@ -194,7 +197,7 @@ internal fun TimePickerDialog(
                                 symbol = MaterialSymbol.Error,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onPrimary,
-                                size = 20.dp,
+                                size = 18.dp,
                             )
                             Text(
                                 text = String.format(
