@@ -115,22 +115,24 @@ internal fun TimePickerDialog(
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (hardLatest != null) {
-                    Text(
-                        text = String.format(Locale.US, "Latest: %02d:%02d", hardLatest.hour, hardLatest.minute),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (overLimit) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.height(Spacing.lg))
+                Spacer(Modifier.height(Spacing.xl))
                 MaterialTheme(typography = lighterTypography) {
                     TimePicker(state = pickerState)
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (hardLatest != null) {
+                        Text(
+                            text = String.format(Locale.US, "Latest: %02d:%02d", hardLatest.hour, hardLatest.minute),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (overLimit) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.weight(1f))
+                    }
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                     TextButton(
                         onClick = { onConfirm(LocalTime(pickerState.hour, pickerState.minute)) },
