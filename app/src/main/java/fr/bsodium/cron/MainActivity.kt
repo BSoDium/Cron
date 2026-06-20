@@ -269,9 +269,15 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         onNavigateToScheduleSettings = {
-                                            navController.navigate(SETTINGS_SCHEDULE) {
+                                            navController.navigate(SETTINGS_ROOT) {
+                                                popUpTo(ROUTE_HOME) {
+                                                    saveState = true
+                                                    inclusive = false
+                                                }
                                                 launchSingleTop = true
+                                                restoreState = true
                                             }
+                                            navController.navigate(SETTINGS_SCHEDULE)
                                         },
                                     )
                                 }

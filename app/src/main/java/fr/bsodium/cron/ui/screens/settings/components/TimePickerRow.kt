@@ -1,17 +1,14 @@
 package fr.bsodium.cron.ui.screens.settings.components
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -32,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -144,77 +140,48 @@ internal fun TimePickerDialog(
                     }
                 }
                 if (overLimit && hardLatest != null) {
-                    val errorColor = MaterialTheme.colorScheme.error
-                    Box(
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = Spacing.lg),
+                            .padding(Spacing.xs),
+                        shape = RoundedCornerShape(Radius.lg),
+                        color = MaterialTheme.colorScheme.primary,
+                        tonalElevation = 0.dp,
                     ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(50),
-                                color = errorColor,
-                                shadowElevation = 4.dp,
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(
-                                        start = Spacing.xs,
-                                        top = Spacing.xs,
-                                        bottom = Spacing.xs,
-                                        end = Spacing.sm,
-                                    ),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                                ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.onError.copy(alpha = 0.2f),
-                                    ) {
-                                        Symbol(
-                                            symbol = MaterialSymbol.Schedule,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onError,
-                                            size = 16.dp,
-                                            modifier = Modifier.padding(Spacing.xs),
-                                        )
-                                    }
+                        Row(
+                            modifier = Modifier.padding(
+                                start = Spacing.md,
+                                top = Spacing.xs,
+                                bottom = Spacing.xs,
+                                end = Spacing.sm,
+                            ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        ) {
+                            Symbol(
+                                symbol = MaterialSymbol.Schedule,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                size = 16.dp,
+                            )
+                            Text(
+                                text = String.format(
+                                    Locale.US,
+                                    "Must be before %02d:%02d",
+                                    hardLatest.hour,
+                                    hardLatest.minute,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (onEditLimit != null) {
+                                TextButton(onClick = { onEditLimit(); onDismiss() }) {
                                     Text(
-                                        text = String.format(
-                                            Locale.US,
-                                            "Must be before %02d:%02d",
-                                            hardLatest.hour,
-                                            hardLatest.minute,
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onError,
-                                        modifier = Modifier.weight(1f),
+                                        text = "Edit",
+                                        color = MaterialTheme.colorScheme.onPrimary,
                                     )
-                                    if (onEditLimit != null) {
-                                        TextButton(onClick = { onEditLimit(); onDismiss() }) {
-                                            Text(
-                                                text = "Edit",
-                                                color = MaterialTheme.colorScheme.onError,
-                                            )
-                                        }
-                                    }
                                 }
-                            }
-                            Canvas(
-                                modifier = Modifier
-                                    .align(Alignment.End)
-                                    .padding(end = Spacing.xxl)
-                                    .size(width = 12.dp, height = 6.dp),
-                            ) {
-                                drawPath(
-                                    path = Path().apply {
-                                        moveTo(0f, 0f)
-                                        lineTo(size.width, 0f)
-                                        lineTo(size.width / 2f, size.height)
-                                        close()
-                                    },
-                                    color = errorColor,
-                                )
                             }
                         }
                     }
@@ -233,6 +200,7 @@ internal fun TimePickerDialog(
                     }
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(Spacing.sm))
                     Button(
                         onClick = { onConfirm(LocalTime(pickerState.hour, pickerState.minute)) },
                         enabled = !overLimit,
