@@ -13,14 +13,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TimePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,7 +31,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -37,17 +41,14 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp as colorLerp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
-import fr.bsodium.cron.session.model.SleepSegment
-import fr.bsodium.cron.ui.theme.LcdFontFamily
+import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
@@ -64,11 +65,10 @@ internal fun TimePickerOverlay(
     dateLabel: String,
     alarmTime: LocalTime?,
     sessionDate: LocalDate?,
-    sleepDurationLabel: String?,
-    sleepSegments: List<SleepSegment>,
     hardLatest: LocalTime?,
     onDismiss: () -> Unit,
     onConfirm: (LocalTime) -> Unit,
+    onShowingChanged: (Boolean) -> Unit,
 ) {
     val progress = remember { Animatable(0f) }
     val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
@@ -82,6 +82,7 @@ internal fun TimePickerOverlay(
     }
 
     val showing = progress.value > 0f || visible
+    LaunchedEffect(showing) { onShowingChanged(showing) }
     if (!showing) return
 
     var dismissing by remember { mutableStateOf(false) }
@@ -99,6 +100,9 @@ internal fun TimePickerOverlay(
         initialMinute = alarmTime?.minute ?: 0,
         is24Hour = true,
     )
+    val pickerTime = LocalTime(pickerState.hour, pickerState.minute)
+    val pickerTiming = rememberAlarmTiming(pickerTime, sessionDate)
+
     val overLimit by remember(hardLatest) {
         derivedStateOf {
             hardLatest != null && (pickerState.hour > hardLatest.hour ||
@@ -107,28 +111,28 @@ internal fun TimePickerOverlay(
     }
 
     val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
     val surfaceHigh = MaterialTheme.colorScheme.surfaceContainerHigh
-    val timing = rememberAlarmTiming(alarmTime, sessionDate)
     val density = LocalDensity.current
     val radiusPx = with(density) { Radius.xl.toPx() }
-    val paddingPx = with(density) { Spacing.xl.toPx() }
+    val narrowingPx = with(density) { (Spacing.md * 2).toPx() }.roundToInt()
 
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
-    var pickerSize by remember { mutableStateOf(IntSize.Zero) }
+    var contentSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val pickerW = cardBounds?.width?.roundToInt() ?: (pickerSize.width + (paddingPx * 2).roundToInt())
-    val pickerH = pickerSize.height + (paddingPx * 2).roundToInt()
+    val targetW = cardBounds?.width?.let { (it - narrowingPx).roundToInt() }
+        ?: (containerSize.width - with(density) { (Spacing.xl * 2).toPx() }.roundToInt())
+    val targetH = contentSize.height
     val origin = cardBounds ?: Rect(
-        left = (containerSize.width - pickerW) / 2f,
-        top = (containerSize.height - pickerH) / 2f,
-        right = (containerSize.width + pickerW) / 2f,
-        bottom = (containerSize.height + pickerH) / 2f,
+        left = (containerSize.width - targetW) / 2f,
+        top = (containerSize.height - targetH) / 2f,
+        right = (containerSize.width + targetW) / 2f,
+        bottom = (containerSize.height + targetH) / 2f,
     )
-    val targetLeft = (containerSize.width - pickerW) / 2f
-    val targetTop = (containerSize.height - pickerH) / 2f
+    val targetLeft = (containerSize.width - targetW) / 2f
+    val targetTop = (containerSize.height - targetH) / 2f
 
     Box(Modifier.fillMaxSize().onSizeChanged { containerSize = it }) {
-        // Scrim
         Box(
             Modifier
                 .fillMaxSize()
@@ -140,121 +144,120 @@ internal fun TimePickerOverlay(
                 ) { dismiss() },
         )
 
-        // Morphing surface + clipped content
         Box(
             Modifier
                 .fillMaxSize()
-                .drawWithMorphSurface(
+                .drawMorphSurface(
                     progress = { progress.value },
                     origin = origin,
                     targetLeft = targetLeft,
                     targetTop = targetTop,
-                    pickerW = pickerW.toFloat(),
-                    pickerH = pickerH.toFloat(),
-                    startColor = primary,
-                    endColor = surfaceHigh,
+                    targetW = targetW.toFloat(),
+                    targetH = targetH.toFloat(),
+                    color = primary,
                     radiusPx = radiusPx,
                 ),
         ) {
-            // Ghost — card content, fading out early
-            Box(
-                Modifier
-                    .width(with(density) { origin.width.toDp() })
+            Column(
+                modifier = Modifier
+                    .onSizeChanged { contentSize = it }
                     .graphicsLayer {
                         val p = progress.value.coerceIn(0f, 1f)
                         translationX = lerp(origin.left, targetLeft, p)
                         translationY = lerp(origin.top, targetTop, p)
-                        alpha = (1f - p * 2.85f).coerceIn(0f, 1f)
-                    },
+                    }
+                    .padding(
+                        start = Spacing.xxl,
+                        top = Spacing.lg,
+                        end = Spacing.xxl,
+                        bottom = Spacing.lg,
+                    ),
             ) {
-                AlarmCardContent(
-                    dateLabel = dateLabel,
-                    alarmTime = alarmTime,
-                    timing = timing,
-                    sleepDurationLabel = sleepDurationLabel,
-                    sleepSegments = sleepSegments,
-                )
-            }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AlignedFirstGlyph(
+                        text = dateLabel.ifBlank { "—" },
+                        color = onPrimary,
+                        style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
+                    )
+                    Button(
+                        onClick = { onConfirm(pickerTime) },
+                        enabled = !overLimit,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = ((progress.value - 0.5f) * 2f).coerceIn(0f, 1f)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = onPrimary,
+                            contentColor = primary,
+                        ),
+                    ) { Text("Save") }
+                }
 
-            // Picker — fading in late
-            Box(
-                Modifier
-                    .onSizeChanged { pickerSize = it }
-                    .graphicsLayer {
-                        val p = progress.value.coerceIn(0f, 1f)
-                        translationX = lerp(origin.left + paddingPx, targetLeft + paddingPx, p)
-                        translationY = lerp(origin.top + paddingPx, targetTop + paddingPx, p)
-                        alpha = ((p - 0.5f) * 2f).coerceIn(0f, 1f)
+                val upcoming = pickerTiming is AlarmTiming.Upcoming
+                val digitColor = if (upcoming) onPrimary else onPrimary.copy(alpha = 0.30f)
+                val countdownColor = if (upcoming) onPrimary.copy(alpha = 0.7f) else onPrimary.copy(alpha = 0.30f)
+
+                Row(verticalAlignment = Alignment.Top) {
+                    LcdClock(
+                        alarmTime = pickerTime,
+                        reveal = LcdReveal(pickerState.hour, pickerState.minute, 1f),
+                        color = digitColor,
+                    )
+                    RemainingOrStatus(
+                        timing = pickerTiming,
+                        progress = 1f,
+                        color = countdownColor,
+                        modifier = Modifier.padding(
+                            start = Spacing.xs + Spacing.xxs,
+                            top = Spacing.xs + Spacing.xxs,
+                        ),
+                    )
+                }
+
+                Spacer(
+                    Modifier.height(Spacing.lg).graphicsLayer {
+                        alpha = ((progress.value - 0.5f) * 2f).coerceIn(0f, 1f)
                     },
-            ) {
-                PickerDialogContent(
-                    pickerState = pickerState,
-                    overLimit = overLimit,
-                    onDismiss = { dismiss() },
-                    onConfirm = { onConfirm(LocalTime(pickerState.hour, pickerState.minute)) },
                 )
+                Surface(
+                    color = surfaceHigh,
+                    shape = RoundedCornerShape(Radius.lg),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            alpha = ((progress.value - 0.5f) * 2f).coerceIn(0f, 1f)
+                        },
+                ) {
+                    TimePicker(state = pickerState)
+                }
             }
         }
     }
 }
 
-private fun Modifier.drawWithMorphSurface(
+private fun Modifier.drawMorphSurface(
     progress: () -> Float,
     origin: Rect,
     targetLeft: Float,
     targetTop: Float,
-    pickerW: Float,
-    pickerH: Float,
-    startColor: Color,
-    endColor: Color,
+    targetW: Float,
+    targetH: Float,
+    color: Color,
     radiusPx: Float,
 ) = this.drawWithContent {
     val p = progress().coerceIn(0f, 1f)
-    val color = colorLerp(startColor, endColor, p)
     val left = lerp(origin.left, targetLeft, p)
     val top = lerp(origin.top, targetTop, p)
-    val w = lerp(origin.width, pickerW, p)
-    val h = lerp(origin.height, pickerH, p)
+    val w = lerp(origin.width, targetW, p)
+    val h = lerp(origin.height, targetH, p)
     val cr = CornerRadius(radiusPx)
 
     drawRoundRect(color, Offset(left, top), Size(w, h), cornerRadius = cr)
 
-    clipPath(
-        Path().apply { addRoundRect(RoundRect(left, top, left + w, top + h, cr)) },
-    ) {
+    clipPath(Path().apply { addRoundRect(RoundRect(left, top, left + w, top + h, cr)) }) {
         this@drawWithContent.drawContent()
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PickerDialogContent(
-    pickerState: TimePickerState,
-    overLimit: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    val lcdTypography = MaterialTheme.typography.copy(
-        displayLarge = MaterialTheme.typography.displayLarge.copy(
-            fontFamily = LcdFontFamily,
-            fontWeight = FontWeight.Normal,
-        ),
-    )
-    Column {
-        MaterialTheme(typography = lcdTypography) {
-            TimePicker(state = pickerState)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-            TextButton(
-                onClick = onConfirm,
-                enabled = !overLimit,
-            ) {
-                Text("OK")
-            }
-        }
     }
 }
