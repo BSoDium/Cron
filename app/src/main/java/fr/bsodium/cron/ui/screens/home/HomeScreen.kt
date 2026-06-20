@@ -75,6 +75,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     fabRegistry: FabRegistry,
     onNavigateToSettings: () -> Unit,
+    onNavigateToScheduleSettings: () -> Unit = onNavigateToSettings,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     // At most one iteration streams at a time (always the latest). Typewriter-reveal that sub-thread and
@@ -244,6 +245,10 @@ fun HomeScreen(
                     showTimePicker = false
                 },
                 hardLatest = uiState.sessionDisplay?.hardLatest,
+                onEditLimit = {
+                    showTimePicker = false
+                    onNavigateToScheduleSettings()
+                },
             )
         }
     }

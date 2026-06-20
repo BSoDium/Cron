@@ -8,12 +8,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -27,8 +32,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 import java.util.Locale
 import kotlinx.datetime.LocalTime
 
@@ -87,6 +94,7 @@ internal fun TimePickerDialog(
     onDismiss: () -> Unit,
     onConfirm: (LocalTime) -> Unit,
     hardLatest: LocalTime? = null,
+    onEditLimit: (() -> Unit)? = null,
 ) {
     val pickerState = rememberTimePickerState(
         initialHour = initial.hour,
@@ -96,12 +104,13 @@ internal fun TimePickerDialog(
     val overLimit by remember(hardLatest) {
         derivedStateOf {
             hardLatest != null && (pickerState.hour > hardLatest.hour ||
-                (pickerState.hour == hardLatest.hour && pickerState.minute > hardLatest.minute))
+                    (pickerState.hour == hardLatest.hour && pickerState.minute > hardLatest.minute))
         }
     }
     val lighterTypography = MaterialTheme.typography.copy(
         displayLarge = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Normal),
     )
+    var showDial by remember { mutableStateOf(true) }
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(Radius.xl),
@@ -109,34 +118,101 @@ internal fun TimePickerDialog(
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
-            Column(modifier = Modifier.padding(Spacing.xl)) {
+            Column {
                 Text(
                     text = "Select time",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = Spacing.xl, top = Spacing.xl),
                 )
-                if (hardLatest != null) {
-                    Text(
-                        text = String.format(Locale.US, "Latest: %02d:%02d", hardLatest.hour, hardLatest.minute),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (overLimit) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.height(Spacing.lg))
+                Spacer(Modifier.height(Spacing.xl))
                 MaterialTheme(typography = lighterTypography) {
-                    TimePicker(state = pickerState)
+                    if (showDial) {
+                        TimePicker(
+                            state = pickerState,
+                            modifier = Modifier.padding(horizontal = Spacing.xl).fillMaxWidth(),
+                        )
+                    } else {
+                        TimeInput(
+                            state = pickerState,
+                            modifier = Modifier.padding(horizontal = Spacing.xl).fillMaxWidth(),
+                        )
+                    }
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    IconButton(onClick = { showDial = !showDial }) {
+                        Symbol(
+                            symbol = if (showDial) MaterialSymbol.Keyboard else MaterialSymbol.Schedule,
+                            contentDescription = if (showDial) "Switch to keyboard" else "Switch to dial",
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
                     TextButton(onClick = onDismiss) { Text("Cancel") }
-                    TextButton(
+                    Spacer(Modifier.width(Spacing.sm))
+                    Button(
                         onClick = { onConfirm(LocalTime(pickerState.hour, pickerState.minute)) },
                         enabled = !overLimit,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
                     ) {
-                        Text("OK")
+                        Text("Save")
+                    }
+                }
+                if (overLimit && hardLatest != null) {
+                    Spacer(
+                        Modifier
+                            .height(2.dp)
+                            .fillMaxWidth()
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(
+                                    start = Spacing.lg,
+                                    end = Spacing.sm,
+                                    top = Spacing.xs,
+                                    bottom = Spacing.xs
+                                ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        ) {
+                            Symbol(
+                                symbol = MaterialSymbol.Error,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onBackground,
+                                size = 20.dp,
+                            )
+                            Text(
+                                text = String.format(
+                                    Locale.US,
+                                    "Must be before %02d:%02d",
+                                    hardLatest.hour,
+                                    hardLatest.minute,
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (onEditLimit != null) {
+                                TextButton(onClick = { onEditLimit(); onDismiss() }) {
+                                    Text(
+                                        text = "Edit settings",
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
