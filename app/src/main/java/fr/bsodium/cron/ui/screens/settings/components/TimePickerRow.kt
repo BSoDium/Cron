@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.settings.components
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -119,11 +118,7 @@ internal fun TimePickerDialog(
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
-            Column(
-                modifier = Modifier.animateContentSize(
-                    MaterialTheme.motionScheme.defaultEffectsSpec(),
-                ),
-            ) {
+            Column {
                 Text(
                     text = "Select time",
                     style = MaterialTheme.typography.labelLarge,
