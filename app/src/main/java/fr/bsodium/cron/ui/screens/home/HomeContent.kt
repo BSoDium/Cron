@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -84,6 +85,8 @@ internal fun HomePlanContent(
     onNotifEnable: () -> Unit,
     onAutoAlarmsChange: (Boolean) -> Unit,
     onAlarmTimeClick: (() -> Unit)? = null,
+    onCardBounds: ((Rect) -> Unit)? = null,
+    cardHidden: Boolean = false,
 ) {
     val iterations = plan.iterations
     val listState = rememberLazyListState()
@@ -306,9 +309,11 @@ internal fun HomePlanContent(
                 sessionDate = uiState.sessionDisplay?.sessionDate,
                 sleepDurationLabel = uiState.sleepStats?.durationLabel,
                 sleepSegments = uiState.sleepStats?.segments.orEmpty(),
-                collapseFraction = collapseFraction, // () -> Float, read in the card's measure pass only
+                collapseFraction = collapseFraction,
                 onFullHeight = { cardFullHeightPx = it },
                 onAlarmTimeClick = onAlarmTimeClick,
+                onBoundsChanged = onCardBounds,
+                modifier = if (cardHidden) Modifier.graphicsLayer { alpha = 0f } else Modifier,
             )
         }
     }

@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
@@ -54,6 +55,7 @@ internal fun CollapsibleAlarmCard(
     onFullHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
     onAlarmTimeClick: (() -> Unit)? = null,
+    onBoundsChanged: ((Rect) -> Unit)? = null,
 ) {
     val timing = rememberAlarmTiming(alarmTime, sessionDate)
     val onCard = MaterialTheme.colorScheme.onPrimary
@@ -71,6 +73,7 @@ internal fun CollapsibleAlarmCard(
         modifier = modifier,
         shape = RoundedCornerShape(Radius.xl),
         onClick = onAlarmTimeClick,
+        onBoundsChanged = onBoundsChanged,
     ) {
         SubcomposeLayout(modifier = Modifier.clipToBounds()) { constraints ->
             val f = collapseFraction().coerceIn(0f, 1f)

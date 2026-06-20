@@ -32,6 +32,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
@@ -82,9 +85,15 @@ internal fun AlarmShell(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(Radius.xl),
     onClick: (() -> Unit)? = null,
+    onBoundsChanged: ((Rect) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val mod = modifier.fillMaxWidth()
+    val mod = modifier
+        .fillMaxWidth()
+        .then(
+            if (onBoundsChanged != null) Modifier.onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) }
+            else Modifier,
+        )
     if (onClick != null) {
         Surface(
             onClick = onClick,

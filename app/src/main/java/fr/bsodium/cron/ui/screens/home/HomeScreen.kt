@@ -56,7 +56,8 @@ import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
 import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
 import fr.bsodium.cron.ui.screens.home.components.rememberAlarmTiming
-import fr.bsodium.cron.ui.screens.settings.components.TimePickerDialog
+import androidx.compose.ui.geometry.Rect
+import fr.bsodium.cron.ui.screens.home.components.TimePickerOverlay
 import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
@@ -132,6 +133,7 @@ fun HomeScreen(
     }
 
     var showTimePicker by remember { mutableStateOf(false) }
+    var cardBounds by remember { mutableStateOf<Rect?>(null) }
     val alarmEditable = uiState.autoAlarmsEnabled
         && uiState.sessionDisplay?.alarmTime != null
         && timing is AlarmTiming.Upcoming
@@ -187,6 +189,8 @@ fun HomeScreen(
                         onNotifEnable = onNotifEnable,
                         onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                         onAlarmTimeClick = onAlarmTimeClick,
+                        onCardBounds = { cardBounds = it },
+                        cardHidden = showTimePicker,
                     )
                 }
             }
@@ -235,17 +239,21 @@ fun HomeScreen(
             }
         }
 
-        if (showTimePicker) {
-            TimePickerDialog(
-                initial = uiState.sessionDisplay?.alarmTime ?: LocalTime(7, 0),
-                onDismiss = { showTimePicker = false },
-                onConfirm = { newTime ->
-                    viewModel.updateAlarmTime(newTime)
-                    showTimePicker = false
-                },
-                hardLatest = uiState.sessionDisplay?.hardLatest,
-            )
-        }
+        TimePickerOverlay(
+            visible = showTimePicker,
+            cardBounds = cardBounds,
+            dateLabel = uiState.dateLabel,
+            alarmTime = uiState.sessionDisplay?.alarmTime,
+            sessionDate = uiState.sessionDisplay?.sessionDate,
+            sleepDurationLabel = uiState.sleepStats?.durationLabel,
+            sleepSegments = uiState.sleepStats?.segments.orEmpty(),
+            hardLatest = uiState.sessionDisplay?.hardLatest,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { newTime ->
+                viewModel.updateAlarmTime(newTime)
+                showTimePicker = false
+            },
+        )
     }
 }
 
