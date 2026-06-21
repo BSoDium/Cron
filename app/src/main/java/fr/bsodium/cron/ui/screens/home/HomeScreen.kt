@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -174,14 +176,28 @@ fun HomeScreen(
         )
 
         detailKey?.let { key ->
-            PredictiveBackCard(
-                onBack = { detailKey = null },
-            ) { animatedBack ->
-                PlanDetailScreen(
-                    iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
-                    hapticsEnabled = uiState.hapticsEnabled,
-                    onBack = animatedBack,
-                )
+            var entered by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { entered = true }
+            val enterOffset by animateFloatAsState(
+                targetValue = if (entered) 0f else 1f,
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                label = "plan-detail-enter",
+            )
+
+            Box(
+                Modifier.fillMaxSize().graphicsLayer {
+                    translationX = enterOffset * size.width
+                },
+            ) {
+                PredictiveBackCard(
+                    onBack = { detailKey = null },
+                ) { animatedBack ->
+                    PlanDetailScreen(
+                        iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
+                        hapticsEnabled = uiState.hapticsEnabled,
+                        onBack = animatedBack,
+                    )
+                }
             }
         }
     }
