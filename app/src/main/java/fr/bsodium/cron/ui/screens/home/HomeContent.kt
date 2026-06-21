@@ -1,7 +1,6 @@
 package fr.bsodium.cron.ui.screens.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -100,7 +99,6 @@ internal fun HomePlanContent(
                 top = statusInsetTop + Spacing.xxl,
                 bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
             ),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             item(key = "greeting") {
                 HomeGreetingRow(
@@ -108,12 +106,14 @@ internal fun HomePlanContent(
                     name = uiState.greetingName,
                     autoAlarmsEnabled = uiState.autoAlarmsEnabled,
                     onAutoAlarmsChange = onAutoAlarmsChange,
-                    modifier = Modifier.onSizeChanged { greetingHeightPx = it.height },
+                    modifier = Modifier
+                        .padding(bottom = Spacing.md)
+                        .onSizeChanged { greetingHeightPx = it.height },
                     hapticsEnabled = uiState.hapticsEnabled,
                 )
             }
             item(key = "alarm-spacer") {
-                Spacer(Modifier.height(with(density) { reservePx.toDp() }))
+                Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.md))
             }
             sessionTimelineItems(
                 timeline = uiState.timeline,

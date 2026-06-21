@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -24,6 +26,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -38,8 +44,11 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 private val CARD_SHAPE = RoundedCornerShape(Radius.lg)
-private val GUTTER_ICON_SIZE = 22.dp
-private val GUTTER_LOADER_SIZE = 24.dp
+private val ICON_BOX = 32.dp
+private val ICON_GLYPH = 22.dp
+private val TRACK_WIDTH = 2.dp
+private val DASH_ON = 2f
+private val DASH_OFF = 5f
 
 @Composable
 internal fun PlanTimelineCard(
@@ -55,31 +64,36 @@ internal fun PlanTimelineCard(
     val scheme = MaterialTheme.colorScheme
     val containerColor = if (isLatest) scheme.primaryContainer else scheme.secondaryContainer
     val contentColor = if (isLatest) scheme.onPrimaryContainer else scheme.onSecondaryContainer
+    val ruleColor = scheme.surfaceContainerHighest
     val enter = remember { Animatable(if (isNew) 0f else 1f) }
     val enterSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     if (isNew) LaunchedEffect(Unit) { enter.animateTo(1f, enterSpec) }
 
-    SessionTimelineRow(
-        firstLineHeight = 48.dp,
-        isFirst = isFirst,
-        isLast = isLast,
-        icon = {
-            if (isStreaming) {
-                ContainedLoadingIndicator(
-                    modifier = Modifier.size(GUTTER_LOADER_SIZE),
-                    containerShape = CircleShape,
-                    containerColor = scheme.primaryContainer,
-                    indicatorColor = scheme.onPrimaryContainer,
+    val trackCx = with(androidx.compose.ui.platform.LocalDensity.current) { (SESSION_GUTTER_WIDTH / 2).toPx() }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.sm)
+            .drawBehind {
+                if (isFirst && isLast) return@drawBehind
+                val top = if (isFirst) size.height / 2f else 0f
+                val bottom = if (isLast) size.height / 2f else size.height
+                drawLine(
+                    color = ruleColor,
+                    start = Offset(trackCx, top),
+                    end = Offset(trackCx, bottom),
+                    strokeWidth = TRACK_WIDTH.toPx(),
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(
+                        floatArrayOf(DASH_ON.dp.toPx(), DASH_OFF.dp.toPx()),
+                    ),
                 )
-            } else {
-                val icon = if (iteration.thread.isMocked) MaterialSymbol.Code else runSymbol(iteration.kind)
-                Symbol(symbol = icon, contentDescription = null, tint = contentColor, size = GUTTER_ICON_SIZE)
-            }
-        },
+            },
     ) {
         Surface(
             onClick = onClick,
-            modifier = modifier
+            modifier = Modifier
                 .graphicsLayer {
                     alpha = enter.value
                     val s = 0.85f + 0.15f * enter.value
@@ -92,16 +106,35 @@ internal fun PlanTimelineCard(
             contentColor = contentColor,
         ) {
             Row(
-                modifier = Modifier.padding(Spacing.md),
+                modifier = Modifier.padding(
+                    start = Spacing.sm,
+                    top = Spacing.sm,
+                    end = Spacing.xl,
+                    bottom = Spacing.sm,
+                ),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
+                Box(modifier = Modifier.size(ICON_BOX), contentAlignment = Alignment.Center) {
+                    if (isStreaming) {
+                        ContainedLoadingIndicator(
+                            modifier = Modifier.fillMaxSize(),
+                            containerShape = CircleShape,
+                            containerColor = contentColor.copy(alpha = 0.2f),
+                            indicatorColor = contentColor,
+                        )
+                    } else {
+                        val icon = if (iteration.thread.isMocked) MaterialSymbol.Code else runSymbol(iteration.kind)
+                        Symbol(symbol = icon, contentDescription = null, tint = contentColor, size = ICON_GLYPH)
+                    }
+                }
+                Spacer(Modifier.width(Spacing.xs))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = iteration.systemMessage,
                         style = MaterialTheme.typography.labelLarge,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
                     )
                     val meta = if (isLatest) "Latest · ${iteration.timeLabel}" else iteration.timeLabel
                     Text(
@@ -109,17 +142,9 @@ internal fun PlanTimelineCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = contentColor.copy(alpha = 0.75f),
                         maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
                     )
-                    val preview = iteration.thread.response?.take(80)?.replace('\n', ' ')
-                    if (!preview.isNullOrBlank()) {
-                        Text(
-                            text = preview,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = contentColor.copy(alpha = 0.65f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
                 }
                 Symbol(
                     symbol = MaterialSymbol.ArrowForward,
@@ -139,54 +164,21 @@ private fun PlanTimelineCardPreview() {
         turnIndex = 0,
         timeLabel = "23:14",
         kind = RunKind.ScheduledBase,
-        thread = AiThreadUi(
-            turnIndex = 0,
-            summary = "Thought for 8s",
-            process = emptyList(),
-            response = "Set alarm for 7:15. Your first meeting is at 9:00.",
-        ),
+        thread = AiThreadUi(0, "Thought for 8s", emptyList(), "Set alarm for 7:15."),
         ranAtEpochMs = System.currentTimeMillis(),
     )
     CronTheme {
         Column(modifier = Modifier.padding(Spacing.lg)) {
             PlanTimelineCard(
-                iteration = iteration,
-                isLatest = true,
-                isStreaming = false,
-                isFirst = true,
-                isLast = false,
-                onClick = {},
+                iteration = iteration, isLatest = true, isStreaming = false,
+                isFirst = true, isLast = false, onClick = {},
             )
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun PlanTimelineCardStreamingPreview() {
-    val iteration = AiIterationUi(
-        turnIndex = 1,
-        timeLabel = "23:20",
-        kind = RunKind.Replan(null),
-        thread = AiThreadUi(
-            turnIndex = 1,
-            summary = "Thinking...",
-            process = emptyList(),
-            response = null,
-            isStreaming = true,
-        ),
-        ranAtEpochMs = System.currentTimeMillis(),
-    )
-    CronTheme {
-        Column(modifier = Modifier.padding(Spacing.lg)) {
             PlanTimelineCard(
-                iteration = iteration,
-                isLatest = true,
-                isStreaming = true,
-                isFirst = false,
-                isLast = true,
-                onClick = {},
-                isNew = true,
+                iteration = iteration.copy(
+                    turnIndex = 1, kind = RunKind.Replan(null), timeLabel = "21:30",
+                ),
+                isLatest = false, isStreaming = false,
+                isFirst = false, isLast = true, onClick = {},
             )
         }
     }
