@@ -176,7 +176,7 @@ internal fun HomePlanContent(
             iteration = (timelineMode as? TimelineMode.Detail)?.turnIndex?.let { turn ->
                 uiState.aiPlan?.iterations?.find { it.turnIndex == turn }
             },
-            alarmBottomDp = with(density) { (collapseSafeTopPx + cardFullHeightPx).toDp() } + Spacing.lg,
+            alarmBottomDp = with(density) { (collapseState.value.top + cardFullHeightPx).toDp() } + Spacing.lg,
             navInsetBottom = navInsetBottom,
             hapticsEnabled = uiState.hapticsEnabled,
             onBack = onBack,

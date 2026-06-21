@@ -62,8 +62,8 @@ internal fun PlanTimelineCard(
     isNew: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val containerColor = if (isLatest) scheme.primaryContainer else scheme.secondaryContainer
-    val contentColor = if (isLatest) scheme.onPrimaryContainer else scheme.onSecondaryContainer
+    val containerColor = if (isLatest) scheme.primary else scheme.secondaryContainer
+    val contentColor = if (isLatest) scheme.onPrimary else scheme.onSecondaryContainer
     val ruleColor = scheme.surfaceContainerHighest
     val enter = remember { Animatable(if (isNew) 0f else 1f) }
     val enterSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
@@ -106,7 +106,7 @@ internal fun PlanTimelineCard(
                 modifier = Modifier.padding(
                     start = Spacing.sm,
                     top = Spacing.sm,
-                    end = Spacing.md,
+                    end = Spacing.xl,
                     bottom = Spacing.sm,
                 ),
                 verticalAlignment = Alignment.CenterVertically,
