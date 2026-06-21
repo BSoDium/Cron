@@ -1,15 +1,14 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.session.model.TriggerType
@@ -67,15 +66,14 @@ internal fun LazyListScope.sessionTimelineItems(
 
     if (hasMore) {
         item(key = "view-history") {
-            Box(
+            OutlinedButton(
+                onClick = onNavigateToHistory,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = Spacing.lg),
-                contentAlignment = Alignment.Center,
+                shape = RoundedCornerShape(50),
             ) {
-                TextButton(onClick = onNavigateToHistory) {
-                    Text("View full history")
-                }
+                Text("View full history")
             }
         }
     }
