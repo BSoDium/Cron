@@ -53,6 +53,7 @@ data class HomeUiState(
     val sleepStats: SleepStatsUi? = null,
     val aiPlan: AiPlanUi? = null,
     val timeline: List<TimelineItem> = emptyList(),
+    val hasMoreHistory: Boolean = false,
     val isRetrying: Boolean = false,
     /** False until the backing flows have produced their first value — gates the onboarding so it
      *  doesn't flash over an existing plan during the cold-start load. */
@@ -148,6 +149,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
 
     private val _historicalSessions = MutableStateFlow<List<TimelineSession>>(emptyList())
+    private val _hasMoreHistory = MutableStateFlow(false)
     private val _dismissedSettingsAt = MutableStateFlow(0L)
 
     private val settingsChangedFlow = combine(
@@ -223,8 +225,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         displayFlow,
         aiPlanFlow,
         timelineFlow,
+        _hasMoreHistory,
         statusFlow,
-    ) { display, plan, timeline, status ->
+    ) { display, plan, timeline, hasMore, status ->
         HomeUiState(
             sessionDisplay = display.session,
             greetingPrefix = greetingPrefix(),
@@ -233,6 +236,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             sleepStats = display.sleepStats,
             aiPlan = plan,
             timeline = timeline,
+            hasMoreHistory = hasMore,
             isRetrying = status.isRetrying,
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && plan != null,
@@ -253,6 +257,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 offset = 0,
             )
             _historicalSessions.value = page.sessions
+            _hasMoreHistory.value = page.hasMore
         }
     }
 

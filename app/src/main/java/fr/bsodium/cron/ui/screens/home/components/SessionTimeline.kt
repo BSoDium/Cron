@@ -24,6 +24,7 @@ import kotlinx.datetime.Instant
 
 internal fun LazyListScope.sessionTimelineItems(
     timeline: List<TimelineItem>,
+    hasMore: Boolean,
     onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
     onNavigateToHistory: () -> Unit,
 ) {
@@ -61,15 +62,17 @@ internal fun LazyListScope.sessionTimelineItems(
         }
     }
 
-    item(key = "view-history") {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = Spacing.lg),
-            contentAlignment = Alignment.Center,
-        ) {
-            TextButton(onClick = onNavigateToHistory) {
-                Text("View full history")
+    if (hasMore) {
+        item(key = "view-history") {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = Spacing.lg),
+                contentAlignment = Alignment.Center,
+            ) {
+                TextButton(onClick = onNavigateToHistory) {
+                    Text("View full history")
+                }
             }
         }
     }
@@ -106,7 +109,7 @@ private fun SessionTimelinePreview() {
         TimelineItem.AiRun(
             timestamp = now,
             iteration = previewIteration(
-                turn = 2,
+                turn = 3,
                 kind = RunKind.Replan(TriggerType.AlarmSnoozed),
                 response = null,
                 isStreaming = true,
@@ -124,9 +127,24 @@ private fun SessionTimelinePreview() {
         TimelineItem.AiRun(
             timestamp = now,
             iteration = previewIteration(
-                turn = 1,
+                turn = 2,
                 kind = RunKind.Replan(TriggerType.CalendarChange),
                 response = "Moved alarm to **07:15** — your first meeting shifted to 09:00.",
+                process = listOf(
+                    ProcessItem.Reasoning("Checking calendar for changes..."),
+                    ProcessItem.Tool("read_calendar", isComplete = true, contextLabel = "3 events"),
+                ),
+            ),
+            sessionId = "s1",
+            isStreaming = false,
+            isLatest = false,
+        ),
+        TimelineItem.AiRun(
+            timestamp = now,
+            iteration = previewIteration(
+                turn = 1,
+                kind = RunKind.Replan(TriggerType.CalendarChange),
+                response = "Moved alarm to **06:15** — your first meeting was moved to 08:00.",
                 process = listOf(
                     ProcessItem.Reasoning("Checking calendar for changes..."),
                     ProcessItem.Tool("read_calendar", isComplete = true, contextLabel = "3 events"),

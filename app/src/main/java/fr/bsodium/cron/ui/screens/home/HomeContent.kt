@@ -71,7 +71,9 @@ import kotlin.coroutines.cancellation.CancellationException
 private val ALARM_COLLAPSE_RANGE = 120.dp
 private const val DETAIL_COMMIT_MS = 300
 private const val DETAIL_CANCEL_MS = 220
-private const val DETAIL_MIN_SCALE = 0.92f
+private const val DETAIL_CARD_MIN_SCALE = 0.90f
+private val DETAIL_PREVIEW_SHIFT = Spacing.lg
+private const val DETAIL_DIM_ALPHA = 0.35f
 
 sealed interface TimelineMode {
     data object List : TimelineMode
@@ -156,6 +158,7 @@ internal fun HomePlanContent(
             }
             sessionTimelineItems(
                 timeline = uiState.timeline,
+                hasMore = uiState.hasMoreHistory,
                 onOpenAiRun = onOpenAiRun,
                 onNavigateToHistory = onNavigateToHistory,
             )
@@ -174,7 +177,7 @@ internal fun HomePlanContent(
             iteration = (timelineMode as? TimelineMode.Detail)?.turnIndex?.let { turn ->
                 uiState.aiPlan?.iterations?.find { it.turnIndex == turn }
             },
-            alarmBottomDp = statusInsetTop + Spacing.sm + ALARM_BAR_HEIGHT + Spacing.lg,
+            alarmBottomDp = with(density) { (collapseSafeTopPx + cardFullHeightPx).toDp() } + Spacing.lg,
             navInsetBottom = navInsetBottom,
             hapticsEnabled = uiState.hapticsEnabled,
             onBack = onBack,
@@ -249,8 +252,7 @@ private fun BoxScope.DetailOverlay(
                     backProgress.snapTo(decelerate(event.progress))
                 }
                 committing = true
-                backProgress.animateTo(1f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
-                slide.snapTo(1f)
+                backProgress.animateTo(2f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
                 shown = false
                 committing = false
                 onBack()
@@ -264,6 +266,20 @@ private fun BoxScope.DetailOverlay(
 
         val detailScrollState = rememberScrollState()
         val pullState = remember(iteration?.turnIndex) { PullState() }
+        val previewShiftPx = with(density) { DETAIL_PREVIEW_SHIFT.toPx() }
+
+        // Dim scrim between the timeline (revealed as the card shrinks) and the detail card.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = alarmBottomDp)
+                .graphicsLayer {
+                    val preview = backProgress.value.coerceIn(0f, 1f)
+                    val commit = (backProgress.value - 1f).coerceIn(0f, 1f)
+                    alpha = DETAIL_DIM_ALPHA * preview * (1f - commit)
+                }
+                .background(Color.Black),
+        )
 
         Box(
             modifier = Modifier
@@ -272,15 +288,16 @@ private fun BoxScope.DetailOverlay(
                 .graphicsLayer {
                     val backP = backProgress.value
                     val slideP = slide.value
+                    val preview = backP.coerceIn(0f, 1f)
+                    val commit = (backP - 1f).coerceIn(0f, 1f)
                     val sign = if (edgeLeft) -1f else 1f
-                    translationX = slideP * screenWidthPx + sign * backP * screenWidthPx * 0.3f
-                    scaleX = lerp(1f, DETAIL_MIN_SCALE, backP)
-                    scaleY = lerp(1f, DETAIL_MIN_SCALE, backP)
-                    alpha = 1f - backP * 0.4f
-                    if (backP > 0f) {
-                        clip = true
-                        shape = RoundedCornerShape(Radius.xl * backP)
-                    }
+                    val scale = lerp(1f, DETAIL_CARD_MIN_SCALE, preview)
+                    scaleX = scale; scaleY = scale
+                    alpha = 1f - commit
+                    translationX = slideP * screenWidthPx +
+                        sign * (previewShiftPx * preview + (screenWidthPx - previewShiftPx) * commit)
+                    clip = true
+                    shape = RoundedCornerShape(Radius.xl * preview)
                 }
                 .background(CronColors.pageBackground),
         ) {
