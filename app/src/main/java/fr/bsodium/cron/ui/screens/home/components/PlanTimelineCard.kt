@@ -3,6 +3,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -46,11 +46,9 @@ import fr.bsodium.cron.ui.theme.Symbol
 private val CARD_SHAPE = RoundedCornerShape(50)
 private val ICON_BOX = 24.dp
 private val ICON_GLYPH = 18.dp
-private val CHEVRON_SIZE = 18.dp
-private val TRACK_WIDTH = 2.dp
-private val DASH_ON = 2f
-private val DASH_OFF = 5f
-private val ICON_START_PAD = (SESSION_GUTTER_WIDTH - ICON_BOX) / 2
+private val CHEVRON_SIZE = 14.dp
+private val CHEVRON_STROKE = 1.5.dp
+private val TRACK_WIDTH = 1.5.dp
 
 @Composable
 internal fun PlanTimelineCard(
@@ -87,9 +85,6 @@ internal fun PlanTimelineCard(
                     end = Offset(trackCx, bottom),
                     strokeWidth = TRACK_WIDTH.toPx(),
                     cap = StrokeCap.Round,
-                    pathEffect = PathEffect.dashPathEffect(
-                        floatArrayOf(DASH_ON.dp.toPx(), DASH_OFF.dp.toPx()),
-                    ),
                 )
             },
     ) {
@@ -102,14 +97,14 @@ internal fun PlanTimelineCard(
                     scaleX = s; scaleY = s
                 }
                 .fillMaxWidth()
-                .heightIn(min = 48.dp),
+                .heightIn(min = 45.dp),
             shape = CARD_SHAPE,
             color = containerColor,
             contentColor = contentColor,
         ) {
             Row(
                 modifier = Modifier.padding(
-                    start = ICON_START_PAD,
+                    start = Spacing.sm,
                     top = Spacing.sm,
                     end = Spacing.sm,
                     bottom = Spacing.sm,
@@ -148,14 +143,20 @@ internal fun PlanTimelineCard(
                         overflow = TextOverflow.Clip,
                     )
                 }
-                Symbol(
-                    symbol = MaterialSymbol.NavigateNext,
-                    contentDescription = null,
-                    tint = contentColor.copy(alpha = 0.5f),
-                    size = CHEVRON_SIZE,
-                )
+                Chevron(color = contentColor.copy(alpha = 0.5f))
             }
         }
+    }
+}
+
+@Composable
+private fun Chevron(color: androidx.compose.ui.graphics.Color) {
+    val strokePx = with(LocalDensity.current) { CHEVRON_STROKE.toPx() }
+    Canvas(modifier = Modifier.size(CHEVRON_SIZE)) {
+        val cx = size.width * 0.4f
+        val endX = size.width * 0.7f
+        drawLine(color, Offset(cx, size.height * 0.2f), Offset(endX, size.height * 0.5f), strokePx, StrokeCap.Round)
+        drawLine(color, Offset(endX, size.height * 0.5f), Offset(cx, size.height * 0.8f), strokePx, StrokeCap.Round)
     }
 }
 

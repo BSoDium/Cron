@@ -96,14 +96,17 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
 
     val result = mutableListOf<TimelineItem>()
     var currentDate: LocalDate? = null
+    val today = java.time.LocalDate.now()
     for (item in items) {
         val date = item.timestamp.toLocalDateTime(tz).date
         if (date != currentDate) {
             currentDate = date
-            result += TimelineItem.DayHeader(
-                timestamp = item.timestamp,
-                label = formatTimelineDateLabel(date),
-            )
+            if (date.toJavaLocalDate() != today) {
+                result += TimelineItem.DayHeader(
+                    timestamp = item.timestamp,
+                    label = formatTimelineDateLabel(date),
+                )
+            }
         }
         result += item
     }

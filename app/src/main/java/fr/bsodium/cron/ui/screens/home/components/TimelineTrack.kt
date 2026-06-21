@@ -21,7 +21,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -33,14 +32,12 @@ import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
-internal val SESSION_GUTTER_WIDTH = 28.dp
-private val TRACK_WIDTH = 2.dp
+internal val SESSION_GUTTER_WIDTH = 40.dp
+private val TRACK_WIDTH = 1.5.dp
 private val DISC_SIZE = 24.dp
 private val EVENT_ICON_SIZE = 18.dp
 private val STATION_DOT_SIZE = 6.dp
 
-private val DASH_ON = 2f
-private val DASH_OFF = 5f
 
 @Composable
 internal fun SessionTimelineRow(
@@ -84,9 +81,6 @@ internal fun SessionTimelineRow(
                             end = Offset(cx, bottom),
                             strokeWidth = TRACK_WIDTH.toPx(),
                             cap = StrokeCap.Round,
-                            pathEffect = PathEffect.dashPathEffect(
-                                floatArrayOf(DASH_ON.dp.toPx(), DASH_OFF.dp.toPx()),
-                            ),
                         )
                     },
             ) {
