@@ -15,6 +15,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
+import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -77,24 +78,65 @@ internal fun LazyListScope.sessionTimelineItems(
     }
 }
 
-@Preview(showBackground = true)
+private fun previewIteration(
+    turn: Int,
+    kind: RunKind,
+    response: String?,
+    isStreaming: Boolean = false,
+    process: List<ProcessItem> = emptyList(),
+) = AiIterationUi(
+    turnIndex = turn,
+    timeLabel = if (turn == 0) "23:14" else "21:30",
+    kind = kind,
+    thread = AiThreadUi(
+        turnIndex = turn,
+        summary = if (isStreaming) "Thinking..." else "Thought for 8s",
+        process = process,
+        response = response,
+        isStreaming = isStreaming,
+    ),
+    ranAtEpochMs = System.currentTimeMillis(),
+)
+
+@Preview(showBackground = true, name = "Timeline — full example")
 @Composable
 private fun SessionTimelinePreview() {
     val now = Instant.fromEpochMilliseconds(System.currentTimeMillis())
+    val yesterday = Instant.fromEpochMilliseconds(System.currentTimeMillis() - 86_400_000L)
     val timeline = listOf(
         TimelineItem.DayHeader(timestamp = now, label = "Today"),
         TimelineItem.AiRun(
             timestamp = now,
-            iteration = AiIterationUi(
-                turnIndex = 0,
-                timeLabel = "23:14",
-                kind = RunKind.ScheduledBase,
-                thread = AiThreadUi(0, "Thought for 8s", emptyList(), "Set alarm for 7:15."),
-                ranAtEpochMs = now.toEpochMilliseconds(),
+            iteration = previewIteration(
+                turn = 2,
+                kind = RunKind.Replan(TriggerType.AlarmSnoozed),
+                response = null,
+                isStreaming = true,
+            ),
+            sessionId = "s1",
+            isStreaming = true,
+            isLatest = true,
+        ),
+        TimelineItem.Event(
+            timestamp = now,
+            trigger = TriggerType.AlarmSnoozed,
+            label = "Alarm snoozed",
+            detail = "9 min",
+        ),
+        TimelineItem.AiRun(
+            timestamp = now,
+            iteration = previewIteration(
+                turn = 1,
+                kind = RunKind.Replan(TriggerType.CalendarChange),
+                response = "Moved alarm to **07:15** — your first meeting shifted to 09:00.",
+                process = listOf(
+                    ProcessItem.Reasoning("Checking calendar for changes..."),
+                    ProcessItem.Tool("read_calendar", isComplete = true, contextLabel = "3 events"),
+                ),
             ),
             sessionId = "s1",
             isStreaming = false,
-            isLatest = true,
+            isLatest = false,
         ),
         TimelineItem.Event(
             timestamp = now,
@@ -104,20 +146,41 @@ private fun SessionTimelinePreview() {
         ),
         TimelineItem.AiRun(
             timestamp = now,
-            iteration = AiIterationUi(
-                turnIndex = 1,
-                timeLabel = "21:30",
-                kind = RunKind.Replan(TriggerType.CalendarChange),
-                thread = AiThreadUi(1, null, emptyList(), "Your first meeting moved to 10:00."),
-                ranAtEpochMs = now.toEpochMilliseconds(),
+            iteration = previewIteration(
+                turn = 0,
+                kind = RunKind.ScheduledBase,
+                response = "Set alarm for **07:45**. You have a 08:30 standup.",
+                process = listOf(
+                    ProcessItem.Reasoning("Looking at tomorrow's calendar..."),
+                    ProcessItem.Tool("read_calendar", isComplete = true, contextLabel = "5 events"),
+                    ProcessItem.Tool("set_alarm", isComplete = true, contextLabel = "07:45"),
+                ),
             ),
             sessionId = "s1",
             isStreaming = false,
             isLatest = false,
         ),
+        TimelineItem.DayHeader(timestamp = yesterday, label = "Yesterday"),
+        TimelineItem.Event(
+            timestamp = yesterday,
+            trigger = TriggerType.AlarmDismissed,
+            label = "Alarm dismissed",
+            detail = null,
+        ),
+        TimelineItem.AiRun(
+            timestamp = yesterday,
+            iteration = previewIteration(
+                turn = 0,
+                kind = RunKind.ManualBase,
+                response = "No alarm needed — your calendar is free tomorrow.",
+            ),
+            sessionId = "s2",
+            isStreaming = false,
+            isLatest = false,
+        ),
     )
     CronTheme {
-        Column(modifier = Modifier.padding(Spacing.lg)) {
+        Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
             timeline.forEachIndexed { index, item ->
                 val isFirst = index == 0 || timeline[index - 1] is TimelineItem.DayHeader
                 val isLast = index == timeline.lastIndex || timeline.getOrNull(index + 1) is TimelineItem.DayHeader
