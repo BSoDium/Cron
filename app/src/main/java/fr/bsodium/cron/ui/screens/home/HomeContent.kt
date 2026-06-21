@@ -115,7 +115,7 @@ internal fun HomePlanContent(
                 )
             }
             item(key = "alarm-spacer") {
-                Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.md))
+                Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.xl))
             }
             sessionTimelineItems(
                 timeline = uiState.timeline,
