@@ -1,7 +1,6 @@
 package fr.bsodium.cron.ui.screens.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,12 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -47,6 +48,7 @@ import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlinx.coroutines.launch
 import fr.bsodium.cron.ui.theme.Symbol
 
 private val ALARM_COLLAPSE_RANGE = 120.dp
@@ -105,6 +107,19 @@ internal fun HomePlanContent(
     }
     AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
 
+    val detailTurnIndex = (timelineMode as? TimelineMode.Detail)?.turnIndex
+    val detailIteration = detailTurnIndex?.let { turn ->
+        uiState.aiPlan?.iterations?.find { it.turnIndex == turn }
+    }
+    val pullState = remember(detailTurnIndex) { PullState() }
+    val pullConnection = rememberDetailPullConnection(
+        listState = listState,
+        pullState = pullState,
+        hasProcess = detailIteration?.thread?.process?.isNotEmpty() == true,
+        hapticsEnabled = uiState.hapticsEnabled,
+    )
+    val scope = rememberCoroutineScope()
+
     LaunchedEffect(timelineMode) {
         if (timelineMode is TimelineMode.Detail) {
             listState.animateScrollToItem(2)
@@ -112,9 +127,12 @@ internal fun HomePlanContent(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        val isDetail = timelineMode is TimelineMode.Detail
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isDetail) Modifier.nestedScroll(pullConnection) else Modifier),
             contentPadding = PaddingValues(
                 start = Spacing.xl,
                 end = Spacing.xl,
@@ -166,6 +184,24 @@ internal fun HomePlanContent(
                         item(key = "detail-thread") {
                             AiThinkingThread(
                                 thread = iteration.thread,
+                                expanded = pullState.expanded,
+                                onExpandedChange = { next ->
+                                    pullState.expanded = next
+                                    scope.launch {
+                                        if (next) {
+                                            val full = pullState.fullPx.intValue
+                                            if (full > 0) pullState.reveal.animateTo(full.toFloat())
+                                        } else {
+                                            pullState.reveal.animateTo(0f)
+                                        }
+                                    }
+                                },
+                                expandPx = { pullState.reveal.value },
+                                onFullHeight = { pullState.fullPx.intValue = it },
+                                expansionFraction = {
+                                    val full = pullState.fullPx.intValue
+                                    if (full > 0) (pullState.reveal.value / full).coerceIn(0f, 1f) else 0f
+                                },
                                 modifier = Modifier.padding(top = Spacing.md),
                             )
                         }
