@@ -38,8 +38,12 @@ import androidx.compose.runtime.setValue
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalView
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.drawToBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
@@ -169,6 +173,8 @@ class MainActivity : ComponentActivity() {
                 // against the bar's scrolled surfaceContainer shade, so suppress it there.
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
                     currentRoute?.startsWith("settings") == true
+                val view = LocalView.current
+                var parentSnapshot by remember { mutableStateOf<ImageBitmap?>(null) }
                 val fabRegistry = remember { FabRegistry() }
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
@@ -307,6 +313,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         onNavigateToPlanDetail = { turnIndex, sessionId ->
+                                            parentSnapshot = view.drawToBitmap().asImageBitmap()
                                             navController.navigate(planDetailRoute(turnIndex, sessionId))
                                         },
                                     )
@@ -319,11 +326,7 @@ class MainActivity : ComponentActivity() {
                                     ),
                                     enterTransition = { slideInHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { it } + fadeIn(tween(FORWARD_MS / 2)) },
                                     exitTransition = { slideOutHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { -it / 4 } + fadeOut(tween(FORWARD_MS), targetAlpha = 0.65f) },
-                                    popExitTransition = {
-                                        scaleOut(tween(FORWARD_MS, easing = EaseOutCubic), targetScale = 0.90f) +
-                                            slideOutHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { it / 3 } +
-                                            fadeOut(tween(FORWARD_MS / 2))
-                                    },
+                                    popExitTransition = { ExitTransition.None },
                                     popEnterTransition = { EnterTransition.None },
                                 ) { entry ->
                                     val turnIndex = entry.arguments?.getInt("turnIndex") ?: return@composable
@@ -334,7 +337,11 @@ class MainActivity : ComponentActivity() {
                                     PlanDetailScreen(
                                         iteration = iteration,
                                         hapticsEnabled = uiState.hapticsEnabled,
-                                        onBack = { navController.popBackStack() },
+                                        parentSnapshot = parentSnapshot,
+                                        onBack = {
+                                            navController.popBackStack()
+                                            parentSnapshot = null
+                                        },
                                     )
                                 }
                                 composable(
