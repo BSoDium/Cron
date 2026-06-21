@@ -3,7 +3,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,10 +43,9 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 private val CARD_SHAPE = RoundedCornerShape(50)
-private val ICON_BOX = 24.dp
-private val ICON_GLYPH = 18.dp
-private val CHEVRON_SIZE = 14.dp
-private val CHEVRON_STROKE = 2.dp
+private val ICON_BOX = 30.dp
+private val ICON_GLYPH = 22.dp
+private val CHEVRON_ICON_SIZE = 18.dp
 private val TRACK_WIDTH = 1.5.dp
 
 @Composable
@@ -143,20 +141,14 @@ internal fun PlanTimelineCard(
                         overflow = TextOverflow.Clip,
                     )
                 }
-                Chevron(color = contentColor.copy(alpha = 0.5f))
+                Symbol(
+                    symbol = MaterialSymbol.NavigateNext,
+                    contentDescription = null,
+                    tint = contentColor.copy(alpha = 0.5f),
+                    size = CHEVRON_ICON_SIZE,
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun Chevron(color: androidx.compose.ui.graphics.Color) {
-    val strokePx = with(LocalDensity.current) { CHEVRON_STROKE.toPx() }
-    Canvas(modifier = Modifier.size(CHEVRON_SIZE)) {
-        val cx = size.width * 0.4f
-        val endX = size.width * 0.7f
-        drawLine(color, Offset(cx, size.height * 0.2f), Offset(endX, size.height * 0.5f), strokePx, StrokeCap.Round)
-        drawLine(color, Offset(endX, size.height * 0.5f), Offset(cx, size.height * 0.8f), strokePx, StrokeCap.Round)
     }
 }
 

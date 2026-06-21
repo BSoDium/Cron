@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import fr.bsodium.cron.debug.MockApiPrefs
-import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
@@ -166,17 +165,16 @@ private fun FsmEventInjector(
     context: android.content.Context,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
-    val repository = remember { SessionRepository(context) }
-    val fsm = remember { SessionFsm(context, repository) }
+    val repo = remember { SessionRepository(context) }
 
     Column {
         Text(
-            text = "Inject FSM event",
+            text = "Inject timeline event",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )
         Text(
-            text = "Fire events into the active session's state machine",
+            text = "Record events in the current session without FSM transitions",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -185,70 +183,57 @@ private fun FsmEventInjector(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            FsmInjectButton("Sleep Onset", scope) {
-                fsm.onEvent(
-                    SessionEvent(
-                        trigger = TriggerType.SleepOnset,
-                        timestamp = Clock.System.now(),
-                        data = EventData.SleepOnset(
-                            screenOffSince = Clock.System.now(),
-                            rearm = false,
-                        ),
-                    ),
-                )
+            InjectButton("Sleep Onset", scope) {
+                val session = repo.findCurrent() ?: return@InjectButton false
+                repo.appendEvent(session.id, SessionEvent(
+                    trigger = TriggerType.SleepOnset,
+                    timestamp = Clock.System.now(),
+                    data = EventData.SleepOnset(screenOffSince = Clock.System.now(), rearm = false),
+                ))
+                true
             }
-            FsmInjectButton("Alarm Dismissed", scope) {
-                fsm.onEvent(
-                    SessionEvent(
-                        trigger = TriggerType.AlarmDismissed,
-                        timestamp = Clock.System.now(),
-                        data = EventData.Empty,
-                    ),
-                )
+            InjectButton("Alarm Dismissed", scope) {
+                val session = repo.findCurrent() ?: return@InjectButton false
+                repo.appendEvent(session.id, SessionEvent(
+                    trigger = TriggerType.AlarmDismissed,
+                    timestamp = Clock.System.now(),
+                    data = EventData.Empty,
+                ))
+                true
             }
-            FsmInjectButton("Sleep Onset (rearm)", scope) {
-                fsm.onEvent(
-                    SessionEvent(
-                        trigger = TriggerType.SleepOnset,
-                        timestamp = Clock.System.now(),
-                        data = EventData.SleepOnset(
-                            screenOffSince = Clock.System.now(),
-                            rearm = true,
-                        ),
-                    ),
-                )
+            InjectButton("Alarm Snoozed", scope) {
+                val session = repo.findCurrent() ?: return@InjectButton false
+                repo.appendEvent(session.id, SessionEvent(
+                    trigger = TriggerType.AlarmSnoozed,
+                    timestamp = Clock.System.now(),
+                    data = EventData.Empty,
+                ))
+                true
             }
-            FsmInjectButton("Out Of Bed", scope) {
-                fsm.onEvent(
-                    SessionEvent(
-                        trigger = TriggerType.OutOfBedConfirmed,
-                        timestamp = Clock.System.now(),
-                        data = EventData.OutOfBedConfirmed(evidence = listOf("debug injection")),
-                    ),
-                )
+            InjectButton("Out Of Bed", scope) {
+                val session = repo.findCurrent() ?: return@InjectButton false
+                repo.appendEvent(session.id, SessionEvent(
+                    trigger = TriggerType.OutOfBedConfirmed,
+                    timestamp = Clock.System.now(),
+                    data = EventData.OutOfBedConfirmed(evidence = listOf("debug injection")),
+                ))
+                true
             }
         }
     }
 }
 
 @Composable
-private fun FsmInjectButton(
+private fun InjectButton(
     label: String,
     scope: kotlinx.coroutines.CoroutineScope,
-    action: suspend () -> String?,
+    action: suspend () -> Boolean,
 ) {
     val context = LocalContext.current
     FilledTonalButton(
         onClick = {
             scope.launch {
-                val sessionId = action()
-                val msg = if (sessionId != null) {
-                    val repo = SessionRepository(context)
-                    val session = repo.findById(sessionId)
-                    "$label → ${session?.status ?: "?"}"
-                } else {
-                    "No active session"
-                }
+                val msg = if (action()) "$label injected" else "No active session"
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             }
         },

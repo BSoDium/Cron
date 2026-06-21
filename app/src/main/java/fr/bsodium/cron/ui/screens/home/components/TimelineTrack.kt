@@ -32,10 +32,10 @@ import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
-internal val SESSION_GUTTER_WIDTH = 40.dp
+internal val SESSION_GUTTER_WIDTH = 46.dp
 private val TRACK_WIDTH = 1.5.dp
 private val DISC_SIZE = 24.dp
-private val EVENT_ICON_SIZE = 18.dp
+private val EVENT_ICON_SIZE = 24.dp
 private val STATION_DOT_SIZE = 6.dp
 
 
@@ -128,6 +128,7 @@ internal fun SessionTimelineDayHeader(
     label: String,
     @Suppress("UNUSED_PARAMETER") isFirst: Boolean,
     @Suppress("UNUSED_PARAMETER") isLast: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val waveColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val bgColor = CronColors.pageBackground
@@ -137,7 +138,7 @@ internal fun SessionTimelineDayHeader(
     val strokePx = with(density) { WAVE_STROKE.toPx() }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = Spacing.lg)
             .drawBehind {
