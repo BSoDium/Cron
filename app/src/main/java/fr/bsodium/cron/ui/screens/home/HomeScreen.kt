@@ -10,9 +10,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -151,8 +149,8 @@ fun HomeScreen(
         )
     }
 
-    // Detail overlay: which AI run iteration the user tapped to drill into.
-    var selectedIteration by remember { mutableStateOf<AiIterationUi?>(null) }
+    var timelineMode by remember { mutableStateOf<TimelineMode>(TimelineMode.List) }
+    BackHandler(enabled = timelineMode is TimelineMode.Detail) { timelineMode = TimelineMode.List }
 
     Box(modifier = Modifier.fillMaxSize()) {
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
@@ -184,17 +182,18 @@ fun HomeScreen(
                         val plan = displayPlan ?: lastPlan
                         if (plan != null) state.copy(aiPlan = plan) else state
                     },
+                    timelineMode = timelineMode,
                     statusInsetTop = statusInsetTop,
                     navInsetBottom = navInsetBottom,
                     hasNotificationPermission = hasNotificationPermission,
                     onNotifEnable = onNotifEnable,
                     onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                     onAlarmTimeClick = onAlarmTimeClick,
-                    onOpenAiRun = { turnIndex, _ ->
-                        val iter = (displayPlan ?: lastPlan)?.iterations?.find { it.turnIndex == turnIndex }
-                        if (iter != null) selectedIteration = iter
+                    onOpenAiRun = { turnIndex, sessionId ->
+                        timelineMode = TimelineMode.Detail(turnIndex, sessionId)
                     },
                     onLoadMore = viewModel::loadMoreHistory,
+                    onBack = { timelineMode = TimelineMode.List },
                 )
             }
         }
@@ -242,19 +241,6 @@ fun HomeScreen(
                     onDismiss = viewModel::dismissSettingsReminder,
                 )
             }
-        }
-
-        // Detail overlay: full-screen AI plan detail with predictive back.
-        val currentSelection = selectedIteration
-        if (currentSelection != null) {
-            // Keep the iteration's thread in sync with streaming updates.
-            val liveIteration = (displayPlan ?: lastPlan)?.iterations
-                ?.find { it.turnIndex == currentSelection.turnIndex }
-                ?: currentSelection
-            AiPlanDetailScreen(
-                iteration = liveIteration,
-                onBack = { selectedIteration = null },
-            )
         }
 
         if (showTimePicker) {

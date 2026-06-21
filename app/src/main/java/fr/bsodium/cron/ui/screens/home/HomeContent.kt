@@ -1,25 +1,32 @@
 package fr.bsodium.cron.ui.screens.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -29,6 +36,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import androidx.compose.ui.unit.dp
@@ -37,13 +45,21 @@ import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 
 private val ALARM_COLLAPSE_RANGE = 120.dp
+
+sealed interface TimelineMode {
+    data object List : TimelineMode
+    data class Detail(val turnIndex: Int, val sessionId: String) : TimelineMode
+}
 
 @Composable
 internal fun HomePlanContent(
     uiState: HomeUiState,
+    timelineMode: TimelineMode,
     statusInsetTop: Dp,
     navInsetBottom: Dp,
     hasNotificationPermission: Boolean,
@@ -52,11 +68,11 @@ internal fun HomePlanContent(
     onAlarmTimeClick: (() -> Unit)? = null,
     onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
     onLoadMore: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     var cardFullHeightPx by remember { mutableIntStateOf(0) }
-
     var greetingHeightPx by remember { mutableIntStateOf(0) }
     val reservePx by remember { derivedStateOf { cardFullHeightPx } }
 
@@ -89,6 +105,12 @@ internal fun HomePlanContent(
     }
     AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
 
+    LaunchedEffect(timelineMode) {
+        if (timelineMode is TimelineMode.Detail) {
+            listState.animateScrollToItem(2)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -115,15 +137,39 @@ internal fun HomePlanContent(
             item(key = "alarm-spacer") {
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.md))
             }
-            sessionTimelineItems(
-                timeline = uiState.timeline,
-                hasMore = uiState.hasMoreHistory,
-                onOpenAiRun = onOpenAiRun,
-                onLoadMore = onLoadMore,
-            )
-            if (!hasNotificationPermission) {
-                item(key = "notif-permission") {
-                    NotificationPermissionRow(onEnable = onNotifEnable)
+
+            when (timelineMode) {
+                is TimelineMode.List -> {
+                    sessionTimelineItems(
+                        timeline = uiState.timeline,
+                        hasMore = uiState.hasMoreHistory,
+                        onOpenAiRun = onOpenAiRun,
+                        onLoadMore = onLoadMore,
+                    )
+                    if (!hasNotificationPermission) {
+                        item(key = "notif-permission") {
+                            NotificationPermissionRow(onEnable = onNotifEnable)
+                        }
+                    }
+                }
+                is TimelineMode.Detail -> {
+                    val iteration = uiState.aiPlan?.iterations
+                        ?.find { it.turnIndex == timelineMode.turnIndex }
+
+                    item(key = "detail-back") {
+                        DetailBackRow(
+                            title = iteration?.systemMessage ?: "Plan",
+                            onBack = onBack,
+                        )
+                    }
+                    if (iteration != null) {
+                        item(key = "detail-thread") {
+                            AiThinkingThread(
+                                thread = iteration.thread,
+                                modifier = Modifier.padding(top = Spacing.md),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -142,6 +188,31 @@ internal fun HomePlanContent(
                 onAlarmTimeClick = onAlarmTimeClick,
             )
         }
+    }
+}
+
+@Composable
+private fun DetailBackRow(title: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(bottom = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack) {
+            Symbol(
+                symbol = MaterialSymbol.ArrowBack,
+                contentDescription = "Back",
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Spacer(Modifier.width(Spacing.xs))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -184,7 +255,6 @@ private fun BoxScope.StickyAlarm(
 @Preview(showBackground = true)
 @Composable
 private fun HomePlanContentPreview() {
-    val now = kotlinx.datetime.Clock.System.now()
     CronTheme {
         HomePlanContent(
             uiState = HomeUiState(
@@ -209,6 +279,7 @@ private fun HomePlanContentPreview() {
                     ),
                 ),
             ),
+            timelineMode = TimelineMode.List,
             statusInsetTop = 0.dp,
             navInsetBottom = 0.dp,
             hasNotificationPermission = true,
@@ -216,6 +287,7 @@ private fun HomePlanContentPreview() {
             onAutoAlarmsChange = {},
             onOpenAiRun = { _, _ -> },
             onLoadMore = {},
+            onBack = {},
         )
     }
 }
