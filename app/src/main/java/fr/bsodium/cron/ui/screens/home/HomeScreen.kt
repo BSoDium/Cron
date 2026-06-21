@@ -7,15 +7,10 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,10 +31,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.runtime.toMutableStateList
-import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.ui.NavDisplay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
@@ -79,10 +70,7 @@ import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 
-private data object HomeRoot
 private data class PlanDetailKey(val turnIndex: Int, val sessionId: String)
-
-private const val FORWARD_MS = 350
 
 private const val EMPTY_STATE_DATE_LABEL = "No alarm set"
 
@@ -169,62 +157,49 @@ fun HomeScreen(
         )
     }
 
-    val backStack: SnapshotStateList<Any> = remember { listOf<Any>(HomeRoot).toMutableStateList() }
+    var detailKey by remember { mutableStateOf<PlanDetailKey?>(null) }
     val snapshotLayer = rememberGraphicsLayer()
 
-    NavDisplay(
-        backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
-        transitionSpec = {
-            slideInHorizontally { it } + fadeIn() togetherWith
-                slideOutHorizontally { -it / 4 } + fadeOut()
-        },
-        popTransitionSpec = {
-            EnterTransition.None togetherWith ExitTransition.None
-        },
-        predictivePopTransitionSpec = {
-            EnterTransition.None togetherWith ExitTransition.None
-        },
-        entryProvider = entryProvider {
-            entry<HomeRoot> {
-                HomeRootContent(
-                    uiState = uiState,
-                    displayPlan = displayPlan,
-                    resting = resting,
-                    statusInsetTop = statusInsetTop,
-                    navInsetBottom = navInsetBottom,
-                    hasNotificationPermission = hasNotificationPermission,
-                    onNotifEnable = onNotifEnable,
-                    onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
-                    onAlarmTimeClick = onAlarmTimeClick,
-                    onOpenAiRun = { turn, session -> backStack.add(PlanDetailKey(turn, session)) },
-                    onNavigateToHistory = onNavigateToHistory,
-                    onNavigateToSettings = onNavigateToSettings,
-                    onNavigateToScheduleSettings = onNavigateToScheduleSettings,
-                    viewModel = viewModel,
-                    showTimePicker = showTimePicker,
-                    onShowTimePicker = { showTimePicker = it },
-                    snapshotLayer = snapshotLayer,
+    Box(Modifier.fillMaxSize()) {
+        if (detailKey == null) {
+            HomeRootContent(
+                uiState = uiState,
+                displayPlan = displayPlan,
+                resting = resting,
+                statusInsetTop = statusInsetTop,
+                navInsetBottom = navInsetBottom,
+                hasNotificationPermission = hasNotificationPermission,
+                onNotifEnable = onNotifEnable,
+                onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
+                onAlarmTimeClick = onAlarmTimeClick,
+                onOpenAiRun = { turn, session -> detailKey = PlanDetailKey(turn, session) },
+                onNavigateToHistory = onNavigateToHistory,
+                onNavigateToSettings = onNavigateToSettings,
+                onNavigateToScheduleSettings = onNavigateToScheduleSettings,
+                viewModel = viewModel,
+                showTimePicker = showTimePicker,
+                onShowTimePicker = { showTimePicker = it },
+                snapshotLayer = snapshotLayer,
+            )
+        }
+
+        detailKey?.let { key ->
+            PredictiveBackCard(
+                onBack = { detailKey = null },
+                parentContent = {
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawLayer(snapshotLayer)
+                    }
+                },
+            ) { animatedBack ->
+                PlanDetailScreen(
+                    iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
+                    hapticsEnabled = uiState.hapticsEnabled,
+                    onBack = animatedBack,
                 )
             }
-            entry<PlanDetailKey> { key ->
-                PredictiveBackCard(
-                    onBack = { backStack.removeLastOrNull() },
-                    parentContent = {
-                        Canvas(Modifier.fillMaxSize()) {
-                            drawLayer(snapshotLayer)
-                        }
-                    },
-                ) { animatedBack ->
-                    PlanDetailScreen(
-                        iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
-                        hapticsEnabled = uiState.hapticsEnabled,
-                        onBack = animatedBack,
-                    )
-                }
-            }
-        },
-    )
+        }
+    }
 }
 
 @Suppress("AnimationPreviewNotRequired")
