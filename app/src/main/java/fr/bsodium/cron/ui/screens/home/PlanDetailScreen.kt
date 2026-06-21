@@ -2,7 +2,6 @@ package fr.bsodium.cron.ui.screens.home
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,27 +24,20 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.components.PredictiveBackCard
 import fr.bsodium.cron.ui.components.rememberCronHaptics
-import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 import kotlinx.coroutines.launch
-
-const val ROUTE_PLAN_DETAIL = "plan-detail/{turnIndex}/{sessionId}"
-
-fun planDetailRoute(turnIndex: Int, sessionId: String) = "plan-detail/$turnIndex/$sessionId"
 
 private const val PULL_THRESHOLD_FRACTION = 0.4f
 private const val PULL_RUBBER_FLOOR = 0.15f
@@ -56,48 +48,34 @@ private val PULL_TRIGGER_MAX = 120.dp
 fun PlanDetailScreen(
     iteration: AiIterationUi?,
     hapticsEnabled: Boolean,
-    parentSnapshot: ImageBitmap? = null,
     onBack: () -> Unit,
 ) {
-    PredictiveBackCard(
-        onBack = onBack,
-        parentContent = parentSnapshot?.let { bmp ->
-            {
-                Image(
-                    bitmap = bmp,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.FillBounds,
-                )
-            }
-        },
-    ) { animatedBack ->
-        Scaffold(
-            containerColor = CronColors.pageBackground,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = iteration?.systemMessage.orEmpty(),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+    Scaffold(
+        containerColor = CronColors.pageBackground,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = iteration?.systemMessage.orEmpty(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Symbol(
+                            symbol = MaterialSymbol.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = animatedBack) {
-                            Symbol(
-                                symbol = MaterialSymbol.ArrowBack,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = CronColors.pageBackground,
-                    ),
-                )
-            },
-        ) { innerPadding ->
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = CronColors.pageBackground,
+                ),
+            )
+        },
+    ) { innerPadding ->
         if (iteration != null) {
             val scope = rememberCoroutineScope()
             val pullState = remember(iteration.turnIndex) { PullState() }
@@ -140,7 +118,6 @@ fun PlanDetailScreen(
                     },
                 )
             }
-        }
         }
     }
 }
