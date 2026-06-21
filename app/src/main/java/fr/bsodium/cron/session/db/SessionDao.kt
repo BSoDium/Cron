@@ -37,6 +37,12 @@ interface SessionDao {
     @Query("DELETE FROM sessions WHERE createdAt < :olderThanMillis")
     suspend fun deleteOlderThan(olderThanMillis: Long): Int
 
+    @Query("SELECT * FROM sessions ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
+    suspend fun findPaginated(limit: Int, offset: Int): List<SessionEntity>
+
+    @Query("SELECT COUNT(*) FROM sessions")
+    suspend fun count(): Int
+
     @Query("DELETE FROM sessions")
     suspend fun deleteAll(): Int
 }
