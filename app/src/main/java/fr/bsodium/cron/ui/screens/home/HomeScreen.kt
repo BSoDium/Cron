@@ -7,10 +7,15 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +35,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.toMutableStateList
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.ui.NavDisplay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
@@ -63,7 +72,11 @@ import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 
-// The onset card's header when no plan has run for the next alarm yet.
+private data object HomeRoot
+private data class PlanDetailKey(val turnIndex: Int, val sessionId: String)
+
+private const val FORWARD_MS = 350
+
 private const val EMPTY_STATE_DATE_LABEL = "No alarm set"
 
 /** What the home body should show — kept coarse (not the thread content) so it only crossfades on a
@@ -77,7 +90,6 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToScheduleSettings: () -> Unit = onNavigateToSettings,
     onNavigateToHistory: () -> Unit = {},
-    onNavigateToPlanDetail: (turnIndex: Int, sessionId: String) -> Unit = { _, _ -> },
 ) {
     val uiState by viewModel.uiState.collectAsState()
     // At most one iteration streams at a time (always the latest). Typewriter-reveal that sub-thread and
@@ -150,6 +162,75 @@ fun HomeScreen(
         )
     }
 
+    val backStack: SnapshotStateList<Any> = remember { listOf<Any>(HomeRoot).toMutableStateList() }
+
+    NavDisplay(
+        backStack = backStack,
+        onBack = { backStack.removeLastOrNull() },
+        transitionSpec = {
+            slideInHorizontally { it } + fadeIn() togetherWith
+                slideOutHorizontally { -it / 4 } + fadeOut()
+        },
+        popTransitionSpec = {
+            slideInHorizontally { -it / 4 } + fadeIn() togetherWith
+                slideOutHorizontally { it } + fadeOut()
+        },
+        predictivePopTransitionSpec = {
+            EnterTransition.None togetherWith
+                scaleOut(targetScale = 0.90f) + fadeOut()
+        },
+        entryProvider = entryProvider {
+            entry<HomeRoot> {
+                HomeRootContent(
+                    uiState = uiState,
+                    displayPlan = displayPlan,
+                    resting = resting,
+                    statusInsetTop = statusInsetTop,
+                    navInsetBottom = navInsetBottom,
+                    hasNotificationPermission = hasNotificationPermission,
+                    onNotifEnable = onNotifEnable,
+                    onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
+                    onAlarmTimeClick = onAlarmTimeClick,
+                    onOpenAiRun = { turn, session -> backStack.add(PlanDetailKey(turn, session)) },
+                    onNavigateToHistory = onNavigateToHistory,
+                    onNavigateToSettings = onNavigateToSettings,
+                    onNavigateToScheduleSettings = onNavigateToScheduleSettings,
+                    viewModel = viewModel,
+                    showTimePicker = showTimePicker,
+                    onShowTimePicker = { showTimePicker = it },
+                )
+            }
+            entry<PlanDetailKey> { key ->
+                PlanDetailScreen(
+                    iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
+                    hapticsEnabled = uiState.hapticsEnabled,
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+        },
+    )
+}
+
+@Suppress("AnimationPreviewNotRequired")
+@Composable
+private fun HomeRootContent(
+    uiState: HomeUiState,
+    displayPlan: AiPlanUi?,
+    resting: Boolean,
+    statusInsetTop: Dp,
+    navInsetBottom: Dp,
+    hasNotificationPermission: Boolean,
+    onNotifEnable: () -> Unit,
+    onAutoAlarmsChange: (Boolean) -> Unit,
+    onAlarmTimeClick: (() -> Unit)?,
+    onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToScheduleSettings: () -> Unit,
+    viewModel: HomeViewModel,
+    showTimePicker: Boolean,
+    onShowTimePicker: (Boolean) -> Unit,
+) {
     Box(modifier = Modifier.fillMaxSize()) {
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
@@ -173,7 +254,7 @@ fun HomeScreen(
                     navInsetBottom = navInsetBottom,
                     hasNotificationPermission = hasNotificationPermission,
                     onNotifEnable = onNotifEnable,
-                    onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
+                    onAutoAlarmsChange = onAutoAlarmsChange,
                 )
                 HomePhase.Plan -> HomePlanContent(
                     uiState = uiState.let { state ->
@@ -184,16 +265,14 @@ fun HomeScreen(
                     navInsetBottom = navInsetBottom,
                     hasNotificationPermission = hasNotificationPermission,
                     onNotifEnable = onNotifEnable,
-                    onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
+                    onAutoAlarmsChange = onAutoAlarmsChange,
                     onAlarmTimeClick = onAlarmTimeClick,
-                    onOpenAiRun = onNavigateToPlanDetail,
+                    onOpenAiRun = onOpenAiRun,
                     onNavigateToHistory = onNavigateToHistory,
                 )
             }
         }
 
-        // Floating callouts stack just above the nav: a turn-failure banner on top of the
-        // "settings changed" pill, so the two never overlap when both are visible.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -203,7 +282,6 @@ fun HomeScreen(
                     bottom = navInsetBottom + Spacing.navBarClearance,
                 ),
         ) {
-            // Hold the last failure so it animates out cleanly after aiFailure clears on dismiss.
             var lastFailure by remember { mutableStateOf<AiTurnFailure?>(null) }
             LaunchedEffect(uiState.aiFailure) { uiState.aiFailure?.let { lastFailure = it } }
             AnimatedVisibility(
@@ -240,14 +318,14 @@ fun HomeScreen(
         if (showTimePicker) {
             TimePickerDialog(
                 initial = uiState.sessionDisplay?.alarmTime ?: LocalTime(7, 0),
-                onDismiss = { showTimePicker = false },
+                onDismiss = { onShowTimePicker(false) },
                 onConfirm = { newTime ->
                     viewModel.updateAlarmTime(newTime)
-                    showTimePicker = false
+                    onShowTimePicker(false)
                 },
                 hardLatest = uiState.sessionDisplay?.hardLatest,
                 onEditLimit = {
-                    showTimePicker = false
+                    onShowTimePicker(false)
                     onNavigateToScheduleSettings()
                 },
             )

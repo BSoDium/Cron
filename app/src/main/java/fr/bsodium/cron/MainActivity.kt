@@ -38,12 +38,8 @@ import androidx.compose.runtime.setValue
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalView
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.view.drawToBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
@@ -61,16 +57,8 @@ import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.core.EaseOutCubic
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
 import fr.bsodium.cron.ui.screens.home.HomeScreen
 import fr.bsodium.cron.ui.screens.home.HomeViewModel
-import fr.bsodium.cron.ui.screens.home.PlanDetailScreen
-import fr.bsodium.cron.ui.screens.home.ROUTE_PLAN_DETAIL
-import fr.bsodium.cron.ui.screens.home.planDetailRoute
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
@@ -173,8 +161,6 @@ class MainActivity : ComponentActivity() {
                 // against the bar's scrolled surfaceContainer shade, so suppress it there.
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
                     currentRoute?.startsWith("settings") == true
-                val view = LocalView.current
-                var parentSnapshot by remember { mutableStateOf<ImageBitmap?>(null) }
                 val fabRegistry = remember { FabRegistry() }
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
@@ -264,18 +250,9 @@ class MainActivity : ComponentActivity() {
                                 }
                                 composable(
                                     route = ROUTE_HOME,
-                                    // Directional tab slide (onboarding → home fades, handled inside tabEnter). All
-                                    // four slots use the index-directional specs so push/pop both read correctly and
-                                    // nothing ever stacks at the same position.
                                     enterTransition = tabEnter,
-                                    exitTransition = {
-                                        if (targetState.destination.route == ROUTE_PLAN_DETAIL) ExitTransition.None
-                                        else tabExit()
-                                    },
-                                    popEnterTransition = {
-                                        if (initialState.destination.route == ROUTE_PLAN_DETAIL) EnterTransition.None
-                                        else tabEnter()
-                                    },
+                                    exitTransition = tabExit,
+                                    popEnterTransition = tabEnter,
                                     popExitTransition = tabExit,
                                 ) {
                                     HomeScreen(
@@ -311,36 +288,6 @@ class MainActivity : ComponentActivity() {
                                                 launchSingleTop = true
                                                 restoreState = true
                                             }
-                                        },
-                                        onNavigateToPlanDetail = { turnIndex, sessionId ->
-                                            parentSnapshot = view.drawToBitmap().asImageBitmap()
-                                            navController.navigate(planDetailRoute(turnIndex, sessionId))
-                                        },
-                                    )
-                                }
-                                composable(
-                                    route = ROUTE_PLAN_DETAIL,
-                                    arguments = listOf(
-                                        navArgument("turnIndex") { type = NavType.IntType },
-                                        navArgument("sessionId") { type = NavType.StringType },
-                                    ),
-                                    enterTransition = { slideInHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { it } + fadeIn(tween(FORWARD_MS / 2)) },
-                                    exitTransition = { slideOutHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { -it / 4 } + fadeOut(tween(FORWARD_MS), targetAlpha = 0.65f) },
-                                    popExitTransition = { ExitTransition.None },
-                                    popEnterTransition = { EnterTransition.None },
-                                ) { entry ->
-                                    val turnIndex = entry.arguments?.getInt("turnIndex") ?: return@composable
-                                    val homeEntry = remember(entry) { navController.getBackStackEntry(ROUTE_HOME) }
-                                    val homeVm = viewModel<HomeViewModel>(homeEntry)
-                                    val uiState by homeVm.uiState.collectAsState()
-                                    val iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == turnIndex }
-                                    PlanDetailScreen(
-                                        iteration = iteration,
-                                        hapticsEnabled = uiState.hapticsEnabled,
-                                        parentSnapshot = parentSnapshot,
-                                        onBack = {
-                                            navController.popBackStack()
-                                            parentSnapshot = null
                                         },
                                     )
                                 }
