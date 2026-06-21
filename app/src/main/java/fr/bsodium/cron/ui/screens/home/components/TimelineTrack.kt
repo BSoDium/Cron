@@ -51,7 +51,7 @@ internal fun SessionTimelineRow(
 ) {
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val maskColor = CronColors.pageBackground
-    val discTop = (verticalPadding + (firstLineHeight - discSize) / 2).coerceAtLeast(0.dp)
+    val discTop = (verticalPadding + (firstLineHeight - discSize) / 2 - 1.dp).coerceAtLeast(0.dp)
     val iconCenter = discTop + discSize / 2
 
     Box(modifier = Modifier.fillMaxWidth()) {

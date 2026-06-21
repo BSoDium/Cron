@@ -26,7 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -47,7 +47,7 @@ private val CARD_SHAPE = RoundedCornerShape(50)
 private val ICON_BOX = 24.dp
 private val ICON_GLYPH = 18.dp
 private val CHEVRON_SIZE = 14.dp
-private val CHEVRON_STROKE = 1.5.dp
+private val CHEVRON_STROKE = 2.dp
 private val TRACK_WIDTH = 1.5.dp
 
 @Composable
@@ -75,8 +75,9 @@ internal fun PlanTimelineCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = Spacing.sm)
-            .drawBehind {
-                if (isFirst && isLast) return@drawBehind
+            .drawWithContent {
+                drawContent()
+                if (isFirst && isLast) return@drawWithContent
                 val top = if (isFirst) size.height / 2f else 0f
                 val bottom = if (isLast) size.height / 2f else size.height
                 drawLine(
@@ -97,7 +98,7 @@ internal fun PlanTimelineCard(
                     scaleX = s; scaleY = s
                 }
                 .fillMaxWidth()
-                .heightIn(min = 45.dp),
+                .heightIn(min = 48.dp),
             shape = CARD_SHAPE,
             color = containerColor,
             contentColor = contentColor,
@@ -106,7 +107,7 @@ internal fun PlanTimelineCard(
                 modifier = Modifier.padding(
                     start = Spacing.sm,
                     top = Spacing.sm,
-                    end = Spacing.sm,
+                    end = Spacing.md,
                     bottom = Spacing.sm,
                 ),
                 verticalAlignment = Alignment.CenterVertically,

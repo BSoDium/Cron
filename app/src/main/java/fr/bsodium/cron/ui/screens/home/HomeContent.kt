@@ -132,8 +132,8 @@ internal fun HomePlanContent(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = Spacing.xl,
-                end = Spacing.xl,
+                start = Spacing.md,
+                end = Spacing.md,
                 top = statusInsetTop + Spacing.xxl,
                 bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
             ),
@@ -145,6 +145,7 @@ internal fun HomePlanContent(
                     autoAlarmsEnabled = uiState.autoAlarmsEnabled,
                     onAutoAlarmsChange = onAutoAlarmsChange,
                     modifier = Modifier
+                        .padding(horizontal = Spacing.sm)
                         .padding(bottom = Spacing.md)
                         .onSizeChanged { greetingHeightPx = it.height },
                     hapticsEnabled = uiState.hapticsEnabled,
@@ -160,7 +161,10 @@ internal fun HomePlanContent(
             )
             if (!hasNotificationPermission) {
                 item(key = "notif-permission") {
-                    NotificationPermissionRow(onEnable = onNotifEnable)
+                    NotificationPermissionRow(
+                        onEnable = onNotifEnable,
+                        modifier = Modifier.padding(horizontal = Spacing.sm),
+                    )
                 }
             }
         }
