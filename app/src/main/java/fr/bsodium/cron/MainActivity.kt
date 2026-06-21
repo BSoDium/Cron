@@ -319,8 +319,12 @@ class MainActivity : ComponentActivity() {
                                     ),
                                     enterTransition = { slideInHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { it } + fadeIn(tween(FORWARD_MS / 2)) },
                                     exitTransition = { slideOutHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { -it / 4 } + fadeOut(tween(FORWARD_MS), targetAlpha = 0.65f) },
+                                    popExitTransition = {
+                                        scaleOut(tween(FORWARD_MS, easing = EaseOutCubic), targetScale = 0.90f) +
+                                            slideOutHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { it / 3 } +
+                                            fadeOut(tween(FORWARD_MS / 2))
+                                    },
                                     popEnterTransition = { EnterTransition.None },
-                                    popExitTransition = { ExitTransition.None },
                                 ) { entry ->
                                     val turnIndex = entry.arguments?.getInt("turnIndex") ?: return@composable
                                     val homeEntry = remember(entry) { navController.getBackStackEntry(ROUTE_HOME) }

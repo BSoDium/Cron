@@ -30,6 +30,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -141,11 +143,15 @@ internal fun PlanTimelineCard(
                         overflow = TextOverflow.Clip,
                     )
                 }
+                val ltr = LocalLayoutDirection.current == LayoutDirection.Ltr
                 Symbol(
-                    symbol = MaterialSymbol.ArrowForward,
+                    symbol = MaterialSymbol.ExpandMore,
                     contentDescription = null,
                     tint = contentColor.copy(alpha = 0.5f),
                     size = CHEVRON_ICON_SIZE,
+                    modifier = Modifier.graphicsLayer {
+                        rotationZ = if (ltr) -90f else 90f
+                    },
                 )
             }
         }

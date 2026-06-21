@@ -37,6 +37,7 @@ import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.PlanTimelineCard
+import fr.bsodium.cron.ui.screens.home.components.SessionStatusRow
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -147,6 +148,13 @@ internal fun HomePlanContent(
                     Spacer(Modifier.height(with(density) { latestPlanHeightPx.toDp() }))
                 }
             }
+            item(key = "session-status") {
+                SessionStatusRow(
+                    status = uiState.sessionDisplay?.status,
+                    isLast = timelineWithoutLatest.isEmpty(),
+                    modifier = Modifier.padding(top = Spacing.sm),
+                )
+            }
             sessionTimelineItems(
                 timeline = timelineWithoutLatest,
                 hasMore = uiState.hasMoreHistory,
@@ -185,6 +193,7 @@ internal fun HomePlanContent(
         StickyAlarm(
             safeTopPx = collapseSafeTopPx,
             collapse = collapseState,
+            hasLatestPlan = latestRun != null,
         ) { collapseFraction ->
             CollapsibleAlarmCard(
                 dateLabel = uiState.dateLabel,
@@ -204,13 +213,14 @@ internal fun HomePlanContent(
 private fun BoxScope.StickyAlarm(
     safeTopPx: Int,
     collapse: State<AlarmCollapse>,
+    hasLatestPlan: Boolean,
     card: @Composable (collapseFraction: () -> Float) -> Unit,
 ) {
     val density = LocalDensity.current
     val background = CronColors.pageBackground
     var visiblePx by remember { mutableIntStateOf(0) }
     val cardBottomPx = safeTopPx + visiblePx
-    val belowFadePx = with(density) { Spacing.xxxl.toPx() }
+    val belowFadePx = with(density) { (if (hasLatestPlan) Spacing.sm else Spacing.xxxl).toPx() }
     val totalPx = cardBottomPx + belowFadePx
     val solidStop = if (totalPx > 0f) (cardBottomPx / totalPx).coerceIn(0f, 1f) else 1f
     Box(
