@@ -8,14 +8,15 @@ import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,10 +43,15 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toIntSize
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -54,6 +60,7 @@ import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.ui.components.FabAction
+import fr.bsodium.cron.ui.components.PredictiveBackCard
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
 import fr.bsodium.cron.ui.screens.home.components.AlarmTiming
@@ -163,6 +170,7 @@ fun HomeScreen(
     }
 
     val backStack: SnapshotStateList<Any> = remember { listOf<Any>(HomeRoot).toMutableStateList() }
+    val snapshotLayer = rememberGraphicsLayer()
 
     NavDisplay(
         backStack = backStack,
@@ -172,12 +180,10 @@ fun HomeScreen(
                 slideOutHorizontally { -it / 4 } + fadeOut()
         },
         popTransitionSpec = {
-            slideInHorizontally { -it / 4 } + fadeIn() togetherWith
-                slideOutHorizontally { it } + fadeOut()
+            EnterTransition.None togetherWith ExitTransition.None
         },
         predictivePopTransitionSpec = {
-            EnterTransition.None togetherWith
-                scaleOut(targetScale = 0.90f) + fadeOut()
+            EnterTransition.None togetherWith ExitTransition.None
         },
         entryProvider = entryProvider {
             entry<HomeRoot> {
@@ -198,14 +204,24 @@ fun HomeScreen(
                     viewModel = viewModel,
                     showTimePicker = showTimePicker,
                     onShowTimePicker = { showTimePicker = it },
+                    snapshotLayer = snapshotLayer,
                 )
             }
             entry<PlanDetailKey> { key ->
-                PlanDetailScreen(
-                    iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
-                    hapticsEnabled = uiState.hapticsEnabled,
+                PredictiveBackCard(
                     onBack = { backStack.removeLastOrNull() },
-                )
+                    parentContent = {
+                        Canvas(Modifier.fillMaxSize()) {
+                            drawLayer(snapshotLayer)
+                        }
+                    },
+                ) { animatedBack ->
+                    PlanDetailScreen(
+                        iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
+                        hapticsEnabled = uiState.hapticsEnabled,
+                        onBack = animatedBack,
+                    )
+                }
             }
         },
     )
@@ -230,8 +246,24 @@ private fun HomeRootContent(
     viewModel: HomeViewModel,
     showTimePicker: Boolean,
     onShowTimePicker: (Boolean) -> Unit,
+    snapshotLayer: GraphicsLayer? = null,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (snapshotLayer != null) {
+                    Modifier.drawWithContent {
+                        snapshotLayer.record(size = size.toIntSize()) {
+                            this@drawWithContent.drawContent()
+                        }
+                        drawLayer(snapshotLayer)
+                    }
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
         val homePhase = when {
