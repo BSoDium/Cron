@@ -5,11 +5,14 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -148,14 +151,12 @@ fun HomeScreen(
         )
     }
 
+    // Detail overlay: which AI run iteration the user tapped to drill into.
+    var selectedIteration by remember { mutableStateOf<AiIterationUi?>(null) }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        // Keep the last shown plan so a Plan→Idle dissolve still renders it while fading out — and so a
-        // re-plan's brief null gap (old turn cleared before the new one publishes) holds Plan instead of
-        // flashing the Idle onboarding cake.
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
-        // Gate on `initialized` so we never flash the idle layout before data resolves, then crossfade
-        // straight into the right layout — no empty→thread pop / card jump on cold start.
         val homePhase = when {
             !uiState.initialized -> HomePhase.Loading
             displayPlan != null && !resting -> HomePhase.Plan
@@ -178,18 +179,23 @@ fun HomeScreen(
                     onNotifEnable = onNotifEnable,
                     onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                 )
-                HomePhase.Plan -> (displayPlan ?: lastPlan)?.let { plan ->
-                    HomePlanContent(
-                        plan = plan,
-                        uiState = uiState,
-                        statusInsetTop = statusInsetTop,
-                        navInsetBottom = navInsetBottom,
-                        hasNotificationPermission = hasNotificationPermission,
-                        onNotifEnable = onNotifEnable,
-                        onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
-                        onAlarmTimeClick = onAlarmTimeClick,
-                    )
-                }
+                HomePhase.Plan -> HomePlanContent(
+                    uiState = uiState.let { state ->
+                        val plan = displayPlan ?: lastPlan
+                        if (plan != null) state.copy(aiPlan = plan) else state
+                    },
+                    statusInsetTop = statusInsetTop,
+                    navInsetBottom = navInsetBottom,
+                    hasNotificationPermission = hasNotificationPermission,
+                    onNotifEnable = onNotifEnable,
+                    onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
+                    onAlarmTimeClick = onAlarmTimeClick,
+                    onOpenAiRun = { turnIndex, _ ->
+                        val iter = (displayPlan ?: lastPlan)?.iterations?.find { it.turnIndex == turnIndex }
+                        if (iter != null) selectedIteration = iter
+                    },
+                    onLoadMore = viewModel::loadMoreHistory,
+                )
             }
         }
 
@@ -236,6 +242,19 @@ fun HomeScreen(
                     onDismiss = viewModel::dismissSettingsReminder,
                 )
             }
+        }
+
+        // Detail overlay: full-screen AI plan detail with predictive back.
+        val currentSelection = selectedIteration
+        if (currentSelection != null) {
+            // Keep the iteration's thread in sync with streaming updates.
+            val liveIteration = (displayPlan ?: lastPlan)?.iterations
+                ?.find { it.turnIndex == currentSelection.turnIndex }
+                ?: currentSelection
+            AiPlanDetailScreen(
+                iteration = liveIteration,
+                onBack = { selectedIteration = null },
+            )
         }
 
         if (showTimePicker) {
