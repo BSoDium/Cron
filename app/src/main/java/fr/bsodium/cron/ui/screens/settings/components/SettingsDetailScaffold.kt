@@ -15,12 +15,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.PageAppBar
+import fr.bsodium.cron.ui.components.PredictiveBackCard
+import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
+import fr.bsodium.cron.ui.screens.settings.SettingsScreen
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
@@ -47,7 +52,17 @@ internal fun SettingsDetailScaffold(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val navBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    PredictiveBackCard(onBack = onBack, modifier = modifier) { animatedBack ->
+    val currentState = LocalSettingsListState.current
+    val previewIndex = currentState.firstVisibleItemIndex
+    val previewOffset = currentState.firstVisibleItemScrollOffset
+    PredictiveBackCard(
+        onBack = onBack,
+        modifier = modifier,
+        parentContent = {
+            val previewState = remember { LazyListState(previewIndex, previewOffset) }
+            SettingsScreen(onOpenCategory = {}, listState = previewState)
+        },
+    ) { animatedBack ->
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
