@@ -53,6 +53,8 @@ data class HomeUiState(
     val dateLabel: String = "",
     val sleepStats: SleepStatsUi? = null,
     val aiPlan: AiPlanUi? = null,
+    val timeline: List<TimelineItem> = emptyList(),
+    val hasMoreHistory: Boolean = false,
     val isRetrying: Boolean = false,
     /** False until the backing flows have produced their first value — gates the onboarding so it
      *  doesn't flash over an existing plan during the cold-start load. */
@@ -91,6 +93,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val eveningPlanScheduler = EveningPlanScheduler(application)
     private val alarmScheduler = AlarmScheduler(application)
     private val hardLatestScheduler = HardLatestScheduler(application)
+
+    private val timelineRepo = TimelineRepository(db)
 
     private val _isRetrying = MutableStateFlow(false)
 
@@ -150,6 +154,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+    /** Session events for the current session — drives the timeline event cards. */
+    private val currentEventsFlow = sessionFlow
+        .map { it?.id }
+        .distinctUntilChanged()
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else db.eventDao().observeBySession(id).map { rows -> rows.map { it.toModel() } }.flowOn(Dispatchers.Default)
+        }
+
+    /** Loaded historical sessions (not including the current one). */
+    private val _historicalSessions = MutableStateFlow<List<TimelineSession>>(emptyList())
+    private val _hasMoreHistory = MutableStateFlow(false)
+    private var _historyOffset = 0
+
     /** Epoch-ms the user last dismissed the "settings changed" reminder this process. */
     private val _dismissedSettingsAt = MutableStateFlow(0L)
 
@@ -183,6 +201,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private val timelineFlow = combine(
+        sessionFlow.map { it?.id }.distinctUntilChanged(),
+        aiPlanFlow,
+        currentEventsFlow,
+        StreamingTurnStore.active,
+        _historicalSessions,
+    ) { sessionId, plan, events, streaming, history ->
+        val currentSession = if (sessionId != null && plan != null) {
+            TimelineSession(
+                sessionId = sessionId,
+                iterations = plan.iterations,
+                events = events,
+                streamingTurnIndex = streaming?.takeIf { it.sessionId == sessionId }?.turnIndex,
+            )
+        } else null
+        val allSessions = listOfNotNull(currentSession) + history
+        buildTimeline(allSessions)
+    }.flowOn(Dispatchers.Default)
+
     private val statusFlow = combine(
         _isRetrying,
         settingsChangedFlow,
@@ -200,23 +237,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    val uiState: StateFlow<HomeUiState> = combine(
+    // Pre-combine the display-layer fields so the main combine stays within arity limits.
+    private val displayFlow = combine(
         sessionFlow.map { it?.toDisplayState() },
         sleepStatsFlow,
-        aiPlanFlow,
         settings.displayName,
+    ) { session, sleepStats, displayName ->
+        HomeDisplay(session = session, sleepStats = sleepStats, displayName = displayName)
+    }
+
+    val uiState: StateFlow<HomeUiState> = combine(
+        displayFlow,
+        aiPlanFlow,
+        timelineFlow,
+        _hasMoreHistory,
         statusFlow,
-    ) { session, sleepStats, plan, displayName, status ->
+    ) { display, plan, timeline, hasMore, status ->
         HomeUiState(
-            sessionDisplay = session,
+            sessionDisplay = display.session,
             greetingPrefix = greetingPrefix(),
-            greetingName = displayName,
-            dateLabel = formatDateLabel(session),
-            sleepStats = sleepStats,
+            greetingName = display.displayName,
+            dateLabel = formatDateLabel(display.session),
+            sleepStats = display.sleepStats,
             aiPlan = plan,
+            timeline = timeline,
+            hasMoreHistory = hasMore,
             isRetrying = status.isRetrying,
-            // combine() only emits once every source has produced a value, so reaching here means
-            // the backing flows have loaded — distinguishes "no plan" from "not loaded yet".
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && plan != null,
             aiFailure = status.failure,
@@ -225,6 +271,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             eveningTriggerTime = status.eveningTriggerTime,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+
+    fun loadMoreHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentId = db.sessionDao().findCurrent()?.id
+                ?: db.sessionDao().findPaginated(1, 0).firstOrNull()?.id
+            val page = timelineRepo.loadHistory(
+                excludeSessionId = currentId,
+                limit = HISTORY_PAGE_SIZE,
+                offset = _historyOffset,
+            )
+            _historyOffset += page.sessions.size
+            _historicalSessions.value = _historicalSessions.value + page.sessions
+            _hasMoreHistory.value = page.hasMore
+        }
+    }
 
     /** Hide the "settings changed" reminder until the next plan-affecting change. */
     fun dismissSettingsReminder() {
@@ -280,6 +341,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+        viewModelScope.launch(Dispatchers.IO) { loadMoreHistory() }
+
         // Drive the "working" flag and the failure banner off the real WorkManager turn, not a fixed
         // delay: a tap sets isRetrying true optimistically; this clears it when the turn reaches a
         // terminal state, and surfaces the failure reason a FAILED turn carries in its output data.
@@ -449,7 +512,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-/** The transient status signals folded into one combine source to keep uiState's arity at 5. */
+private const val HISTORY_PAGE_SIZE = 2
+
+private data class HomeDisplay(
+    val session: SessionDisplayState?,
+    val sleepStats: SleepStatsUi?,
+    val displayName: String?,
+)
+
 private data class HomeStatus(
     val isRetrying: Boolean,
     val settingsChanged: Boolean,
