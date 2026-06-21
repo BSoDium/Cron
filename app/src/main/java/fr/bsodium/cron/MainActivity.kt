@@ -262,8 +262,14 @@ class MainActivity : ComponentActivity() {
                                     // four slots use the index-directional specs so push/pop both read correctly and
                                     // nothing ever stacks at the same position.
                                     enterTransition = tabEnter,
-                                    exitTransition = tabExit,
-                                    popEnterTransition = tabEnter,
+                                    exitTransition = {
+                                        if (targetState.destination.route == ROUTE_PLAN_DETAIL) ExitTransition.None
+                                        else tabExit()
+                                    },
+                                    popEnterTransition = {
+                                        if (initialState.destination.route == ROUTE_PLAN_DETAIL) EnterTransition.None
+                                        else tabEnter()
+                                    },
                                     popExitTransition = tabExit,
                                 ) {
                                     HomeScreen(

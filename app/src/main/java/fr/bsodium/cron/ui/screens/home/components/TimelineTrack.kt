@@ -114,7 +114,7 @@ internal fun SessionTimelineEventRow(
         isLast = isLast,
         icon = icon,
         discSize = EVENT_ICON_SIZE,
-        verticalPadding = Spacing.sm,
+        verticalPadding = Spacing.md,
         content = content,
     )
 }

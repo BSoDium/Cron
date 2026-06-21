@@ -42,7 +42,7 @@ internal fun LazyListScope.sessionTimelineItems(
                 label = item.label,
                 isFirst = index == 0,
                 isLast = index == timeline.lastIndex,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null),
             )
             is TimelineItem.AiRun -> PlanTimelineCard(
                 iteration = item.iteration,
@@ -51,7 +51,7 @@ internal fun LazyListScope.sessionTimelineItems(
                 isFirst = isFirst,
                 isLast = isLast,
                 onClick = { onOpenAiRun(item.iteration.turnIndex, item.sessionId) },
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null),
             )
             is TimelineItem.Event -> EventTimelineCard(
                 trigger = item.trigger,
@@ -60,7 +60,7 @@ internal fun LazyListScope.sessionTimelineItems(
                 timestamp = item.timestamp,
                 isFirst = isFirst,
                 isLast = isLast,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null),
             )
         }
     }

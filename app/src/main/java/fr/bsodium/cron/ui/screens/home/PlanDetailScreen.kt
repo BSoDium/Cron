@@ -1,13 +1,20 @@
 package fr.bsodium.cron.ui.screens.home
 
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -23,26 +30,34 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
-import fr.bsodium.cron.ui.screens.settings.components.PredictiveBackCard
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.MaterialSymbol
+import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 const val ROUTE_PLAN_DETAIL = "plan-detail/{turnIndex}/{sessionId}"
 
 fun planDetailRoute(turnIndex: Int, sessionId: String) = "plan-detail/$turnIndex/$sessionId"
 
+private const val COMMIT_MS = 300
+private const val CANCEL_MS = 220
+private const val CARD_MIN_SCALE = 0.90f
+private val CARD_PREVIEW_SHIFT = Spacing.lg
 private const val PULL_THRESHOLD_FRACTION = 0.4f
 private const val PULL_RUBBER_FLOOR = 0.15f
 private val PULL_TRIGGER_MAX = 120.dp
@@ -54,7 +69,7 @@ fun PlanDetailScreen(
     hapticsEnabled: Boolean,
     onBack: () -> Unit,
 ) {
-    PredictiveBackCard(onBack = onBack) { animatedBack ->
+    DetailBackShell(onBack = onBack) { animatedBack ->
         Scaffold(
             containerColor = CronColors.pageBackground,
             topBar = {
@@ -67,7 +82,7 @@ fun PlanDetailScreen(
                         )
                     },
                     navigationIcon = {
-                        androidx.compose.material3.IconButton(onClick = animatedBack) {
+                        IconButton(onClick = animatedBack) {
                             Symbol(
                                 symbol = MaterialSymbol.ArrowBack,
                                 contentDescription = "Back",
@@ -126,6 +141,71 @@ fun PlanDetailScreen(
             }
         }
     }
+}
+
+@Composable
+private fun DetailBackShell(
+    onBack: () -> Unit,
+    content: @Composable (animatedBack: () -> Unit) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val progress = remember { Animatable(0f) }
+    var edgeLeft by remember { mutableStateOf(false) }
+    var committing by remember { mutableStateOf(false) }
+
+    val density = LocalDensity.current
+    val screenWidthPx = with(density) { (LocalConfiguration.current.screenWidthDp.dp + 48.dp).toPx() }
+    val previewShiftPx = with(density) { CARD_PREVIEW_SHIFT.toPx() }
+
+    fun animatedBack() {
+        if (committing) return
+        committing = true
+        scope.launch {
+            progress.animateTo(2f, tween(COMMIT_MS, easing = EaseOutCubic))
+            onBack()
+        }
+    }
+
+    PredictiveBackHandler(enabled = !committing) { events ->
+        try {
+            events.collect { event ->
+                edgeLeft = event.swipeEdge == BackEventCompat.EDGE_LEFT
+                progress.snapTo(decelerate(event.progress))
+            }
+            committing = true
+            progress.animateTo(2f, tween(COMMIT_MS, easing = EaseOutCubic))
+            onBack()
+        } catch (cancel: CancellationException) {
+            scope.launch {
+                progress.animateTo(0f, tween(CANCEL_MS, easing = EaseOutCubic))
+            }
+            throw cancel
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                val p = progress.value
+                val preview = p.coerceIn(0f, 1f)
+                val commit = (p - 1f).coerceIn(0f, 1f)
+                val sign = if (edgeLeft) -1f else 1f
+                val scale = lerp(1f, CARD_MIN_SCALE, preview)
+                scaleX = scale; scaleY = scale
+                alpha = 1f - commit
+                translationX = sign * (previewShiftPx * preview + (screenWidthPx - previewShiftPx) * commit)
+                clip = true
+                shape = RoundedCornerShape(Radius.xl * preview)
+            },
+    ) {
+        content(::animatedBack)
+    }
+}
+
+private fun decelerate(raw: Float): Float {
+    val x = raw.coerceIn(0f, 1f)
+    return 1f - (1f - x) * (1f - x)
 }
 
 internal class PullState {
