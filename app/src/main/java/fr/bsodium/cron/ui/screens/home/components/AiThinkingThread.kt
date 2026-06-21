@@ -409,7 +409,7 @@ private fun AnswerArea(
     // Animate the slot size only when settled (the answer↔fallback crossfade). While streaming, the
     // typewriter outpaces the spring, so a lagging container clips the freshest lines — grow instantly.
     Box(modifier = modifier.fillMaxWidth().then(if (inProgress) Modifier else Modifier.animateContentSize())) {
-        AnimatedVisibility(visible = hasAnswer, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = hasAnswer, enter = fadeIn(), exit = fadeOut(), label = "response-body") {
             Column {
                 Spacer(Modifier.height(Spacing.sm))
                 ResponseBody(response?.takeIf { it.isNotBlank() } ?: lastResponse)
@@ -418,7 +418,7 @@ private fun AnswerArea(
                 Spacer(Modifier.height(Spacing.sm))
             }
         }
-        AnimatedVisibility(visible = showFallback, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = showFallback, enter = fadeIn(), exit = fadeOut(), label = "no-response-fallback") {
             Column {
                 Spacer(Modifier.height(Spacing.sm))
                 Text(

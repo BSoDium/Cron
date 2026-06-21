@@ -223,4 +223,83 @@ tasks.register("checkFileLength") {
     }
 }
 
-tasks.named("check") { dependsOn("checkFileLength") }
+/**
+ * Enforces two animation-quality rules so the Animation Inspector is always usable:
+ * A) Every animation API call has an explicit `label` parameter (named tracks in the timeline).
+ * B) Every file that uses animation APIs ships a @Preview (or a sibling *Previews.kt, or an
+ *    explicit @Suppress("AnimationPreviewNotRequired") for structurally un-previewable code).
+ * Wired into `check` alongside checkFileLength.
+ */
+tasks.register("checkAnimationPreviews") {
+    group = "verification"
+    description = "Fails if animation calls lack labels or animated files lack @Preview."
+    val mainSrc = layout.projectDirectory.dir("src/main")
+    val projectRoot = rootDir
+    doLast {
+        val animationApis = listOf(
+            "animateFloatAsState", "animateColorAsState", "animateDpAsState",
+            "animateIntAsState", "animateValueAsState", "animateIntOffsetAsState",
+            "animateOffsetAsState", "animateSizeAsState", "animateIntSizeAsState",
+            "animateRectAsState", "AnimatedVisibility", "AnimatedContent",
+            "updateTransition", "Crossfade", "rememberInfiniteTransition",
+        )
+        val callPatterns = animationApis.map { it to Regex("""(?<!\w)$it\s*\(""") }
+        val labelPattern = Regex("""label\s*=""")
+        val previewPattern = Regex("""@Preview""")
+        val suppressPattern = Regex("""@(?:file:)?Suppress\([^)]*AnimationPreviewNotRequired[^)]*\)""")
+
+        val ktFiles = mainSrc.asFile.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .toList()
+
+        val unlabeled = mutableListOf<String>()
+        val noPreview = mutableListOf<String>()
+
+        for (file in ktFiles) {
+            val lines = file.readLines()
+            val text = lines.joinToString("\n")
+            val hasAnimations = callPatterns.any { (_, pattern) -> pattern.containsMatchIn(text) }
+            if (!hasAnimations) continue
+
+            for ((i, line) in lines.withIndex()) {
+                val trimmed = line.trimStart()
+                if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("import ")) continue
+                val apiMatch = callPatterns.firstOrNull { (_, p) -> p.containsMatchIn(line) }?.first ?: continue
+                val window = lines.subList(i, minOf(i + 12, lines.size))
+                val hasLabel = window.any { labelPattern.containsMatchIn(it) }
+                if (!hasLabel) {
+                    unlabeled += "  ${file.relativeTo(projectRoot).path}:${i + 1} — $apiMatch"
+                }
+            }
+
+            if (!previewPattern.containsMatchIn(text) && !suppressPattern.containsMatchIn(text)) {
+                val hasSiblingPreviews = file.parentFile.listFiles()
+                    ?.any { it.name.endsWith("Previews.kt") } ?: false
+                if (!hasSiblingPreviews) {
+                    noPreview += "  ${file.relativeTo(projectRoot).path}"
+                }
+            }
+        }
+
+        if (unlabeled.isNotEmpty() || noPreview.isNotEmpty()) {
+            val msg = buildString {
+                if (unlabeled.isNotEmpty()) {
+                    appendLine("Animation calls missing `label` parameter:")
+                    unlabeled.forEach { appendLine(it) }
+                }
+                if (noPreview.isNotEmpty()) {
+                    if (unlabeled.isNotEmpty()) appendLine()
+                    appendLine(
+                        "Files with animations but no @Preview " +
+                            "(add one, or @Suppress(\"AnimationPreviewNotRequired\")):",
+                    )
+                    noPreview.forEach { appendLine(it) }
+                }
+            }
+            throw GradleException(msg)
+        }
+        logger.lifecycle("checkAnimationPreviews: all animation calls labeled, all animated files have previews.")
+    }
+}
+
+tasks.named("check") { dependsOn("checkFileLength", "checkAnimationPreviews") }
