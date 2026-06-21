@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,15 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toIntSize
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -158,39 +152,30 @@ fun HomeScreen(
     }
 
     var detailKey by remember { mutableStateOf<PlanDetailKey?>(null) }
-    val snapshotLayer = rememberGraphicsLayer()
 
     Box(Modifier.fillMaxSize()) {
-        if (detailKey == null) {
-            HomeRootContent(
-                uiState = uiState,
-                displayPlan = displayPlan,
-                resting = resting,
-                statusInsetTop = statusInsetTop,
-                navInsetBottom = navInsetBottom,
-                hasNotificationPermission = hasNotificationPermission,
-                onNotifEnable = onNotifEnable,
-                onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
-                onAlarmTimeClick = onAlarmTimeClick,
-                onOpenAiRun = { turn, session -> detailKey = PlanDetailKey(turn, session) },
-                onNavigateToHistory = onNavigateToHistory,
-                onNavigateToSettings = onNavigateToSettings,
-                onNavigateToScheduleSettings = onNavigateToScheduleSettings,
-                viewModel = viewModel,
-                showTimePicker = showTimePicker,
-                onShowTimePicker = { showTimePicker = it },
-                snapshotLayer = snapshotLayer,
-            )
-        }
+        HomeRootContent(
+            uiState = uiState,
+            displayPlan = displayPlan,
+            resting = resting,
+            statusInsetTop = statusInsetTop,
+            navInsetBottom = navInsetBottom,
+            hasNotificationPermission = hasNotificationPermission,
+            onNotifEnable = onNotifEnable,
+            onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
+            onAlarmTimeClick = onAlarmTimeClick,
+            onOpenAiRun = { turn, session -> detailKey = PlanDetailKey(turn, session) },
+            onNavigateToHistory = onNavigateToHistory,
+            onNavigateToSettings = onNavigateToSettings,
+            onNavigateToScheduleSettings = onNavigateToScheduleSettings,
+            viewModel = viewModel,
+            showTimePicker = showTimePicker,
+            onShowTimePicker = { showTimePicker = it },
+        )
 
         detailKey?.let { key ->
             PredictiveBackCard(
                 onBack = { detailKey = null },
-                parentContent = {
-                    Canvas(Modifier.fillMaxSize()) {
-                        drawLayer(snapshotLayer)
-                    }
-                },
             ) { animatedBack ->
                 PlanDetailScreen(
                     iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
@@ -221,24 +206,8 @@ private fun HomeRootContent(
     viewModel: HomeViewModel,
     showTimePicker: Boolean,
     onShowTimePicker: (Boolean) -> Unit,
-    snapshotLayer: GraphicsLayer? = null,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(
-                if (snapshotLayer != null) {
-                    Modifier.drawWithContent {
-                        snapshotLayer.record(size = size.toIntSize()) {
-                            this@drawWithContent.drawContent()
-                        }
-                        drawLayer(snapshotLayer)
-                    }
-                } else {
-                    Modifier
-                },
-            ),
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
         val homePhase = when {
