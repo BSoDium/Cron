@@ -54,6 +54,7 @@ Rounded, MaterialShapes-based. **Flat**: no `Modifier.shadow`, no `shadowElevati
 - [ ] Used the Expressive variant where one exists (`ButtonGroup` + `animateWidth`, `ToggleButton`, Expressive FAB).
 - [ ] Press/selection has spring feedback.
 - [ ] Uses accent roles (not only `primary`); flat; `Spacing`/`Radius` tokens; ships a `@Preview`.
+- [ ] Every animation call has a `label`; animated components ship an interactive `@Preview` (enforced by `checkAnimationPreviews`).
 
 ## Sanctioned exceptions to the motionScheme rule
 

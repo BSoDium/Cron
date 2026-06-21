@@ -375,6 +375,7 @@ private fun BoxScope.StickyAlarm(
                         fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                     exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
                         fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                    label = "below-card",
                 ) {
                     Box(Modifier.padding(top = Spacing.sm)) { belowCard() }
                 }

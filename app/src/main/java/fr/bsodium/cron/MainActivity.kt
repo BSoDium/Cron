@@ -1,3 +1,5 @@
+@file:Suppress("AnimationPreviewNotRequired")
+
 package fr.bsodium.cron
 
 import android.os.Bundle
@@ -188,6 +190,7 @@ class MainActivity : ComponentActivity() {
                                 enter = slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it / 3 } +
                                     fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                                 exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                                label = "bottom-bar",
                             ) {
                                 if (useCompactNav) {
                                     CronFloatingNav(

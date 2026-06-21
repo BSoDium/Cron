@@ -211,6 +211,7 @@ fun HomeScreen(
                 visible = uiState.aiFailure != null,
                 enter = fadeIn() + slideInVertically { it / 2 },
                 exit = fadeOut() + slideOutVertically { it / 2 },
+                label = "failure-banner",
             ) {
                 lastFailure?.let { failure ->
                     AiFailureBanner(
@@ -225,6 +226,7 @@ fun HomeScreen(
                 visible = uiState.settingsChangedSincePlan,
                 enter = fadeIn() + slideInVertically { it / 2 },
                 exit = fadeOut() + slideOutVertically { it / 2 },
+                label = "settings-changed-pill",
             ) {
                 SettingsChangedPill(
                     onRewrite = {

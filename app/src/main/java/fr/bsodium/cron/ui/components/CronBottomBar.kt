@@ -144,6 +144,7 @@ private fun FabSlot(
             visible = visible,
             enter = slideInHorizontally(spatialSpec) { it } + fadeIn(alphaSpec),
             exit = slideOutHorizontally(spatialSpec) { it } + fadeOut(alphaSpec),
+            label = "fab-visibility",
         ) {
             Box(Modifier.onSizeChanged { onWidthMeasured(it.width) }) {
                 if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
@@ -265,6 +266,7 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                     exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
                                         slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
                                         shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), clip = false),
+                                    label = "mock-badge",
                                 ) {
                                     Text(
                                         text = "Mocked",
