@@ -25,7 +25,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 
-private val EVENT_ICON_SIZE = 18.dp
+private val EVENT_ICON_SIZE = 16.dp
 
 @Composable
 private fun eventFirstLineHeight(): Dp {

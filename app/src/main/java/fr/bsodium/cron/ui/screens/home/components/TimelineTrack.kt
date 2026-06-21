@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
@@ -124,32 +125,55 @@ internal fun SessionTimelineEventRow(
     )
 }
 
+private val WAVE_AMPLITUDE = 3.dp
+private val WAVE_LENGTH = 14.dp
+private val WAVE_STROKE = 1.5.dp
+
 @Composable
 internal fun SessionTimelineDayHeader(
     label: String,
-    isFirst: Boolean,
-    isLast: Boolean,
+    @Suppress("UNUSED_PARAMETER") isFirst: Boolean,
+    @Suppress("UNUSED_PARAMETER") isLast: Boolean,
 ) {
-    val dotColor = MaterialTheme.colorScheme.surfaceContainerHighest
-    SessionTimelineRow(
-        firstLineHeight = 20.dp,
-        isFirst = isFirst,
-        isLast = isLast,
-        icon = {
-            Box(
-                modifier = Modifier
-                    .size(STATION_DOT_SIZE)
-                    .clip(CircleShape)
-                    .background(dotColor),
-            )
-        },
-        discSize = STATION_DOT_SIZE,
-        verticalPadding = Spacing.md,
+    val waveColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val bgColor = CronColors.pageBackground
+    val density = LocalDensity.current
+    val ampPx = with(density) { WAVE_AMPLITUDE.toPx() }
+    val waveLenPx = with(density) { WAVE_LENGTH.toPx() }
+    val strokePx = with(density) { WAVE_STROKE.toPx() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.lg)
+            .drawBehind {
+                val cy = size.height / 2f
+                val path = androidx.compose.ui.graphics.Path()
+                path.moveTo(0f, cy)
+                var x = 0f
+                while (x < size.width) {
+                    path.quadraticTo(x + waveLenPx / 4f, cy - ampPx, x + waveLenPx / 2f, cy)
+                    path.quadraticTo(x + waveLenPx * 3f / 4f, cy + ampPx, x + waveLenPx, cy)
+                    x += waveLenPx
+                }
+                drawPath(
+                    path = path,
+                    color = waveColor,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = strokePx,
+                        cap = StrokeCap.Round,
+                    ),
+                )
+            },
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .background(bgColor)
+                .padding(horizontal = Spacing.md),
         )
     }
 }
