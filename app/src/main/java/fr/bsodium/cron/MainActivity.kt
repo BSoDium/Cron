@@ -57,8 +57,16 @@ import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.history.HistoryScreen
 import fr.bsodium.cron.ui.screens.history.HistoryViewModel
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import fr.bsodium.cron.ui.screens.home.HomeScreen
 import fr.bsodium.cron.ui.screens.home.HomeViewModel
+import fr.bsodium.cron.ui.screens.home.PlanDetailScreen
+import fr.bsodium.cron.ui.screens.home.ROUTE_PLAN_DETAIL
+import fr.bsodium.cron.ui.screens.home.planDetailRoute
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
@@ -292,6 +300,31 @@ class MainActivity : ComponentActivity() {
                                                 restoreState = true
                                             }
                                         },
+                                        onNavigateToPlanDetail = { turnIndex, sessionId ->
+                                            navController.navigate(planDetailRoute(turnIndex, sessionId))
+                                        },
+                                    )
+                                }
+                                composable(
+                                    route = ROUTE_PLAN_DETAIL,
+                                    arguments = listOf(
+                                        navArgument("turnIndex") { type = NavType.IntType },
+                                        navArgument("sessionId") { type = NavType.StringType },
+                                    ),
+                                    enterTransition = { slideInHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { it } + fadeIn(tween(FORWARD_MS / 2)) },
+                                    exitTransition = { slideOutHorizontally(tween(FORWARD_MS, easing = EaseOutCubic)) { -it / 4 } + fadeOut(tween(FORWARD_MS), targetAlpha = 0.65f) },
+                                    popEnterTransition = { EnterTransition.None },
+                                    popExitTransition = { ExitTransition.None },
+                                ) { entry ->
+                                    val turnIndex = entry.arguments?.getInt("turnIndex") ?: return@composable
+                                    val homeEntry = remember(entry) { navController.getBackStackEntry(ROUTE_HOME) }
+                                    val homeVm = viewModel<HomeViewModel>(homeEntry)
+                                    val uiState by homeVm.uiState.collectAsState()
+                                    val iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == turnIndex }
+                                    PlanDetailScreen(
+                                        iteration = iteration,
+                                        hapticsEnabled = uiState.hapticsEnabled,
+                                        onBack = { navController.popBackStack() },
                                     )
                                 }
                                 composable(

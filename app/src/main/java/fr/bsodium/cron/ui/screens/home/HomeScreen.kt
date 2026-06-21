@@ -77,6 +77,7 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToScheduleSettings: () -> Unit = onNavigateToSettings,
     onNavigateToHistory: () -> Unit = {},
+    onNavigateToPlanDetail: (turnIndex: Int, sessionId: String) -> Unit = { _, _ -> },
 ) {
     val uiState by viewModel.uiState.collectAsState()
     // At most one iteration streams at a time (always the latest). Typewriter-reveal that sub-thread and
@@ -149,8 +150,6 @@ fun HomeScreen(
         )
     }
 
-    var timelineMode by remember { mutableStateOf<TimelineMode>(TimelineMode.List) }
-
     Box(modifier = Modifier.fillMaxSize()) {
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
@@ -181,18 +180,14 @@ fun HomeScreen(
                         val plan = displayPlan ?: lastPlan
                         if (plan != null) state.copy(aiPlan = plan) else state
                     },
-                    timelineMode = timelineMode,
                     statusInsetTop = statusInsetTop,
                     navInsetBottom = navInsetBottom,
                     hasNotificationPermission = hasNotificationPermission,
                     onNotifEnable = onNotifEnable,
                     onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
                     onAlarmTimeClick = onAlarmTimeClick,
-                    onOpenAiRun = { turnIndex, sessionId ->
-                        timelineMode = TimelineMode.Detail(turnIndex, sessionId)
-                    },
+                    onOpenAiRun = onNavigateToPlanDetail,
                     onNavigateToHistory = onNavigateToHistory,
-                    onBack = { timelineMode = TimelineMode.List },
                 )
             }
         }
