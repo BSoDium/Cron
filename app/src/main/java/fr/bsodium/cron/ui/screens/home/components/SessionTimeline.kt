@@ -24,9 +24,8 @@ import kotlinx.datetime.Instant
 
 internal fun LazyListScope.sessionTimelineItems(
     timeline: List<TimelineItem>,
-    hasMore: Boolean,
     onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
-    onLoadMore: () -> Unit,
+    onNavigateToHistory: () -> Unit,
 ) {
     items(
         count = timeline.size,
@@ -62,17 +61,15 @@ internal fun LazyListScope.sessionTimelineItems(
         }
     }
 
-    if (hasMore) {
-        item(key = "load-more") {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = Spacing.md),
-                contentAlignment = Alignment.Center,
-            ) {
-                TextButton(onClick = onLoadMore) {
-                    Text("Load more")
-                }
+    item(key = "view-history") {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Spacing.lg),
+            contentAlignment = Alignment.Center,
+        ) {
+            TextButton(onClick = onNavigateToHistory) {
+                Text("View full history")
             }
         }
     }

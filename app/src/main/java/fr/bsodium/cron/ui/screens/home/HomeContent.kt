@@ -69,7 +69,7 @@ internal fun HomePlanContent(
     onAutoAlarmsChange: (Boolean) -> Unit,
     onAlarmTimeClick: (() -> Unit)? = null,
     onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
-    onLoadMore: () -> Unit,
+    onNavigateToHistory: () -> Unit,
     onBack: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -160,9 +160,8 @@ internal fun HomePlanContent(
                 is TimelineMode.List -> {
                     sessionTimelineItems(
                         timeline = uiState.timeline,
-                        hasMore = uiState.hasMoreHistory,
                         onOpenAiRun = onOpenAiRun,
-                        onLoadMore = onLoadMore,
+                        onNavigateToHistory = onNavigateToHistory,
                     )
                     if (!hasNotificationPermission) {
                         item(key = "notif-permission") {
@@ -322,7 +321,7 @@ private fun HomePlanContentPreview() {
             onNotifEnable = {},
             onAutoAlarmsChange = {},
             onOpenAiRun = { _, _ -> },
-            onLoadMore = {},
+            onNavigateToHistory = {},
             onBack = {},
         )
     }

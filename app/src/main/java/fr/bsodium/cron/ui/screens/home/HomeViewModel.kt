@@ -53,7 +53,6 @@ data class HomeUiState(
     val sleepStats: SleepStatsUi? = null,
     val aiPlan: AiPlanUi? = null,
     val timeline: List<TimelineItem> = emptyList(),
-    val hasMoreHistory: Boolean = false,
     val isRetrying: Boolean = false,
     /** False until the backing flows have produced their first value — gates the onboarding so it
      *  doesn't flash over an existing plan during the cold-start load. */
@@ -149,8 +148,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
 
     private val _historicalSessions = MutableStateFlow<List<TimelineSession>>(emptyList())
-    private val _hasMoreHistory = MutableStateFlow(false)
-    private var _historyOffset = 0
     private val _dismissedSettingsAt = MutableStateFlow(0L)
 
     private val settingsChangedFlow = combine(
@@ -226,9 +223,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         displayFlow,
         aiPlanFlow,
         timelineFlow,
-        _hasMoreHistory,
         statusFlow,
-    ) { display, plan, timeline, hasMore, status ->
+    ) { display, plan, timeline, status ->
         HomeUiState(
             sessionDisplay = display.session,
             greetingPrefix = greetingPrefix(),
@@ -237,7 +233,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             sleepStats = display.sleepStats,
             aiPlan = plan,
             timeline = timeline,
-            hasMoreHistory = hasMore,
             isRetrying = status.isRetrying,
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && plan != null,
@@ -248,18 +243,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
-    fun loadMoreHistory() {
+    private fun loadRecentHistory() {
         viewModelScope.launch(Dispatchers.IO) {
             val currentId = db.sessionDao().findCurrent()?.id
                 ?: db.sessionDao().findPaginated(1, 0).firstOrNull()?.id
             val page = timelineRepo.loadHistory(
                 excludeSessionId = currentId,
-                limit = HISTORY_PAGE_SIZE,
-                offset = _historyOffset,
+                limit = HISTORY_LOAD_SIZE,
+                offset = 0,
             )
-            _historyOffset += page.sessions.size
-            _historicalSessions.value = _historicalSessions.value + page.sessions
-            _hasMoreHistory.value = page.hasMore
+            _historicalSessions.value = page.sessions
         }
     }
 
@@ -317,7 +310,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        viewModelScope.launch(Dispatchers.IO) { loadMoreHistory() }
+        loadRecentHistory()
 
         // Drive the "working" flag and the failure banner off the real WorkManager turn, not a fixed
         // delay: a tap sets isRetrying true optimistically; this clears it when the turn reaches a
@@ -486,5 +479,5 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-private const val HISTORY_PAGE_SIZE = 2
+private const val HISTORY_LOAD_SIZE = 10
 

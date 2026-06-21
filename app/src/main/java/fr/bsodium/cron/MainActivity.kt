@@ -282,6 +282,16 @@ class MainActivity : ComponentActivity() {
                                             }
                                             navController.navigate(SETTINGS_SCHEDULE)
                                         },
+                                        onNavigateToHistory = {
+                                            navController.navigate(ROUTE_HISTORY) {
+                                                popUpTo(ROUTE_HOME) {
+                                                    saveState = true
+                                                    inclusive = false
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
                                     )
                                 }
                                 composable(

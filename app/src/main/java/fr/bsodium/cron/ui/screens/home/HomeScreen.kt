@@ -77,6 +77,7 @@ fun HomeScreen(
     fabRegistry: FabRegistry,
     onNavigateToSettings: () -> Unit,
     onNavigateToScheduleSettings: () -> Unit = onNavigateToSettings,
+    onNavigateToHistory: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     // At most one iteration streams at a time (always the latest). Typewriter-reveal that sub-thread and
@@ -192,7 +193,7 @@ fun HomeScreen(
                     onOpenAiRun = { turnIndex, sessionId ->
                         timelineMode = TimelineMode.Detail(turnIndex, sessionId)
                     },
-                    onLoadMore = viewModel::loadMoreHistory,
+                    onNavigateToHistory = onNavigateToHistory,
                     onBack = { timelineMode = TimelineMode.List },
                 )
             }
