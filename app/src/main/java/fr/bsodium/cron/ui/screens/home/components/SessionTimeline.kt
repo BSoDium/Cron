@@ -100,6 +100,7 @@ private fun previewIteration(
 private fun SessionTimelinePreview() {
     val now = Instant.fromEpochMilliseconds(System.currentTimeMillis())
     val yesterday = Instant.fromEpochMilliseconds(System.currentTimeMillis() - 86_400_000L)
+    val twoDaysAgo = Instant.fromEpochMilliseconds(System.currentTimeMillis() - 172_800_000L)
     val timeline = listOf(
         TimelineItem.DayHeader(timestamp = now, label = "Today"),
         TimelineItem.AiRun(
@@ -160,18 +161,74 @@ private fun SessionTimelinePreview() {
         TimelineItem.DayHeader(timestamp = yesterday, label = "Yesterday"),
         TimelineItem.Event(
             timestamp = yesterday,
+            trigger = TriggerType.OutOfBedConfirmed,
+            label = "You got up",
+            detail = null,
+        ),
+        TimelineItem.Event(
+            timestamp = yesterday,
             trigger = TriggerType.AlarmDismissed,
             label = "Alarm dismissed",
+            detail = null,
+        ),
+        TimelineItem.Event(
+            timestamp = yesterday,
+            trigger = TriggerType.WakeWindowOpportunity,
+            label = "A good moment to wake",
+            detail = null,
+        ),
+        TimelineItem.AiRun(
+            timestamp = yesterday,
+            iteration = previewIteration(
+                turn = 1,
+                kind = RunKind.Replan(TriggerType.SleepOnset),
+                response = "Adjusted alarm to **07:30** — you fell asleep earlier than expected.",
+                process = listOf(
+                    ProcessItem.Reasoning("Re-evaluating wake window..."),
+                    ProcessItem.Tool("set_alarm", isComplete = true, contextLabel = "07:30"),
+                ),
+            ),
+            sessionId = "s2",
+            isStreaming = false,
+            isLatest = false,
+        ),
+        TimelineItem.Event(
+            timestamp = yesterday,
+            trigger = TriggerType.SleepOnset,
+            label = "You fell asleep",
             detail = null,
         ),
         TimelineItem.AiRun(
             timestamp = yesterday,
             iteration = previewIteration(
                 turn = 0,
+                kind = RunKind.ScheduledBase,
+                response = "Set alarm for **07:45**. First meeting at 09:30.",
+                process = listOf(
+                    ProcessItem.Tool("read_calendar", isComplete = true, contextLabel = "4 events"),
+                    ProcessItem.Tool("estimate_commute", isComplete = true, contextLabel = "25 min"),
+                    ProcessItem.Tool("set_alarm", isComplete = true, contextLabel = "07:45"),
+                ),
+            ),
+            sessionId = "s2",
+            isStreaming = false,
+            isLatest = false,
+        ),
+        TimelineItem.DayHeader(timestamp = twoDaysAgo, label = "Thu 19 Jun"),
+        TimelineItem.Event(
+            timestamp = twoDaysAgo,
+            trigger = TriggerType.HardLatestFired,
+            label = "Safety alarm fired",
+            detail = null,
+        ),
+        TimelineItem.AiRun(
+            timestamp = twoDaysAgo,
+            iteration = previewIteration(
+                turn = 0,
                 kind = RunKind.ManualBase,
                 response = "No alarm needed — your calendar is free tomorrow.",
             ),
-            sessionId = "s2",
+            sessionId = "s3",
             isStreaming = false,
             isLatest = false,
         ),
