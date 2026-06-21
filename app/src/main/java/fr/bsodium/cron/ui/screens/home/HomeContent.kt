@@ -73,7 +73,6 @@ private const val DETAIL_COMMIT_MS = 300
 private const val DETAIL_CANCEL_MS = 220
 private const val DETAIL_CARD_MIN_SCALE = 0.90f
 private val DETAIL_PREVIEW_SHIFT = Spacing.lg
-private const val DETAIL_DIM_ALPHA = 0.35f
 
 sealed interface TimelineMode {
     data object List : TimelineMode
@@ -267,19 +266,6 @@ private fun BoxScope.DetailOverlay(
         val detailScrollState = rememberScrollState()
         val pullState = remember(iteration?.turnIndex) { PullState() }
         val previewShiftPx = with(density) { DETAIL_PREVIEW_SHIFT.toPx() }
-
-        // Dim scrim between the timeline (revealed as the card shrinks) and the detail card.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = alarmBottomDp)
-                .graphicsLayer {
-                    val preview = backProgress.value.coerceIn(0f, 1f)
-                    val commit = (backProgress.value - 1f).coerceIn(0f, 1f)
-                    alpha = DETAIL_DIM_ALPHA * preview * (1f - commit)
-                }
-                .background(Color.Black),
-        )
 
         Box(
             modifier = Modifier

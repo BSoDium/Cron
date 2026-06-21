@@ -26,7 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -74,10 +74,8 @@ internal fun PlanTimelineCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.sm)
-            .drawWithContent {
-                drawContent()
-                if (isFirst && isLast) return@drawWithContent
+            .drawBehind {
+                if (isFirst && isLast) return@drawBehind
                 val top = if (isFirst) size.height / 2f else 0f
                 val bottom = if (isLast) size.height / 2f else size.height
                 drawLine(
@@ -98,6 +96,7 @@ internal fun PlanTimelineCard(
                     scaleX = s; scaleY = s
                 }
                 .fillMaxWidth()
+                .padding(vertical = Spacing.sm)
                 .heightIn(min = 48.dp),
             shape = CARD_SHAPE,
             color = containerColor,

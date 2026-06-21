@@ -1,10 +1,15 @@
 package fr.bsodium.cron.ui.screens.settings.categories
 
+import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -18,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import fr.bsodium.cron.debug.MockApiPrefs
+import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
@@ -49,6 +55,7 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
                 mockEnabled = enabled
             },
         )
+        FsmEventInjector(context, scope)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -150,5 +157,102 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
                 }
             },
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FsmEventInjector(
+    context: android.content.Context,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    val repository = remember { SessionRepository(context) }
+    val fsm = remember { SessionFsm(context, repository) }
+
+    Column {
+        Text(
+            text = "Inject FSM event",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            text = "Fire events into the active session's state machine",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            modifier = Modifier.padding(top = Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            FsmInjectButton("Sleep Onset", scope) {
+                fsm.onEvent(
+                    SessionEvent(
+                        trigger = TriggerType.SleepOnset,
+                        timestamp = Clock.System.now(),
+                        data = EventData.SleepOnset(
+                            screenOffSince = Clock.System.now(),
+                            rearm = false,
+                        ),
+                    ),
+                )
+            }
+            FsmInjectButton("Alarm Dismissed", scope) {
+                fsm.onEvent(
+                    SessionEvent(
+                        trigger = TriggerType.AlarmDismissed,
+                        timestamp = Clock.System.now(),
+                        data = EventData.Empty,
+                    ),
+                )
+            }
+            FsmInjectButton("Sleep Onset (rearm)", scope) {
+                fsm.onEvent(
+                    SessionEvent(
+                        trigger = TriggerType.SleepOnset,
+                        timestamp = Clock.System.now(),
+                        data = EventData.SleepOnset(
+                            screenOffSince = Clock.System.now(),
+                            rearm = true,
+                        ),
+                    ),
+                )
+            }
+            FsmInjectButton("Out Of Bed", scope) {
+                fsm.onEvent(
+                    SessionEvent(
+                        trigger = TriggerType.OutOfBedConfirmed,
+                        timestamp = Clock.System.now(),
+                        data = EventData.OutOfBedConfirmed(evidence = listOf("debug injection")),
+                    ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FsmInjectButton(
+    label: String,
+    scope: kotlinx.coroutines.CoroutineScope,
+    action: suspend () -> String?,
+) {
+    val context = LocalContext.current
+    FilledTonalButton(
+        onClick = {
+            scope.launch {
+                val sessionId = action()
+                val msg = if (sessionId != null) {
+                    val repo = SessionRepository(context)
+                    val session = repo.findById(sessionId)
+                    "$label → ${session?.status ?: "?"}"
+                } else {
+                    "No active session"
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
+        },
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
     }
 }
