@@ -3,7 +3,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,24 +30,27 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
-import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
-private val CARD_SHAPE = RoundedCornerShape(Radius.lg)
-private val ICON_BOX = 32.dp
-private val ICON_GLYPH = 22.dp
+private val CARD_SHAPE = RoundedCornerShape(50)
+private val ICON_BOX = 24.dp
+private val ICON_GLYPH = 18.dp
+private val CHEVRON_SIZE = 18.dp
 private val TRACK_WIDTH = 2.dp
 private val DASH_ON = 2f
 private val DASH_OFF = 5f
+private val ICON_START_PAD = (SESSION_GUTTER_WIDTH - ICON_BOX) / 2
 
 @Composable
 internal fun PlanTimelineCard(
@@ -69,7 +71,7 @@ internal fun PlanTimelineCard(
     val enterSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     if (isNew) LaunchedEffect(Unit) { enter.animateTo(1f, enterSpec) }
 
-    val trackCx = with(androidx.compose.ui.platform.LocalDensity.current) { (SESSION_GUTTER_WIDTH / 2).toPx() }
+    val trackCx = with(LocalDensity.current) { (SESSION_GUTTER_WIDTH / 2).toPx() }
 
     Box(
         modifier = modifier
@@ -107,9 +109,9 @@ internal fun PlanTimelineCard(
         ) {
             Row(
                 modifier = Modifier.padding(
-                    start = Spacing.sm,
+                    start = ICON_START_PAD,
                     top = Spacing.sm,
-                    end = Spacing.xl,
+                    end = Spacing.sm,
                     bottom = Spacing.sm,
                 ),
                 verticalAlignment = Alignment.CenterVertically,
@@ -127,7 +129,7 @@ internal fun PlanTimelineCard(
                         Symbol(symbol = icon, contentDescription = null, tint = contentColor, size = ICON_GLYPH)
                     }
                 }
-                Spacer(Modifier.width(Spacing.xs))
+                Spacer(Modifier.width(Spacing.sm))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = iteration.systemMessage,
@@ -147,10 +149,10 @@ internal fun PlanTimelineCard(
                     )
                 }
                 Symbol(
-                    symbol = MaterialSymbol.ArrowForward,
+                    symbol = MaterialSymbol.NavigateNext,
                     contentDescription = null,
-                    tint = contentColor.copy(alpha = 0.6f),
-                    size = 20.dp,
+                    tint = contentColor.copy(alpha = 0.5f),
+                    size = CHEVRON_SIZE,
                 )
             }
         }
@@ -161,23 +163,29 @@ internal fun PlanTimelineCard(
 @Composable
 private fun PlanTimelineCardPreview() {
     val iteration = AiIterationUi(
-        turnIndex = 0,
-        timeLabel = "23:14",
-        kind = RunKind.ScheduledBase,
+        turnIndex = 0, timeLabel = "23:14", kind = RunKind.ScheduledBase,
         thread = AiThreadUi(0, "Thought for 8s", emptyList(), "Set alarm for 7:15."),
         ranAtEpochMs = System.currentTimeMillis(),
     )
     CronTheme {
-        Column(modifier = Modifier.padding(Spacing.lg)) {
+        Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
             PlanTimelineCard(
                 iteration = iteration, isLatest = true, isStreaming = false,
                 isFirst = true, isLast = false, onClick = {},
             )
             PlanTimelineCard(
                 iteration = iteration.copy(
-                    turnIndex = 1, kind = RunKind.Replan(null), timeLabel = "21:30",
+                    turnIndex = 1, kind = RunKind.Replan(TriggerType.CalendarChange), timeLabel = "21:30",
                 ),
                 isLatest = false, isStreaming = false,
+                isFirst = false, isLast = false, onClick = {},
+            )
+            PlanTimelineCard(
+                iteration = iteration.copy(
+                    turnIndex = 2, kind = RunKind.Replan(TriggerType.AlarmSnoozed), timeLabel = "07:15",
+                    thread = AiThreadUi(2, "Thinking...", emptyList(), null, isStreaming = true),
+                ),
+                isLatest = true, isStreaming = true,
                 isFirst = false, isLast = true, onClick = {},
             )
         }

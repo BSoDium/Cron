@@ -55,6 +55,7 @@ enum class MaterialSymbol(val code: String) {
     AlarmOff("\uE857"),
     ArrowBack("\uE5C4"),
     ArrowForward("\uE5C8"),
+    NavigateNext("\uE409"),
     Article("\uEF87"),
     AutoAwesome("\uE65F"),
     Autoplay("\uF6B5"),
