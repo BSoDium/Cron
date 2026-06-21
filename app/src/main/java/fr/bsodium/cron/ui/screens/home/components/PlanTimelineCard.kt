@@ -142,7 +142,7 @@ internal fun PlanTimelineCard(
                     )
                 }
                 Symbol(
-                    symbol = MaterialSymbol.NavigateNext,
+                    symbol = MaterialSymbol.ArrowForward,
                     contentDescription = null,
                     tint = contentColor.copy(alpha = 0.5f),
                     size = CHEVRON_ICON_SIZE,
