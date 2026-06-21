@@ -37,7 +37,6 @@ import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.PlanTimelineCard
-import fr.bsodium.cron.ui.screens.home.components.SessionStatusRow
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -147,13 +146,6 @@ internal fun HomePlanContent(
                 item(key = "latest-plan-spacer") {
                     Spacer(Modifier.height(with(density) { latestPlanHeightPx.toDp() }))
                 }
-            }
-            item(key = "session-status") {
-                SessionStatusRow(
-                    status = uiState.sessionDisplay?.status,
-                    isLast = timelineWithoutLatest.isEmpty(),
-                    modifier = Modifier.padding(top = Spacing.sm),
-                )
             }
             sessionTimelineItems(
                 timeline = timelineWithoutLatest,
