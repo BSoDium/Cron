@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
@@ -151,7 +150,6 @@ fun HomeScreen(
     }
 
     var timelineMode by remember { mutableStateOf<TimelineMode>(TimelineMode.List) }
-    BackHandler(enabled = timelineMode is TimelineMode.Detail) { timelineMode = TimelineMode.List }
 
     Box(modifier = Modifier.fillMaxSize()) {
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }

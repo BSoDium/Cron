@@ -1,8 +1,21 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package fr.bsodium.cron.ui.screens.home
 
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,44 +27,55 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
-import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
-import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
+import fr.bsodium.cron.ui.theme.CronColors
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
+import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
-import kotlinx.coroutines.launch
 import fr.bsodium.cron.ui.theme.Symbol
+import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 private val ALARM_COLLAPSE_RANGE = 120.dp
+private const val DETAIL_COMMIT_MS = 300
+private const val DETAIL_CANCEL_MS = 220
+private const val DETAIL_MIN_SCALE = 0.92f
 
 sealed interface TimelineMode {
     data object List : TimelineMode
@@ -107,32 +131,10 @@ internal fun HomePlanContent(
     }
     AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
 
-    val detailTurnIndex = (timelineMode as? TimelineMode.Detail)?.turnIndex
-    val detailIteration = detailTurnIndex?.let { turn ->
-        uiState.aiPlan?.iterations?.find { it.turnIndex == turn }
-    }
-    val pullState = remember(detailTurnIndex) { PullState() }
-    val pullConnection = rememberDetailPullConnection(
-        listState = listState,
-        pullState = pullState,
-        hasProcess = detailIteration?.thread?.process?.isNotEmpty() == true,
-        hapticsEnabled = uiState.hapticsEnabled,
-    )
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(timelineMode) {
-        if (timelineMode is TimelineMode.Detail) {
-            listState.animateScrollToItem(2)
-        }
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        val isDetail = timelineMode is TimelineMode.Detail
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (isDetail) Modifier.nestedScroll(pullConnection) else Modifier),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = Spacing.xl,
                 end = Spacing.xl,
@@ -155,59 +157,29 @@ internal fun HomePlanContent(
             item(key = "alarm-spacer") {
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.md))
             }
-
-            when (timelineMode) {
-                is TimelineMode.List -> {
-                    sessionTimelineItems(
-                        timeline = uiState.timeline,
-                        onOpenAiRun = onOpenAiRun,
-                        onNavigateToHistory = onNavigateToHistory,
-                    )
-                    if (!hasNotificationPermission) {
-                        item(key = "notif-permission") {
-                            NotificationPermissionRow(onEnable = onNotifEnable)
-                        }
-                    }
-                }
-                is TimelineMode.Detail -> {
-                    val iteration = uiState.aiPlan?.iterations
-                        ?.find { it.turnIndex == timelineMode.turnIndex }
-
-                    item(key = "detail-back") {
-                        DetailBackRow(
-                            title = iteration?.systemMessage ?: "Plan",
-                            onBack = onBack,
-                        )
-                    }
-                    if (iteration != null) {
-                        item(key = "detail-thread") {
-                            AiThinkingThread(
-                                thread = iteration.thread,
-                                expanded = pullState.expanded,
-                                onExpandedChange = { next ->
-                                    pullState.expanded = next
-                                    scope.launch {
-                                        if (next) {
-                                            val full = pullState.fullPx.intValue
-                                            if (full > 0) pullState.reveal.animateTo(full.toFloat())
-                                        } else {
-                                            pullState.reveal.animateTo(0f)
-                                        }
-                                    }
-                                },
-                                expandPx = { pullState.reveal.value },
-                                onFullHeight = { pullState.fullPx.intValue = it },
-                                expansionFraction = {
-                                    val full = pullState.fullPx.intValue
-                                    if (full > 0) (pullState.reveal.value / full).coerceIn(0f, 1f) else 0f
-                                },
-                                modifier = Modifier.padding(top = Spacing.md),
-                            )
-                        }
-                    }
+            sessionTimelineItems(
+                timeline = uiState.timeline,
+                onOpenAiRun = onOpenAiRun,
+                onNavigateToHistory = onNavigateToHistory,
+            )
+            if (!hasNotificationPermission) {
+                item(key = "notif-permission") {
+                    NotificationPermissionRow(onEnable = onNotifEnable)
                 }
             }
         }
+
+        DetailOverlay(
+            visible = timelineMode is TimelineMode.Detail,
+            iteration = (timelineMode as? TimelineMode.Detail)?.turnIndex?.let { turn ->
+                uiState.aiPlan?.iterations?.find { it.turnIndex == turn }
+            },
+            statusInsetTop = statusInsetTop,
+            navInsetBottom = navInsetBottom,
+            hapticsEnabled = uiState.hapticsEnabled,
+            onBack = onBack,
+        )
+
         StickyAlarm(
             safeTopPx = collapseSafeTopPx,
             collapse = collapseState,
@@ -222,6 +194,135 @@ internal fun HomePlanContent(
                 onFullHeight = { cardFullHeightPx = it },
                 onAlarmTimeClick = onAlarmTimeClick,
             )
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.DetailOverlay(
+    visible: Boolean,
+    iteration: AiIterationUi?,
+    statusInsetTop: Dp,
+    navInsetBottom: Dp,
+    hapticsEnabled: Boolean,
+    onBack: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val progress = remember { Animatable(0f) }
+    var edgeLeft by remember { mutableStateOf(false) }
+    var committing by remember { mutableStateOf(false) }
+
+    val density = LocalDensity.current
+    val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+
+    fun animatedBack() {
+        if (committing) return
+        committing = true
+        scope.launch {
+            progress.animateTo(2f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
+            onBack()
+            progress.snapTo(0f)
+            committing = false
+        }
+    }
+
+    if (visible) {
+        PredictiveBackHandler(enabled = !committing) { events ->
+            try {
+                events.collect { event ->
+                    edgeLeft = event.swipeEdge == BackEventCompat.EDGE_LEFT
+                    progress.snapTo(decelerate(event.progress))
+                }
+                committing = true
+                progress.animateTo(2f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
+                onBack()
+                progress.snapTo(0f)
+                committing = false
+            } catch (cancel: CancellationException) {
+                scope.launch {
+                    progress.animateTo(0f, tween(DETAIL_CANCEL_MS, easing = EaseOutCubic))
+                }
+                throw cancel
+            }
+        }
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) { it } +
+            fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+        exit = slideOutHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) { it } +
+            fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+        label = "detail-overlay",
+    ) {
+        val detailScrollState = rememberScrollState()
+        val pullState = remember(iteration?.turnIndex) { PullState() }
+        val pullConnection = rememberDetailPullConnection(
+            listState = rememberLazyListState(),
+            pullState = pullState,
+            hasProcess = iteration?.thread?.process?.isNotEmpty() == true,
+            hapticsEnabled = hapticsEnabled,
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val p = progress.value
+                    val preview = p.coerceIn(0f, 1f)
+                    val commit = (p - 1f).coerceIn(0f, 1f)
+                    val sign = if (edgeLeft) -1f else 1f
+                    scaleX = lerp(1f, DETAIL_MIN_SCALE, preview)
+                    scaleY = lerp(1f, DETAIL_MIN_SCALE, preview)
+                    alpha = 1f - commit
+                    translationX = sign * screenWidthPx * commit
+                    if (preview > 0f) {
+                        clip = true
+                        shape = RoundedCornerShape(Radius.xl * preview)
+                    }
+                }
+                .background(CronColors.pageBackground),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(detailScrollState)
+                    .padding(
+                        start = Spacing.xl,
+                        end = Spacing.xl,
+                        top = statusInsetTop + Spacing.xxl + ALARM_BAR_HEIGHT + Spacing.lg,
+                        bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
+                    ),
+            ) {
+                if (iteration != null) {
+                    DetailBackRow(
+                        title = iteration.systemMessage,
+                        onBack = ::animatedBack,
+                    )
+                    AiThinkingThread(
+                        thread = iteration.thread,
+                        expanded = pullState.expanded,
+                        onExpandedChange = { next ->
+                            pullState.expanded = next
+                            scope.launch {
+                                if (next) {
+                                    val full = pullState.fullPx.intValue
+                                    if (full > 0) pullState.reveal.animateTo(full.toFloat())
+                                } else {
+                                    pullState.reveal.animateTo(0f)
+                                }
+                            }
+                        },
+                        expandPx = { pullState.reveal.value },
+                        onFullHeight = { pullState.fullPx.intValue = it },
+                        expansionFraction = {
+                            val full = pullState.fullPx.intValue
+                            if (full > 0) (pullState.reveal.value / full).coerceIn(0f, 1f) else 0f
+                        },
+                        modifier = Modifier.padding(top = Spacing.md),
+                    )
+                }
+            }
         }
     }
 }
@@ -249,6 +350,11 @@ private fun DetailBackRow(title: String, onBack: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
+}
+
+private fun decelerate(raw: Float): Float {
+    val x = raw.coerceIn(0f, 1f)
+    return 1f - (1f - x) * (1f - x)
 }
 
 @Composable
