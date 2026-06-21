@@ -4,14 +4,9 @@ package fr.bsodium.cron.ui.screens.home
 
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -35,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -174,7 +170,7 @@ internal fun HomePlanContent(
             iteration = (timelineMode as? TimelineMode.Detail)?.turnIndex?.let { turn ->
                 uiState.aiPlan?.iterations?.find { it.turnIndex == turn }
             },
-            statusInsetTop = statusInsetTop,
+            alarmBottomDp = statusInsetTop + Spacing.sm + ALARM_BAR_HEIGHT + Spacing.lg,
             navInsetBottom = navInsetBottom,
             hapticsEnabled = uiState.hapticsEnabled,
             onBack = onBack,
@@ -202,83 +198,84 @@ internal fun HomePlanContent(
 private fun BoxScope.DetailOverlay(
     visible: Boolean,
     iteration: AiIterationUi?,
-    statusInsetTop: Dp,
+    alarmBottomDp: Dp,
     navInsetBottom: Dp,
     hapticsEnabled: Boolean,
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val progress = remember { Animatable(0f) }
+    val slide = remember { Animatable(1f) }
+    val backProgress = remember { Animatable(0f) }
     var edgeLeft by remember { mutableStateOf(false) }
     var committing by remember { mutableStateOf(false) }
+    var shown by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
     val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            shown = true
+            slide.snapTo(1f)
+            backProgress.snapTo(0f)
+            committing = false
+            slide.animateTo(0f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
+        } else if (shown && !committing) {
+            slide.animateTo(1f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
+            shown = false
+        }
+    }
 
     fun animatedBack() {
         if (committing) return
         committing = true
         scope.launch {
-            progress.animateTo(2f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
-            onBack()
-            progress.snapTo(0f)
+            slide.animateTo(1f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
+            shown = false
             committing = false
+            onBack()
         }
     }
 
-    if (visible) {
+    if (shown) {
         PredictiveBackHandler(enabled = !committing) { events ->
             try {
                 events.collect { event ->
                     edgeLeft = event.swipeEdge == BackEventCompat.EDGE_LEFT
-                    progress.snapTo(decelerate(event.progress))
+                    backProgress.snapTo(decelerate(event.progress))
                 }
                 committing = true
-                progress.animateTo(2f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
-                onBack()
-                progress.snapTo(0f)
+                backProgress.animateTo(1f, tween(DETAIL_COMMIT_MS, easing = EaseOutCubic))
+                slide.snapTo(1f)
+                shown = false
                 committing = false
+                onBack()
             } catch (cancel: CancellationException) {
                 scope.launch {
-                    progress.animateTo(0f, tween(DETAIL_CANCEL_MS, easing = EaseOutCubic))
+                    backProgress.animateTo(0f, tween(DETAIL_CANCEL_MS, easing = EaseOutCubic))
                 }
                 throw cancel
             }
         }
-    }
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) { it } +
-            fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
-        exit = slideOutHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) { it } +
-            fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
-        label = "detail-overlay",
-    ) {
         val detailScrollState = rememberScrollState()
         val pullState = remember(iteration?.turnIndex) { PullState() }
-        val pullConnection = rememberDetailPullConnection(
-            listState = rememberLazyListState(),
-            pullState = pullState,
-            hasProcess = iteration?.thread?.process?.isNotEmpty() == true,
-            hapticsEnabled = hapticsEnabled,
-        )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(top = alarmBottomDp)
                 .graphicsLayer {
-                    val p = progress.value
-                    val preview = p.coerceIn(0f, 1f)
-                    val commit = (p - 1f).coerceIn(0f, 1f)
+                    val backP = backProgress.value
+                    val slideP = slide.value
                     val sign = if (edgeLeft) -1f else 1f
-                    scaleX = lerp(1f, DETAIL_MIN_SCALE, preview)
-                    scaleY = lerp(1f, DETAIL_MIN_SCALE, preview)
-                    alpha = 1f - commit
-                    translationX = sign * screenWidthPx * commit
-                    if (preview > 0f) {
+                    translationX = slideP * screenWidthPx + sign * backP * screenWidthPx * 0.3f
+                    scaleX = lerp(1f, DETAIL_MIN_SCALE, backP)
+                    scaleY = lerp(1f, DETAIL_MIN_SCALE, backP)
+                    alpha = 1f - backP * 0.4f
+                    if (backP > 0f) {
                         clip = true
-                        shape = RoundedCornerShape(Radius.xl * preview)
+                        shape = RoundedCornerShape(Radius.xl * backP)
                     }
                 }
                 .background(CronColors.pageBackground),
@@ -290,7 +287,7 @@ private fun BoxScope.DetailOverlay(
                     .padding(
                         start = Spacing.xl,
                         end = Spacing.xl,
-                        top = statusInsetTop + Spacing.xxl + ALARM_BAR_HEIGHT + Spacing.lg,
+                        top = Spacing.md,
                         bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
                     ),
             ) {
