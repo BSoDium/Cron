@@ -109,7 +109,6 @@ internal fun HomePlanContent(
                     autoAlarmsEnabled = uiState.autoAlarmsEnabled,
                     onAutoAlarmsChange = onAutoAlarmsChange,
                     modifier = Modifier
-                        .padding(horizontal = Spacing.sm)
                         .padding(bottom = Spacing.md)
                         .onSizeChanged { greetingHeightPx = it.height },
                     hapticsEnabled = uiState.hapticsEnabled,
