@@ -126,8 +126,8 @@ internal fun CollapsibleAlarmCard(
                     style = TightTextStyle.copy(
                         fontFamily = ExpressiveCondensedFontFamily,
                         fontWeight = FontWeight.Medium,
-                        fontSize = 11.sp,
-                        lineHeight = 11.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 13.sp,
                     ),
                 )
             }.first().measure(cWrap)
@@ -145,7 +145,7 @@ internal fun CollapsibleAlarmCard(
 
             // Countdown mover: expanded slot (right of the clock, matching the LcdTimeDisplay row) → pill-right, centred.
             val expandedCdX = startPad + clock.width + cdGap
-            val expandedCdY = expandedClockY + cdGap
+            val expandedCdY = expandedClockY
             val collapsedCdX = w - endPad - countdown.width
             val collapsedCdY = (barHeight - countdown.height) / 2f
 

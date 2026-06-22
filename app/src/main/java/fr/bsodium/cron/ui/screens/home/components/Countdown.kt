@@ -47,8 +47,8 @@ internal data class HoursMinutes(val hours: Long, val minutes: Long)
 private val FIRES_IN_STYLE = TightTextStyle.copy(
     fontFamily = ExpressiveCondensedFontFamily,
     fontWeight = FontWeight.Medium,
-    fontSize = 11.sp,
-    lineHeight = 11.sp,
+    fontSize = 13.sp,
+    lineHeight = 13.sp,
 )
 
 @Composable

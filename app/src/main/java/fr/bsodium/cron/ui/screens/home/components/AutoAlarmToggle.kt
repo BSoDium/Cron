@@ -54,7 +54,7 @@ internal fun AutoAlarmToggle(
     var initialRender by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) { initialRender = false }
     val targetColor = if (enabled) {
-        MaterialTheme.colorScheme.tertiaryContainer
+        MaterialTheme.colorScheme.secondaryContainer
     } else {
         MaterialTheme.colorScheme.surfaceContainer
     }
@@ -72,13 +72,15 @@ internal fun AutoAlarmToggle(
             brush = Brush.horizontalGradient(colors = listOf(
                 MaterialTheme.colorScheme.surfaceContainer,
                 containerColor,
-            ))
-        , shape = PillShape).clip(PillShape),
+            )),
+            shape = PillShape,
+        ).clip(PillShape),
+        contentAlignment = Alignment.Center,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            modifier = Modifier.padding(start = Spacing.md, end = Spacing.sm, top = Spacing.sm, bottom = Spacing.sm),
+            modifier = Modifier.padding(start = Spacing.md, end = Spacing.sm),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
                 Text(

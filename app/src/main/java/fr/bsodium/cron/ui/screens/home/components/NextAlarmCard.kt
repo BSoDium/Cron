@@ -46,7 +46,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.ui.components.PillBadge
@@ -88,11 +87,11 @@ internal fun AlarmShell(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val mod = modifier.fillMaxWidth()
+    val commonModifier = modifier.fillMaxWidth()
     if (onClick != null) {
         Surface(
             onClick = onClick,
-            modifier = mod,
+            modifier = commonModifier,
             color = MaterialTheme.colorScheme.primary,
             shape = shape,
             tonalElevation = 0.dp,
@@ -101,7 +100,7 @@ internal fun AlarmShell(
         )
     } else {
         Surface(
-            modifier = mod,
+            modifier = commonModifier,
             color = MaterialTheme.colorScheme.primary,
             shape = shape,
             tonalElevation = 0.dp,
