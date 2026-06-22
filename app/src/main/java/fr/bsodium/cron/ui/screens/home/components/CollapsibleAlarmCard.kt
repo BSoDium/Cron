@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.theme.CronTheme
-
+import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
@@ -66,7 +66,7 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
-    val dateStyle = MaterialTheme.typography.titleMedium
+    val dateStyle = CronTypography.dateSentence
 
     AlarmShell(
         modifier = modifier,
@@ -89,7 +89,7 @@ internal fun CollapsibleAlarmCard(
             onFullHeight(extras.height)
             // Date mover — the same AlignedFirstGlyph as extras, placed so it can slide up out the top.
             val date = subcompose("date") {
-                DateSentenceLabel(text = dateLabel.ifBlank { "—" }, color = onCard.copy(alpha = 0.8f), style = dateStyle)
+                DateSentenceLabel(text = dateLabel.ifBlank { "—" }, color = onCard.copy(alpha = 0.9f), style = dateStyle)
             }.first().measure(cWrap)
             // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
             val barHeight = ALARM_BAR_HEIGHT.roundToPx()
@@ -111,7 +111,7 @@ internal fun CollapsibleAlarmCard(
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
             // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
             val countdown = subcompose("countdown") {
-                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, showLabel = f < 0.5f)
+                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, labelAlpha = (1f - f * 3f).coerceIn(0f, 1f))
             }.first().measure(cWrap)
 
             val w = extras.width

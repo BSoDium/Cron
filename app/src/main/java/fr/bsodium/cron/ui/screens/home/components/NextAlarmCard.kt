@@ -142,8 +142,8 @@ internal fun AlarmCardContent(
         if (initialRender) {
             DateSentenceLabel(
                 text = displayLabel,
-                color = onCard.copy(alpha = 0.8f),
-                style = MaterialTheme.typography.titleMedium,
+                color = onCard.copy(alpha = 0.9f),
+                style = CronTypography.dateSentence,
                 modifier = Modifier
                     .padding(bottom = Spacing.xs)
                     .graphicsLayer { alpha = dateAlpha },
@@ -159,8 +159,8 @@ internal fun AlarmCardContent(
             ) { label ->
                 DateSentenceLabel(
                     text = label,
-                    color = onCard.copy(alpha = 0.8f),
-                    style = MaterialTheme.typography.titleMedium,
+                    color = onCard.copy(alpha = 0.9f),
+                    style = CronTypography.dateSentence,
                 )
             }
         }
@@ -384,7 +384,8 @@ private fun ColonSeparator(
     }
 }
 
-/** Renders the date sentence with the day portion (before the comma) in bold. */
+/** Renders the date sentence with the day portion (before the comma) bold and bright,
+ *  the suffix thinner and dimmer. */
 @Composable
 internal fun DateSentenceLabel(
     text: String,
@@ -396,8 +397,10 @@ internal fun DateSentenceLabel(
     if (commaIdx > 0) {
         Text(
             text = buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(text.substring(0, commaIdx)) }
-                append(text.substring(commaIdx))
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(text.substring(0, commaIdx)) }
+                withStyle(SpanStyle(fontWeight = FontWeight.Light, color = color.copy(alpha = color.alpha * 0.7f))) {
+                    append(text.substring(commaIdx))
+                }
             },
             color = color,
             style = style,

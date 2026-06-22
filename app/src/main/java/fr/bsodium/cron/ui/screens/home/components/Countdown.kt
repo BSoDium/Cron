@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
@@ -47,15 +48,20 @@ internal fun CountdownStack(
     color: Color,
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
-    showLabel: Boolean = true,
+    labelAlpha: Float = 1f,
 ) {
     // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
     val (top, bottom) = if (countdown == null) "00H" to "00M"
     else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
         String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
     Column(modifier = modifier) {
-        if (showLabel) {
-            Text(text = "in", color = color, style = CronTypography.labelMono)
+        if (labelAlpha > 0f) {
+            Text(
+                text = "fires in",
+                color = color,
+                style = CronTypography.labelMonoSmall,
+                modifier = Modifier.graphicsLayer { alpha = labelAlpha },
+            )
         }
         TwoLineLcdStack(top = top, bottom = bottom, color = color, alignFraction = alignFraction)
     }
@@ -70,11 +76,11 @@ internal fun RemainingOrStatus(
     color: Color,
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
-    showLabel: Boolean = true,
+    labelAlpha: Float = 1f,
 ) {
     when (timing) {
-        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction, showLabel)
-        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction, showLabel)
+        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction, labelAlpha)
+        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction, labelAlpha)
     }
 }
 
