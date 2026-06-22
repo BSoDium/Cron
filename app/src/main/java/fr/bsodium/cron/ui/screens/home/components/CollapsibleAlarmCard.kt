@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -13,11 +14,11 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+
 import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.theme.CronTheme
-import fr.bsodium.cron.ui.theme.CronTypography
+
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
@@ -65,7 +66,7 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
-    val dateStyle = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp)
+    val dateStyle = MaterialTheme.typography.bodyMedium
 
     AlarmShell(
         modifier = modifier,
@@ -88,7 +89,7 @@ internal fun CollapsibleAlarmCard(
             onFullHeight(extras.height)
             // Date mover — the same AlignedFirstGlyph as extras, placed so it can slide up out the top.
             val date = subcompose("date") {
-                AlignedFirstGlyph(dateLabel.ifBlank { "—" }, color = onCard, style = dateStyle)
+                Text(dateLabel.ifBlank { "—" }, color = onCard.copy(alpha = 0.7f), style = dateStyle, maxLines = 1)
             }.first().measure(cWrap)
             // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
             val barHeight = ALARM_BAR_HEIGHT.roundToPx()
