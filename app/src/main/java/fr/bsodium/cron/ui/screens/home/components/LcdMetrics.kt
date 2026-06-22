@@ -9,10 +9,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.DisplayFontFamily
 import fr.bsodium.cron.ui.theme.LcdFontFamily
 
 /**
@@ -69,5 +73,32 @@ internal fun rememberLcdInkMetrics(): LcdInkMetrics {
         }
             .onFailure { Log.w("LcdMetrics", "LCD ink metrics measurement failed — using fallback ratios", it) }
             .getOrDefault(fallback)
+    }
+}
+
+@Composable
+internal fun rememberInkTopPx(family: FontFamily, size: TextUnit): Float {
+    val resolver = LocalFontFamilyResolver.current
+    val density = LocalDensity.current
+    return remember(resolver, density.density, family, size) {
+        runCatching {
+            val typeface = resolver.resolve(
+                fontFamily = family,
+                fontWeight = FontWeight.Normal,
+                fontStyle = FontStyle.Normal,
+                fontSynthesis = FontSynthesis.None,
+            ).value as? Typeface ?: return@runCatching 0f
+            val paint = Paint().apply {
+                this.typeface = typeface
+                this.textSize = with(density) { size.toPx() }
+                isAntiAlias = true
+            }
+            val fm = paint.fontMetrics
+            val bounds = Rect()
+            paint.getTextBounds("0", 0, 1, bounds)
+            (-fm.ascent + bounds.top).coerceAtLeast(0f)
+        }
+            .onFailure { Log.w("LcdMetrics", "ink-top measurement failed for $family", it) }
+            .getOrDefault(0f)
     }
 }

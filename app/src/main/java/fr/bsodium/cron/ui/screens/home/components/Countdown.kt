@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.ExpressiveCondensedFontFamily
+import fr.bsodium.cron.ui.theme.ExpressiveWideFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.coroutines.delay
@@ -45,7 +45,7 @@ internal data class HoursMinutes(val hours: Long, val minutes: Long)
  * (the expanded card), 1 = right (the collapsed pill, so the shorter line hugs the pill's right edge).
  */
 private val FIRES_IN_STYLE = TightTextStyle.copy(
-    fontFamily = ExpressiveCondensedFontFamily,
+    fontFamily = ExpressiveWideFontFamily,
     fontWeight = FontWeight.Medium,
     fontSize = 13.sp,
     lineHeight = 13.sp,

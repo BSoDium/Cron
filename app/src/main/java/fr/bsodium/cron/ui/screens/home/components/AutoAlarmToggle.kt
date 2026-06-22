@@ -3,7 +3,6 @@ package fr.bsodium.cron.ui.screens.home.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -11,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -26,7 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
@@ -54,7 +52,7 @@ internal fun AutoAlarmToggle(
     var initialRender by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) { initialRender = false }
     val targetColor = if (enabled) {
-        MaterialTheme.colorScheme.secondaryContainer
+        MaterialTheme.colorScheme.secondaryFixedDim
     } else {
         MaterialTheme.colorScheme.surfaceContainer
     }
@@ -67,46 +65,57 @@ internal fun AutoAlarmToggle(
             label = "auto-plan-pill-color",
         )
     }
-    Box(
-        modifier = modifier.background(
-            brush = Brush.horizontalGradient(colors = listOf(
-                MaterialTheme.colorScheme.surfaceContainer,
-                containerColor,
-            )),
-            shape = PillShape,
-        ).clip(PillShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            modifier = Modifier.padding(start = Spacing.md, end = Spacing.sm),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                Text(
-                    text = "Auto-plan",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = if (enabled) "Enabled" else "Disabled",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    Layout(
+        content = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+                    Text(
+                        text = "Auto-plan",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = if (enabled) "Enabled" else "Disabled",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { v -> haptics.contextClick(); onChange(v) },
+                        thumbContent = {
+                            Symbol(
+                                symbol = if (enabled) MaterialSymbol.Alarm else MaterialSymbol.AlarmOff,
+                                contentDescription = if (enabled) "Auto alarms on" else "Auto alarms off",
+                                size = SwitchDefaults.IconSize,
+                            )
+                        },
+                    )
+                }
             }
-            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = { v -> haptics.contextClick(); onChange(v) },
-                    thumbContent = {
-                        Symbol(
-                            symbol = if (enabled) MaterialSymbol.Alarm else MaterialSymbol.AlarmOff,
-                            contentDescription = if (enabled) "Auto alarms on" else "Auto alarms off",
-                            size = SwitchDefaults.IconSize,
-                        )
-                    },
-                )
-            }
+        },
+        modifier = modifier
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surfaceContainer,
+                        containerColor,
+                    ),
+                ),
+                shape = PillShape,
+            )
+            .clip(PillShape),
+    ) { measurables, constraints ->
+        val row = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val h = constraints.maxHeight.coerceAtLeast(row.height)
+        val vertPad = ((h - row.height) / 2).coerceAtLeast(0)
+        val startPad = Spacing.md.roundToPx()
+        layout(startPad + row.width + vertPad, h) {
+            row.place(startPad, vertPad)
         }
     }
 }

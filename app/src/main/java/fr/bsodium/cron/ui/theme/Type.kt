@@ -148,7 +148,7 @@ object CronTypography {
     /** Home greeting, line 2 — the user's name on its own full-width line, so long names no longer
      *  contend with the switch for horizontal room. */
     val greetingName: TextStyle = TextStyle(
-        fontFamily = ExpressiveFontFamily,
+        fontFamily = ExpressiveNarrowFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 32.sp,

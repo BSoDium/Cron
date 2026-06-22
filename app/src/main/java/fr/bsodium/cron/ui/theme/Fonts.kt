@@ -52,16 +52,20 @@ val ExpressiveFontFamily: FontFamily = FontFamily(
     },
 )
 
-val ExpressiveCondensedFontFamily: FontFamily = FontFamily(
+private fun expressiveWidth(wdth: Float): FontFamily = FontFamily(
     buildList {
         WEIGHTS.forEach { w ->
             add(Font(R.font.roboto_flex, weight = w, variationSettings = FontVariation.Settings(
                 FontVariation.weight(w.weight),
-                FontVariation.Setting("wdth", 85f),
+                FontVariation.Setting("wdth", wdth),
             )))
         }
     },
 )
+
+val ExpressiveNarrowFontFamily: FontFamily = expressiveWidth(40f)
+val ExpressiveCondensedFontFamily: FontFamily = expressiveWidth(85f)
+val ExpressiveWideFontFamily: FontFamily = expressiveWidth(120f)
 
 /**
  * Hero LCD face for the next-alarm time. Bundled .ttf files resolve first,

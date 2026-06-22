@@ -20,7 +20,8 @@ import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.ExpressiveCondensedFontFamily
+import fr.bsodium.cron.ui.theme.DisplayFontFamily
+import fr.bsodium.cron.ui.theme.ExpressiveWideFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
@@ -69,6 +70,7 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
+    val countdownInkTopPx = rememberInkTopPx(DisplayFontFamily, CronTypography.lcdStack.fontSize)
     val dateStyle = CronTypography.dateSentence
 
     AlarmShell(
@@ -124,7 +126,7 @@ internal fun CollapsibleAlarmCard(
                     text = "fires in",
                     color = countdownColor,
                     style = TightTextStyle.copy(
-                        fontFamily = ExpressiveCondensedFontFamily,
+                        fontFamily = ExpressiveWideFontFamily,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,
                         lineHeight = 13.sp,
@@ -146,7 +148,7 @@ internal fun CollapsibleAlarmCard(
             // Countdown mover: expanded slot (right of the clock, matching the LcdTimeDisplay row) → pill-right, centred.
             val expandedCdX = startPad + clock.width + cdGap
             val inkTopPx = inkCenterPx - inkHeightPx / 2
-            val expandedCdY = expandedClockY + inkTopPx.toInt()
+            val expandedCdY = expandedClockY + (inkTopPx - countdownInkTopPx).toInt()
             val collapsedCdX = w - endPad - countdown.width
             val collapsedCdY = (barHeight - countdown.height) / 2f
 
