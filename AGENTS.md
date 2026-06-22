@@ -137,11 +137,20 @@ Co-locate at file bottom by default. Split to a sibling `*Previews.kt` when mock
 ## Workflow
 
 - Concise responses, no celebration paragraphs, no end-of-turn "what I did" recaps — the diff is the recap.
-- Before claiming a UI task is done, build the app and visually confirm on a device or emulator. Type-checking is not feature-checking. Use:
+- **Visually verify UI changes with Roborazzi** — read `docs/screenshot-testing.md` for full details. After modifying a composable, capture a screenshot to confirm it renders correctly:
+  1. If a `*ScreenshotTest.kt` already exists for the component, run it:
+     ```sh
+     JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+       ./gradlew :app:recordRoborazziDebug --tests 'fully.qualified.TestClass'
+     ```
+  2. If not, write a minimal one: call the composable with deterministic data inside `CronTheme`, then `composeTestRule.onRoot().captureRoboImage()`. Follow the pattern in existing `*ScreenshotTest.kt` files.
+  3. Read the generated PNG from `app/build/outputs/roborazzi/` to inspect the result. Iterate until the rendering matches intent.
+
+  Type-checking is not feature-checking — a green build does not mean the UI is correct.
+- Build and lint must also pass before declaring a UI task done. CI fails on lint **errors** (e.g. `UnusedMaterial3ScaffoldPaddingParameter`). An intentionally-ignored Scaffold padding parameter in an edge-to-edge layout needs `@Suppress("UnusedMaterial3ScaffoldPaddingParameter")` on the enclosing function.
   ```sh
-  JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
+  JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug :app:lintDebug
   ```
-- CI runs `:app:lintDebug` and fails the build on lint **errors** (not warnings) — e.g. `UnusedMaterial3ScaffoldPaddingParameter`. Run `./gradlew :app:lintDebug` alongside `assembleDebug` before declaring a UI task done; `assembleDebug` passing locally is not enough. An intentionally-ignored Scaffold padding parameter in an edge-to-edge layout needs `@Suppress("UnusedMaterial3ScaffoldPaddingParameter")` on the enclosing function.
 - If a task spans 3+ steps, use TaskCreate to track them and mark `completed` as soon as each is done — don't batch.
 - **Branch before touching any file.** At the start of every task, create a fresh branch from `main` (or the appropriate base) and never commit directly to `main`. Name it using the standard prefixes: `feat/`, `fix/`, `chore/`, `docs/`, `style/`, matching the project's commit-message convention.
 - **Commit incrementally.** Commit at each logical milestone — at minimum one commit per completed TaskCreate task — rather than staging everything in a single commit at the end. Each intermediate commit must build (`assembleDebug`) before moving on.
