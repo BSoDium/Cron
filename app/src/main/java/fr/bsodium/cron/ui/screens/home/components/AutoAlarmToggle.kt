@@ -111,8 +111,9 @@ internal fun AutoAlarmToggle(
             .clip(PillShape),
     ) { measurables, constraints ->
         val row = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
-        val h = constraints.maxHeight.coerceAtLeast(row.height)
-        val vertPad = ((h - row.height) / 2).coerceAtLeast(0)
+        val minPad = Spacing.sm.roundToPx()
+        val h = if (constraints.hasBoundedHeight) constraints.maxHeight else row.height + minPad * 2
+        val vertPad = ((h - row.height) / 2).coerceAtLeast(minPad)
         val startPad = Spacing.md.roundToPx()
         layout(startPad + row.width + vertPad, h) {
             row.place(startPad, vertPad)
