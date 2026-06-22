@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -46,12 +47,18 @@ internal fun CountdownStack(
     color: Color,
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
+    showLabel: Boolean = true,
 ) {
     // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
     val (top, bottom) = if (countdown == null) "00H" to "00M"
     else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
         String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
-    TwoLineLcdStack(top = top, bottom = bottom, color = color, modifier = modifier, alignFraction = alignFraction)
+    Column(modifier = modifier) {
+        if (showLabel) {
+            Text(text = "in", color = color, style = CronTypography.labelMono)
+        }
+        TwoLineLcdStack(top = top, bottom = bottom, color = color, alignFraction = alignFraction)
+    }
 }
 
 /** The live countdown, or a grayed "00H/00M" placeholder. A passed alarm reads as onset here — the
@@ -63,10 +70,11 @@ internal fun RemainingOrStatus(
     color: Color,
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
+    showLabel: Boolean = true,
 ) {
     when (timing) {
-        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction)
-        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction)
+        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction, showLabel)
+        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction, showLabel)
     }
 }
 

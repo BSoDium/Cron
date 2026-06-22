@@ -97,7 +97,7 @@ internal fun HomePlanContent(
             contentPadding = PaddingValues(
                 start = Spacing.md,
                 end = Spacing.md,
-                top = statusInsetTop + Spacing.xxl,
+                top = statusInsetTop + Spacing.md,
                 bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
             ),
         ) {

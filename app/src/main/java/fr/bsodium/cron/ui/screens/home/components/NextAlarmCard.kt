@@ -135,7 +135,7 @@ internal fun AlarmCardContent(
         AlignedFirstGlyph(
             text = dateLabel.ifBlank { "—" },
             color = onCard,
-            style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
+            style = CronTypography.dateLabel.copy(fontSize = 18.sp, lineHeight = 20.sp),
             modifier = Modifier.graphicsLayer { alpha = dateAlpha },
         )
         LcdTimeDisplay(alarmTime = alarmTime, timing = timing, base = onCard, timeRowAlpha = timeRowAlpha)

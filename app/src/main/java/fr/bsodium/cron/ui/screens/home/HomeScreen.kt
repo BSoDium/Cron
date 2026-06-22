@@ -340,7 +340,7 @@ private fun HomeIdleContent(
             .fillMaxSize()
             // Horizontal inset is applied per-child so the card can hug wider than the rest.
             .padding(
-                top = statusInsetTop + Spacing.xxl,
+                top = statusInsetTop + Spacing.md,
                 bottom = navInsetBottom + Spacing.navBarClearance,
             ),
         // Tight gap from the greeting down to the card; the card→hint area is a weighted box below.

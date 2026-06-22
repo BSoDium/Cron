@@ -110,7 +110,7 @@ internal fun CollapsibleAlarmCard(
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
             // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
             val countdown = subcompose("countdown") {
-                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f)
+                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, showLabel = false)
             }.first().measure(cWrap)
 
             val w = extras.width
