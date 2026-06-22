@@ -15,8 +15,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
@@ -96,6 +99,18 @@ internal fun RemainingOrStatus(
     }
 }
 
+private val SUFFIX_WEIGHT = SpanStyle(fontWeight = FontWeight(170))
+
+private fun dualWeightCountdown(text: String) = buildAnnotatedString {
+    val splitIndex = text.indexOfFirst { !it.isDigit() }
+    if (splitIndex < 0) {
+        append(text)
+    } else {
+        append(text.substring(0, splitIndex))
+        withStyle(SUFFIX_WEIGHT) { append(text.substring(splitIndex)) }
+    }
+}
+
 /** Two short LCD lines stacked by baseline pitch, optionally slid left→right by [alignFraction]
  *  (0 = left, expanded card; 1 = right, collapsed pill). */
 @Composable
@@ -106,14 +121,13 @@ private fun TwoLineLcdStack(
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
 ) {
-    // Space Grotesk (legible, unlike Major Mono's art-deco H/M) — the shared compact-stack role.
     val smallLcd = CronTypography.lcdStack
     val align = alignFraction.coerceIn(0f, 1f)
     Layout(
         modifier = modifier,
         content = {
-            Text(text = top, color = color, style = smallLcd, maxLines = 1, softWrap = false)
-            Text(text = bottom, color = color, style = smallLcd, maxLines = 1, softWrap = false)
+            Text(text = dualWeightCountdown(top), color = color, style = smallLcd, maxLines = 1, softWrap = false)
+            Text(text = dualWeightCountdown(bottom), color = color, style = smallLcd, maxLines = 1, softWrap = false)
         },
     ) { measurables, constraints ->
         val (line0, line1) = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }

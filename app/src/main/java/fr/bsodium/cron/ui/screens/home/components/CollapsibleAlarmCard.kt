@@ -20,7 +20,7 @@ import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.DisplayFontFamily
+import fr.bsodium.cron.ui.theme.CountdownFontFamily
 import fr.bsodium.cron.ui.theme.ExpressiveWideFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -70,7 +70,7 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
-    val countdownInkTopPx = rememberInkTopPx(DisplayFontFamily, CronTypography.lcdStack.fontSize)
+    val countdownInkTopPx = rememberInkTopPx(CountdownFontFamily, CronTypography.lcdStack.fontSize)
     val dateStyle = CronTypography.dateSentence
 
     AlarmShell(

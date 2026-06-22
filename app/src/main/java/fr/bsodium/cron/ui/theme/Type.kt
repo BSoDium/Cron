@@ -121,7 +121,7 @@ val Typography: Typography = Typography(
 
 /**
  * App-specific Typography roles that live outside the Material scale because
- * they bind to brand fonts (`DisplayFontFamily`, `SerifFontFamily`,
+ * they bind to brand fonts (`CountdownFontFamily`, `SerifFontFamily`,
  * `CodeFontFamily`) rather than the expressive sans. Use these wherever a
  * `TextStyle.copy(fontFamily = ...)` would otherwise be repeated.
  */
@@ -203,7 +203,8 @@ object CronTypography {
     /** Compact two-line LCD stack — the remaining/status block beside the hero clock.
      *  lineHeight < fontSize tightens the leading so the stack reads as one unit. */
     val lcdStack: TextStyle = tight.copy(
-        fontFamily = DisplayFontFamily,
+        fontFamily = CountdownFontFamily,
+        fontWeight = FontWeight.W500,
         fontSize = 24.sp,
         lineHeight = 21.sp,
         fontFeatureSettings = "tnum",

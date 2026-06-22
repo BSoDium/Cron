@@ -33,7 +33,6 @@ private val MajorMonoDisplay = GoogleFont("Major Mono Display")
 private val Iceland = GoogleFont("Iceland")
 private val MartianMono = GoogleFont("Martian Mono")
 private val NotoSerif = GoogleFont("Noto Serif")
-private val SpaceGrotesk = GoogleFont("Space Grotesk")
 
 private val WEIGHTS = listOf(
     FontWeight.Normal,
@@ -109,11 +108,11 @@ val SerifFontFamily: FontFamily = FontFamily(
     Font(googleFont = NotoSerif, fontProvider = Provider),
 )
 
-/**
- * Display face for the alarm card's date label — geometric grotesque
- * with a slightly technical feel that pairs with the LCD digits below.
- */
-val DisplayFontFamily: FontFamily = FontFamily(
-    Font(R.font.space_grotesk, weight = FontWeight.Medium),
-    Font(googleFont = SpaceGrotesk, fontProvider = Provider, weight = FontWeight.Medium),
+val CountdownFontFamily: FontFamily = FontFamily(
+    Font(R.font.roboto_flex, weight = FontWeight.W500, variationSettings = FontVariation.Settings(
+        FontVariation.weight(500), FontVariation.Setting("wdth", 115f),
+    )),
+    Font(R.font.roboto_flex, weight = FontWeight(170), variationSettings = FontVariation.Settings(
+        FontVariation.weight(170), FontVariation.Setting("wdth", 115f),
+    )),
 )
