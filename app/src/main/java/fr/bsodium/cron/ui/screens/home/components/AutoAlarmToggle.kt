@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -26,9 +27,15 @@ import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
-import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
+
+private val PillShape = RoundedCornerShape(
+    topStartPercent = 20,
+    bottomStartPercent = 20,
+    topEndPercent = 50,
+    bottomEndPercent = 50,
+)
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -57,7 +64,7 @@ internal fun AutoAlarmToggle(
     }
     Surface(
         color = containerColor,
-        shape = Radius.full,
+        shape = PillShape,
         modifier = modifier,
     ) {
         Row(
@@ -65,7 +72,7 @@ internal fun AutoAlarmToggle(
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             modifier = Modifier.padding(start = Spacing.lg, end = Spacing.sm, top = Spacing.sm, bottom = Spacing.sm),
         ) {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
                 Text(
                     text = "Auto-plan",
                     style = MaterialTheme.typography.labelMedium,

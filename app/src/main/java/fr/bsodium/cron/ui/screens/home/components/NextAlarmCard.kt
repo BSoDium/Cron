@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import android.content.res.Configuration
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
@@ -135,14 +136,34 @@ internal fun AlarmCardContent(
             bottom = Spacing.lg,
         ),
     ) {
-        DateSentenceLabel(
-            text = dateLabel.ifBlank { "—" },
-            color = onCard.copy(alpha = 0.8f),
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier
-                .padding(bottom = Spacing.xs)
-                .graphicsLayer { alpha = dateAlpha },
-        )
+        var initialRender by remember { mutableStateOf(true) }
+        LaunchedEffect(Unit) { initialRender = false }
+        val displayLabel = dateLabel.ifBlank { "—" }
+        if (initialRender) {
+            DateSentenceLabel(
+                text = displayLabel,
+                color = onCard.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .padding(bottom = Spacing.xs)
+                    .graphicsLayer { alpha = dateAlpha },
+            )
+        } else {
+            Crossfade(
+                targetState = displayLabel,
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                label = "date-label-crossfade",
+                modifier = Modifier
+                    .padding(bottom = Spacing.xs)
+                    .graphicsLayer { alpha = dateAlpha },
+            ) { label ->
+                DateSentenceLabel(
+                    text = label,
+                    color = onCard.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
         LcdTimeDisplay(alarmTime = alarmTime, timing = timing, base = onCard, timeRowAlpha = timeRowAlpha)
         if (sleepSegments.isNotEmpty()) {
             Spacer(Modifier.height(Spacing.xl))

@@ -86,8 +86,9 @@ internal fun Data.toAiTurnFailure(): AiTurnFailure = when (getString(AiTurnWorke
     else -> AiTurnFailure.Generic(getString(AiTurnWorker.KEY_REASON))
 }
 
-/** Sentence-style label for the alarm card: "Tomorrow, you'll wake up at". */
-internal fun formatDateLabel(session: SessionDisplayState?): String {
+/** Sentence-style label for the alarm card; shows a disabled message when auto-plan is off. */
+internal fun formatDateLabel(session: SessionDisplayState?, autoAlarmsEnabled: Boolean = true): String {
+    if (!autoAlarmsEnabled && session != null) return "Your alarm is disabled"
     val today = JavaLocalDate.now()
     val date = session?.sessionDate?.toJavaLocalDate() ?: today
     val dayPart = when (ChronoUnit.DAYS.between(today, date)) {

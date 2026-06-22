@@ -66,7 +66,7 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
-    val dateStyle = MaterialTheme.typography.titleSmall
+    val dateStyle = MaterialTheme.typography.titleMedium
 
     AlarmShell(
         modifier = modifier,
@@ -111,7 +111,7 @@ internal fun CollapsibleAlarmCard(
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
             // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
             val countdown = subcompose("countdown") {
-                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, showLabel = false)
+                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, showLabel = f < 0.5f)
             }.first().measure(cWrap)
 
             val w = extras.width
