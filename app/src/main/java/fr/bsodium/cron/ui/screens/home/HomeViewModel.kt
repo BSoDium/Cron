@@ -14,7 +14,6 @@ import fr.bsodium.cron.calendar.requestCalendarSync
 import fr.bsodium.cron.location.LocationProvider
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
-import fr.bsodium.cron.session.db.AiMessageEntity
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.toModel
 import fr.bsodium.cron.session.model.ActionType
@@ -53,6 +52,8 @@ data class HomeUiState(
     val dateLabel: String = "",
     val sleepStats: SleepStatsUi? = null,
     val aiPlan: AiPlanUi? = null,
+    val timeline: List<TimelineItem> = emptyList(),
+    val hasMoreHistory: Boolean = false,
     val isRetrying: Boolean = false,
     /** False until the backing flows have produced their first value — gates the onboarding so it
      *  doesn't flash over an existing plan during the cold-start load. */
@@ -92,26 +93,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val alarmScheduler = AlarmScheduler(application)
     private val hardLatestScheduler = HardLatestScheduler(application)
 
+    private val timelineRepo = TimelineRepository(db)
+
     private val _isRetrying = MutableStateFlow(false)
 
-    /** The (sessionId, turnIndex) of the placeholder seeded into [StreamingTurnStore] when a user triggers
-     *  a replan, so the optimistic tab IS the real turn. Tracked only to clear it if the worker dies before
-     *  streaming (the normal path is cleared by TurnRunner's finally). Null when no replan is pending. */
     private val _optimisticTurn = MutableStateFlow<Pair<String, Int>?>(null)
-
-    /** Failure parsed from the latest FAILED turn; null while idle, running, or once dismissed. */
     private val _aiFailure = MutableStateFlow<AiTurnFailure?>(null)
-
-    /** id of the most-recent FAILED turn surfaced, and the one the user dismissed — WorkManager keeps
-     *  re-emitting a terminal FAILED WorkInfo, so dismissal keys on its id to avoid resurrection. A new
-     *  enqueue (REPLACE) gets a fresh id, so a genuinely new failure still shows. */
     private val _lastFailedId = MutableStateFlow<String?>(null)
     private val _dismissedFailureId = MutableStateFlow<String?>(null)
 
-    /** Latest session entity; many derived streams hang off this. */
     private val sessionFlow = db.sessionDao().observeLatest()
 
-    /** Sleep events for the active session — drives the timeline + duration. */
     private val sleepStatsFlow = sessionFlow
         .map { it?.id }
         .distinctUntilChanged()
@@ -121,8 +113,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else db.eventDao().observeBySession(id).map { events -> buildSleepStats(events) }.flowOn(Dispatchers.Default)
         }
 
-    /** Latest-turn AI thread — the live streaming partial overrides the settled DB state while a turn
-     *  for this session is in flight, so tokens render as they arrive. `.conflate()` bounds recomposition. */
     private val aiPlanFlow = sessionFlow
         .map { it?.id }
         .distinctUntilChanged()
@@ -150,11 +140,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-    /** Epoch-ms the user last dismissed the "settings changed" reminder this process. */
+    private val currentEventsFlow = sessionFlow
+        .map { it?.id }
+        .distinctUntilChanged()
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else db.eventDao().observeBySession(id).map { rows -> rows.map { it.toModel() } }.flowOn(Dispatchers.Default)
+        }
+
+    private val _historicalSessions = MutableStateFlow<List<TimelineSession>>(emptyList())
+    private val _hasMoreHistory = MutableStateFlow(false)
     private val _dismissedSettingsAt = MutableStateFlow(0L)
 
-    /** True when a plan-affecting setting changed after the last AI call and the reminder hasn't
-     *  been dismissed since. Gated on an existing plan at the combine site. */
     private val settingsChangedFlow = combine(
         sessionFlow.map { it?.lastAiCallAt ?: 0L },
         settings.settingsUpdatedAt,
@@ -163,14 +160,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         settingsAt > lastAiCallAt && settingsAt > dismissedAt
     }
 
-    /** True while a turn for the active session is actively streaming — a real token-flow signal that
-     *  drives the spinner, rather than waiting on WorkManager's coarser terminal-state transition. */
     private val streamingActiveFlow = combine(
         sessionFlow.map { it?.id }.distinctUntilChanged(),
         StreamingTurnStore.active,
     ) { id, streaming -> id != null && streaming?.sessionId == id }
 
-    // UX prefs pre-combined so statusFlow stays within combine's 5-arg arity.
     private val prefsFlow = combine(
         settings.hapticsEnabled,
         settings.autoAlarmsEnabled,
@@ -182,6 +176,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             eveningTriggerTime = eveningTrigger,
         )
     }
+
+    private val timelineFlow = combine(
+        sessionFlow.map { it?.id }.distinctUntilChanged(),
+        aiPlanFlow,
+        currentEventsFlow,
+        StreamingTurnStore.active,
+        _historicalSessions,
+    ) { sessionId, plan, events, streaming, history ->
+        val currentSession = if (sessionId != null && plan != null) {
+            TimelineSession(
+                sessionId = sessionId,
+                iterations = plan.iterations,
+                events = events,
+                streamingTurnIndex = streaming?.takeIf { it.sessionId == sessionId }?.turnIndex,
+            )
+        } else null
+        val allSessions = listOfNotNull(currentSession) + history
+        buildTimeline(allSessions)
+    }.flowOn(Dispatchers.Default)
 
     private val statusFlow = combine(
         _isRetrying,
@@ -200,23 +213,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    val uiState: StateFlow<HomeUiState> = combine(
+    private val displayFlow = combine(
         sessionFlow.map { it?.toDisplayState() },
         sleepStatsFlow,
-        aiPlanFlow,
         settings.displayName,
+    ) { session, sleepStats, displayName ->
+        HomeDisplay(session = session, sleepStats = sleepStats, displayName = displayName)
+    }
+
+    val uiState: StateFlow<HomeUiState> = combine(
+        displayFlow,
+        aiPlanFlow,
+        timelineFlow,
+        _hasMoreHistory,
         statusFlow,
-    ) { session, sleepStats, plan, displayName, status ->
+    ) { display, plan, timeline, hasMore, status ->
         HomeUiState(
-            sessionDisplay = session,
+            sessionDisplay = display.session,
             greetingPrefix = greetingPrefix(),
-            greetingName = displayName,
-            dateLabel = formatDateLabel(session),
-            sleepStats = sleepStats,
+            greetingName = display.displayName,
+            dateLabel = formatDateLabel(display.session),
+            sleepStats = display.sleepStats,
             aiPlan = plan,
+            timeline = timeline,
+            hasMoreHistory = hasMore,
             isRetrying = status.isRetrying,
-            // combine() only emits once every source has produced a value, so reaching here means
-            // the backing flows have loaded — distinguishes "no plan" from "not loaded yet".
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && plan != null,
             aiFailure = status.failure,
@@ -225,6 +246,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             eveningTriggerTime = status.eveningTriggerTime,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+
+    private fun loadRecentHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentId = db.sessionDao().findCurrent()?.id
+                ?: db.sessionDao().findPaginated(1, 0).firstOrNull()?.id
+            val page = timelineRepo.loadHistory(
+                excludeSessionId = currentId,
+                limit = HISTORY_LOAD_SIZE,
+                offset = 0,
+            )
+            _historicalSessions.value = page.sessions
+            _hasMoreHistory.value = page.hasMore
+        }
+    }
 
     /** Hide the "settings changed" reminder until the next plan-affecting change. */
     fun dismissSettingsReminder() {
@@ -280,6 +315,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+        loadRecentHistory()
+
         // Drive the "working" flag and the failure banner off the real WorkManager turn, not a fixed
         // delay: a tap sets isRetrying true optimistically; this clears it when the turn reaches a
         // terminal state, and surfaces the failure reason a FAILED turn carries in its output data.
@@ -437,8 +474,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Drops the seeded placeholder turn if the worker never streamed it (the normal path is cleared by
-     *  TurnRunner). Safe to call always: if the turn streamed/settled, the active entry no longer matches. */
     private fun clearOptimisticTurn() {
         _optimisticTurn.value?.let { (session, turn) -> StreamingTurnStore.clear(session, turn) }
         _optimisticTurn.value = null
@@ -449,37 +484,5 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-/** The transient status signals folded into one combine source to keep uiState's arity at 5. */
-private data class HomeStatus(
-    val isRetrying: Boolean,
-    val settingsChanged: Boolean,
-    val failure: AiTurnFailure?,
-    val hapticsEnabled: Boolean,
-    val autoAlarmsEnabled: Boolean,
-    val eveningTriggerTime: LocalTime,
-)
+private const val HISTORY_LOAD_SIZE = 10
 
-/** The DataStore-backed UX prefs, pre-combined so [HomeStatus] stays within combine's arity. */
-private data class HomePrefs(
-    val hapticsEnabled: Boolean,
-    val autoAlarmsEnabled: Boolean,
-    val eveningTriggerTime: LocalTime,
-)
-
-/**
- * Per-session memo for [AiPlanMapper.buildPlan]: a settled turn's rows are immutable, so its
- * [AiThreadUi] is rebuilt only when the turn's rows change (keyed by their ids). Caps the per-emission
- * cost at the streaming/changed turn instead of re-decoding every turn's JSON. One instance per session,
- * confined to a single Default-dispatched flow, so a plain map needs no synchronization.
- */
-private class TurnThreadCache {
-    private val cache = HashMap<Int, Pair<List<Long>, AiThreadUi>>()
-
-    fun threadFor(turn: Int, rows: List<AiMessageEntity>): AiThreadUi {
-        val signature = rows.map { it.id }
-        cache[turn]?.let { (sig, thread) -> if (sig == signature) return thread }
-        val thread = AiThreadMapper.build(rows) ?: AiThreadUi(turn, summary = null, process = emptyList(), response = null)
-        cache[turn] = signature to thread
-        return thread
-    }
-}
