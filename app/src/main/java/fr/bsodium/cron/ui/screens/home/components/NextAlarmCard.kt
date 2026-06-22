@@ -38,7 +38,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -132,12 +135,13 @@ internal fun AlarmCardContent(
             bottom = Spacing.lg,
         ),
     ) {
-        Text(
+        DateSentenceLabel(
             text = dateLabel.ifBlank { "—" },
-            color = onCard.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            modifier = Modifier.graphicsLayer { alpha = dateAlpha },
+            color = onCard.copy(alpha = 0.8f),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier
+                .padding(bottom = Spacing.xs)
+                .graphicsLayer { alpha = dateAlpha },
         )
         LcdTimeDisplay(alarmTime = alarmTime, timing = timing, base = onCard, timeRowAlpha = timeRowAlpha)
         if (sleepSegments.isNotEmpty()) {
@@ -356,6 +360,31 @@ private fun ColonSeparator(
         val gap = size.height * inkHeightFraction * 0.24f
         drawColonDot(color, centerY = cy - gap, boostPx = dotBoostPx)
         drawColonDot(color, centerY = cy + gap, boostPx = dotBoostPx)
+    }
+}
+
+/** Renders the date sentence with the day portion (before the comma) in bold. */
+@Composable
+internal fun DateSentenceLabel(
+    text: String,
+    color: Color,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    val commaIdx = text.indexOf(',')
+    if (commaIdx > 0) {
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(text.substring(0, commaIdx)) }
+                append(text.substring(commaIdx))
+            },
+            color = color,
+            style = style,
+            maxLines = 1,
+            modifier = modifier,
+        )
+    } else {
+        Text(text = text, color = color, style = style, maxLines = 1, modifier = modifier)
     }
 }
 

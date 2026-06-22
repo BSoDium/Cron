@@ -86,7 +86,7 @@ internal fun Data.toAiTurnFailure(): AiTurnFailure = when (getString(AiTurnWorke
     else -> AiTurnFailure.Generic(getString(AiTurnWorker.KEY_REASON))
 }
 
-/** Sentence-style label for the alarm card: "Tomorrow, you'll wake up at" (locale-default weekday). */
+/** Sentence-style label for the alarm card: "Tomorrow, you'll wake up at". */
 internal fun formatDateLabel(session: SessionDisplayState?): String {
     val today = JavaLocalDate.now()
     val date = session?.sessionDate?.toJavaLocalDate() ?: today

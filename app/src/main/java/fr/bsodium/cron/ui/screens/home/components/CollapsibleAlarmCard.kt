@@ -66,7 +66,7 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
-    val dateStyle = MaterialTheme.typography.bodyMedium
+    val dateStyle = MaterialTheme.typography.titleSmall
 
     AlarmShell(
         modifier = modifier,
@@ -89,7 +89,7 @@ internal fun CollapsibleAlarmCard(
             onFullHeight(extras.height)
             // Date mover — the same AlignedFirstGlyph as extras, placed so it can slide up out the top.
             val date = subcompose("date") {
-                Text(dateLabel.ifBlank { "—" }, color = onCard.copy(alpha = 0.7f), style = dateStyle, maxLines = 1)
+                DateSentenceLabel(text = dateLabel.ifBlank { "—" }, color = onCard.copy(alpha = 0.8f), style = dateStyle)
             }.first().measure(cWrap)
             // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
             val barHeight = ALARM_BAR_HEIGHT.roundToPx()
