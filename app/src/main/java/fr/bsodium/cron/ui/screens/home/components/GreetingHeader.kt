@@ -16,7 +16,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.LcdFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
 
 @Composable
@@ -28,7 +27,6 @@ fun HomeGreetingRow(
     modifier: Modifier = Modifier,
     hapticsEnabled: Boolean = true,
 ) {
-    val nameStyle = CronTypography.greetingName.copy(fontFamily = LcdFontFamily)
     Row(
         modifier = modifier.fillMaxWidth().height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically,
@@ -46,7 +44,7 @@ fun HomeGreetingRow(
             }
             Text(
                 text = name?.takeIf { it.isNotBlank() } ?: prefix,
-                style = nameStyle,
+                style = CronTypography.greetingName,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
