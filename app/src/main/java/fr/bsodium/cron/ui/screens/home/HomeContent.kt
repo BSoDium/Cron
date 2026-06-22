@@ -5,7 +5,7 @@ package fr.bsodium.cron.ui.screens.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.ui.Alignment
+
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
-import fr.bsodium.cron.ui.screens.home.components.AutoAlarmToggle
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
@@ -107,20 +106,13 @@ internal fun HomePlanContent(
                 HomeGreetingRow(
                     prefix = uiState.greetingPrefix,
                     name = uiState.greetingName,
+                    autoAlarmsEnabled = uiState.autoAlarmsEnabled,
+                    onAutoAlarmsChange = onAutoAlarmsChange,
                     modifier = Modifier
                         .padding(horizontal = Spacing.sm)
-                        .padding(bottom = Spacing.md)
                         .onSizeChanged { greetingHeightPx = it.height },
+                    hapticsEnabled = uiState.hapticsEnabled,
                 )
-            }
-            item(key = "auto-plan-toggle") {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    AutoAlarmToggle(
-                        enabled = uiState.autoAlarmsEnabled,
-                        onChange = onAutoAlarmsChange,
-                        hapticsEnabled = uiState.hapticsEnabled,
-                    )
-                }
             }
             item(key = "alarm-spacer") {
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.xxl))
