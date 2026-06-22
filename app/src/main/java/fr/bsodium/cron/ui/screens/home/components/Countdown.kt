@@ -63,8 +63,8 @@ internal fun CountdownStack(
 ) {
     // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
     val (top, bottom) = if (countdown == null) "00H" to "00M"
-    else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
-        String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
+    else String.format(Locale.US, "%02dH", (countdown.hours * progress).roundToInt()) to
+        String.format(Locale.US, "%02dM", (countdown.minutes * progress).roundToInt())
     Column(modifier = modifier) {
         TwoLineLcdStack(top = top, bottom = bottom, color = color, alignFraction = alignFraction)
         if (showLabel) {

@@ -206,6 +206,7 @@ object CronTypography {
         fontFamily = DisplayFontFamily,
         fontSize = 24.sp,
         lineHeight = 21.sp,
+        fontFeatureSettings = "tnum",
     )
 
     /** Small mono clock figures on tiles (sleep-timeline tick labels). */
