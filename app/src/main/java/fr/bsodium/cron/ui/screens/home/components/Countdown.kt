@@ -19,6 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.ExpressiveCondensedFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
@@ -55,15 +56,13 @@ internal fun CountdownStack(
     else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
         String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
     Column(modifier = modifier) {
-        if (labelAlpha > 0f) {
-            Text(
-                text = "fires in",
-                color = color,
-                style = CronTypography.labelMonoSmall,
-                modifier = Modifier.graphicsLayer { alpha = labelAlpha },
-            )
-        }
         TwoLineLcdStack(top = top, bottom = bottom, color = color, alignFraction = alignFraction)
+        Text(
+            text = "fires in",
+            color = color,
+            style = CronTypography.labelMonoSmall.copy(fontFamily = ExpressiveCondensedFontFamily),
+            modifier = Modifier.graphicsLayer { alpha = labelAlpha },
+        )
     }
 }
 

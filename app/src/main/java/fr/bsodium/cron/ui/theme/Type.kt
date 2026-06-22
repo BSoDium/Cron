@@ -157,7 +157,7 @@ object CronTypography {
 
     /** Sentence-style date label on the alarm card — "Tomorrow, you'll wake up at". */
     val dateSentence: TextStyle = TextStyle(
-        fontFamily = ExpressiveFontFamily,
+        fontFamily = ExpressiveCondensedFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 18.sp,
         lineHeight = 22.sp,

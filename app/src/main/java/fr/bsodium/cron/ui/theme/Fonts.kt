@@ -52,6 +52,17 @@ val ExpressiveFontFamily: FontFamily = FontFamily(
     },
 )
 
+val ExpressiveCondensedFontFamily: FontFamily = FontFamily(
+    buildList {
+        WEIGHTS.forEach { w ->
+            add(Font(R.font.roboto_flex, weight = w, variationSettings = FontVariation.Settings(
+                FontVariation.weight(w.weight),
+                FontVariation.Setting("wdth", 75f),
+            )))
+        }
+    },
+)
+
 /**
  * Hero LCD face for the next-alarm time. Bundled .ttf files resolve first,
  * with the downloadable Google Fonts entry as a network fallback. The
