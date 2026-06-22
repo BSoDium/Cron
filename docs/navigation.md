@@ -192,6 +192,58 @@ A detail screen wanting the card effect wraps its scaffold in `PredictiveBackCar
 `SettingsDetailScaffold`), and its parent screen should be cheap to render a second time (see §3's
 stateless-screen note).
 
+## 6. Stateful screens — the Home pattern
+
+When the parent screen is **stateful** (ViewModel-backed flows, markdown parsing, SubcomposeLayout probes,
+font resolution), rendering a second instance as `parentContent` — like Settings does — is not viable: you'd
+need to hoist all state or snapshot the composition, and the cost is not "free" the way a static category
+list is. Home's plan-detail navigation solves this differently:
+
+**Local state, not NavHost.** Plan detail is managed via `detailKey: PlanDetailKey?` in `HomeScreen`.
+`HomeRootContent` is always composed in a `Box` behind the detail. When `detailKey` is set,
+`PredictiveBackCard` overlays on top — its scrim naturally dims the live home during the gesture. No
+snapshot, no second instance needed.
+
+```kotlin
+Box(Modifier.fillMaxSize()) {
+    HomeRootContent(…)                                  // always composed
+
+    detailKey?.let { key ->
+        Box(Modifier.graphicsLayer { translationX = enterOffset * size.width }) {
+            PredictiveBackCard(onBack = { detailKey = null }) { animatedBack ->
+                PlanDetailScreen(…, onBack = animatedBack)
+            }
+        }
+    }
+}
+```
+
+**Forward entrance** uses `animateFloatAsState` with `motionScheme.defaultSpatialSpec()` to slide the detail
+in from the right — the same visual direction as the Settings push, but driven by Compose state rather than
+NavHost transitions (because NavHost isn't involved).
+
+**Why the `PredictiveBackCard` has no `parentContent` here:** with the home always composed behind, the
+card's scrim reveals the live home directly. `parentContent` would add a second stateful instance.
+
+### What was tried and why it failed
+
+Three approaches were attempted before arriving at the always-composed solution:
+
+1. **Navigation 3 `NavDisplay`** — registers a `NavigationBackHandler` (from `androidx.navigationevent`)
+   that intercepts the back gesture even with `None togetherWith None` transitions. It also corrupts
+   GraphicsLayer snapshots via its exit animation. Abandoned entirely.
+
+2. **`rememberGraphicsLayer()` snapshot** — `drawWithContent { record(); drawLayer() }` to capture the home
+   screen as a bitmap during the back gesture. Child render nodes are destroyed when the composable leaves
+   composition, making the display list stale — `drawLayer()` renders nothing.
+
+3. **Conditional composition** — `if (detailKey == null) { HomeRootContent(…) }`. Causes a layout flash on
+   return: `mutableIntStateOf(0)` values (`cardFullHeightPx`, `greetingHeightPx`) reset when the composable
+   re-enters composition, so the alarm card jumps for a frame.
+
+The working solution is the simplest. First-composition is expensive but ongoing recomposition is cheap, so
+keeping the home composed behind the detail costs nothing.
+
 ## Verifying
 
 Predictive back's *in-progress* (drag) animation needs **API 34+**; on older devices and the system back

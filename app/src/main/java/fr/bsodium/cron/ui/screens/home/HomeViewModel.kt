@@ -17,6 +17,7 @@ import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.toModel
 import fr.bsodium.cron.session.model.ActionType
+import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionEvent
@@ -192,7 +193,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 streamingTurnIndex = streaming?.takeIf { it.sessionId == sessionId }?.turnIndex,
             )
         } else null
-        val allSessions = listOfNotNull(currentSession) + history
+        val dedupedHistory = if (currentSession != null) {
+            history.filter { it.sessionId != currentSession.sessionId }
+        } else history
+        val allSessions = listOfNotNull(currentSession) + dedupedHistory
         buildTimeline(allSessions)
     }.flowOn(Dispatchers.Default)
 
@@ -250,7 +254,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadRecentHistory() {
         viewModelScope.launch(Dispatchers.IO) {
             val currentId = db.sessionDao().findCurrent()?.id
-                ?: db.sessionDao().findPaginated(1, 0).firstOrNull()?.id
             val page = timelineRepo.loadHistory(
                 excludeSessionId = currentId,
                 limit = HISTORY_LOAD_SIZE,
@@ -316,6 +319,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadRecentHistory()
+
+        viewModelScope.launch {
+            sessionFlow
+                .map { it?.status }
+                .distinctUntilChanged()
+                .collect { status ->
+                    if (status == SessionStatus.Complete.name) loadRecentHistory()
+                }
+        }
 
         // Drive the "working" flag and the failure banner off the real WorkManager turn, not a fixed
         // delay: a tap sets isRetrying true optimistically; this clears it when the turn reaches a

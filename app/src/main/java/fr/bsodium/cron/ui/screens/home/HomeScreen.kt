@@ -228,8 +228,8 @@ private fun HomeRootContent(
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
         val homePhase = when {
             !uiState.initialized -> HomePhase.Loading
-            displayPlan != null && !resting -> HomePhase.Plan
-            lastPlan != null && uiState.isRetrying && !resting -> HomePhase.Plan
+            displayPlan != null -> HomePhase.Plan
+            lastPlan != null && uiState.isRetrying -> HomePhase.Plan
             else -> HomePhase.Idle
         }
         Crossfade(
