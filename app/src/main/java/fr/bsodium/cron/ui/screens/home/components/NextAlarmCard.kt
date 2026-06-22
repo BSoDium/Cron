@@ -408,7 +408,13 @@ internal fun DateSentenceLabel(
             modifier = modifier,
         )
     } else {
-        Text(text = text, color = color, style = style, maxLines = 1, modifier = modifier)
+        Text(
+            text = text,
+            color = color.copy(alpha = color.alpha * 0.7f),
+            style = style.copy(fontWeight = FontWeight.Light),
+            maxLines = 1,
+            modifier = modifier,
+        )
     }
 }
 

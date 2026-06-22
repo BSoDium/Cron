@@ -44,13 +44,14 @@ internal fun AlarmCollapseEffects(
     rangePx: Float,
     hapticsEnabled: Boolean,
 ) {
-    // Read live inside the listState-keyed effects below: a haptics-pref toggle swaps the instance, and the
-    // range resolves from the card's measured height a frame or two after the effects launch — neither should
-    // stay captured stale.
+    // Read live inside the listState-keyed effects below: a haptics-pref toggle swaps the instance, the
+    // range resolves from the card's measured height a frame or two after the effects launch, and the
+    // collapse State can be recreated when the card height changes — none should stay captured stale.
     val haptics = rememberUpdatedState(rememberCronHaptics(enabled = hapticsEnabled))
     val range = rememberUpdatedState(rangePx)
+    val collapseRef = rememberUpdatedState(collapse)
     LaunchedEffect(listState) {
-        snapshotFlow { collapse.value.fraction >= 0.5f }
+        snapshotFlow { collapseRef.value.value.fraction >= 0.5f }
             .distinctUntilChanged()
             .drop(1)
             .collect { haptics.value.tick() }
@@ -59,8 +60,8 @@ internal fun AlarmCollapseEffects(
     // user was headed (down → collapse, up → expand) instead of a fixed midpoint that yanks a down-scroll back up.
     val scrollingDown = remember { mutableStateOf(true) }
     LaunchedEffect(listState) {
-        var last = collapse.value.distancePx
-        snapshotFlow { collapse.value.distancePx }.collect { d ->
+        var last = collapseRef.value.value.distancePx
+        snapshotFlow { collapseRef.value.value.distancePx }.collect { d ->
             if (d > last + 0.5f) scrollingDown.value = true
             else if (d < last - 0.5f) scrollingDown.value = false
             last = d
@@ -74,7 +75,7 @@ internal fun AlarmCollapseEffects(
                 // so the snap runs from the true settle (else the fling preempts it: "Mutation interrupted").
                 delay(SETTLE_DEBOUNCE_MS)
                 if (listState.isScrollInProgress) return@collect
-                val c = collapse.value
+                val c = collapseRef.value.value
                 // Only nudge a scroll that came to REST between the two stable states — a momentum fling that
                 // already carried through to a stable end (or into the content below) is left untouched.
                 if (c.fraction <= 0.001f || c.fraction >= 0.999f) return@collect
@@ -82,7 +83,7 @@ internal fun AlarmCollapseEffects(
                     if (scrollingDown.value && listState.canScrollForward) {
                         listState.animateScrollBy(range.value - c.distancePx, ALARM_SNAP_SPEC)
                         // Hit the content bottom before fully collapsing → expand to the very top instead of stalling.
-                        val rest = collapse.value
+                        val rest = collapseRef.value.value
                         if (rest.fraction > 0.001f && rest.fraction < 0.999f) {
                             listState.animateScrollToItem(0)
                         }

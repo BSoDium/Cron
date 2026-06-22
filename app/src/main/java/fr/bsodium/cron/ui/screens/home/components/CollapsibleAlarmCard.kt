@@ -13,14 +13,17 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.ExpressiveCondensedFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlin.math.roundToInt
@@ -110,8 +113,23 @@ internal fun CollapsibleAlarmCard(
             }.first().measure(cWrap)
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
             // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
+            // showLabel=false: the "fires in" label is subcomposed separately so it doesn't inflate
+            // the countdown height and break pill centering.
             val countdown = subcompose("countdown") {
-                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, labelAlpha = (1f - f * 3f).coerceIn(0f, 1f))
+                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, showLabel = false)
+            }.first().measure(cWrap)
+            val firesInAlpha = (1f - f * 3f).coerceIn(0f, 1f)
+            val firesIn = subcompose("fires-in") {
+                Text(
+                    text = "fires in",
+                    color = countdownColor,
+                    style = TightTextStyle.copy(
+                        fontFamily = ExpressiveCondensedFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 11.sp,
+                        lineHeight = 11.sp,
+                    ),
+                )
             }.first().measure(cWrap)
 
             val w = extras.width
@@ -154,6 +172,11 @@ internal fun CollapsibleAlarmCard(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
+                if (firesInAlpha > 0f) {
+                    firesIn.placeWithLayer(expandedCdX, expandedCdY + countdown.height) {
+                        alpha = firesInAlpha
+                    }
+                }
             }
         }
     }

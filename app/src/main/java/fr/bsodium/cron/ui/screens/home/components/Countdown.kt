@@ -16,11 +16,13 @@ import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.ExpressiveCondensedFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -42,6 +44,13 @@ internal data class HoursMinutes(val hours: Long, val minutes: Long)
  * alarm is set. [alignFraction] slides each line horizontally inside the stack's width — 0 = left
  * (the expanded card), 1 = right (the collapsed pill, so the shorter line hugs the pill's right edge).
  */
+private val FIRES_IN_STYLE = TightTextStyle.copy(
+    fontFamily = ExpressiveCondensedFontFamily,
+    fontWeight = FontWeight.Medium,
+    fontSize = 11.sp,
+    lineHeight = 11.sp,
+)
+
 @Composable
 internal fun CountdownStack(
     countdown: HoursMinutes?,
@@ -49,6 +58,7 @@ internal fun CountdownStack(
     color: Color,
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
+    showLabel: Boolean = true,
     labelAlpha: Float = 1f,
 ) {
     // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
@@ -57,12 +67,14 @@ internal fun CountdownStack(
         String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
     Column(modifier = modifier) {
         TwoLineLcdStack(top = top, bottom = bottom, color = color, alignFraction = alignFraction)
-        Text(
-            text = "fires in",
-            color = color,
-            style = CronTypography.labelMonoSmall.copy(fontFamily = ExpressiveCondensedFontFamily),
-            modifier = Modifier.graphicsLayer { alpha = labelAlpha },
-        )
+        if (showLabel) {
+            Text(
+                text = "fires in",
+                color = color,
+                style = FIRES_IN_STYLE,
+                modifier = Modifier.graphicsLayer { alpha = labelAlpha },
+            )
+        }
     }
 }
 
@@ -75,11 +87,12 @@ internal fun RemainingOrStatus(
     color: Color,
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
+    showLabel: Boolean = true,
     labelAlpha: Float = 1f,
 ) {
     when (timing) {
-        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction, labelAlpha)
-        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction, labelAlpha)
+        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction, showLabel, labelAlpha)
+        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction, showLabel, labelAlpha)
     }
 }
 

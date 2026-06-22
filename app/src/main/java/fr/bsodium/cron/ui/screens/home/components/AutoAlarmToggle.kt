@@ -1,7 +1,9 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -22,6 +24,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
@@ -31,8 +36,8 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 private val PillShape = RoundedCornerShape(
-    topStartPercent = 20,
-    bottomStartPercent = 20,
+    topStartPercent = 40,
+    bottomStartPercent = 40,
     topEndPercent = 50,
     bottomEndPercent = 50,
 )
@@ -49,9 +54,9 @@ internal fun AutoAlarmToggle(
     var initialRender by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) { initialRender = false }
     val targetColor = if (enabled) {
-        MaterialTheme.colorScheme.surfaceContainerHigh
+        MaterialTheme.colorScheme.tertiaryContainer
     } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
+        MaterialTheme.colorScheme.surfaceContainer
     }
     val containerColor by if (initialRender) {
         remember(targetColor) { mutableStateOf(targetColor) }
@@ -62,15 +67,18 @@ internal fun AutoAlarmToggle(
             label = "auto-plan-pill-color",
         )
     }
-    Surface(
-        color = containerColor,
-        shape = PillShape,
-        modifier = modifier,
+    Box(
+        modifier = modifier.background(
+            brush = Brush.horizontalGradient(colors = listOf(
+                MaterialTheme.colorScheme.surfaceContainer,
+                containerColor,
+            ))
+        , shape = PillShape).clip(PillShape),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            modifier = Modifier.padding(start = Spacing.lg, end = Spacing.sm, top = Spacing.sm, bottom = Spacing.sm),
+            modifier = Modifier.padding(start = Spacing.md, end = Spacing.sm, top = Spacing.sm, bottom = Spacing.sm),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
                 Text(

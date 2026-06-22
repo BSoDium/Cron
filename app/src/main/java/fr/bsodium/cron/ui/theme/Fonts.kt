@@ -57,7 +57,7 @@ val ExpressiveCondensedFontFamily: FontFamily = FontFamily(
         WEIGHTS.forEach { w ->
             add(Font(R.font.roboto_flex, weight = w, variationSettings = FontVariation.Settings(
                 FontVariation.weight(w.weight),
-                FontVariation.Setting("wdth", 75f),
+                FontVariation.Setting("wdth", 85f),
             )))
         }
     },
