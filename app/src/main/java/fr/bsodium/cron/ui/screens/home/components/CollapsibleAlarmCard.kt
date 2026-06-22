@@ -13,18 +13,14 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.CountdownFontFamily
-import fr.bsodium.cron.ui.theme.ExpressiveWideFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
-import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlin.math.roundToInt
@@ -122,16 +118,7 @@ internal fun CollapsibleAlarmCard(
             }.first().measure(cWrap)
             val firesInAlpha = (1f - f * 3f).coerceIn(0f, 1f)
             val firesIn = subcompose("fires-in") {
-                Text(
-                    text = "fires in",
-                    color = countdownColor,
-                    style = TightTextStyle.copy(
-                        fontFamily = ExpressiveWideFontFamily,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 13.sp,
-                        lineHeight = 13.sp,
-                    ),
-                )
+                Text(text = "fires in", color = countdownColor, style = FIRES_IN_STYLE)
             }.first().measure(cWrap)
 
             val w = extras.width

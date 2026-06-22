@@ -42,12 +42,7 @@ import kotlin.time.Duration
 
 internal data class HoursMinutes(val hours: Long, val minutes: Long)
 
-/**
- * Two-line LCD stack ("8H" / "12M") showing time remaining until the alarm; dim placeholders when no
- * alarm is set. [alignFraction] slides each line horizontally inside the stack's width — 0 = left
- * (the expanded card), 1 = right (the collapsed pill, so the shorter line hugs the pill's right edge).
- */
-private val FIRES_IN_STYLE = TightTextStyle.copy(
+internal val FIRES_IN_STYLE = TightTextStyle.copy(
     fontFamily = ExpressiveWideFontFamily,
     fontWeight = FontWeight.Medium,
     fontSize = 13.sp,
