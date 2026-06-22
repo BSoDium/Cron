@@ -3,6 +3,7 @@ package fr.bsodium.cron.ui.screens.home.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -24,7 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
@@ -65,39 +68,14 @@ internal fun AutoAlarmToggle(
             label = "auto-plan-pill-color",
         )
     }
-    Layout(
-        content = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                    Text(
-                        text = "Auto-plan",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = if (enabled) "Enabled" else "Disabled",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                    Switch(
-                        checked = enabled,
-                        onCheckedChange = { v -> haptics.contextClick(); onChange(v) },
-                        thumbContent = {
-                            Symbol(
-                                symbol = if (enabled) MaterialSymbol.Alarm else MaterialSymbol.AlarmOff,
-                                contentDescription = if (enabled) "Auto alarms on" else "Auto alarms off",
-                                size = SwitchDefaults.IconSize,
-                            )
-                        },
-                    )
-                }
-            }
-        },
+    val density = LocalDensity.current
+    var boxHeightPx by remember { mutableIntStateOf(0) }
+    var rowHeightPx by remember { mutableIntStateOf(0) }
+    val minPadPx = with(density) { Spacing.sm.roundToPx() }
+    val endPad = with(density) {
+        ((boxHeightPx - rowHeightPx) / 2).coerceAtLeast(minPadPx).toDp()
+    }
+    Box(
         modifier = modifier
             .background(
                 brush = Brush.horizontalGradient(
@@ -108,15 +86,42 @@ internal fun AutoAlarmToggle(
                 ),
                 shape = PillShape,
             )
-            .clip(PillShape),
-    ) { measurables, constraints ->
-        val row = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
-        val minPad = Spacing.sm.roundToPx()
-        val h = if (constraints.hasBoundedHeight) constraints.maxHeight else row.height + minPad * 2
-        val vertPad = ((h - row.height) / 2).coerceAtLeast(minPad)
-        val startPad = Spacing.md.roundToPx()
-        layout(startPad + row.width + vertPad, h) {
-            row.place(startPad, vertPad)
+            .clip(PillShape)
+            .onSizeChanged { boxHeightPx = it.height },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            modifier = Modifier
+                .onSizeChanged { rowHeightPx = it.height }
+                .padding(start = Spacing.md, end = endPad),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+                Text(
+                    text = "Auto-plan",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = if (enabled) "Enabled" else "Disabled",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { v -> haptics.contextClick(); onChange(v) },
+                    thumbContent = {
+                        Symbol(
+                            symbol = if (enabled) MaterialSymbol.Alarm else MaterialSymbol.AlarmOff,
+                            contentDescription = if (enabled) "Auto alarms on" else "Auto alarms off",
+                            size = SwitchDefaults.IconSize,
+                        )
+                    },
+                )
+            }
         }
     }
 }
