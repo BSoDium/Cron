@@ -145,7 +145,8 @@ internal fun CollapsibleAlarmCard(
 
             // Countdown mover: expanded slot (right of the clock, matching the LcdTimeDisplay row) → pill-right, centred.
             val expandedCdX = startPad + clock.width + cdGap
-            val expandedCdY = expandedClockY
+            val inkTopPx = inkCenterPx - inkHeightPx / 2
+            val expandedCdY = expandedClockY + inkTopPx.toInt()
             val collapsedCdX = w - endPad - countdown.width
             val collapsedCdY = (barHeight - countdown.height) / 2f
 
@@ -173,7 +174,7 @@ internal fun CollapsibleAlarmCard(
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
                 if (firesInAlpha > 0f) {
-                    firesIn.placeWithLayer(expandedCdX, expandedCdY + countdown.height) {
+                    firesIn.placeWithLayer(expandedCdX, expandedCdY + countdown.height - Spacing.xxs.roundToPx()) {
                         alpha = firesInAlpha
                     }
                 }
