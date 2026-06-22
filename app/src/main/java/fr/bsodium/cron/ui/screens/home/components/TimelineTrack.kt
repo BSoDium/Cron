@@ -35,7 +35,7 @@ import fr.bsodium.cron.ui.theme.Spacing
 internal val SESSION_GUTTER_WIDTH = 40.dp
 private val TRACK_WIDTH = 1.5.dp
 private val DISC_SIZE = 24.dp
-private val EVENT_ICON_SIZE = 18.dp
+private val EVENT_ICON_SIZE = 24.dp
 private val STATION_DOT_SIZE = 6.dp
 
 
@@ -47,17 +47,18 @@ internal fun SessionTimelineRow(
     icon: (@Composable () -> Unit)? = null,
     discSize: Dp = DISC_SIZE,
     verticalPadding: Dp = Spacing.md,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val maskColor = CronColors.pageBackground
-    val discTop = (verticalPadding + (firstLineHeight - discSize) / 2 - 1.dp).coerceAtLeast(0.dp)
+    val discTop = (verticalPadding + (firstLineHeight - discSize) / 2).coerceAtLeast(0.dp)
     val iconCenter = discTop + discSize / 2
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth()) {
             Spacer(Modifier.width(SESSION_GUTTER_WIDTH))
-            Spacer(Modifier.width(Spacing.sm))
+            Spacer(Modifier.width(Spacing.xs))
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -128,6 +129,7 @@ internal fun SessionTimelineDayHeader(
     label: String,
     @Suppress("UNUSED_PARAMETER") isFirst: Boolean,
     @Suppress("UNUSED_PARAMETER") isLast: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val waveColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val bgColor = CronColors.pageBackground
@@ -137,7 +139,7 @@ internal fun SessionTimelineDayHeader(
     val strokePx = with(density) { WAVE_STROKE.toPx() }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = Spacing.lg)
             .drawBehind {

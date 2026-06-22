@@ -1,10 +1,15 @@
 package fr.bsodium.cron.ui.screens.settings.categories
 
+import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,6 +54,7 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
                 mockEnabled = enabled
             },
         )
+        FsmEventInjector(context, scope)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -150,5 +156,88 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
                 }
             },
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FsmEventInjector(
+    context: android.content.Context,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    val repo = remember { SessionRepository(context) }
+
+    Column {
+        Text(
+            text = "Inject timeline event",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            text = "Record events in the current session without FSM transitions",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            modifier = Modifier.padding(top = Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            InjectButton("Sleep Onset", scope) {
+                val session = repo.findCurrent() ?: return@InjectButton false
+                repo.appendEvent(session.id, SessionEvent(
+                    trigger = TriggerType.SleepOnset,
+                    timestamp = Clock.System.now(),
+                    data = EventData.SleepOnset(screenOffSince = Clock.System.now(), rearm = false),
+                ))
+                true
+            }
+            InjectButton("Alarm Dismissed", scope) {
+                val session = repo.findCurrent() ?: return@InjectButton false
+                repo.appendEvent(session.id, SessionEvent(
+                    trigger = TriggerType.AlarmDismissed,
+                    timestamp = Clock.System.now(),
+                    data = EventData.Empty,
+                ))
+                true
+            }
+            InjectButton("Alarm Snoozed", scope) {
+                val session = repo.findCurrent() ?: return@InjectButton false
+                repo.appendEvent(session.id, SessionEvent(
+                    trigger = TriggerType.AlarmSnoozed,
+                    timestamp = Clock.System.now(),
+                    data = EventData.Empty,
+                ))
+                true
+            }
+            InjectButton("Out Of Bed", scope) {
+                val session = repo.findCurrent() ?: return@InjectButton false
+                repo.appendEvent(session.id, SessionEvent(
+                    trigger = TriggerType.OutOfBedConfirmed,
+                    timestamp = Clock.System.now(),
+                    data = EventData.OutOfBedConfirmed(evidence = listOf("debug injection")),
+                ))
+                true
+            }
+        }
+    }
+}
+
+@Composable
+private fun InjectButton(
+    label: String,
+    scope: kotlinx.coroutines.CoroutineScope,
+    action: suspend () -> Boolean,
+) {
+    val context = LocalContext.current
+    FilledTonalButton(
+        onClick = {
+            scope.launch {
+                val msg = if (action()) "$label injected" else "No active session"
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
+        },
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
     }
 }

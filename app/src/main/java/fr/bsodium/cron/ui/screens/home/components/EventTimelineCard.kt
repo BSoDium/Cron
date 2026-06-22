@@ -72,7 +72,7 @@ internal fun EventTimelineCard(
                 color = contentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f),
             )
             if (detail != null) {
                 MonoPill(text = detail)
