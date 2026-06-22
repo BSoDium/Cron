@@ -1,4 +1,4 @@
-package fr.bsodium.cron.ui.screens.settings.components
+package fr.bsodium.cron.ui.components
 
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
@@ -15,8 +15,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -27,9 +27,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
-import androidx.compose.foundation.lazy.LazyListState
-import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
-import fr.bsodium.cron.ui.screens.settings.SettingsScreen
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -39,35 +36,25 @@ import kotlin.coroutines.cancellation.CancellationException
 private const val COMMIT_MS = 300
 private const val CANCEL_MS = 220
 
-/** How far the lifted card scales down at full pull, and how far it shifts toward the gesture edge. */
 private const val CARD_MIN_SCALE = 0.90f
 private val CARD_PREVIEW_SHIFT = Spacing.lg
 
-/** The parent peeking behind: scaled down, shifted left and dimmed throughout the hold, restored on commit. */
 private const val PARENT_MIN_SCALE = 0.92f
 private const val PARENT_MAX_DIM = 0.35f
 private const val PARENT_SHIFT_FRACTION = 0.18f
 
 /**
- * Two-phase predictive back, matching the Pixel-Settings gesture. Navigation Compose's built-in seekable
- * predictive back maps the whole pop transition to the drag, so at max pull it's already finished and
- * release does nothing — it structurally can't separate preview from commit. This drives the two phases by
- * hand off [PredictiveBackHandler]:
+ * Two-phase predictive back, matching the Pixel-Settings gesture. See docs/navigation.md.
  *
- * - **Drag (progress 0→1):** the current page ([content]) shrinks into an opaque rounded card that shifts
- *   toward the gesture edge; the parent ([SettingsScreen], stateless so a second instance is free) is
- *   revealed behind it, scaled down and dimmed. At max pull it's a held, fully-readable card.
- * - **Release / commit (progress 1→2):** the card slides off-screen and fades while the parent de-dims and
- *   scales to full; then [onBack] performs the real pop (the NavHost swap is `None`, hidden under this).
- * - **Cancel:** the card animates back to rest.
- *
- * [content] receives an `animatedBack` callback so the app-bar back arrow and the system back button play
- * the same commit animation as the gesture.
+ * [parentContent] is the screen revealed behind the shrinking card. When non-null, it renders
+ * scaled-down and dimmed during the drag; when null, only a dimmed scrim shows. Pass a live
+ * composable for cheap/stateless parents, or a static [Image] of a captured bitmap for expensive ones.
  */
 @Composable
 internal fun PredictiveBackCard(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    parentContent: (@Composable () -> Unit)? = null,
     content: @Composable (animatedBack: () -> Unit) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -109,19 +96,17 @@ internal fun PredictiveBackCard(
         progress = { progress.value },
         edgeLeft = edgeLeft,
         active = active,
+        parentContent = parentContent,
         modifier = modifier,
     ) { content(::animatedBack) }
 }
 
-/**
- * Pure visual layers for [PredictiveBackCard], parameterised by a [progress] provider (0=rest, 1=held
- * preview, 2=committed) so the transforms re-read in the layer pass without recomposing [content].
- */
 @Composable
 private fun PredictiveBackLayers(
     progress: () -> Float,
     edgeLeft: Boolean,
     active: Boolean,
+    parentContent: (@Composable () -> Unit)?,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -133,29 +118,21 @@ private fun PredictiveBackLayers(
 
     Box(modifier = modifier.fillMaxSize()) {
         if (active) {
-            val currentState = LocalSettingsListState.current
-            val previewIndex = currentState.firstVisibleItemIndex
-            val previewOffset = currentState.firstVisibleItemScrollOffset
-            // plain remember: rememberSaveable would restore stale position from the previous gesture.
-            val previewState = remember { LazyListState(previewIndex, previewOffset) }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        val commit = (progress() - 1f).coerceIn(0f, 1f)
-                        val sign = if (edgeLeft) -1f else 1f
-                        val scale = lerp(PARENT_MIN_SCALE, 1f, commit)
-                        scaleX = scale
-                        scaleY = scale
-                        // Parked on the side the card vacates (opposite the card, which moves toward the
-                        // gesture edge) so the geometry mirrors for both edges; slides to centre on commit.
-                        translationX = -sign * parentShiftPx * (1f - commit)
-                    },
-            ) {
-                SettingsScreen(
-                    onOpenCategory = {},
-                    listState = previewState,
-                )
+            if (parentContent != null) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val commit = (progress() - 1f).coerceIn(0f, 1f)
+                            val sign = if (edgeLeft) -1f else 1f
+                            val scale = lerp(PARENT_MIN_SCALE, 1f, commit)
+                            scaleX = scale
+                            scaleY = scale
+                            translationX = -sign * parentShiftPx * (1f - commit)
+                        },
+                ) {
+                    parentContent()
+                }
             }
             Box(
                 Modifier
@@ -189,7 +166,6 @@ private fun PredictiveBackLayers(
     }
 }
 
-/** Decelerate the raw gesture progress so the card eases as it's pulled, per the Material back spec. */
 private fun decelerate(raw: Float): Float {
     val x = raw.coerceIn(0f, 1f)
     return 1f - (1f - x) * (1f - x)
@@ -199,8 +175,7 @@ private fun decelerate(raw: Float): Float {
 @Composable
 private fun PredictiveBackCardPreview() {
     CronTheme {
-        // A held mid-drag preview (progress = 1): the detail as a lifted card over the dimmed root.
-        PredictiveBackLayers(progress = { 1f }, edgeLeft = false, active = true) {
+        PredictiveBackLayers(progress = { 1f }, edgeLeft = false, active = true, parentContent = null) {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Box(Modifier.fillMaxSize()) {
                     Text(

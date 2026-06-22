@@ -35,7 +35,7 @@ import fr.bsodium.cron.ui.theme.Spacing
 internal val SESSION_GUTTER_WIDTH = 40.dp
 private val TRACK_WIDTH = 1.5.dp
 private val DISC_SIZE = 24.dp
-private val EVENT_ICON_SIZE = 24.dp
+private val EVENT_DISC_SIZE = 24.dp
 private val STATION_DOT_SIZE = 6.dp
 
 
@@ -114,7 +114,7 @@ internal fun SessionTimelineEventRow(
         isFirst = isFirst,
         isLast = isLast,
         icon = icon,
-        discSize = EVENT_ICON_SIZE,
+        discSize = EVENT_DISC_SIZE,
         verticalPadding = Spacing.sm,
         content = content,
     )

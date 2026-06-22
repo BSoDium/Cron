@@ -36,8 +36,6 @@ import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
-import fr.bsodium.cron.ui.screens.home.components.PlanTimelineCard
-import fr.bsodium.cron.ui.screens.home.components.SessionStatusRow
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -61,15 +59,7 @@ internal fun HomePlanContent(
     val density = LocalDensity.current
     var cardFullHeightPx by remember { mutableIntStateOf(0) }
     var greetingHeightPx by remember { mutableIntStateOf(0) }
-    var latestPlanHeightPx by remember { mutableIntStateOf(0) }
     val reservePx by remember { derivedStateOf { cardFullHeightPx } }
-
-    val latestRun = remember(uiState.timeline) {
-        uiState.timeline.firstOrNull { it is TimelineItem.AiRun && it.isLatest } as? TimelineItem.AiRun
-    }
-    val timelineWithoutLatest = remember(uiState.timeline, latestRun) {
-        if (latestRun != null) uiState.timeline.filter { it !== latestRun } else uiState.timeline
-    }
 
     val collapseSafeTopPx = with(density) { (statusInsetTop + Spacing.sm).roundToPx() }
     val collapseFadePx = with(density) { Spacing.xxl.toPx() }
@@ -100,22 +90,6 @@ internal fun HomePlanContent(
     }
     AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
 
-    val latestPlanPinPx by remember(collapseSafeTopPx) {
-        derivedStateOf {
-            val alarmBottom = collapseState.value.top +
-                androidx.compose.ui.util.lerp(cardFullHeightPx.toFloat(), barHeightPx, collapseState.value.fraction)
-            (alarmBottom + with(density) { Spacing.sm.toPx() }).toInt()
-        }
-    }
-    val latestPlanTopPx by remember(latestPlanPinPx) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val spacerTop = info.visibleItemsInfo.firstOrNull { it.key == "latest-plan-spacer" }
-                ?.let { it.offset - info.viewportStartOffset }
-            if (spacerTop != null) maxOf(latestPlanPinPx, spacerTop) else latestPlanPinPx
-        }
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -141,22 +115,10 @@ internal fun HomePlanContent(
                 )
             }
             item(key = "alarm-spacer") {
-                Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.md))
-            }
-            if (latestRun != null) {
-                item(key = "latest-plan-spacer") {
-                    Spacer(Modifier.height(with(density) { latestPlanHeightPx.toDp() }))
-                }
-            }
-            item(key = "session-status") {
-                SessionStatusRow(
-                    status = uiState.sessionDisplay?.status,
-                    isLast = timelineWithoutLatest.isEmpty(),
-                    modifier = Modifier.padding(top = Spacing.sm),
-                )
+                Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.xxl))
             }
             sessionTimelineItems(
-                timeline = timelineWithoutLatest,
+                timeline = uiState.timeline,
                 hasMore = uiState.hasMoreHistory,
                 onOpenAiRun = onOpenAiRun,
                 onNavigateToHistory = onNavigateToHistory,
@@ -171,29 +133,9 @@ internal fun HomePlanContent(
             }
         }
 
-        if (latestRun != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer { translationY = latestPlanTopPx.toFloat() }
-                    .onSizeChanged { latestPlanHeightPx = it.height }
-                    .padding(horizontal = Spacing.md),
-            ) {
-                PlanTimelineCard(
-                    iteration = latestRun.iteration,
-                    isLatest = true,
-                    isStreaming = latestRun.isStreaming,
-                    isFirst = true,
-                    isLast = true,
-                    onClick = { onOpenAiRun(latestRun.iteration.turnIndex, latestRun.sessionId) },
-                )
-            }
-        }
-
         StickyAlarm(
             safeTopPx = collapseSafeTopPx,
             collapse = collapseState,
-            hasLatestPlan = latestRun != null,
         ) { collapseFraction ->
             CollapsibleAlarmCard(
                 dateLabel = uiState.dateLabel,
@@ -213,14 +155,13 @@ internal fun HomePlanContent(
 private fun BoxScope.StickyAlarm(
     safeTopPx: Int,
     collapse: State<AlarmCollapse>,
-    hasLatestPlan: Boolean,
     card: @Composable (collapseFraction: () -> Float) -> Unit,
 ) {
     val density = LocalDensity.current
     val background = CronColors.pageBackground
     var visiblePx by remember { mutableIntStateOf(0) }
     val cardBottomPx = safeTopPx + visiblePx
-    val belowFadePx = with(density) { (if (hasLatestPlan) Spacing.sm else Spacing.xxxl).toPx() }
+    val belowFadePx = with(density) { Spacing.xxxl.toPx() }
     val totalPx = cardBottomPx + belowFadePx
     val solidStop = if (totalPx > 0f) (cardBottomPx / totalPx).coerceIn(0f, 1f) else 1f
     Box(

@@ -63,7 +63,7 @@ internal fun EventTimelineCard(
     ) {
         Row(
             modifier = modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(

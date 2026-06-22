@@ -24,7 +24,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -34,14 +33,11 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 import kotlinx.coroutines.launch
-
-const val ROUTE_PLAN_DETAIL = "plan-detail/{turnIndex}/{sessionId}"
-
-fun planDetailRoute(turnIndex: Int, sessionId: String) = "plan-detail/$turnIndex/$sessionId"
 
 private const val PULL_THRESHOLD_FRACTION = 0.4f
 private const val PULL_RUBBER_FLOOR = 0.15f
@@ -55,7 +51,7 @@ fun PlanDetailScreen(
     onBack: () -> Unit,
 ) {
     Scaffold(
-        containerColor = Color.Transparent,
+        containerColor = CronColors.pageBackground,
         topBar = {
             TopAppBar(
                 title = {
@@ -75,7 +71,7 @@ fun PlanDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
+                    containerColor = CronColors.pageBackground,
                 ),
             )
         },
