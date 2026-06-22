@@ -121,7 +121,7 @@ val Typography: Typography = Typography(
 
 /**
  * App-specific Typography roles that live outside the Material scale because
- * they bind to brand fonts (`DisplayFontFamily`, `SerifFontFamily`,
+ * they bind to brand fonts (`CountdownFontFamily`, `SerifFontFamily`,
  * `CodeFontFamily`) rather than the expressive sans. Use these wherever a
  * `TextStyle.copy(fontFamily = ...)` would otherwise be repeated.
  */
@@ -148,19 +148,19 @@ object CronTypography {
     /** Home greeting, line 2 — the user's name on its own full-width line, so long names no longer
      *  contend with the switch for horizontal room. */
     val greetingName: TextStyle = TextStyle(
-        fontFamily = ExpressiveFontFamily,
+        fontFamily = ExpressiveNarrowFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 32.sp,
         letterSpacing = (-0.01).em,
     )
 
-    /** Date label on the alarm card — "Thursday 28". */
-    val dateLabel: TextStyle = tight.copy(
-        fontFamily = DisplayFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 24.sp,
-        lineHeight = 24.sp,
+    /** Sentence-style date label on the alarm card — "Tomorrow, you'll wake up at". */
+    val dateSentence: TextStyle = TextStyle(
+        fontFamily = ExpressiveCondensedFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 18.sp,
+        lineHeight = 22.sp,
     )
 
     /** AI response prose — the "conclusion" paragraph below the thinking thread. */
@@ -203,9 +203,11 @@ object CronTypography {
     /** Compact two-line LCD stack — the remaining/status block beside the hero clock.
      *  lineHeight < fontSize tightens the leading so the stack reads as one unit. */
     val lcdStack: TextStyle = tight.copy(
-        fontFamily = DisplayFontFamily,
+        fontFamily = CountdownFontFamily,
+        fontWeight = FontWeight.W500,
         fontSize = 24.sp,
         lineHeight = 21.sp,
+        fontFeatureSettings = "tnum",
     )
 
     /** Small mono clock figures on tiles (sleep-timeline tick labels). */

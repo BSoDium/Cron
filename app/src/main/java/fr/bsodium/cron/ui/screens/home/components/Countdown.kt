@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -10,14 +11,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.ExpressiveWideFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -34,11 +42,13 @@ import kotlin.time.Duration
 
 internal data class HoursMinutes(val hours: Long, val minutes: Long)
 
-/**
- * Two-line LCD stack ("8H" / "12M") showing time remaining until the alarm; dim placeholders when no
- * alarm is set. [alignFraction] slides each line horizontally inside the stack's width — 0 = left
- * (the expanded card), 1 = right (the collapsed pill, so the shorter line hugs the pill's right edge).
- */
+internal val FIRES_IN_STYLE = TightTextStyle.copy(
+    fontFamily = ExpressiveWideFontFamily,
+    fontWeight = FontWeight.Medium,
+    fontSize = 13.sp,
+    lineHeight = 13.sp,
+)
+
 @Composable
 internal fun CountdownStack(
     countdown: HoursMinutes?,
@@ -46,12 +56,24 @@ internal fun CountdownStack(
     color: Color,
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
+    showLabel: Boolean = true,
+    labelAlpha: Float = 1f,
 ) {
     // No alarm → a grayed "00H/00M" placeholder, mirroring the dimmed "00:00" digits.
     val (top, bottom) = if (countdown == null) "00H" to "00M"
-    else String.format(Locale.US, "%dH", (countdown.hours * progress).roundToInt()) to
-        String.format(Locale.US, "%dM", (countdown.minutes * progress).roundToInt())
-    TwoLineLcdStack(top = top, bottom = bottom, color = color, modifier = modifier, alignFraction = alignFraction)
+    else String.format(Locale.US, "%02dH", (countdown.hours * progress).roundToInt()) to
+        String.format(Locale.US, "%02dM", (countdown.minutes * progress).roundToInt())
+    Column(modifier = modifier) {
+        TwoLineLcdStack(top = top, bottom = bottom, color = color, alignFraction = alignFraction)
+        if (showLabel) {
+            Text(
+                text = "fires in",
+                color = color,
+                style = FIRES_IN_STYLE,
+                modifier = Modifier.graphicsLayer { alpha = labelAlpha },
+            )
+        }
+    }
 }
 
 /** The live countdown, or a grayed "00H/00M" placeholder. A passed alarm reads as onset here — the
@@ -63,10 +85,24 @@ internal fun RemainingOrStatus(
     color: Color,
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
+    showLabel: Boolean = true,
+    labelAlpha: Float = 1f,
 ) {
     when (timing) {
-        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction)
-        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction)
+        is AlarmTiming.Upcoming -> CountdownStack(timing.remaining, progress, color, modifier, alignFraction, showLabel, labelAlpha)
+        AlarmTiming.None, AlarmTiming.Past -> CountdownStack(null, progress, color, modifier, alignFraction, showLabel, labelAlpha)
+    }
+}
+
+private val SUFFIX_WEIGHT = SpanStyle(fontWeight = FontWeight(170))
+
+private fun dualWeightCountdown(text: String) = buildAnnotatedString {
+    val splitIndex = text.indexOfFirst { !it.isDigit() }
+    if (splitIndex < 0) {
+        append(text)
+    } else {
+        append(text.substring(0, splitIndex))
+        withStyle(SUFFIX_WEIGHT) { append(text.substring(splitIndex)) }
     }
 }
 
@@ -80,14 +116,13 @@ private fun TwoLineLcdStack(
     modifier: Modifier = Modifier,
     alignFraction: Float = 0f,
 ) {
-    // Space Grotesk (legible, unlike Major Mono's art-deco H/M) — the shared compact-stack role.
     val smallLcd = CronTypography.lcdStack
     val align = alignFraction.coerceIn(0f, 1f)
     Layout(
         modifier = modifier,
         content = {
-            Text(text = top, color = color, style = smallLcd, maxLines = 1, softWrap = false)
-            Text(text = bottom, color = color, style = smallLcd, maxLines = 1, softWrap = false)
+            Text(text = dualWeightCountdown(top), color = color, style = smallLcd, maxLines = 1, softWrap = false)
+            Text(text = dualWeightCountdown(bottom), color = color, style = smallLcd, maxLines = 1, softWrap = false)
         },
     ) { measurables, constraints ->
         val (line0, line1) = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }

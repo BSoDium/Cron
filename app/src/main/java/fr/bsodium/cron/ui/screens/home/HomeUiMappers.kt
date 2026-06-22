@@ -86,17 +86,17 @@ internal fun Data.toAiTurnFailure(): AiTurnFailure = when (getString(AiTurnWorke
     else -> AiTurnFailure.Generic(getString(AiTurnWorker.KEY_REASON))
 }
 
-/** The card header reads the date the alarm fires (the session's morning), falling back to today
- *  when idle. Relative when near — "Today" / "Tomorrow" — else "EEEE d" (e.g. "Tuesday 2");
- *  locale-default for the human-language weekday name. */
-internal fun formatDateLabel(session: SessionDisplayState?): String {
+/** Sentence-style label for the alarm card; shows a disabled message when auto-plan is off. */
+internal fun formatDateLabel(session: SessionDisplayState?, autoAlarmsEnabled: Boolean = true): String {
+    if (!autoAlarmsEnabled && session != null) return "Your alarm is disabled"
     val today = JavaLocalDate.now()
     val date = session?.sessionDate?.toJavaLocalDate() ?: today
-    return when (ChronoUnit.DAYS.between(today, date)) {
+    val dayPart = when (ChronoUnit.DAYS.between(today, date)) {
         0L -> "Today"
         1L -> "Tomorrow"
-        else -> date.format(DateTimeFormatter.ofPattern("EEEE d", Locale.getDefault()))
+        else -> date.format(DateTimeFormatter.ofPattern("EEEE", Locale.getDefault()))
     }
+    return "$dayPart, you'll wake up at"
 }
 
 private fun formatDuration(d: Duration): String {

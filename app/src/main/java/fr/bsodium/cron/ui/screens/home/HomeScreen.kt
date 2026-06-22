@@ -68,7 +68,7 @@ import kotlinx.datetime.LocalTime
 
 private data class PlanDetailKey(val turnIndex: Int, val sessionId: String)
 
-private const val EMPTY_STATE_DATE_LABEL = "No alarm set"
+private const val EMPTY_STATE_DATE_LABEL = "No alarm is set"
 
 /** What the home body should show — kept coarse (not the thread content) so it only crossfades on a
  *  real state change, never on each streaming update. */
@@ -340,7 +340,7 @@ private fun HomeIdleContent(
             .fillMaxSize()
             // Horizontal inset is applied per-child so the card can hug wider than the rest.
             .padding(
-                top = statusInsetTop + Spacing.xxl,
+                top = statusInsetTop + Spacing.md,
                 bottom = navInsetBottom + Spacing.navBarClearance,
             ),
         // Tight gap from the greeting down to the card; the card→hint area is a weighted box below.

@@ -236,7 +236,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             sessionDisplay = display.session,
             greetingPrefix = greetingPrefix(),
             greetingName = display.displayName,
-            dateLabel = formatDateLabel(display.session),
+            dateLabel = formatDateLabel(display.session, status.autoAlarmsEnabled),
             sleepStats = display.sleepStats,
             aiPlan = plan,
             timeline = timeline,

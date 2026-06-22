@@ -5,6 +5,7 @@ package fr.bsodium.cron.ui.screens.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -97,7 +98,7 @@ internal fun HomePlanContent(
             contentPadding = PaddingValues(
                 start = Spacing.md,
                 end = Spacing.md,
-                top = statusInsetTop + Spacing.xxl,
+                top = statusInsetTop + Spacing.md,
                 bottom = navInsetBottom + Spacing.navBarClearance + Spacing.xxxl,
             ),
         ) {
@@ -108,7 +109,6 @@ internal fun HomePlanContent(
                     autoAlarmsEnabled = uiState.autoAlarmsEnabled,
                     onAutoAlarmsChange = onAutoAlarmsChange,
                     modifier = Modifier
-                        .padding(horizontal = Spacing.sm)
                         .padding(bottom = Spacing.md)
                         .onSizeChanged { greetingHeightPx = it.height },
                     hapticsEnabled = uiState.hapticsEnabled,

@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import android.content.res.Configuration
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.tween
@@ -38,11 +39,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.ui.components.PillBadge
@@ -84,11 +87,11 @@ internal fun AlarmShell(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val mod = modifier.fillMaxWidth()
+    val commonModifier = modifier.fillMaxWidth()
     if (onClick != null) {
         Surface(
             onClick = onClick,
-            modifier = mod,
+            modifier = commonModifier,
             color = MaterialTheme.colorScheme.primary,
             shape = shape,
             tonalElevation = 0.dp,
@@ -97,7 +100,7 @@ internal fun AlarmShell(
         )
     } else {
         Surface(
-            modifier = mod,
+            modifier = commonModifier,
             color = MaterialTheme.colorScheme.primary,
             shape = shape,
             tonalElevation = 0.dp,
@@ -132,12 +135,34 @@ internal fun AlarmCardContent(
             bottom = Spacing.lg,
         ),
     ) {
-        AlignedFirstGlyph(
-            text = dateLabel.ifBlank { "—" },
-            color = onCard,
-            style = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp),
-            modifier = Modifier.graphicsLayer { alpha = dateAlpha },
-        )
+        var initialRender by remember { mutableStateOf(true) }
+        LaunchedEffect(Unit) { initialRender = false }
+        val displayLabel = dateLabel.ifBlank { "—" }
+        if (initialRender) {
+            DateSentenceLabel(
+                text = displayLabel,
+                color = onCard.copy(alpha = 0.9f),
+                style = CronTypography.dateSentence,
+                modifier = Modifier
+                    .padding(bottom = Spacing.xs)
+                    .graphicsLayer { alpha = dateAlpha },
+            )
+        } else {
+            Crossfade(
+                targetState = displayLabel,
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                label = "date-label-crossfade",
+                modifier = Modifier
+                    .padding(bottom = Spacing.xs)
+                    .graphicsLayer { alpha = dateAlpha },
+            ) { label ->
+                DateSentenceLabel(
+                    text = label,
+                    color = onCard.copy(alpha = 0.9f),
+                    style = CronTypography.dateSentence,
+                )
+            }
+        }
         LcdTimeDisplay(alarmTime = alarmTime, timing = timing, base = onCard, timeRowAlpha = timeRowAlpha)
         if (sleepSegments.isNotEmpty()) {
             Spacer(Modifier.height(Spacing.xl))
@@ -355,6 +380,40 @@ private fun ColonSeparator(
         val gap = size.height * inkHeightFraction * 0.24f
         drawColonDot(color, centerY = cy - gap, boostPx = dotBoostPx)
         drawColonDot(color, centerY = cy + gap, boostPx = dotBoostPx)
+    }
+}
+
+/** Renders the date sentence with the day portion (before the comma) bold and bright,
+ *  the suffix thinner and dimmer. */
+@Composable
+internal fun DateSentenceLabel(
+    text: String,
+    color: Color,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    val commaIdx = text.indexOf(',')
+    if (commaIdx > 0) {
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(text.substring(0, commaIdx)) }
+                withStyle(SpanStyle(fontWeight = FontWeight.Light, color = color.copy(alpha = color.alpha * 0.7f))) {
+                    append(text.substring(commaIdx))
+                }
+            },
+            color = color,
+            style = style,
+            maxLines = 1,
+            modifier = modifier,
+        )
+    } else {
+        Text(
+            text = text,
+            color = color.copy(alpha = color.alpha * 0.7f),
+            style = style.copy(fontWeight = FontWeight.Light),
+            maxLines = 1,
+            modifier = modifier,
+        )
     }
 }
 

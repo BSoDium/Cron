@@ -1,14 +1,33 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
@@ -17,10 +36,14 @@ import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
-/**
- * On/off switch for automatic alarm planning, with an alarm icon in the thumb. Lives at the right end
- * of the home greeting row.
- */
+private val PillShape = RoundedCornerShape(
+    topStartPercent = 40,
+    bottomStartPercent = 40,
+    topEndPercent = 50,
+    bottomEndPercent = 50,
+)
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun AutoAlarmToggle(
     enabled: Boolean,
@@ -29,29 +52,88 @@ internal fun AutoAlarmToggle(
     hapticsEnabled: Boolean = true,
 ) {
     val haptics = rememberCronHaptics(enabled = hapticsEnabled)
-    // Opt out of the 48dp minimum-interactive reservation so the switch lays out at its natural ~32dp
-    // height and doesn't inflate the greeting row (which would push the alarm card down).
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-        Switch(
-            checked = enabled,
-            onCheckedChange = { v -> haptics.contextClick(); onChange(v) },
-            modifier = modifier,
-            thumbContent = {
-                Symbol(
-                    symbol = if (enabled) MaterialSymbol.Alarm else MaterialSymbol.AlarmOff,
-                    contentDescription = if (enabled) "Auto alarms on" else "Auto alarms off",
-                    size = SwitchDefaults.IconSize,
-                )
-            },
+    var initialRender by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { initialRender = false }
+    val targetColor = if (enabled) {
+        MaterialTheme.colorScheme.secondaryFixedDim
+    } else {
+        MaterialTheme.colorScheme.surfaceContainer
+    }
+    val containerColor by if (initialRender) {
+        remember(targetColor) { mutableStateOf(targetColor) }
+    } else {
+        animateColorAsState(
+            targetValue = targetColor,
+            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+            label = "auto-plan-pill-color",
         )
+    }
+    val density = LocalDensity.current
+    var boxHeightPx by remember { mutableIntStateOf(0) }
+    var rowHeightPx by remember { mutableIntStateOf(0) }
+    val minPadPx = with(density) { Spacing.sm.roundToPx() }
+    val endPad = with(density) {
+        ((boxHeightPx - rowHeightPx) / 2).coerceAtLeast(minPadPx).toDp()
+    }
+    Box(
+        modifier = modifier
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surfaceContainer,
+                        containerColor,
+                    ),
+                ),
+                shape = PillShape,
+            )
+            .clip(PillShape)
+            .onSizeChanged { boxHeightPx = it.height },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            modifier = Modifier
+                .onSizeChanged { rowHeightPx = it.height }
+                .padding(start = Spacing.md, end = endPad),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+                Text(
+                    text = "Auto-plan",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = if (enabled) "Enabled" else "Disabled",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { v -> haptics.contextClick(); onChange(v) },
+                    thumbContent = {
+                        Symbol(
+                            symbol = if (enabled) MaterialSymbol.Alarm else MaterialSymbol.AlarmOff,
+                            contentDescription = if (enabled) "Auto alarms on" else "Auto alarms off",
+                            size = SwitchDefaults.IconSize,
+                        )
+                    },
+                )
+            }
+        }
     }
 }
 
-@Preview(showBackground = true, name = "Auto alarms — on / off")
+@Preview(showBackground = true, name = "Auto-plan pill — on / off")
 @Composable
 private fun AutoAlarmTogglePreview() {
     CronTheme {
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xl), modifier = Modifier.padding(Spacing.lg)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xl),
+            modifier = Modifier.padding(Spacing.lg),
+        ) {
             AutoAlarmToggle(enabled = true, onChange = {})
             AutoAlarmToggle(enabled = false, onChange = {})
         }

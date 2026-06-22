@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -13,11 +14,11 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
+import fr.bsodium.cron.ui.theme.CountdownFontFamily
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
@@ -65,7 +66,8 @@ internal fun CollapsibleAlarmCard(
     // deterministic copy, never drawn).
     val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
-    val dateStyle = CronTypography.dateLabel.copy(fontSize = 28.sp, lineHeight = 28.sp)
+    val countdownInkTopPx = rememberInkTopPx(CountdownFontFamily, CronTypography.lcdStack.fontSize)
+    val dateStyle = CronTypography.dateSentence
 
     AlarmShell(
         modifier = modifier,
@@ -88,7 +90,7 @@ internal fun CollapsibleAlarmCard(
             onFullHeight(extras.height)
             // Date mover — the same AlignedFirstGlyph as extras, placed so it can slide up out the top.
             val date = subcompose("date") {
-                AlignedFirstGlyph(dateLabel.ifBlank { "—" }, color = onCard, style = dateStyle)
+                DateSentenceLabel(text = dateLabel.ifBlank { "—" }, color = onCard.copy(alpha = 0.9f), style = dateStyle)
             }.first().measure(cWrap)
             // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
             val barHeight = ALARM_BAR_HEIGHT.roundToPx()
@@ -109,8 +111,14 @@ internal fun CollapsibleAlarmCard(
             }.first().measure(cWrap)
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
             // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
+            // showLabel=false: the "fires in" label is subcomposed separately so it doesn't inflate
+            // the countdown height and break pill centering.
             val countdown = subcompose("countdown") {
-                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f)
+                RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, showLabel = false)
+            }.first().measure(cWrap)
+            val firesInAlpha = (1f - f * 3f).coerceIn(0f, 1f)
+            val firesIn = subcompose("fires-in") {
+                Text(text = "fires in", color = countdownColor, style = FIRES_IN_STYLE)
             }.first().measure(cWrap)
 
             val w = extras.width
@@ -126,7 +134,8 @@ internal fun CollapsibleAlarmCard(
 
             // Countdown mover: expanded slot (right of the clock, matching the LcdTimeDisplay row) → pill-right, centred.
             val expandedCdX = startPad + clock.width + cdGap
-            val expandedCdY = expandedClockY + cdGap
+            val inkTopPx = inkCenterPx - inkHeightPx / 2
+            val expandedCdY = expandedClockY + (inkTopPx - countdownInkTopPx).toInt()
             val collapsedCdX = w - endPad - countdown.width
             val collapsedCdY = (barHeight - countdown.height) / 2f
 
@@ -153,6 +162,11 @@ internal fun CollapsibleAlarmCard(
                     x = lerp(expandedCdX.toFloat(), collapsedCdX.toFloat(), f).roundToInt(),
                     y = lerp(expandedCdY.toFloat(), collapsedCdY, f).roundToInt(),
                 )
+                if (firesInAlpha > 0f) {
+                    firesIn.placeWithLayer(expandedCdX, expandedCdY + countdown.height - Spacing.xxs.roundToPx()) {
+                        alpha = firesInAlpha
+                    }
+                }
             }
         }
     }
