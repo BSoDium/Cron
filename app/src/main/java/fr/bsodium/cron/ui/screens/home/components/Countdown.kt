@@ -23,7 +23,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
-import fr.bsodium.cron.ui.theme.ExpressiveWideFontFamily
+import fr.bsodium.cron.ui.theme.ExpressiveCondensedFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
 import kotlinx.coroutines.delay
@@ -43,7 +43,7 @@ import kotlin.time.Duration
 internal data class HoursMinutes(val hours: Long, val minutes: Long)
 
 internal val FIRES_IN_STYLE = TightTextStyle.copy(
-    fontFamily = ExpressiveWideFontFamily,
+    fontFamily = ExpressiveCondensedFontFamily,
     fontWeight = FontWeight.Medium,
     fontSize = 13.sp,
     lineHeight = 13.sp,
@@ -67,7 +67,7 @@ internal fun CountdownStack(
         TwoLineLcdStack(top = top, bottom = bottom, color = color, alignFraction = alignFraction)
         if (showLabel) {
             Text(
-                text = "fires in",
+                text = "remaining",
                 color = color,
                 style = FIRES_IN_STYLE,
                 modifier = Modifier.graphicsLayer { alpha = labelAlpha },

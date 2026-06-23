@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -30,6 +32,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -131,11 +134,12 @@ internal fun AutoAlarmToggle(
 private fun AutoAlarmTogglePreview() {
     CronTheme {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xl),
-            modifier = Modifier.padding(Spacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.height(50.dp),
         ) {
-            AutoAlarmToggle(enabled = true, onChange = {})
-            AutoAlarmToggle(enabled = false, onChange = {})
+            AutoAlarmToggle(enabled = true, onChange = {}, modifier = Modifier.fillMaxHeight())
+            AutoAlarmToggle(enabled = false, onChange = {}, modifier = Modifier.fillMaxHeight())
         }
     }
 }
