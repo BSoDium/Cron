@@ -72,3 +72,6 @@ spring is *structurally* wrong for the job, not as a tuning preference. Anything
   adding a destination.
 - **Content-reveal choreography** (`NextAlarmCard.kt` LCD digit reveal): the reveal drives a 0→1
   progress that gates digit rolling; a spring's overshoot would push progress past 1 and re-roll digits.
+- **Continuous shader clock** (`AiPulse.kt` time uniform): a `rememberInfiniteTransition` driving a
+  monotonic time float into an AGSL shader. There is no state transition to map to spatial/effects
+  specs — the animation is a GPU-side continuous function of time.
