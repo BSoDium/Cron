@@ -34,6 +34,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
@@ -57,10 +58,13 @@ internal fun AutoAlarmToggle(
     val haptics = rememberCronHaptics(enabled = hapticsEnabled)
     var initialRender by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) { initialRender = false }
+    // The plain/left end tracks the page background (light=surfaceContainer, dark=surface) so the
+    // resting pill blends into the page in both themes; the active end stays a distinct shade above it.
+    val pageBackground = CronColors.pageBackground
     val targetColor = if (enabled) {
-        MaterialTheme.colorScheme.secondaryFixedDim
+        MaterialTheme.colorScheme.surfaceContainerHighest
     } else {
-        MaterialTheme.colorScheme.surfaceContainer
+        pageBackground
     }
     val containerColor by if (initialRender) {
         remember(targetColor) { mutableStateOf(targetColor) }
@@ -83,7 +87,7 @@ internal fun AutoAlarmToggle(
             .background(
                 brush = Brush.horizontalGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.surfaceContainer,
+                        pageBackground,
                         containerColor,
                     ),
                 ),
