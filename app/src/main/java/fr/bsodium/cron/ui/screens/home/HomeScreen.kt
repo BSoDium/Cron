@@ -228,10 +228,8 @@ private fun HomeRootContent(
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
         val homePhase = when {
             !uiState.initialized -> HomePhase.Loading
-            lastPlan != null && uiState.isRetrying -> HomePhase.Plan
-            // Spent alarm (passed/dismissed): rest on the onset card + next-plan line, not the stale thread.
-            resting -> HomePhase.Idle
             displayPlan != null -> HomePhase.Plan
+            lastPlan != null && uiState.isRetrying -> HomePhase.Plan
             else -> HomePhase.Idle
         }
         Crossfade(
