@@ -98,6 +98,7 @@ class ScreenStateMonitor(
 
     private fun onScreenOff() {
         screenOffSince = Clock.System.now()
+        Log.d(TAG, "Screen off — onset check scheduled (threshold=$sleepOnsetThreshold)")
         scheduleOnsetCheck()
     }
 

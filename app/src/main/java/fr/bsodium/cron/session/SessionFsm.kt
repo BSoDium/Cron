@@ -80,6 +80,9 @@ class SessionFsm(
         }
 
         if (shouldTriggerAi(event.trigger, nextStatus, session.lastAiCallAt)) {
+            // Stamp the trigger time before enqueueing so the cooldown is effective immediately —
+            // a burst of noisy events otherwise each slip through before the worker's tool sets it.
+            repository.markAiTriggered(session.id)
             repository.triggerAiTurn(session.id)
         }
 
