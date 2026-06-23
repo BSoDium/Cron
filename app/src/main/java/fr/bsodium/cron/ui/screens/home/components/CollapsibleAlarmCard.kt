@@ -111,14 +111,14 @@ internal fun CollapsibleAlarmCard(
             }.first().measure(cWrap)
             // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
             // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
-            // showLabel=false: the "fires in" label is subcomposed separately so it doesn't inflate
+            // showLabel=false: the "remaining" label is subcomposed separately so it doesn't inflate
             // the countdown height and break pill centering.
             val countdown = subcompose("countdown") {
                 RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, showLabel = false)
             }.first().measure(cWrap)
             val firesInAlpha = (1f - f * 3f).coerceIn(0f, 1f)
             val firesIn = subcompose("fires-in") {
-                Text(text = "fires in", color = countdownColor, style = FIRES_IN_STYLE)
+                Text(text = "remaining", color = countdownColor, style = FIRES_IN_STYLE)
             }.first().measure(cWrap)
 
             val w = extras.width
