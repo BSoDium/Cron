@@ -38,6 +38,7 @@ class ScreenStateMonitor(
     private val sink: SensorEventSink,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob()),
     private val sleepOnsetThreshold: Duration = 20.minutes,
+    private val rearmThreshold: Duration = REARM_ONSET_THRESHOLD,
     private val lightReader: AmbientLightReader = AmbientLightReader(context),
 ) {
 
@@ -88,7 +89,7 @@ class ScreenStateMonitor(
      * the user has already proven they can fall asleep tonight, and we want to catch a second sleep
      * onset quickly so the AI can re-arm the alarm without losing too much window.
      */
-    fun rearm(threshold: Duration = REARM_ONSET_THRESHOLD) {
+    fun rearm(threshold: Duration = rearmThreshold) {
         sleepOnsetEmitted = false
         isRearm = true
         screenOffSince = if (!powerManager.isInteractive) Clock.System.now() else null
