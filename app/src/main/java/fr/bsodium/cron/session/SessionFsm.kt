@@ -44,6 +44,14 @@ class SessionFsm(
      * session exists and the event cannot bootstrap one.
      */
     suspend fun onEvent(event: SessionEvent): String? = withContext(Dispatchers.IO) {
+        // Auto-plan off = full stand-down: drop every automatic event. A manual run (the "run one
+        // yourself" CTA) carries isManual and is exempt, so it still works with the toggle off.
+        if (!SettingsRepository(context).autoAlarmsEnabledNow() &&
+            (event.data as? EventData.EveningPlan)?.isManual != true
+        ) {
+            Log.d(TAG, "Auto-plan disabled — ignoring ${event.trigger}")
+            return@withContext null
+        }
         var current = repository.findCurrent()
         // A fresh evening plan for a new morning supersedes any session left unfinished from a prior day.
         if (event.trigger == TriggerType.EveningPlan && current != null && supersedeIfStale(current, event)) {

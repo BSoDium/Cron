@@ -16,6 +16,7 @@ import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.toModel
+import fr.bsodium.cron.service.SleepSessionService
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.EventData
@@ -308,6 +309,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } else {
                 eveningPlanScheduler.cancel()
+                // Stop the monitor so sensors stop emitting — the FSM also drops automatic events, but
+                // tearing down the FGS is the actual stand-down the user asked for.
+                getApplication<Application>().startService(SleepSessionService.stopIntent(getApplication()))
                 repository.findCurrent()?.let { session ->
                     alarmScheduler.cancel(session.date)
                     hardLatestScheduler.clear(session.date)

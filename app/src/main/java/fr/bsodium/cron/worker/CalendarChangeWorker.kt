@@ -27,6 +27,10 @@ class CalendarChangeWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
+        if (!SettingsRepository(applicationContext).autoAlarmsEnabledNow()) {
+            Log.d(TAG, "Auto-plan disabled — skipping calendar change check")
+            return Result.success()
+        }
         val repository = SessionRepository(applicationContext)
         val session = repository.findCurrent() ?: run {
             Log.d(TAG, "No active session — skipping calendar change check")
