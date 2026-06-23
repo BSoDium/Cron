@@ -4,38 +4,41 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.BatteryManager
 import android.os.PowerManager
 import android.util.Log
-import fr.bsodium.cron.session.model.ActivityType
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * Listens to ACTION_SCREEN_OFF / SCREEN_ON / USER_PRESENT broadcasts and
- * synthesizes two derived events:
+ * Listens to ACTION_SCREEN_OFF / SCREEN_ON / USER_PRESENT broadcasts and synthesizes:
  *
- *  - [TriggerType.SleepOnset] when the screen has been off continuously
- *    for [sleepOnsetThreshold].
- *  - [TriggerType.MidSleepActivity] when the screen turns on mid-session
- *    (during MONITORING_SLEEP).
+ *  - [TriggerType.SleepOnset] when the screen has been off long enough **and** the room is dark
+ *    (Google Clock's "motionless in a dark room"). Uncharged devices need a longer sustained window,
+ *    since a phone set down somewhere is more likely than one charging at a bedside. Conditions are
+ *    re-checked while the screen stays off, so onset still fires once the lights go out.
+ *  - [TriggerType.OutOfBedConfirmed] on a genuine unlock mid-session — the strongest "awake" signal
+ *    we have, so a pickup wakes the session instead of firing a plan on every handle.
  *
- * Receivers MUST be registered dynamically — static registration of
- * ACTION_SCREEN_ON / OFF has been blocked since Android 8.
+ * Receivers MUST be registered dynamically — static registration of ACTION_SCREEN_ON / OFF has been
+ * blocked since Android 8.
  */
 class ScreenStateMonitor(
     private val context: Context,
     private val sink: SensorEventSink,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob()),
-    private val sleepOnsetThreshold: kotlin.time.Duration = 20.minutes,
+    private val sleepOnsetThreshold: Duration = 20.minutes,
+    private val lightReader: AmbientLightReader = AmbientLightReader(context),
 ) {
 
     private var screenOffSince: Instant? = null
@@ -43,20 +46,21 @@ class ScreenStateMonitor(
     private var pendingOnset: Job? = null
     /** True after [rearm] has been called; consumed by the next SleepOnset emission. */
     private var isRearm: Boolean = false
-    private var currentOnsetThreshold: kotlin.time.Duration = sleepOnsetThreshold
     private val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    private val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> onScreenOff()
                 Intent.ACTION_SCREEN_ON -> onScreenOn()
-                Intent.ACTION_USER_PRESENT -> Unit // unlock; treat like SCREEN_ON
+                Intent.ACTION_USER_PRESENT -> onUserPresent()
             }
         }
     }
 
     fun start() {
+        lightReader.start()
         // Seed from the current state — service might start with the screen already off.
         if (!powerManager.isInteractive) {
             screenOffSince = Clock.System.now()
@@ -74,20 +78,19 @@ class ScreenStateMonitor(
     fun stop() {
         runCatching { context.unregisterReceiver(receiver) }
             .onFailure { Log.w(TAG, "unregisterReceiver failed", it) }
+        lightReader.stop()
         pendingOnset?.cancel()
         Log.i(TAG, "ScreenStateMonitor stopped")
     }
 
     /**
-     * Resets sleep-onset latch after the FSM moves to AWAKE. Uses a shorter
-     * threshold by default since the user has already proven they can fall
-     * asleep tonight, and we want to catch a second sleep onset quickly so
-     * the AI can re-arm the alarm without losing too much window.
+     * Resets sleep-onset latch after the FSM moves to AWAKE. Uses a shorter threshold by default since
+     * the user has already proven they can fall asleep tonight, and we want to catch a second sleep
+     * onset quickly so the AI can re-arm the alarm without losing too much window.
      */
-    fun rearm(threshold: kotlin.time.Duration = REARM_ONSET_THRESHOLD) {
+    fun rearm(threshold: Duration = REARM_ONSET_THRESHOLD) {
         sleepOnsetEmitted = false
         isRearm = true
-        currentOnsetThreshold = threshold
         screenOffSince = if (!powerManager.isInteractive) Clock.System.now() else null
         scheduleOnsetCheck(threshold)
     }
@@ -102,55 +105,83 @@ class ScreenStateMonitor(
         val offDuration = Clock.System.now() - offSince
         screenOffSince = null
         pendingOnset?.cancel()
-
-        if (sleepOnsetEmitted) {
-            // Already-sleeping → screen on means activity. Emit MidSleepActivity.
-            scope.launch {
-                sink.emit(
-                    SessionEvent(
-                        trigger = TriggerType.MidSleepActivity,
-                        timestamp = Clock.System.now(),
-                        data = EventData.MidSleepActivity(
-                            activityType = ActivityType.Still,
-                            screenOn = true,
-                            durationSeconds = 0, // populated when screen turns off again
-                        ),
-                    )
-                )
-            }
-        }
         Log.d(TAG, "Screen on after ${offDuration.inWholeSeconds}s off")
     }
 
-    private fun scheduleOnsetCheck(threshold: kotlin.time.Duration = sleepOnsetThreshold) {
+    /**
+     * A genuine unlock is our strongest "awake" signal — the user is handling the phone, not stirring
+     * in their sleep. If we'd latched sleep, treat it as getting out of bed (one event → FSM Awake →
+     * [rearm]) rather than firing a plan on every pickup.
+     */
+    private fun onUserPresent() {
+        screenOffSince = null
+        pendingOnset?.cancel()
+        if (!sleepOnsetEmitted) return
+        sleepOnsetEmitted = false
+        scope.launch {
+            sink.emit(
+                SessionEvent(
+                    trigger = TriggerType.OutOfBedConfirmed,
+                    timestamp = Clock.System.now(),
+                    data = EventData.OutOfBedConfirmed(evidence = listOf("device_unlocked")),
+                )
+            )
+        }
+        Log.i(TAG, "User present while asleep — out of bed")
+    }
+
+    private fun scheduleOnsetCheck(threshold: Duration = sleepOnsetThreshold) {
         pendingOnset?.cancel()
         pendingOnset = scope.launch {
             kotlinx.coroutines.delay(threshold)
-            val since = screenOffSince ?: return@launch
-            if (sleepOnsetEmitted) return@launch
-            val onsetThresholdMet = (Clock.System.now() - since) >= threshold
-            if (onsetThresholdMet) {
-                sleepOnsetEmitted = true
-                val wasRearm = isRearm
-                isRearm = false
-                sink.emit(
-                    SessionEvent(
-                        trigger = TriggerType.SleepOnset,
-                        timestamp = Clock.System.now(),
-                        data = EventData.SleepOnset(
-                            screenOffSince = since,
-                            rearm = wasRearm,
-                        ),
-                    )
-                )
-                Log.i(TAG, "Sleep onset emitted at ${Clock.System.now()} (rearm=$wasRearm)")
+            while (isActive) {
+                val since = screenOffSince ?: return@launch
+                if (sleepOnsetEmitted) return@launch
+                val screenOff = Clock.System.now() - since
+                if (shouldEmitOnset(screenOff, threshold, lightReader.isDark(), batteryManager.isCharging)) {
+                    emitOnset(since)
+                    return@launch
+                }
+                kotlinx.coroutines.delay(ONSET_RECHECK_INTERVAL)
             }
         }
+    }
+
+    private suspend fun emitOnset(since: Instant) {
+        sleepOnsetEmitted = true
+        val wasRearm = isRearm
+        isRearm = false
+        sink.emit(
+            SessionEvent(
+                trigger = TriggerType.SleepOnset,
+                timestamp = Clock.System.now(),
+                data = EventData.SleepOnset(screenOffSince = since, rearm = wasRearm),
+            )
+        )
+        Log.i(TAG, "Sleep onset emitted at ${Clock.System.now()} (rearm=$wasRearm)")
     }
 
     companion object {
         private const val TAG = "ScreenStateMonitor"
         /** Shorter threshold for re-arm; user has already proven they sleep tonight. */
         private val REARM_ONSET_THRESHOLD = 15.minutes
+        /** How often to re-test the dark/charging gate while the screen stays off. */
+        private val ONSET_RECHECK_INTERVAL = 5.minutes
+
+        /**
+         * Pure onset decision — unit-testable. Sleep onset requires a dark room; an uncharged device
+         * (more likely just set down than in bed) must stay dark + idle for twice as long. Conservative
+         * by design: missing an onset only delays an auto-replan, a false one risks a wrong wake + cost.
+         */
+        internal fun shouldEmitOnset(
+            screenOff: Duration,
+            baseThreshold: Duration,
+            isDark: Boolean,
+            isCharging: Boolean,
+        ): Boolean {
+            if (!isDark) return false
+            val required = if (isCharging) baseThreshold else baseThreshold * 2
+            return screenOff >= required
+        }
     }
 }

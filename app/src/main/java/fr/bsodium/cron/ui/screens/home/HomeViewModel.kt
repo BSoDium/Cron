@@ -281,31 +281,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             settings.setAutoAlarmsEnabled(enabled)
             if (enabled) {
                 eveningPlanScheduler.armNext()
-                // Re-arm what the current session already decided — toggling ON must make Android aware
-                // of the alarm again (symmetry with the OFF teardown below). Each target is gated on still
-                // being AHEAD: re-enabling after the wake window must not ring instantly (a past
-                // setAlarmClock fires at once, and the AI alarm would clamp to now + a minute).
-                repository.findCurrent()?.let { session ->
-                    val tz = TimeZone.of(session.timezone)
-                    val now = Clock.System.now()
-                    if (session.date.atTime(session.plan.hardLatest).toInstant(tz) > now) {
-                        hardLatestScheduler.arm(session.plan.hardLatest, session.date, tz, session.id)
-                    }
-                    val instr = session.currentInstruction
-                    val alarmTime = instr.alarmTime
-                    if (instr.action == ActionType.SetAlarm && alarmTime != null) {
-                        val requested = session.date.atTime(alarmTime).toInstant(tz)
-                        if (requested > now) {
-                            alarmScheduler.schedule(
-                                requested = requested,
-                                hardLatest = session.plan.hardLatest,
-                                sessionDate = session.date,
-                                timezone = tz,
-                                label = instr.reason.ifBlank { "Cron Alarm" },
-                                sessionId = session.id,
-                            )
-                        }
-                    }
+                repository.findCurrent()?.let {
+                    rearmSessionAlarms(it, alarmScheduler, hardLatestScheduler)
                 }
             } else {
                 eveningPlanScheduler.cancel()
