@@ -1,6 +1,6 @@
 # Agent guidance for the Cron repo
 
-These rules exist because LLM passes have repeatedly violated them. Follow them on every diff in this repo.
+These rules exist because LLM passes have repeatedly violated them. Follow them on every diff in this repo. Sections below link to deep-dive guides under `docs/` — **read the linked doc before working in that area.**
 
 ## Visual design
 
@@ -26,76 +26,18 @@ This app targets **Material 3 Expressive**, not static M3. **Read `docs/expressi
 
 ## Compose specifics
 
-- When reading `LocalFontFamilyResolver.current.resolve(...).value`, cast with `as? Typeface`, never `as Typeface`. The resolver returns `State<Any>`; resolution can fail and the platform contract isn't pinned to Typeface.
-- Don't capture the typeface inside a bare `remember(...)` if the font family contains downloadable fallbacks — measurement will use the fallback and never update. List bundled `Font(R.font.*)` first so resolution is synchronous, or observe via `produceState` keyed on the resolved typeface.
-- `DisposableEffect(...)` keys should be the things whose change *requires* tearing down and re-registering — not every state value the effect happens to read. If a value only needs to update an existing registration, use a `LaunchedEffect` or `SideEffect`. (See `HomeScreen.kt`'s split between `DisposableEffect(viewModel, fabRegistry)` for register/clear and `LaunchedEffect(isRetrying, ...)` for spinner updates.)
-- Hoist pure heavyweight objects to `private val` constants at file top — `AnimationSpec` (see `NAV_COLOR_SPEC` in `CronBottomBar.kt`) **and** `Regex` literals (see the `MD_*` patterns in `AiThinkingThread.kt`). A `Regex(...)` built inside a function that runs during composition recompiles on every call. Conversely, never wrap a `@Composable` factory (`markdownColor`, `markdownTypography`, `markdownComponents`, any `rememberX`) in `remember { }` — they must be invoked in composition; memoize the plain values they feed instead (e.g. `remember(source) { parseGfmTable(source) }`).
-- `Modifier.padding(...)` overloads don't mix: `start/top/end/bottom` and `horizontal/vertical` are separate overloads, so `padding(start = …, vertical = …)` does not compile. Pick one set. (This broke a build.)
-- Inner clickable rows must hit a minimum 48dp touch target. Don't ship a 44dp pill because it "looks right" — bump the inner box; the visual radius will absorb it.
-- Apply `Modifier.clip(shape)` **before** `.clickable(...)` so the ripple respects the shape. Putting `clickable` first gives you a square highlight on a rounded surface.
-- **Edge-to-edge tap targets in a padded column**: when a screen column has horizontal padding (e.g. `Spacing.xl`) and a child row must show a full-width ripple, use `.bleedHorizontally(Spacing.xl)` (from `BleedHorizontally.kt`) *before* `.clickable` and `.padding(horizontal = Spacing.xl)` *after*. The column padding stays for non-interactive siblings; only the tappable row bleeds. Without this, the ripple stops at the inset edge and looks cramped. See `CheckboxRow` in `SettingsDetailScaffold` for the canonical example.
-- **Don't put screen description text in `LargeFlexibleTopAppBar`'s `subtitle` slot.** The bar renders `smallSubtitle` in the collapsed bar too (see M3 source: `smallSubtitle = subtitle ?: {}`), so long text crowds the collapsed state and clips the title. The canonical Android pattern (used by Android Settings) is: functional description text is the first item in the scrolling content column, where it naturally scrolls away. In this project that means the `subtitle: String?` parameter on `SettingsDetailScaffold`. The `LargeFlexibleTopAppBar` subtitle slot is reserved for very short complementary labels that should remain visible at all scroll positions — not used in this project.
-- Provide a `@Preview` for any non-trivial or reusable composable — **mandatory for important components** (cards, the nav/FAB, the thinking thread, each screen's key pieces). Keep the preview `private`, wrap it in `CronTheme`, and feed representative sample data so it renders without a device. A component you can't preview without real DB/network data is a sign its rendering should be split from its data-loading.
+**Read `docs/compose-gotchas.md` before writing or modifying composables** — it covers font resolution, effect keys, padding overloads, touch targets, and the `LargeFlexibleTopAppBar` subtitle trap. Key reminders:
+
+- `Modifier.clip(shape)` **before** `.clickable(...)` so the ripple respects the shape.
+- `Modifier.padding(...)` overloads don't mix: `start/end` and `horizontal/vertical` are separate. Pick one set.
+- Provide a `@Preview` for any non-trivial composable — **mandatory for important components**.
 
 ## Animation previews & inspectability
 
-The primary workflow for testing motion is Android Studio's **Animation Inspector**. Every animated component must be previewable and scrubbable without deploying. CI enforces this via `./gradlew :app:checkAnimationPreviews`.
+**Read `docs/animation-previews.md` before adding or modifying any animation.** CI enforces via `./gradlew :app:checkAnimationPreviews`.
 
-### Label every animation
-
-Every call to `animate*AsState`, `updateTransition`, `AnimatedVisibility`, `AnimatedContent`, `Crossfade`, and `rememberInfiniteTransition` **must** include a `label` parameter — short kebab-case, scoped to the component, describes the semantic purpose:
-
-```kotlin
-val scale by animateFloatAsState(
-    targetValue = if (pressed) 0.92f else 1f,
-    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-    label = "card-press-scale",
-)
-```
-
-Without labels the Inspector shows "Float 1", "Float 2" — useless. When touching a file with unlabeled calls, add labels before finishing.
-
-### What requires an animation preview
-
-A `@Preview` is mandatory for any composable that directly uses animation APIs (`animate*AsState`, `AnimatedVisibility`, `AnimatedContent`, `updateTransition`, `Crossfade`, `rememberInfiniteTransition`, `Animatable`). Suppress with `@Suppress("AnimationPreviewNotRequired")` for animations that only run inside a parent's preview.
-
-Do NOT preview: pure layout containers, static wrappers, composables whose only motion is inherited from a parent's enter/exit.
-
-### Preview design for the Inspector
-
-**Interactive previews (preferred).** Internal `remember { mutableStateOf(...) }` toggled by `Modifier.clickable` — the Inspector captures the live transition:
-
-```kotlin
-@Preview(name = "ExpandableCard — interactive")
-@Composable
-private fun ExpandableCardPreview() {
-    CronTheme {
-        var expanded by remember { mutableStateOf(false) }
-        ExpandableCard(
-            expanded = expanded,
-            modifier = Modifier.clickable { expanded = !expanded },
-        )
-    }
-}
-```
-
-For >2 states or gesture-driven animations, add multi-variant static previews instead.
-
-**Infinite animations** are self-driving — one preview, the Inspector picks them up.
-
-### State hoisting for inspectability
-
-Hoist the triggering state as a parameter. Never wire a ViewModel or repository into a Preview — use `private val PREVIEW_*` constants or `private fun preview*(...)` factories.
-
-### Preview file organization
-
-Co-locate at file bottom by default. Split to a sibling `*Previews.kt` when mock data setup exceeds ~20 lines.
-
-### Naming
-
-- Preview functions: `private`, `*Preview` suffix, variant after `—`: `"Card — expanded"`.
-- Labels: kebab-case, semantic: `"reasoning-reveal"`, `"nav-container"`, `"skeleton-pulse"`.
-- Mock data: `private val PREVIEW_<THING>` or `private fun preview<Thing>(...)`.
+- Every `animate*AsState`, `AnimatedVisibility`, `AnimatedContent`, `updateTransition`, `Crossfade`, `rememberInfiniteTransition` call **must** have a `label` parameter (short kebab-case, semantic).
+- Every file using animation APIs must ship a `@Preview` (or `@Suppress("AnimationPreviewNotRequired")`).
 
 ## Coroutines & lifecycle
 
