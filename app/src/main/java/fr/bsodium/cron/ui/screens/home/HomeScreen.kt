@@ -360,8 +360,6 @@ private fun HomeIdleContent(
                 dateLabel = EMPTY_STATE_DATE_LABEL,
                 alarmTime = null,
                 sessionDate = null,
-                sleepDurationLabel = null,
-                sleepSegments = emptyList(),
             )
         }
         // Bias the hint toward the upper third so it sits near eye height rather than dead-centre.

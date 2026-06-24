@@ -15,7 +15,6 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
-import fr.bsodium.cron.session.model.SleepSegment
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.CountdownFontFamily
@@ -49,8 +48,6 @@ internal fun CollapsibleAlarmCard(
     dateLabel: String,
     alarmTime: LocalTime?,
     sessionDate: LocalDate?,
-    sleepDurationLabel: String?,
-    sleepSegments: List<SleepSegment>,
     collapseFraction: () -> Float,
     onFullHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -85,7 +82,7 @@ internal fun CollapsibleAlarmCard(
             // Full expanded layout with its time row and date hidden (still measured) → single source of
             // geometry; those are drawn as moving copies on top. The badge isn't in the expanded card.
             val extras = subcompose("extras") {
-                AlarmCardContent(dateLabel, alarmTime, timing, sleepDurationLabel, sleepSegments, timeRowAlpha = 0f, dateAlpha = 0f)
+                AlarmCardContent(dateLabel, alarmTime, timing, timeRowAlpha = 0f, dateAlpha = 0f)
             }.first().measure(cFill)
             onFullHeight(extras.height)
             // Date mover — the same AlignedFirstGlyph as extras, placed so it can slide up out the top.
@@ -105,7 +102,7 @@ internal fun CollapsibleAlarmCard(
             val clockScale = lerp(1f, collapsedScale, f)
             // Fake weight grows in proportion to the size DECREASE. Dividing the local stroke by the
             // glyph scale cancels the dilution from shrinking, so the RENDERED stroke tracks f directly.
-            val strokePx = if (upcoming) MAX_CLOCK_STROKE.toPx() * f / clockScale else 0f
+            val strokePx = MAX_CLOCK_STROKE.toPx() * f / clockScale
             val clock = subcompose("clock") {
                 LcdClock(alarmTime, reveal, digitColor, strokeWidthPx = strokePx)
             }.first().measure(cWrap)
@@ -182,8 +179,6 @@ private fun CollapsedAlarmCardPreview() {
                 dateLabel = "Saturday 6",
                 alarmTime = LocalTime(10, 0),
                 sessionDate = null,
-                sleepDurationLabel = "7H 28M",
-                sleepSegments = PREVIEW_SLEEP_SEGMENTS,
                 collapseFraction = { 1f },
                 onFullHeight = {},
             )
@@ -205,8 +200,6 @@ private fun CollapsibleAlarmCardPreview() {
                     dateLabel = "Saturday 6",
                     alarmTime = LocalTime(10, 0),
                     sessionDate = null,
-                    sleepDurationLabel = "7H 28M",
-                    sleepSegments = PREVIEW_SLEEP_SEGMENTS,
                     collapseFraction = { frac },
                     onFullHeight = {},
                 )

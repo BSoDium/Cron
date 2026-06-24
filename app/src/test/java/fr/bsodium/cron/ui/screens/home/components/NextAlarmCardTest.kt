@@ -3,9 +3,6 @@ package fr.bsodium.cron.ui.screens.home.components
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import fr.bsodium.cron.session.model.SleepSegment
-import fr.bsodium.cron.session.model.SleepStage
-import fr.bsodium.cron.testutil.Fixtures
 import fr.bsodium.cron.ui.theme.CronTheme
 import kotlinx.datetime.LocalTime
 import org.junit.Rule
@@ -23,8 +20,7 @@ class NextAlarmCardTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun renders_date_and_sleep_section_when_alarm_set() {
-        // The LCD countdown polls Clock.System.now() forever; freeze the clock so the test reaches idle.
+    fun renders_date_when_alarm_set() {
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent {
             CronTheme {
@@ -32,21 +28,15 @@ class NextAlarmCardTest {
                     dateLabel = "Friday 22",
                     alarmTime = LocalTime(6, 40),
                     sessionDate = null,
-                    sleepDurationLabel = "7h 30m",
-                    sleepSegments = listOf(
-                        SleepSegment(SleepStage.Deep, Fixtures.at("2026-05-22T01:00:00Z"), Fixtures.at("2026-05-22T05:00:00Z")),
-                    ),
                 )
             }
         }
 
         composeTestRule.onNodeWithText("Friday 22").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Sleep").assertIsDisplayed()
-        composeTestRule.onNodeWithText("7h 30m").assertIsDisplayed()
     }
 
     @Test
-    fun omits_sleep_section_when_no_segments() {
+    fun renders_date_when_no_alarm() {
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent {
             CronTheme {
@@ -54,13 +44,10 @@ class NextAlarmCardTest {
                     dateLabel = "Friday 22",
                     alarmTime = null,
                     sessionDate = null,
-                    sleepDurationLabel = null,
-                    sleepSegments = emptyList(),
                 )
             }
         }
 
         composeTestRule.onNodeWithText("Friday 22").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Sleep").assertDoesNotExist()
     }
 }

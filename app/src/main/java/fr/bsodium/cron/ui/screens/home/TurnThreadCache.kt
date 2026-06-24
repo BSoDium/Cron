@@ -10,7 +10,6 @@ import fr.bsodium.cron.session.db.AiMessageEntity
  */
 internal data class HomeDisplay(
     val session: SessionDisplayState?,
-    val sleepStats: SleepStatsUi?,
     val displayName: String?,
 )
 

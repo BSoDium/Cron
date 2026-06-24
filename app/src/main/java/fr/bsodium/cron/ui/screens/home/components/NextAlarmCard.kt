@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import android.content.res.Configuration
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
@@ -34,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -46,14 +46,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.session.model.SleepSegment
-import fr.bsodium.cron.session.model.SleepStage
-import fr.bsodium.cron.ui.components.PillBadge
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import java.util.Locale
@@ -65,13 +61,11 @@ fun NextAlarmCard(
     dateLabel: String,
     alarmTime: LocalTime?,
     sessionDate: LocalDate?,
-    sleepDurationLabel: String?,
-    sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
 ) {
     val timing = rememberAlarmTiming(alarmTime, sessionDate)
     AlarmShell(modifier) {
-        AlarmCardContent(dateLabel, alarmTime, timing, sleepDurationLabel, sleepSegments)
+        AlarmCardContent(dateLabel, alarmTime, timing)
     }
 }
 
@@ -116,8 +110,6 @@ internal fun AlarmCardContent(
     dateLabel: String,
     alarmTime: LocalTime?,
     timing: AlarmTiming,
-    sleepDurationLabel: String?,
-    sleepSegments: List<SleepSegment>,
     modifier: Modifier = Modifier,
     // The collapsing card hides this layer's time row (clock + countdown — both become moving copies
     // drawn on top) while still measuring it, so this stays the single source of expanded geometry.
@@ -164,78 +156,22 @@ internal fun AlarmCardContent(
             }
         }
         LcdTimeDisplay(alarmTime = alarmTime, timing = timing, base = onCard, timeRowAlpha = timeRowAlpha)
-        if (sleepSegments.isNotEmpty()) {
-            Spacer(Modifier.height(Spacing.xl))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Sleep",
-                    style = CronTypography.titleMono,
-                    color = onCard,
-                    modifier = Modifier.weight(1f),
-                )
-                if (sleepDurationLabel != null) {
-                    // Inverse pill on the bold card: on-color fill, primary text.
-                    PillBadge(
-                        text = sleepDurationLabel,
-                        containerColor = onCard,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        textStyle = CronTypography.labelMonoBold,
-                    )
-                }
-            }
-            Spacer(Modifier.height(Spacing.md + Spacing.xs))
-            SleepTimeline(segments = sleepSegments)
-        }
     }
 }
 
-@Preview(showBackground = true, name = "Pending — no sleep data")
+@Preview(showBackground = true, name = "Alarm set")
 @Composable
-private fun NextAlarmCardPendingPreview() {
+private fun NextAlarmCardPreview() {
     CronTheme {
         NextAlarmCard(
             dateLabel = "Monday 1",
             alarmTime = LocalTime(6, 40),
             sessionDate = null,
-            sleepDurationLabel = null,
-            sleepSegments = emptyList(),
             modifier = Modifier.padding(Spacing.xl),
         )
     }
 }
 
-/** A representative night ending at the 06:40 alarm, for previewing the sleep-duration state. */
-internal val PREVIEW_SLEEP_SEGMENTS = listOf(
-    SleepStage.Awake to ("2026-06-01T23:00:00Z" to "2026-06-01T23:12:00Z"),
-    SleepStage.Light to ("2026-06-01T23:12:00Z" to "2026-06-02T00:30:00Z"),
-    SleepStage.Deep to ("2026-06-02T00:30:00Z" to "2026-06-02T02:05:00Z"),
-    SleepStage.Rem to ("2026-06-02T02:05:00Z" to "2026-06-02T02:50:00Z"),
-    SleepStage.Light to ("2026-06-02T02:50:00Z" to "2026-06-02T04:10:00Z"),
-    SleepStage.Deep to ("2026-06-02T04:10:00Z" to "2026-06-02T05:15:00Z"),
-    SleepStage.Rem to ("2026-06-02T05:15:00Z" to "2026-06-02T06:05:00Z"),
-    SleepStage.Light to ("2026-06-02T06:05:00Z" to "2026-06-02T06:40:00Z"),
-).map { (stage, span) -> SleepSegment(stage, Instant.parse(span.first), Instant.parse(span.second)) }
-
-@Preview(showBackground = true, name = "With sleep — light")
-@Preview(showBackground = true, name = "With sleep — dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-private fun NextAlarmCardWithSleepPreview() {
-    CronTheme {
-        NextAlarmCard(
-            dateLabel = "Monday 1",
-            alarmTime = LocalTime(6, 40),
-            sessionDate = null,
-            sleepDurationLabel = "7H 28M",
-            sleepSegments = PREVIEW_SLEEP_SEGMENTS,
-            modifier = Modifier.padding(Spacing.xl),
-        )
-    }
-}
-
-/** The spent state — a past alarm: digits grey out and the label reads "you woke up at". */
 @Preview(showBackground = true, name = "Spent — woke up")
 @Composable
 private fun NextAlarmCardSpentPreview() {
@@ -244,8 +180,6 @@ private fun NextAlarmCardSpentPreview() {
             dateLabel = "Today, you'll wake up at",
             alarmTime = LocalTime(6, 40),
             sessionDate = LocalDate(2020, 1, 1),
-            sleepDurationLabel = "7H 28M",
-            sleepSegments = PREVIEW_SLEEP_SEGMENTS,
             modifier = Modifier.padding(Spacing.xl),
         )
     }
@@ -313,7 +247,8 @@ internal fun LcdClock(
     }
 }
 
-/** Filled digits with an optional same-color stroke overlaid on top to fake extra weight. */
+/** Filled digits with an optional same-color stroke overlaid on top to fake extra weight.
+ *  Offscreen compositing prevents double-alpha at fill/stroke overlap when [color] is translucent. */
 @Composable
 private fun StrokeableLcdDigits(
     text: String,
@@ -322,20 +257,29 @@ private fun StrokeableLcdDigits(
     strokeWidthPx: Float,
     alignFirstGlyph: Boolean,
 ) {
-    Box {
+    val needsOffscreen = strokeWidthPx > 0f && color.alpha < 1f
+    val drawColor = if (needsOffscreen) color.copy(alpha = 1f) else color
+    Box(
+        modifier = if (needsOffscreen) {
+            Modifier.graphicsLayer {
+                alpha = color.alpha
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+        } else Modifier,
+    ) {
         if (alignFirstGlyph) {
-            AlignedFirstGlyph(text = text, color = color, style = style)
+            AlignedFirstGlyph(text = text, color = drawColor, style = style)
         } else {
-            Text(text = text, color = color, style = style, maxLines = 1, softWrap = false)
+            Text(text = text, color = drawColor, style = style, maxLines = 1, softWrap = false)
         }
         if (strokeWidthPx > 0f) {
             val stroked = style.copy(
                 drawStyle = Stroke(width = strokeWidthPx, join = StrokeJoin.Round, cap = StrokeCap.Round),
             )
             if (alignFirstGlyph) {
-                AlignedFirstGlyph(text = text, color = color, style = stroked)
+                AlignedFirstGlyph(text = text, color = drawColor, style = stroked)
             } else {
-                Text(text = text, color = color, style = stroked, maxLines = 1, softWrap = false)
+                Text(text = text, color = drawColor, style = stroked, maxLines = 1, softWrap = false)
             }
         }
     }
