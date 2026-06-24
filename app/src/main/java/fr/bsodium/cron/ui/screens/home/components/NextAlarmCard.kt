@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -246,7 +247,8 @@ internal fun LcdClock(
     }
 }
 
-/** Filled digits with an optional same-color stroke overlaid on top to fake extra weight. */
+/** Filled digits with an optional same-color stroke overlaid on top to fake extra weight.
+ *  Offscreen compositing prevents double-alpha at fill/stroke overlap when [color] is translucent. */
 @Composable
 private fun StrokeableLcdDigits(
     text: String,
@@ -255,20 +257,29 @@ private fun StrokeableLcdDigits(
     strokeWidthPx: Float,
     alignFirstGlyph: Boolean,
 ) {
-    Box {
+    val needsOffscreen = strokeWidthPx > 0f && color.alpha < 1f
+    val drawColor = if (needsOffscreen) color.copy(alpha = 1f) else color
+    Box(
+        modifier = if (needsOffscreen) {
+            Modifier.graphicsLayer {
+                alpha = color.alpha
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+        } else Modifier,
+    ) {
         if (alignFirstGlyph) {
-            AlignedFirstGlyph(text = text, color = color, style = style)
+            AlignedFirstGlyph(text = text, color = drawColor, style = style)
         } else {
-            Text(text = text, color = color, style = style, maxLines = 1, softWrap = false)
+            Text(text = text, color = drawColor, style = style, maxLines = 1, softWrap = false)
         }
         if (strokeWidthPx > 0f) {
             val stroked = style.copy(
                 drawStyle = Stroke(width = strokeWidthPx, join = StrokeJoin.Round, cap = StrokeCap.Round),
             )
             if (alignFirstGlyph) {
-                AlignedFirstGlyph(text = text, color = color, style = stroked)
+                AlignedFirstGlyph(text = text, color = drawColor, style = stroked)
             } else {
-                Text(text = text, color = color, style = stroked, maxLines = 1, softWrap = false)
+                Text(text = text, color = drawColor, style = stroked, maxLines = 1, softWrap = false)
             }
         }
     }
