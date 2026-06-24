@@ -52,7 +52,7 @@ data class HomeUiState(
     val greetingPrefix: String = "Welcome",
     val greetingName: String? = null,
     val dateLabel: String = "",
-    val sleepStats: SleepStatsUi? = null,
+
     val aiPlan: AiPlanUi? = null,
     val timeline: List<TimelineItem> = emptyList(),
     val hasMoreHistory: Boolean = false,
@@ -105,15 +105,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _dismissedFailureId = MutableStateFlow<String?>(null)
 
     private val sessionFlow = db.sessionDao().observeLatest()
-
-    private val sleepStatsFlow = sessionFlow
-        .map { it?.id }
-        .distinctUntilChanged()
-        .flatMapLatest { id ->
-            if (id == null) flowOf(null)
-            // Off the main thread: buildSleepStats decodes every event's JSON.
-            else db.eventDao().observeBySession(id).map { events -> buildSleepStats(events) }.flowOn(Dispatchers.Default)
-        }
 
     private val aiPlanFlow = sessionFlow
         .map { it?.id }
@@ -220,10 +211,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val displayFlow = combine(
         sessionFlow.map { it?.toDisplayState() },
-        sleepStatsFlow,
         settings.displayName,
-    ) { session, sleepStats, displayName ->
-        HomeDisplay(session = session, sleepStats = sleepStats, displayName = displayName)
+    ) { session, displayName ->
+        HomeDisplay(session = session, displayName = displayName)
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -238,7 +228,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             greetingPrefix = greetingPrefix(),
             greetingName = display.displayName,
             dateLabel = formatDateLabel(display.session, status.autoAlarmsEnabled),
-            sleepStats = display.sleepStats,
+
             aiPlan = plan,
             timeline = timeline,
             hasMoreHistory = hasMore,

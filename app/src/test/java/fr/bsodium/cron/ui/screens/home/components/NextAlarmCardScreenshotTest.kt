@@ -28,8 +28,6 @@ class NextAlarmCardScreenshotTest {
                     dateLabel = "Friday 22",
                     alarmTime = LocalTime(6, 40),
                     sessionDate = null,
-                    sleepDurationLabel = null,
-                    sleepSegments = emptyList(),
                 )
             }
         }

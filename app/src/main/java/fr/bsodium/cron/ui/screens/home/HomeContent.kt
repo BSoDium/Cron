@@ -141,8 +141,6 @@ internal fun HomePlanContent(
                 dateLabel = uiState.dateLabel,
                 alarmTime = uiState.sessionDisplay?.alarmTime,
                 sessionDate = uiState.sessionDisplay?.sessionDate,
-                sleepDurationLabel = uiState.sleepStats?.durationLabel,
-                sleepSegments = uiState.sleepStats?.segments.orEmpty(),
                 collapseFraction = collapseFraction,
                 onFullHeight = { cardFullHeightPx = it },
                 onAlarmTimeClick = onAlarmTimeClick,
