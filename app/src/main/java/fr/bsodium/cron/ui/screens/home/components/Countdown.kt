@@ -157,6 +157,20 @@ internal sealed interface AlarmTiming {
  * that already passed today reads as [AlarmTiming.Past] rather than silently rolling forward to tomorrow.
  * Falls back to the next-occurrence rule when no date is known.
  */
+/**
+ * Keeps the card's date sentence consistent with its (greyed) digits once the alarm has fired: a
+ * future-tense "[day], you'll wake up at" becomes "[day], you woke up at" when [timing] is [AlarmTiming.Past].
+ * Keyed on the same [timing] that greys the digits, so label and digits can never disagree. No-ops on other
+ * timings and on labels without the day-part comma (e.g. "Your alarm is disabled") — the same comma split
+ * DateSentenceLabel already relies on.
+ */
+internal fun alarmSentenceForTiming(dateLabel: String, timing: AlarmTiming): String =
+    if (timing is AlarmTiming.Past && dateLabel.contains(',')) {
+        "${dateLabel.substringBefore(',')}, you woke up at"
+    } else {
+        dateLabel
+    }
+
 internal fun computeAlarmTiming(alarmTime: LocalTime?, sessionDate: LocalDate?): AlarmTiming {
     if (alarmTime == null) return AlarmTiming.None
     val tz = TimeZone.currentSystemDefault()

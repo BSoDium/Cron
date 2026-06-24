@@ -137,7 +137,7 @@ internal fun AlarmCardContent(
     ) {
         var initialRender by remember { mutableStateOf(true) }
         LaunchedEffect(Unit) { initialRender = false }
-        val displayLabel = dateLabel.ifBlank { "—" }
+        val displayLabel = alarmSentenceForTiming(dateLabel, timing).ifBlank { "—" }
         if (initialRender) {
             DateSentenceLabel(
                 text = displayLabel,
@@ -228,6 +228,22 @@ private fun NextAlarmCardWithSleepPreview() {
             dateLabel = "Monday 1",
             alarmTime = LocalTime(6, 40),
             sessionDate = null,
+            sleepDurationLabel = "7H 28M",
+            sleepSegments = PREVIEW_SLEEP_SEGMENTS,
+            modifier = Modifier.padding(Spacing.xl),
+        )
+    }
+}
+
+/** The spent state — a past alarm: digits grey out and the label reads "you woke up at". */
+@Preview(showBackground = true, name = "Spent — woke up")
+@Composable
+private fun NextAlarmCardSpentPreview() {
+    CronTheme {
+        NextAlarmCard(
+            dateLabel = "Today, you'll wake up at",
+            alarmTime = LocalTime(6, 40),
+            sessionDate = LocalDate(2020, 1, 1),
             sleepDurationLabel = "7H 28M",
             sleepSegments = PREVIEW_SLEEP_SEGMENTS,
             modifier = Modifier.padding(Spacing.xl),
