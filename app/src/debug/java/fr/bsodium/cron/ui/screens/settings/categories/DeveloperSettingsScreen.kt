@@ -95,6 +95,7 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
             }
         }
         FsmEventInjector(context, scope)
+        WorkerInjector()
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
