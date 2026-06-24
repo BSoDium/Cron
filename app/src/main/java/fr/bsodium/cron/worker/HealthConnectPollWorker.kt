@@ -17,6 +17,7 @@ import fr.bsodium.cron.session.model.SleepSession
 import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.settings.PollCheckpointStore
+import fr.bsodium.cron.settings.SettingsRepository
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
@@ -43,6 +44,10 @@ class HealthConnectPollWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
+        if (!SettingsRepository(applicationContext).autoAlarmsEnabledNow()) {
+            Log.d(TAG, "Auto-plan disabled — skipping HC poll")
+            return Result.success()
+        }
         val reader = SleepStageReader(applicationContext)
         if (reader.availability() != SleepStageReader.Availability.Available) {
             return Result.success()

@@ -23,7 +23,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import fr.bsodium.cron.debug.MockApiPrefs
+import fr.bsodium.cron.debug.SleepTestPrefs
+import fr.bsodium.cron.service.SleepSessionService
+import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
+import fr.bsodium.cron.session.model.ActivityType
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SignalConfidence
@@ -34,6 +38,7 @@ import fr.bsodium.cron.ui.screens.settings.components.SwitchRow
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
 import kotlin.time.Duration.Companion.minutes
 
 @Composable
@@ -41,6 +46,8 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { MockApiPrefs(context) }
     var mockEnabled by remember { mutableStateOf(prefs.isEnabled) }
+    val sleepPrefs = remember { SleepTestPrefs(context) }
+    var fastOnset by remember { mutableStateOf(sleepPrefs.fastOnset) }
     var showClearDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -54,6 +61,39 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
                 mockEnabled = enabled
             },
         )
+        SwitchRow(
+            title = "Fast sleep onset (10s)",
+            subtitle = "Collapse onset/rearm thresholds to seconds (restart the session to apply)",
+            checked = fastOnset,
+            onCheckedChange = { on ->
+                sleepPrefs.fastOnset = on
+                fastOnset = on
+            },
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Start sleep session",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "Bootstrap a session and start the sensor monitor now",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = {
+                context.startService(
+                    SleepSessionService.eveningPlanIntent(context, TimeZone.currentSystemDefault().id),
+                )
+            }) {
+                Text("Start")
+            }
+        }
         FsmEventInjector(context, scope)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -166,6 +206,18 @@ private fun FsmEventInjector(
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     val repo = remember { SessionRepository(context) }
+    var driveFsm by remember { mutableStateOf(false) }
+
+    // Append-only records the event; FSM mode routes through SessionFsm.onEvent so transitions,
+    // the auto-plan gate (Bug 4) and the AI cooldown (Bug 3) actually run.
+    val inject: suspend (SessionEvent) -> Boolean = { event ->
+        if (driveFsm) {
+            SessionFsm(context, repo).onEvent(event) != null
+        } else {
+            val session = repo.findCurrent()
+            if (session == null) false else { repo.appendEvent(session.id, event); true }
+        }
+    }
 
     Column {
         Text(
@@ -173,10 +225,11 @@ private fun FsmEventInjector(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        Text(
-            text = "Record events in the current session without FSM transitions",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        SwitchRow(
+            title = "Drive through FSM (transitions + AI)",
+            subtitle = "Route injected events through SessionFsm.onEvent — exercises cooldown + auto-plan gating",
+            checked = driveFsm,
+            onCheckedChange = { driveFsm = it },
         )
         FlowRow(
             modifier = Modifier.padding(top = Spacing.sm),
@@ -184,40 +237,43 @@ private fun FsmEventInjector(
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             InjectButton("Sleep Onset", scope) {
-                val session = repo.findCurrent() ?: return@InjectButton false
-                repo.appendEvent(session.id, SessionEvent(
+                inject(SessionEvent(
                     trigger = TriggerType.SleepOnset,
                     timestamp = Clock.System.now(),
                     data = EventData.SleepOnset(screenOffSince = Clock.System.now(), rearm = false),
                 ))
-                true
+            }
+            InjectButton("Mid Sleep Activity", scope) {
+                inject(SessionEvent(
+                    trigger = TriggerType.MidSleepActivity,
+                    timestamp = Clock.System.now(),
+                    data = EventData.MidSleepActivity(
+                        activityType = ActivityType.Still,
+                        screenOn = false,
+                        durationSeconds = 0,
+                    ),
+                ))
             }
             InjectButton("Alarm Dismissed", scope) {
-                val session = repo.findCurrent() ?: return@InjectButton false
-                repo.appendEvent(session.id, SessionEvent(
+                inject(SessionEvent(
                     trigger = TriggerType.AlarmDismissed,
                     timestamp = Clock.System.now(),
                     data = EventData.Empty,
                 ))
-                true
             }
             InjectButton("Alarm Snoozed", scope) {
-                val session = repo.findCurrent() ?: return@InjectButton false
-                repo.appendEvent(session.id, SessionEvent(
+                inject(SessionEvent(
                     trigger = TriggerType.AlarmSnoozed,
                     timestamp = Clock.System.now(),
                     data = EventData.Empty,
                 ))
-                true
             }
             InjectButton("Out Of Bed", scope) {
-                val session = repo.findCurrent() ?: return@InjectButton false
-                repo.appendEvent(session.id, SessionEvent(
+                inject(SessionEvent(
                     trigger = TriggerType.OutOfBedConfirmed,
                     timestamp = Clock.System.now(),
                     data = EventData.OutOfBedConfirmed(evidence = listOf("debug injection")),
                 ))
-                true
             }
         }
     }

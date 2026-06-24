@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlin.time.Duration.Companion.minutes
 
@@ -44,6 +45,14 @@ class SessionFsm(
      * session exists and the event cannot bootstrap one.
      */
     suspend fun onEvent(event: SessionEvent): String? = withContext(Dispatchers.IO) {
+        // Auto-plan off = full stand-down: drop every automatic event. A manual run (the "run one
+        // yourself" CTA) carries isManual and is exempt, so it still works with the toggle off.
+        if (!SettingsRepository(context).autoAlarmsEnabledNow() &&
+            (event.data as? EventData.EveningPlan)?.isManual != true
+        ) {
+            Log.d(TAG, "Auto-plan disabled — ignoring ${event.trigger}")
+            return@withContext null
+        }
         var current = repository.findCurrent()
         // A fresh evening plan for a new morning supersedes any session left unfinished from a prior day.
         if (event.trigger == TriggerType.EveningPlan && current != null && supersedeIfStale(current, event)) {
@@ -70,7 +79,10 @@ class SessionFsm(
             onStatusChange(session, nextStatus)
         }
 
-        if (shouldTriggerAi(event.trigger, nextStatus)) {
+        if (shouldTriggerAi(event.trigger, nextStatus, session.lastAiCallAt)) {
+            // Stamp the trigger time before enqueueing so the cooldown is effective immediately —
+            // a burst of noisy events otherwise each slip through before the worker's tool sets it.
+            repository.markAiTriggered(session.id)
             repository.triggerAiTurn(session.id)
         }
 
@@ -191,11 +203,6 @@ class SessionFsm(
         }
     }
 
-    private fun shouldTriggerAi(trigger: TriggerType, newStatus: SessionStatus): Boolean {
-        if (newStatus == SessionStatus.Complete) return false
-        return trigger in AI_TRIGGERS
-    }
-
     /**
      * Handle an alarm snooze, called from AlarmReceiver and bypassing the main
      * onEvent path. Returns true if AI was triggered for a replan, false if
@@ -238,5 +245,34 @@ class SessionFsm(
             TriggerType.CalendarChange,
             TriggerType.AlarmSnoozed,
         )
+
+        /** Triggers that recur on noise (screen-on, HC polls) and so are rate-limited by [AI_COOLDOWN]. */
+        private val THROTTLEABLE_TRIGGERS = setOf(
+            TriggerType.MidSleepActivity,
+            TriggerType.HcStageUpdate,
+        )
+
+        private val AI_COOLDOWN = 15.minutes
+
+        /**
+         * Whether an event should fire an AI turn. Pure (no IO) so it's unit-testable: a completed
+         * session never fires; only [AI_TRIGGERS] fire; and [THROTTLEABLE_TRIGGERS] are suppressed
+         * within [AI_COOLDOWN] of the last AI turn so noisy sensors can't storm paid calls.
+         */
+        internal fun shouldTriggerAi(
+            trigger: TriggerType,
+            newStatus: SessionStatus,
+            lastAiCallAt: Instant?,
+            now: Instant = Clock.System.now(),
+        ): Boolean {
+            if (newStatus == SessionStatus.Complete) return false
+            if (trigger !in AI_TRIGGERS) return false
+            if (trigger in THROTTLEABLE_TRIGGERS && lastAiCallAt != null &&
+                now - lastAiCallAt < AI_COOLDOWN
+            ) {
+                return false
+            }
+            return true
+        }
     }
 }

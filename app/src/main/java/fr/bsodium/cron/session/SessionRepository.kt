@@ -125,6 +125,17 @@ class SessionRepository(private val context: Context) {
         ))
     }
 
+    /**
+     * Stamps [lastAiCallAt] at the moment an AI turn is *triggered* (not when a tool later runs), so the
+     * cooldown gate sees it synchronously and a burst of noisy events can't each enqueue a turn before the
+     * first one's tool writes the timestamp. Also clears the "settings changed since plan" reminder.
+     */
+    suspend fun markAiTriggered(sessionId: String) {
+        val entity = db.sessionDao().findById(sessionId) ?: return
+        val now = Clock.System.now().toEpochMilliseconds()
+        db.sessionDao().update(entity.copy(lastAiCallAt = now, updatedAt = now))
+    }
+
     suspend fun updateInstruction(sessionId: String, instruction: Instruction) {
         val entity = db.sessionDao().findById(sessionId) ?: return
         val now = Clock.System.now().toEpochMilliseconds()

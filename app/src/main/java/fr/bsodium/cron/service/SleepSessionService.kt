@@ -23,6 +23,7 @@ import fr.bsodium.cron.sensors.ActivityRecognitionMonitor
 import fr.bsodium.cron.sensors.DebugSensorEventSink
 import fr.bsodium.cron.sensors.SensorEventSink
 import fr.bsodium.cron.sensors.ScreenStateMonitor
+import fr.bsodium.cron.sensors.SleepTuning
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
@@ -91,7 +92,13 @@ class SleepSessionService : Service() {
         startForegroundService(includeLocation = eveningPlan)
 
         if (screenStateMonitor == null) {
-            screenStateMonitor = ScreenStateMonitor(applicationContext, fsmSink, serviceScope).also { it.start() }
+            screenStateMonitor = ScreenStateMonitor(
+                applicationContext,
+                fsmSink,
+                serviceScope,
+                sleepOnsetThreshold = SleepTuning.onsetThreshold(applicationContext),
+                rearmThreshold = SleepTuning.rearmThreshold(applicationContext),
+            ).also { it.start() }
         }
         if (activityRecognitionMonitor == null) {
             activityRecognitionMonitor = ActivityRecognitionMonitor(applicationContext, fsmSink, serviceScope).also { it.start() }
