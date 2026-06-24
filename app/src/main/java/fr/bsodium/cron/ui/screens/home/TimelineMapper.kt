@@ -76,7 +76,7 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
                 iteration = iter,
                 sessionId = session.sessionId,
                 isStreaming = iter.turnIndex == session.streamingTurnIndex,
-                isLatest = iter == session.iterations.lastOrNull(),
+                isLatest = false,
             )
         }
 
@@ -110,7 +110,16 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
         }
         result += item
     }
-    return result
+
+    var latestFound = false
+    return result.map { item ->
+        if (item is TimelineItem.AiRun && !latestFound) {
+            latestFound = true
+            item.copy(isLatest = true)
+        } else {
+            item
+        }
+    }
 }
 
 private fun eventLabel(trigger: TriggerType): String = when (trigger) {
