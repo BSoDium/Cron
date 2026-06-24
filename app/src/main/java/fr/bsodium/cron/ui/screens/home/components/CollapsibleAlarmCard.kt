@@ -102,7 +102,7 @@ internal fun CollapsibleAlarmCard(
             val clockScale = lerp(1f, collapsedScale, f)
             // Fake weight grows in proportion to the size DECREASE. Dividing the local stroke by the
             // glyph scale cancels the dilution from shrinking, so the RENDERED stroke tracks f directly.
-            val strokePx = if (upcoming) MAX_CLOCK_STROKE.toPx() * f / clockScale else 0f
+            val strokePx = MAX_CLOCK_STROKE.toPx() * f / clockScale
             val clock = subcompose("clock") {
                 LcdClock(alarmTime, reveal, digitColor, strokeWidthPx = strokePx)
             }.first().measure(cWrap)
