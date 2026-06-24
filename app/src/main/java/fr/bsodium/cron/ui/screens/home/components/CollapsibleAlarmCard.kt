@@ -90,7 +90,7 @@ internal fun CollapsibleAlarmCard(
             onFullHeight(extras.height)
             // Date mover — the same AlignedFirstGlyph as extras, placed so it can slide up out the top.
             val date = subcompose("date") {
-                DateSentenceLabel(text = dateLabel.ifBlank { "—" }, color = onCard.copy(alpha = 0.9f), style = dateStyle)
+                DateSentenceLabel(text = alarmSentenceForTiming(dateLabel, timing).ifBlank { "—" }, color = onCard.copy(alpha = 0.9f), style = dateStyle)
             }.first().measure(cWrap)
             // Collapsed bar is a perfect pill: height = 2 × Radius.xl, so the constant Radius.xl corners round it fully.
             val barHeight = ALARM_BAR_HEIGHT.roundToPx()
