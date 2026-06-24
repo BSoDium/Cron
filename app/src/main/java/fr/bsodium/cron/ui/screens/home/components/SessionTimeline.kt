@@ -155,7 +155,7 @@ private fun EventNode(
         ),
         isFirst = isFirst,
         isLast = isLast,
-        verticalPadding = Spacing.sm,
+        verticalPadding = Spacing.md,
         modifier = modifier,
         title = {
             Text(

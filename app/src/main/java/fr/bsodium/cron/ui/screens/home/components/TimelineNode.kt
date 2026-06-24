@@ -45,9 +45,9 @@ import fr.bsodium.cron.ui.theme.Symbol
 
 internal val NODE_GUTTER = 40.dp
 private val TRACK_WIDTH = 1.5.dp
-private val PLAIN_DOT_SIZE = 7.dp
+private val PLAIN_DOT_SIZE = 8.dp
 private val ICON_DOT_SIZE = 24.dp
-private val ICON_GLYPH_SIZE = 16.dp
+private val ICON_GLYPH_SIZE = 18.dp
 private val LOADER_DOT_SIZE = 28.dp
 
 sealed interface TimelineAnchor {
@@ -74,7 +74,7 @@ internal fun TimelineNode(
     modifier: Modifier = Modifier,
     emphasized: Boolean = false,
     onClick: (() -> Unit)? = null,
-    verticalPadding: Dp = Spacing.md,
+    verticalPadding: Dp = Spacing.lg,
     title: @Composable () -> Unit,
     status: (@Composable () -> Unit)? = null,
     content: (@Composable () -> Unit)? = null,
@@ -175,14 +175,16 @@ private fun EmphasizedNode(
     content: (@Composable () -> Unit)?,
 ) {
     val borderColor = MaterialTheme.colorScheme.outlineVariant
-    val containerPadding = Spacing.sm
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val containerPadding = Spacing.md
 
     val outerAnchorCenter = containerPadding + anchorCenter
+    val innerGutterWidth = NODE_GUTTER - containerPadding
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.xs)
+            .padding(vertical = Spacing.sm)
             .drawBehind {
                 if (isFirst && isLast) return@drawBehind
                 val cx = (NODE_GUTTER / 2).toPx()
@@ -194,14 +196,14 @@ private fun EmphasizedNode(
     ) {
         Surface(
             shape = RoundedCornerShape(Radius.lg),
-            color = CronColors.elementSurface,
+            color = containerColor,
             border = BorderStroke(1.dp, borderColor),
             onClick = onClick ?: {},
             enabled = onClick != null,
         ) {
             Box {
                 Row(modifier = Modifier.fillMaxWidth().padding(containerPadding)) {
-                    Spacer(Modifier.width(NODE_GUTTER - containerPadding))
+                    Spacer(Modifier.width(innerGutterWidth))
                     Spacer(Modifier.width(Spacing.xs))
                     NodeContent(
                         verticalPadding = verticalPadding,
@@ -215,14 +217,19 @@ private fun EmphasizedNode(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .padding(start = containerPadding),
+                        .padding(start = containerPadding)
+                        .drawBehind {
+                            val cx = innerGutterWidth.toPx() / 2f
+                            drawLine(ruleColor, Offset(cx, 0f), Offset(cx, size.height), TRACK_WIDTH.toPx(), StrokeCap.Round)
+                        },
                 ) {
                     GutterColumn(
                         anchor = anchor,
                         anchorTop = anchorTop,
+                        maskColor = containerColor,
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .width(NODE_GUTTER - containerPadding)
+                            .width(innerGutterWidth)
                             .fillMaxHeight(),
                     )
                 }
@@ -315,8 +322,8 @@ private fun GutterColumn(
     anchor: TimelineAnchor,
     anchorTop: Dp,
     modifier: Modifier = Modifier,
+    maskColor: Color = CronColors.pageBackground,
 ) {
-    val maskColor = CronColors.pageBackground
     val anchorDiam = anchor.diameter()
 
     Box(modifier = modifier) {
