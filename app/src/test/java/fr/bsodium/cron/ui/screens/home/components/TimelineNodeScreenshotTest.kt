@@ -2,8 +2,8 @@
 
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -36,51 +36,52 @@ class TimelineNodeScreenshotTest {
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent {
             CronTheme {
-                val secondaryColor = MaterialTheme.colorScheme.onSurfaceVariant
+                val dim = MaterialTheme.colorScheme.onSurfaceVariant
                 Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     TimelineNode(
                         anchor = TimelineAnchor.Loader,
                         isFirst = true,
                         isLast = false,
-                        emphasized = true,
-                        title = { Text("Replanning", style = MaterialTheme.typography.labelLarge) },
-                        status = {
-                            Text("Latest · 07:16", style = MaterialTheme.typography.labelSmall, color = secondaryColor)
-                        },
+                        title = { Text("Replanning", style = MaterialTheme.typography.bodyMedium) },
+                        status = { Text("Latest · 07:16", style = CronTypography.labelMonoSmall, color = dim) },
                     )
                     TimelineNode(
-                        anchor = TimelineAnchor.Icon(MaterialSymbol.Snooze, tint = secondaryColor),
+                        anchor = TimelineAnchor.Icon(MaterialSymbol.Snooze),
                         isFirst = false,
                         isLast = false,
-                        title = { Text("Alarm snoozed", style = MaterialTheme.typography.bodyMedium, color = secondaryColor) },
+                        title = { Text("Alarm snoozed", style = MaterialTheme.typography.bodyMedium, color = dim) },
                         status = {
                             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 MonoPill("9 min")
-                                Text("07:15", style = CronTypography.labelMonoSmall, color = secondaryColor)
+                                Text("07:15", style = CronTypography.labelMonoSmall, color = dim)
                             }
                         },
                     )
                     TimelineNode(
-                        anchor = TimelineAnchor.Icon(MaterialSymbol.Schedule),
+                        anchor = TimelineAnchor.Icon(
+                            symbol = MaterialSymbol.Schedule,
+                            tint = MaterialTheme.colorScheme.primary,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
                         isFirst = false,
                         isLast = false,
                         onClick = {},
-                        title = { Text("Scheduled plan", style = MaterialTheme.typography.bodyMedium) },
-                        status = { Text("23:14", style = CronTypography.labelMonoSmall, color = secondaryColor) },
+                        title = { Text("Planned", style = MaterialTheme.typography.bodyMedium) },
+                        status = { Text("Latest · 23:14", style = CronTypography.labelMonoSmall, color = dim) },
                     )
                     TimelineNode(
                         anchor = TimelineAnchor.Plain,
                         isFirst = false,
                         isLast = false,
-                        title = { Text("You fell asleep", style = MaterialTheme.typography.bodyMedium, color = secondaryColor) },
-                        status = { Text("23:40", style = CronTypography.labelMonoSmall, color = secondaryColor) },
+                        title = { Text("You fell asleep", style = MaterialTheme.typography.bodyMedium, color = dim) },
+                        status = { Text("23:40", style = CronTypography.labelMonoSmall, color = dim) },
                     )
                     TimelineNode(
-                        anchor = TimelineAnchor.Icon(MaterialSymbol.Bedtime, tint = secondaryColor),
+                        anchor = TimelineAnchor.Icon(MaterialSymbol.Bedtime),
                         isFirst = false,
                         isLast = true,
-                        title = { Text("You fell asleep", style = MaterialTheme.typography.bodyMedium, color = secondaryColor) },
-                        status = { Text("22:30", style = CronTypography.labelMonoSmall, color = secondaryColor) },
+                        title = { Text("You fell asleep", style = MaterialTheme.typography.bodyMedium, color = dim) },
+                        status = { Text("22:30", style = CronTypography.labelMonoSmall, color = dim) },
                     )
                 }
             }
@@ -96,23 +97,26 @@ class TimelineNodeScreenshotTest {
                 val dim = MaterialTheme.colorScheme.onSurfaceVariant
                 Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     TimelineNode(
-                        anchor = TimelineAnchor.Icon(MaterialSymbol.Schedule),
+                        anchor = TimelineAnchor.Icon(
+                            symbol = MaterialSymbol.Schedule,
+                            tint = MaterialTheme.colorScheme.primary,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
                         isFirst = true,
                         isLast = false,
-                        emphasized = true,
                         onClick = {},
-                        title = { Text("Planned", style = MaterialTheme.typography.labelLarge) },
-                        status = { Text("Latest · 23:14", style = MaterialTheme.typography.labelSmall, color = dim) },
+                        title = { Text("Planned", style = MaterialTheme.typography.bodyMedium) },
+                        status = { Text("Latest · 23:14", style = CronTypography.labelMonoSmall, color = dim) },
                         content = {
                             Text(
-                                "Set alarm for 07:45. You have a 08:30 standup.",
+                                "Set alarm for 07:45. You have an 08:30 standup.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = dim,
                             )
                         },
                     )
                     TimelineNode(
-                        anchor = TimelineAnchor.Icon(MaterialSymbol.Bedtime, tint = dim),
+                        anchor = TimelineAnchor.Icon(MaterialSymbol.Bedtime),
                         isFirst = false,
                         isLast = true,
                         title = { Text("You fell asleep", style = MaterialTheme.typography.bodyMedium, color = dim) },
@@ -120,14 +124,14 @@ class TimelineNodeScreenshotTest {
                     )
                     SessionTimelineDayHeader(label = "Yesterday", isFirst = false, isLast = false)
                     TimelineNode(
-                        anchor = TimelineAnchor.Icon(MaterialSymbol.DirectionsWalk, tint = dim),
+                        anchor = TimelineAnchor.Icon(MaterialSymbol.DirectionsWalk),
                         isFirst = true,
                         isLast = false,
                         title = { Text("You got up", style = MaterialTheme.typography.bodyMedium, color = dim) },
                         status = { Text("07:50", style = CronTypography.labelMonoSmall, color = dim) },
                     )
                     TimelineNode(
-                        anchor = TimelineAnchor.Icon(MaterialSymbol.AlarmOff, tint = dim),
+                        anchor = TimelineAnchor.Icon(MaterialSymbol.AlarmOff),
                         isFirst = false,
                         isLast = false,
                         title = { Text("Alarm dismissed", style = MaterialTheme.typography.bodyMedium, color = dim) },
