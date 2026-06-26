@@ -41,7 +41,7 @@ internal fun LazyListScope.sessionTimelineItems(
     onNavigateToHistory: () -> Unit,
 ) {
     item(key = "timeline-top-spacer") {
-        Spacer(Modifier.height(Spacing.lg))
+        Spacer(Modifier.height(Spacing.xxxl))
     }
 
     items(
@@ -99,25 +99,33 @@ private fun AiRunNode(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val iter = item.iteration
     val anchor = when {
         item.isStreaming -> TimelineAnchor.Loader
-        iter.thread.isMocked -> TimelineAnchor.Icon(MaterialSymbol.Code)
-        else -> TimelineAnchor.Icon(runSymbol(iter.kind))
+        iter.thread.isMocked -> TimelineAnchor.Icon(
+            symbol = MaterialSymbol.Code,
+            tint = if (item.isLatest) scheme.primary else null,
+            containerColor = if (item.isLatest) scheme.primaryContainer else null,
+        )
+        else -> TimelineAnchor.Icon(
+            symbol = runSymbol(iter.kind),
+            tint = if (item.isLatest) scheme.primary else null,
+            containerColor = if (item.isLatest) scheme.primaryContainer else null,
+        )
     }
-    val contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val contentColor = scheme.onSurfaceVariant
 
     TimelineNode(
         anchor = anchor,
         isFirst = isFirst,
         isLast = isLast,
-        emphasized = item.isLatest,
         onClick = onClick,
         modifier = modifier,
         title = {
             Text(
                 text = iter.systemMessage,
-                style = if (item.isLatest) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
@@ -127,7 +135,7 @@ private fun AiRunNode(
             val meta = if (item.isLatest) "Latest · ${iter.timeLabel}" else iter.timeLabel
             Text(
                 text = meta,
-                style = if (item.isLatest) MaterialTheme.typography.labelSmall else CronTypography.labelMonoSmall,
+                style = CronTypography.labelMonoSmall,
                 color = contentColor,
                 maxLines = 1,
                 softWrap = false,
