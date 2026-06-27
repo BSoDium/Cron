@@ -5,6 +5,7 @@ package fr.bsodium.cron.ui.screens.home.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -175,7 +176,10 @@ private fun EventNode(
             )
         },
         status = {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 if (item.detail != null) {
                     MonoPill(text = item.detail)
                 }
