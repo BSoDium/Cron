@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -100,7 +101,7 @@ internal fun TimelineNode(
                     AnchorCircle(anchor)
                 }
                 Spacer(Modifier.width(Spacing.xs))
-                Box(modifier = Modifier.weight(1f)) { title() }
+                Box(modifier = Modifier.weight(1f).wrapContentHeight()) { title() }
                 if (status != null) status()
             }
             }
