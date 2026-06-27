@@ -51,16 +51,10 @@ internal fun LazyListScope.sessionTimelineItems(
         contentType = { timeline[it]::class },
     ) { index ->
         val item = timeline[index]
-        val isFirst = index == 0 || timeline[index - 1] is TimelineItem.DayHeader
-        val isLast = index == timeline.lastIndex || timeline.getOrNull(index + 1) is TimelineItem.DayHeader
+        val isFirst = index == 0
+        val isLast = index == timeline.lastIndex
 
         when (item) {
-            is TimelineItem.DayHeader -> SessionTimelineDayHeader(
-                label = item.label,
-                isFirst = index == 0,
-                isLast = index == timeline.lastIndex,
-                modifier = Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null),
-            )
             is TimelineItem.AiRun -> AiRunNode(
                 item = item,
                 isFirst = isFirst,
@@ -275,7 +269,6 @@ private fun SessionTimelinePreview() {
             isStreaming = false,
             isLatest = false,
         ),
-        TimelineItem.DayHeader(timestamp = yesterday, label = "Yesterday"),
         TimelineItem.Event(
             timestamp = yesterday,
             trigger = TriggerType.OutOfBedConfirmed,
@@ -325,7 +318,6 @@ private fun SessionTimelinePreview() {
             isStreaming = false,
             isLatest = false,
         ),
-        TimelineItem.DayHeader(timestamp = twoDaysAgo, label = "Thu 19 Jun"),
         TimelineItem.Event(
             timestamp = twoDaysAgo,
             trigger = TriggerType.HardLatestFired,
@@ -347,14 +339,9 @@ private fun SessionTimelinePreview() {
     CronTheme {
         Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
             timeline.forEachIndexed { index, item ->
-                val isFirst = index == 0 || timeline[index - 1] is TimelineItem.DayHeader
-                val isLast = index == timeline.lastIndex || timeline.getOrNull(index + 1) is TimelineItem.DayHeader
+                val isFirst = index == 0
+                val isLast = index == timeline.lastIndex
                 when (item) {
-                    is TimelineItem.DayHeader -> SessionTimelineDayHeader(
-                        label = item.label,
-                        isFirst = index == 0,
-                        isLast = index == timeline.lastIndex,
-                    )
                     is TimelineItem.AiRun -> AiRunNode(
                         item = item,
                         isFirst = isFirst,
