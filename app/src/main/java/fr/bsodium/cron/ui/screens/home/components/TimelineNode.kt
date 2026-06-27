@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +28,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -35,6 +37,7 @@ import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
+import fr.bsodium.cron.ui.theme.TightTextStyle
 
 internal val NODE_GUTTER = 40.dp
 private val TRACK_WIDTH = 1.5.dp
@@ -82,6 +85,8 @@ internal fun TimelineNode(
 
     val inner = @Composable {
         Column(modifier = Modifier.fillMaxWidth()) {
+            // includeFontPadding=true shifts the visual glyph center above the circle center; TightTextStyle strips it.
+            CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.merge(TightTextStyle)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -97,6 +102,7 @@ internal fun TimelineNode(
                 Spacer(Modifier.width(Spacing.xs))
                 Box(modifier = Modifier.weight(1f)) { title() }
                 if (status != null) status()
+            }
             }
             if (content != null) {
                 Box(
