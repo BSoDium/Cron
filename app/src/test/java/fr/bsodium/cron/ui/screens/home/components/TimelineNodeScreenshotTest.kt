@@ -90,7 +90,7 @@ class TimelineNodeScreenshotTest {
     }
 
     @Test
-    fun multi_day_with_day_header() {
+    fun node_with_content_area() {
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent {
             CronTheme {
@@ -116,16 +116,8 @@ class TimelineNodeScreenshotTest {
                         },
                     )
                     TimelineNode(
-                        anchor = TimelineAnchor.Icon(MaterialSymbol.Bedtime),
-                        isFirst = false,
-                        isLast = true,
-                        title = { Text("You fell asleep", style = MaterialTheme.typography.bodyMedium, color = dim) },
-                        status = { Text("23:40", style = CronTypography.labelMonoSmall, color = dim) },
-                    )
-                    SessionTimelineDayHeader(label = "Yesterday", isFirst = false, isLast = false)
-                    TimelineNode(
                         anchor = TimelineAnchor.Icon(MaterialSymbol.DirectionsWalk),
-                        isFirst = true,
+                        isFirst = false,
                         isLast = false,
                         title = { Text("You got up", style = MaterialTheme.typography.bodyMedium, color = dim) },
                         status = { Text("07:50", style = CronTypography.labelMonoSmall, color = dim) },

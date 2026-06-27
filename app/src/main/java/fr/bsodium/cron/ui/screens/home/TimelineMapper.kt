@@ -4,25 +4,14 @@ import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.datetime.Instant
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toLocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /** One item in the vertical timeline. Ordered reverse-chronologically (latest first). */
 sealed interface TimelineItem {
     val timestamp: Instant
     val id: String
-
-    data class DayHeader(
-        override val timestamp: Instant,
-        val label: String,
-    ) : TimelineItem {
-        override val id = "day-$label"
-    }
 
     data class AiRun(
         override val timestamp: Instant,
@@ -94,25 +83,8 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
 
     items.sortByDescending { it.timestamp }
 
-    val result = mutableListOf<TimelineItem>()
-    var currentDate: LocalDate? = null
-    val today = java.time.LocalDate.now()
-    for (item in items) {
-        val date = item.timestamp.toLocalDateTime(tz).date
-        if (date != currentDate) {
-            currentDate = date
-            if (date.toJavaLocalDate() != today) {
-                result += TimelineItem.DayHeader(
-                    timestamp = item.timestamp,
-                    label = formatTimelineDateLabel(date),
-                )
-            }
-        }
-        result += item
-    }
-
     var latestFound = false
-    return result.map { item ->
+    return items.map { item ->
         if (item is TimelineItem.AiRun && !latestFound) {
             latestFound = true
             item.copy(isLatest = true)
@@ -143,13 +115,3 @@ private fun eventDetail(trigger: TriggerType, data: EventData): String? = when {
     else -> null
 }
 
-// locale-default weekday name is intentional here (human-language)
-private fun formatTimelineDateLabel(date: LocalDate): String {
-    val today = java.time.LocalDate.now()
-    val jDate = date.toJavaLocalDate()
-    return when (ChronoUnit.DAYS.between(jDate, today)) {
-        0L -> "Today"
-        1L -> "Yesterday"
-        else -> jDate.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault()))
-    }
-}
