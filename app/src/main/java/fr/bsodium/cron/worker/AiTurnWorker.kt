@@ -157,6 +157,7 @@ class AiTurnWorker(
             if (e.isRetryable && runAttemptCount < MAX_RETRY_ATTEMPTS) {
                 Result.retry()
             } else {
+                db.aiMessageDao().deleteByTurn(sessionId, turnIndex)
                 Result.failure(workDataOf(KEY_REASON to REASON_HTTP))
             }
         } catch (e: Exception) {
@@ -165,6 +166,7 @@ class AiTurnWorker(
                 Result.retry()
             } else {
                 Log.w(TAG, "Turn $turnIndex for $sessionId gave up after $runAttemptCount attempts")
+                db.aiMessageDao().deleteByTurn(sessionId, turnIndex)
                 Result.failure(workDataOf(KEY_REASON to REASON_MAX_RETRIES))
             }
         }
