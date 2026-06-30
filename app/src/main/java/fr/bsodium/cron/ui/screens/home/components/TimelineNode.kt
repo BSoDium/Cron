@@ -201,7 +201,7 @@ private fun TimelineNodeAnchorsPreview() {
                 isLast = false,
                 title = { Text("Alarm snoozed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 status = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                         MonoPill("9 min")
                         Text("07:15", style = CronTypography.labelMonoSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

@@ -313,6 +313,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         infos.any { !it.state.isFinished } -> _isRetrying.value = true
                         infos.isNotEmpty() -> {
                             _isRetrying.value = false
+                            if (infos.any { it.state == WorkInfo.State.FAILED }) {
+                                _optimisticTurn.value?.let { (sid, turn) ->
+                                    viewModelScope.launch(Dispatchers.IO) {
+                                        db.aiMessageDao().deleteByTurn(sid, turn)
+                                    }
+                                }
+                            }
                             clearOptimisticTurn() // safety net if the worker died before streaming
                         }
                     }

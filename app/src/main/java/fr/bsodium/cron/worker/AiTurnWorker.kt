@@ -143,7 +143,12 @@ class AiTurnWorker(
             Result.failure(workDataOf(KEY_REASON to REASON_NO_API_KEY))
         } catch (e: AnthropicClient.AnthropicHttpException) {
             Log.e(TAG, "Anthropic HTTP ${e.code} during turn for $sessionId", e)
-            if (e.isRetryable) Result.retry() else Result.failure(workDataOf(KEY_REASON to REASON_HTTP))
+            if (e.isRetryable) {
+                Result.retry()
+            } else {
+                db.aiMessageDao().deleteByTurn(sessionId, turnIndex)
+                Result.failure(workDataOf(KEY_REASON to REASON_HTTP))
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error during AI turn for $sessionId", e)
             Result.retry()
