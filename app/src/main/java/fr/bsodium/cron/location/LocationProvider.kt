@@ -108,7 +108,7 @@ class LocationProvider(private val context: Context) {
         // Reject fixes coarser than the cap — a precise fix is gated at 500 m (cell-tower-only
         // positions misplace by kilometres); the balanced current fix uses a looser cap since a
         // current city-level position is still far better than a stale precise one elsewhere.
-        if (location.accuracy > maxAccuracyMeters) return null
+        if (!isWithinAccuracyCap(location.accuracy, maxAccuracyMeters)) return null
         val capturedAt = Instant.fromEpochMilliseconds(location.time)
         checkpoints.setLastLocationFix(location.latitude, location.longitude, capturedAt)
         return LocationPayload(
@@ -206,10 +206,18 @@ class LocationProvider(private val context: Context) {
         // alternative is a stale fix in the wrong city (commute origin only needs the right area).
         private const val COARSE_MAX_ACCURACY_METERS = 5000f
         private val REVERSE_GEOCODE_TIMEOUT = 5.seconds
+
+        /** Pure cap check: a fix coarser than [maxAccuracyMeters] is rejected outright. */
+        internal fun isWithinAccuracyCap(accuracyMeters: Float, maxAccuracyMeters: Float): Boolean =
+            accuracyMeters <= maxAccuracyMeters
+
+        /** Pure recency check: a fix older than [maxAge] relative to [nowMs] is stale. */
+        internal fun isRecent(nowMs: Long, locationTimeMs: Long, maxAge: kotlin.time.Duration): Boolean =
+            (nowMs - locationTimeMs) <= maxAge.inWholeMilliseconds
     }
 
     private fun isRecent(location: Location, maxAge: kotlin.time.Duration): Boolean =
-        (System.currentTimeMillis() - location.time) <= maxAge.inWholeMilliseconds
+        isRecent(System.currentTimeMillis(), location.time, maxAge)
 
     private fun hasAnyLocationPermission(): Boolean {
         val coarse = ContextCompat.checkSelfPermission(
