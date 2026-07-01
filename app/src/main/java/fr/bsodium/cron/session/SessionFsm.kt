@@ -172,25 +172,6 @@ class SessionFsm(
         return true
     }
 
-    private fun transition(session: SleepSession, event: SessionEvent): SessionStatus =
-        when (event.trigger) {
-            TriggerType.AlarmDismissed -> when (session.status) {
-                SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
-                SessionStatus.Planning, SessionStatus.Awake, SessionStatus.Complete -> SessionStatus.Complete
-            }
-            TriggerType.SleepOnset -> when (session.status) {
-                SessionStatus.Planning, SessionStatus.Monitoring -> SessionStatus.Monitoring
-                SessionStatus.Awake -> SessionStatus.ReMonitoring
-                else -> session.status // already past monitoring: no change
-            }
-            TriggerType.OutOfBedConfirmed -> when (session.status) {
-                SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
-                SessionStatus.Awake -> SessionStatus.Complete
-                else -> session.status
-            }
-            else -> session.status // other triggers don't change status
-        }
-
     private fun onStatusChange(session: SleepSession, newStatus: SessionStatus) {
         when (newStatus) {
             SessionStatus.Awake -> {
@@ -257,6 +238,31 @@ class SessionFsm(
         )
 
         private val AI_COOLDOWN = 15.minutes
+
+        /**
+         * Pure status transition, unit-testable: given the session's current status and an incoming
+         * event, what status should it become? A dismiss while still asleep re-arms (→ Awake) rather
+         * than completing outright, so a second sleep onset can re-ring the alarm; a second dismiss
+         * (already Awake) ends the session.
+         */
+        internal fun transition(session: SleepSession, event: SessionEvent): SessionStatus =
+            when (event.trigger) {
+                TriggerType.AlarmDismissed -> when (session.status) {
+                    SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
+                    SessionStatus.Planning, SessionStatus.Awake, SessionStatus.Complete -> SessionStatus.Complete
+                }
+                TriggerType.SleepOnset -> when (session.status) {
+                    SessionStatus.Planning, SessionStatus.Monitoring -> SessionStatus.Monitoring
+                    SessionStatus.Awake -> SessionStatus.ReMonitoring
+                    else -> session.status // already past monitoring: no change
+                }
+                TriggerType.OutOfBedConfirmed -> when (session.status) {
+                    SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
+                    SessionStatus.Awake -> SessionStatus.Complete
+                    else -> session.status
+                }
+                else -> session.status // other triggers don't change status
+            }
 
         /**
          * Whether an event should fire an AI turn. Pure (no IO) so it's unit-testable: a completed
