@@ -67,7 +67,7 @@ fun rememberFabChevron(): FabChevronSlot? {
                             shape = MaterialTheme.shapes.extraSmall,
                             color = MaterialTheme.colorScheme.surfaceContainerLow,
                             tonalElevation = 3.dp,
-                            shadowElevation = 3.dp,
+                            shadowElevation = 0.dp,
                         ) {
                             Column(
                                 Modifier
