@@ -28,6 +28,24 @@ class SessionFsmTest {
         data = EventData.OutOfBedConfirmed(evidence = listOf("test")),
     )
 
+    private val sleepOnset = SessionEvent(
+        trigger = TriggerType.SleepOnset,
+        timestamp = now,
+        data = EventData.Empty,
+    )
+
+    private val hardLatestFired = SessionEvent(
+        trigger = TriggerType.HardLatestFired,
+        timestamp = now,
+        data = EventData.Empty,
+    )
+
+    private val calendarChange = SessionEvent(
+        trigger = TriggerType.CalendarChange,
+        timestamp = now,
+        data = EventData.Empty,
+    )
+
     @Test
     fun alarm_dismissed_from_monitoring_rearms_to_awake() {
         val session = Fixtures.session(status = SessionStatus.Monitoring)
@@ -56,6 +74,42 @@ class SessionFsmTest {
     fun out_of_bed_confirmed_from_monitoring_wakes_up() {
         val session = Fixtures.session(status = SessionStatus.Monitoring)
         assertEquals(SessionStatus.Awake, SessionFsm.transition(session, outOfBedConfirmed))
+    }
+
+    @Test
+    fun out_of_bed_confirmed_from_planning_is_a_no_op() {
+        val session = Fixtures.session(status = SessionStatus.Planning)
+        assertEquals(SessionStatus.Planning, SessionFsm.transition(session, outOfBedConfirmed))
+    }
+
+    @Test
+    fun out_of_bed_confirmed_from_complete_is_a_no_op() {
+        val session = Fixtures.session(status = SessionStatus.Complete)
+        assertEquals(SessionStatus.Complete, SessionFsm.transition(session, outOfBedConfirmed))
+    }
+
+    @Test
+    fun sleep_onset_from_remonitoring_is_a_no_op() {
+        val session = Fixtures.session(status = SessionStatus.ReMonitoring)
+        assertEquals(SessionStatus.ReMonitoring, SessionFsm.transition(session, sleepOnset))
+    }
+
+    @Test
+    fun sleep_onset_from_complete_is_a_no_op() {
+        val session = Fixtures.session(status = SessionStatus.Complete)
+        assertEquals(SessionStatus.Complete, SessionFsm.transition(session, sleepOnset))
+    }
+
+    @Test
+    fun hard_latest_fired_never_changes_status() {
+        val session = Fixtures.session(status = SessionStatus.Monitoring)
+        assertEquals(SessionStatus.Monitoring, SessionFsm.transition(session, hardLatestFired))
+    }
+
+    @Test
+    fun calendar_change_never_changes_status() {
+        val session = Fixtures.session(status = SessionStatus.ReMonitoring)
+        assertEquals(SessionStatus.ReMonitoring, SessionFsm.transition(session, calendarChange))
     }
 
     @Test
