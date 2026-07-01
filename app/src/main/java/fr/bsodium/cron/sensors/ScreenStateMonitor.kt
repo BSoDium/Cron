@@ -47,6 +47,8 @@ class ScreenStateMonitor(
     private var pendingOnset: Job? = null
     /** True after [rearm] has been called; consumed by the next SleepOnset emission. */
     private var isRearm: Boolean = false
+    /** The threshold the pending onset check is using; survives a screen-on/off blip during rearm. */
+    private var currentOnsetThreshold: Duration = sleepOnsetThreshold
     private val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     private val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
 
@@ -92,14 +94,15 @@ class ScreenStateMonitor(
     fun rearm(threshold: Duration = rearmThreshold) {
         sleepOnsetEmitted = false
         isRearm = true
+        currentOnsetThreshold = threshold
         screenOffSince = if (!powerManager.isInteractive) Clock.System.now() else null
         scheduleOnsetCheck(threshold)
     }
 
     private fun onScreenOff() {
         screenOffSince = Clock.System.now()
-        Log.d(TAG, "Screen off — onset check scheduled (threshold=$sleepOnsetThreshold)")
-        scheduleOnsetCheck()
+        Log.d(TAG, "Screen off — onset check scheduled (threshold=$currentOnsetThreshold)")
+        scheduleOnsetCheck(currentOnsetThreshold)
     }
 
     private fun onScreenOn() {

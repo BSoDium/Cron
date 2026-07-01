@@ -88,11 +88,12 @@ fun HomeScreen(
     val streamingThread = uiState.aiPlan?.iterations?.lastOrNull { it.thread.isStreaming }?.thread
     val revealed = rememberRevealedThread(streamingThread)
     val displayPlan = uiState.aiPlan?.withStreamingReplaced(revealed)
-    // Once the alarm has passed (out of date) or been dismissed (session Complete), the plan is spent:
-    // Home rests on the onset card + "next plan" line rather than the now-stale thread. Ticks live via
-    // rememberAlarmTiming, so it flips to resting the minute the alarm time passes.
     val timing = rememberAlarmTiming(uiState.sessionDisplay?.alarmTime, uiState.sessionDisplay?.sessionDate)
-    val resting = uiState.sessionDisplay?.status == SessionStatus.Complete || timing is AlarmTiming.Past
+    val resting = when (uiState.sessionDisplay?.status) {
+        SessionStatus.Complete, null -> true
+        SessionStatus.Awake, SessionStatus.ReMonitoring -> false
+        SessionStatus.Planning, SessionStatus.Monitoring -> timing is AlarmTiming.Past
+    }
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.
     StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
     val isFirstRun = displayPlan == null

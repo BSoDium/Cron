@@ -41,6 +41,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlin.time.Duration.Companion.minutes
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DeveloperSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -211,12 +212,14 @@ private fun FsmEventInjector(
 
     // Append-only records the event; FSM mode routes through SessionFsm.onEvent so transitions,
     // the auto-plan gate (Bug 4) and the AI cooldown (Bug 3) actually run.
-    val inject: suspend (SessionEvent) -> Boolean = { event ->
+    val inject: suspend (SessionEvent) -> String? = { event ->
         if (driveFsm) {
-            SessionFsm(context, repo).onEvent(event) != null
+            SessionFsm(context, repo).onEvent(event)?.let { sessionId ->
+                repo.findById(sessionId)?.status?.name
+            } ?: "dropped"
         } else {
             val session = repo.findCurrent()
-            if (session == null) false else { repo.appendEvent(session.id, event); true }
+            if (session == null) null else { repo.appendEvent(session.id, event); "appended" }
         }
     }
 
@@ -242,6 +245,13 @@ private fun FsmEventInjector(
                     trigger = TriggerType.SleepOnset,
                     timestamp = Clock.System.now(),
                     data = EventData.SleepOnset(screenOffSince = Clock.System.now(), rearm = false),
+                ))
+            }
+            InjectButton("Sleep Onset (rearm)", scope) {
+                inject(SessionEvent(
+                    trigger = TriggerType.SleepOnset,
+                    timestamp = Clock.System.now(),
+                    data = EventData.SleepOnset(screenOffSince = Clock.System.now(), rearm = true),
                 ))
             }
             InjectButton("Mid Sleep Activity", scope) {
@@ -284,13 +294,14 @@ private fun FsmEventInjector(
 private fun InjectButton(
     label: String,
     scope: kotlinx.coroutines.CoroutineScope,
-    action: suspend () -> Boolean,
+    action: suspend () -> String?,
 ) {
     val context = LocalContext.current
     FilledTonalButton(
         onClick = {
             scope.launch {
-                val msg = if (action()) "$label injected" else "No active session"
+                val result = action()
+                val msg = if (result != null) "$label → $result" else "No active session"
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             }
         },

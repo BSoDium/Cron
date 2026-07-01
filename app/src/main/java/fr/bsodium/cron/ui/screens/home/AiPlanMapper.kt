@@ -24,7 +24,7 @@ sealed interface RunKind {
     data object ManualBase : RunKind
 
     /** A later rerun, named by the event that triggered it (null trigger → generic "Re-planned"). */
-    data class Replan(val trigger: TriggerType?) : RunKind
+    data class Replan(val trigger: TriggerType?, val rearm: Boolean = false) : RunKind
 }
 
 /** The tab label for a run. Exhaustive over [RunKind] and [TriggerType]. */
@@ -36,7 +36,7 @@ val RunKind.label: String
             null -> "Re-planned"
             TriggerType.EveningPlan -> "Re-planned"
             TriggerType.CalendarChange -> "Your schedule changed"
-            TriggerType.SleepOnset -> "You fell asleep"
+            TriggerType.SleepOnset -> if (rearm) "You fell back asleep" else "You fell asleep"
             TriggerType.HcStageUpdate -> "Sleep update"
             TriggerType.MidSleepActivity -> "Movement detected"
             TriggerType.OutOfBedConfirmed -> "You got up"
@@ -123,7 +123,10 @@ object AiPlanMapper {
             // yet (the seed beats the event write), so inferring from `events` alone would briefly mislabel it.
             val effectiveTrigger = streaming?.trigger?.takeIf { turn == streamingTurn } ?: sourceEvent?.trigger
             val kind = when {
-                index > 0 -> RunKind.Replan(effectiveTrigger)
+                index > 0 -> RunKind.Replan(
+                    trigger = effectiveTrigger,
+                    rearm = (sourceEvent?.data as? EventData.SleepOnset)?.rearm == true,
+                )
                 (sourceEvent?.data as? EventData.EveningPlan)?.isManual == true -> RunKind.ManualBase
                 else -> RunKind.ScheduledBase
             }

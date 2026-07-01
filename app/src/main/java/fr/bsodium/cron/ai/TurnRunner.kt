@@ -89,7 +89,7 @@ class TurnRunner(
                     system = systemPrompt,
                     messages = messages.toList(),
                     tools = tools.definitions,
-                    tool_choice = toolChoice,
+                    tool_choice = if (round == 0) toolChoice else null,
                     thinking = thinking,
                 )
 
