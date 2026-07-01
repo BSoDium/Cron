@@ -23,3 +23,6 @@ local.properties
 
 # Claude Code local state
 .claude/
+
+# Gradle toolchain auto-discovery (machine-specific)
+gradle/gradle-daemon-jvm.properties
