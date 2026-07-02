@@ -22,12 +22,13 @@ import kotlinx.coroutines.flow.filter
 /** Sticky alarm-card collapse geometry. fraction 0 = expanded, 1 = collapsed; pinned ⟺ distancePx > 0. */
 internal data class AlarmCollapse(val top: Int, val gradientAlpha: Float, val fraction: Float, val distancePx: Float)
 
-// Deterministic landing for the magnetic snap — a spring's asymptotic tail reads as a stall.
-// Sanctioned motionScheme exception: see docs/expressive.md § Sanctioned exceptions.
+/**
+ * Deterministic landing for the magnetic snap — a spring's asymptotic tail reads as a stall.
+ * Sanctioned motionScheme exception: see docs/expressive.md § Sanctioned exceptions.
+ */
 private val ALARM_SNAP_SPEC = tween<Float>(durationMillis = 260, easing = FastOutSlowInEasing)
-// A drag-release flips isScrollInProgress false for a frame BEFORE the post-release fling starts.
-// Wait this gap out and re-check, so the snap runs from the TRUE settle — not the momentary gap, where
-// the fling would immediately preempt it ("Mutation interrupted") and leave the card stuck mid-collapse.
+
+/** Debounce for the gap where `isScrollInProgress` flips false a frame before the post-release fling starts, so the snap waits for the TRUE settle instead of the fling preempting it. */
 private const val SETTLE_DEBOUNCE_MS = 50L
 
 /**
@@ -44,9 +45,7 @@ internal fun AlarmCollapseEffects(
     rangePx: Float,
     hapticsEnabled: Boolean,
 ) {
-    // Read live inside the listState-keyed effects below: a haptics-pref toggle swaps the instance, the
-    // range resolves from the card's measured height a frame or two after the effects launch, and the
-    // collapse State can be recreated when the card height changes — none should stay captured stale.
+    // Read live inside the listState-keyed effects below: haptics/range/collapse can each change or resolve late, so none should stay captured stale.
     val haptics = rememberUpdatedState(rememberCronHaptics(enabled = hapticsEnabled))
     val range = rememberUpdatedState(rangePx)
     val collapseRef = rememberUpdatedState(collapse)
@@ -56,8 +55,7 @@ internal fun AlarmCollapseEffects(
             .drop(1)
             .collect { haptics.value.tick() }
     }
-    // Latest scroll direction within the collapse range, so a settle-in-between completes toward where the
-    // user was headed (down → collapse, up → expand) instead of a fixed midpoint that yanks a down-scroll back up.
+    // Latest scroll direction within the collapse range, so a settle-in-between completes toward where the user was headed instead of a fixed midpoint that yanks a down-scroll back up.
     val scrollingDown = remember { mutableStateOf(true) }
     LaunchedEffect(listState) {
         var last = collapseRef.value.value.distancePx
@@ -71,13 +69,11 @@ internal fun AlarmCollapseEffects(
         snapshotFlow { listState.isScrollInProgress }
             .filter { !it }
             .collect {
-                // The release flips this false for a frame before the fling; wait it out, then re-check
-                // so the snap runs from the true settle (else the fling preempts it: "Mutation interrupted").
+                // Wait out the frame where release flips this false before the fling, then re-check, so the snap runs from the true settle (else the fling preempts it).
                 delay(SETTLE_DEBOUNCE_MS)
                 if (listState.isScrollInProgress) return@collect
                 val c = collapseRef.value.value
-                // Only nudge a scroll that came to REST between the two stable states — a momentum fling that
-                // already carried through to a stable end (or into the content below) is left untouched.
+                // Only nudge a scroll that came to REST between the two stable states — a momentum fling that already reached a stable end is left untouched.
                 if (c.fraction <= 0.001f || c.fraction >= 0.999f) return@collect
                 try {
                     if (scrollingDown.value && listState.canScrollForward) {
@@ -88,13 +84,11 @@ internal fun AlarmCollapseEffects(
                             listState.animateScrollToItem(0)
                         }
                     } else {
-                        // Headed up (or can't collapse further) → land at the very top so the greeting + full
-                        // card are visible (not just pinned under the status bar).
+                        // Headed up (or can't collapse further) → land at the very top so the greeting + full card are visible (not just pinned under the status bar).
                         listState.animateScrollToItem(0)
                     }
                 } catch (e: CancellationException) {
-                    // User grabbed the list mid-snap → the SCROLL is cancelled, not us. Keep observing
-                    // so the next settle re-snaps; rethrow only if WE were cancelled (composition gone).
+                    // User grabbed the list mid-snap → the SCROLL is cancelled, not us; rethrow only if WE were cancelled (composition gone).
                     coroutineContext.ensureActive()
                 }
             }

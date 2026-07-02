@@ -24,8 +24,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlin.math.roundToInt
 
-// Max stroke (local 76sp space) overlaid on the collapsed digits to fake weight as they shrink.
-// Conservative default — bump for bolder collapsed digits.
+// Max stroke (local 76sp space) overlaid on the collapsed digits to fake weight as they shrink. Conservative default — bump for bolder collapsed digits.
 private val MAX_CLOCK_STROKE = 1.5.dp
 
 /** Collapsed alarm-bar height: a perfect pill (= 2 × the corner radius). Shared with HomeContent's
@@ -59,8 +58,7 @@ internal fun CollapsibleAlarmCard(
     val upcoming = timing is AlarmTiming.Upcoming
     val digitColor = if (upcoming) onCard else onCard.copy(alpha = 0.30f)
     val countdownColor = if (upcoming) onCard.copy(alpha = 0.7f) else onCard.copy(alpha = 0.30f)
-    // One reveal, shared by the moving clock + countdown (the hidden time row in extras keeps its own
-    // deterministic copy, never drawn).
+    // One reveal, shared by the moving clock + countdown (the hidden time row in extras keeps its own deterministic copy, never drawn).
     val reveal = rememberLcdReveal(alarmTime)
     val ink = rememberLcdInkMetrics()
     val countdownInkTopPx = rememberInkTopPx(CountdownFontFamily, CronTypography.lcdStack.fontSize)
@@ -74,13 +72,11 @@ internal fun CollapsibleAlarmCard(
         SubcomposeLayout(modifier = Modifier.clipToBounds()) { constraints ->
             val f = collapseFraction().coerceIn(0f, 1f)
             val cWrap = constraints.copy(minWidth = 0, minHeight = 0)
-            // Extras fills the full card width (its sleep tile spans it) so the layout width — and the
-            // right-aligned countdown — track the real card width, not the wrapped content width.
+            // Extras fills the full card width (its sleep tile spans it) so the layout width and right-aligned countdown track the real card width.
             val cFill = if (constraints.hasBoundedWidth) constraints.copy(minWidth = constraints.maxWidth, minHeight = 0) else cWrap
             val extrasAlpha = (1f - f * 1.6f).coerceIn(0f, 1f)
 
-            // Full expanded layout with its time row and date hidden (still measured) → single source of
-            // geometry; those are drawn as moving copies on top. The badge isn't in the expanded card.
+            // Full expanded layout with its time row and date hidden (still measured) is the single source of geometry; those draw as moving copies on top.
             val extras = subcompose("extras") {
                 AlarmCardContent(dateLabel, alarmTime, timing, timeRowAlpha = 0f, dateAlpha = 0f)
             }.first().measure(cFill)
@@ -93,23 +89,17 @@ internal fun CollapsibleAlarmCard(
             val barHeight = ALARM_BAR_HEIGHT.roundToPx()
             // Inset > a tight fit so the shrunken digits gain a little spacing above and below in the pill.
             val innerInset = Spacing.md.roundToPx()
-            // Centre on the digit INK, not the line box (Major Mono digits have no descenders → sit high).
-            // Derived from the font's measured line box so the scale is known BEFORE the clock is
-            // subcomposed — the weight stroke is a draw param baked in at that point.
+            // Centre on the digit ink, not the line box (Major Mono digits have no descenders → sit high); derived before the clock is subcomposed since the weight stroke is baked in at that point.
             val inkHeightPx = ink.heightFraction * ink.lineBoxPx
             val inkCenterPx = ink.centerFraction * ink.lineBoxPx
             val collapsedScale = ((barHeight - innerInset * 2) / inkHeightPx).coerceIn(0.2f, 1f)
             val clockScale = lerp(1f, collapsedScale, f)
-            // Fake weight grows in proportion to the size DECREASE. Dividing the local stroke by the
-            // glyph scale cancels the dilution from shrinking, so the RENDERED stroke tracks f directly.
+            // Fake weight grows with the size decrease; dividing by the glyph scale cancels the shrink's dilution so the rendered stroke tracks f directly.
             val strokePx = MAX_CLOCK_STROKE.toPx() * f / clockScale
             val clock = subcompose("clock") {
                 LcdClock(alarmTime, reveal, digitColor, strokeWidthPx = strokePx)
             }.first().measure(cWrap)
-            // The remaining is the SAME CountdownStack as expanded (identical font/size/weight) — it just
-            // moves and re-aligns its lines (left→right) via alignFraction; it never fades or resizes.
-            // showLabel=false: the "remaining" label is subcomposed separately so it doesn't inflate
-            // the countdown height and break pill centering.
+            // Same CountdownStack as expanded; it only moves/re-aligns via alignFraction, never fades or resizes. showLabel=false keeps the "remaining" label subcomposed separately so it can't inflate the pill height.
             val countdown = subcompose("countdown") {
                 RemainingOrStatus(timing = timing, progress = reveal.progress, color = countdownColor, alignFraction = f, showLabel = false)
             }.first().measure(cWrap)
@@ -138,16 +128,14 @@ internal fun CollapsibleAlarmCard(
 
             layout(w, height) {
                 if (extrasAlpha > 0f) extras.placeWithLayer(0, 0) { alpha = extrasAlpha }
-                // Date: sits where extras' (hidden) date is at f=0, then slides UP out the top and fades —
-                // opposite the time, which rises from the bottom.
+                // Date: sits where extras' (hidden) date is at f=0, then slides up out the top and fades — opposite the time, which rises from the bottom.
                 if (extrasAlpha > 0f) {
                     date.placeWithLayer(startPad, topPad) {
                         translationY = -(topPad + date.height).toFloat() * f
                         alpha = extrasAlpha
                     }
                 }
-                // Clock: left-anchored at startPad in BOTH states (the collapsed time stays left-aligned);
-                // pivot on the digit-ink centre so scaling + translation land the ink dead-centre in the pill.
+                // Clock: left-anchored at startPad in both states; pivot on the digit-ink centre so scaling + translation land the ink dead-centre in the pill.
                 clock.placeWithLayer(startPad, expandedClockY) {
                     scaleX = clockScale
                     scaleY = clockScale

@@ -83,8 +83,7 @@ fun HomeScreen(
     onNavigateToHistory: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    // At most one iteration streams at a time (always the latest). Typewriter-reveal that sub-thread and
-    // splice it back so the rest of the plan renders settled.
+    // At most one iteration streams at a time (the latest); typewriter-reveal that sub-thread and splice it back so the rest of the plan renders settled.
     val streamingThread = uiState.aiPlan?.iterations?.lastOrNull { it.thread.isStreaming }?.thread
     val revealed = rememberRevealedThread(streamingThread)
     val displayPlan = uiState.aiPlan?.withStreamingReplaced(revealed)

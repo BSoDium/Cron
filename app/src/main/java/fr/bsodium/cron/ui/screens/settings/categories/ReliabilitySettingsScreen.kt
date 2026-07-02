@@ -16,8 +16,10 @@ import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
 import fr.bsodium.cron.ui.screens.settings.components.ActionRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
 
-// No @Preview: this screen reads live system-permission state and wires Activity-result launchers,
-// which the preview renderer can't supply. The individual ActionRows are previewed in ActionRow.kt.
+/**
+ * No `@Preview`: this screen reads live system-permission state and wires Activity-result launchers,
+ * which the preview renderer can't supply. The individual [ActionRow]s are previewed in `ActionRow.kt`.
+ */
 @Composable
 fun ReliabilitySettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current

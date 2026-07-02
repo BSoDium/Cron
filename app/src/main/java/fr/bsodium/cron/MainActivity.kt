@@ -136,9 +136,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val settings = SettingsRepository(this)
-        // Resolve the start destination off the main thread: SecureKeyStore init (keystore/Tink) and the
-        // DataStore read both block, and gating the first frame on them shows a white window. The branded
-        // splash stays up until this lands, then the NavHost composes immediately.
+        // Resolve the start destination off the main thread: SecureKeyStore init and the DataStore read both block, so the branded splash stays up until this lands.
         val startDestination = mutableStateOf<String?>(null)
         splash.setKeepOnScreenCondition { startDestination.value == null }
 
@@ -157,8 +155,7 @@ class MainActivity : ComponentActivity() {
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = backStackEntry?.destination?.route
                 val showBottomBar = currentRoute in TAB_ROUTES
-                // Pages with a PageAppBar own the status-bar strip; the top edge-fade would two-tone it
-                // against the bar's scrolled surfaceContainer shade, so suppress it there.
+                // Pages with a PageAppBar own the status-bar strip; the top edge-fade would two-tone it against the bar's scrolled surfaceContainer shade, so suppress it there.
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
                     currentRoute?.startsWith("settings") == true
                 val fabRegistry = remember { FabRegistry() }
@@ -227,8 +224,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                     ) { _ ->
-                        // Edge-to-edge: each screen folds the status-bar inset into its own top padding and
-                        // carries bottom padding for the nav pill; EdgeFades overlays soft top/bottom scrims.
+                        // Edge-to-edge: each screen folds the status-bar inset into its own top padding and carries bottom padding for the nav pill; EdgeFades overlays soft top/bottom scrims.
                         Box(modifier = Modifier.fillMaxSize()) {
                             NavHost(
                                 navController = navController,

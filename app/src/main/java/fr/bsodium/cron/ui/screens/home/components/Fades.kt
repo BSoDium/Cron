@@ -20,8 +20,7 @@ internal fun Modifier.fadeBottom(height: Dp, strength: Float = 1f): Modifier = t
     .drawWithContent {
         drawContent()
         drawRect(
-            // [strength] scales the erase: 1 → bottom fully transparent (full fade); 0 → opaque (no fade),
-            // so the band can be animated in as the collapse affordance appears.
+            // [strength] scales the erase (1 = fully transparent, 0 = opaque) so the band can animate in as the collapse affordance appears.
             brush = Brush.verticalGradient(
                 colors = listOf(Color.Black, Color.Black.copy(alpha = 1f - strength)),
                 startY = size.height - height.toPx(),

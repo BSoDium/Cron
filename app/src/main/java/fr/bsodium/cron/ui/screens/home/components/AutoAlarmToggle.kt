@@ -58,8 +58,7 @@ internal fun AutoAlarmToggle(
     val haptics = rememberCronHaptics(enabled = hapticsEnabled)
     var initialRender by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) { initialRender = false }
-    // The plain/left end tracks the page background (light=surfaceContainer, dark=surface) so the
-    // resting pill blends into the page in both themes; the active end stays a distinct shade above it.
+    // Plain end tracks the page background so the resting pill blends into the page in both themes; active end stays a distinct shade above it.
     val pageBackground = CronColors.pageBackground
     val targetColor = if (enabled) {
         MaterialTheme.colorScheme.surfaceContainerHighest

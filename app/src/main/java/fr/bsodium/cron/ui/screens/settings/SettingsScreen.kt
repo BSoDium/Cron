@@ -84,8 +84,7 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = buildList {
     }
 }
 
-// Connected-card group: large radius on a group's outer corners, a barely-rounded seam where
-// same-group cards meet, a tight gap within a group. Between sections the header carries the gap.
+// Connected-card group: large radius on outer corners, a barely-rounded seam within a group, a tight inter-card gap; between sections the header carries the gap.
 /** Scroll state for the settings root list, hoisted to MainActivity so PredictiveBackCard can snapshot it. */
 val LocalSettingsListState = compositionLocalOf { LazyListState() }
 

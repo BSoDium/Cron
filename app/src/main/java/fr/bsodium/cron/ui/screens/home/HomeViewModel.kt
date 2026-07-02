@@ -113,8 +113,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (id == null) {
                 flowOf(null)
             } else {
-                // One cache per session so settled turns (immutable) build once instead of being
-                // re-decoded on every DB/streaming emission. Confined to this Default-dispatched flow.
+                // One cache per session so settled (immutable) turns build once instead of being re-decoded on every DB/streaming emission; confined to this Default-dispatched flow.
                 val threadCache = TurnThreadCache()
                 combine(
                     db.aiMessageDao().observeBySession(id),
@@ -276,8 +275,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } else {
                 eveningPlanScheduler.cancel()
-                // Stop the monitor so sensors stop emitting — the FSM also drops automatic events, but
-                // tearing down the FGS is the actual stand-down the user asked for.
+                // Stop the monitor so sensors stop emitting — tearing down the FGS is the actual stand-down the user asked for (the FSM alone only drops automatic events).
                 getApplication<Application>().startService(SleepSessionService.stopIntent(getApplication()))
                 repository.findCurrent()?.let { session ->
                     alarmScheduler.cancel(session.date)
@@ -300,9 +298,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
         }
 
-        // Drive the "working" flag and the failure banner off the real WorkManager turn, not a fixed
-        // delay: a tap sets isRetrying true optimistically; this clears it when the turn reaches a
-        // terminal state, and surfaces the failure reason a FAILED turn carries in its output data.
+        // Drive the "working" flag and failure banner off the real WorkManager turn, not a fixed delay: a tap sets isRetrying true optimistically, cleared on terminal state, surfacing a FAILED turn's output-data failure reason.
         viewModelScope.launch {
             sessionFlow.map { it?.id }.distinctUntilChanged()
                 .flatMapLatest { id ->
@@ -375,11 +371,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun retryAiPlan() {
         _isRetrying.value = true
-        // Application-scoped, NOT viewModelScope: the seeded StreamingTurnStore placeholder is a
-        // process-global singleton, and ~tens of seconds of location/calendar suspension sit between the
-        // seed and the worker enqueue. A ViewModel clear (navigation, process trim) cancelling this block
-        // mid-flight would orphan the seed — a permanent phantom tab. The finally below guarantees the
-        // seed is cleared on every exit where the worker was never enqueued.
+        // Application-scoped, NOT viewModelScope: a ViewModel clear could cancel this mid-flight (tens of seconds of location/calendar work sit between seed and enqueue) and orphan the process-global StreamingTurnStore seed as a permanent phantom tab; the finally below guarantees it's cleared whenever the worker never gets enqueued.
         getApplication<CronApplication>().appScope.launch {
             var seeded: Pair<String, Int>? = null
             var enqueued = false
@@ -388,13 +380,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val morning = SessionRepository.morningDate(Clock.System.now(), tz)
                 // A same-morning session means this is a replan of an existing plan, not a fresh bootstrap.
                 val replanSession = repository.findCurrent()?.takeIf { it.date == morning }
-                // Seed the upcoming turn FIRST (fast DB read) so its tab shows the instant the user taps —
-                // before the slow location fetch — and IS the real turn (the worker uses maxTurn+1 too, and
-                // appendEvent below adds an event, not an AiMessage, so the index stays correct).
+                // Seed the upcoming turn FIRST (fast DB read) so its tab shows the instant the user taps, before the slow location fetch; it IS the real turn since the worker uses maxTurn+1 too and appendEvent below doesn't touch AiMessage.
                 if (replanSession != null) {
                     val nextTurn = (db.aiMessageDao().maxTurnIndex(replanSession.id) ?: -1) + 1
-                    // Seed with the trigger we're about to fire, so the new tab reads "Re-planned" immediately
-                    // instead of inheriting the prior event's label until our event is persisted.
+                    // Seed with the trigger we're about to fire, so the new tab reads "Re-planned" immediately instead of inheriting the prior event's label until ours is persisted.
                     StreamingTurnStore.seedPending(replanSession.id, nextTurn, Clock.System.now().toEpochMilliseconds(), TriggerType.EveningPlan)
                     seeded = replanSession.id to nextTurn
                     _optimisticTurn.value = seeded
@@ -411,15 +400,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 val fsm = SessionFsm(getApplication(), repository)
                 if (replanSession != null) {
-                    // Same-morning replan: append the fresh evening-plan event (latest wins in the worker),
-                    // pull in any plan-affecting setting changed since bootstrap, then re-run the turn.
+                    // Same-morning replan: append the fresh evening-plan event (latest wins in the worker), pull in any plan-affecting setting changed since bootstrap, then re-run the turn.
                     repository.appendEvent(replanSession.id, event)
                     fsm.refreshPlanFromSettings(replanSession.id)
                     repository.triggerAiTurn(replanSession.id)
                 } else {
-                    // No session, or a stale one targeting an earlier morning (e.g. a morning re-run of a
-                    // session created last night) — let the FSM supersede the stale one and bootstrap a
-                    // fresh session for the correct upcoming morning, so the alarm isn't pinned to today.
+                    // No session, or a stale one targeting an earlier morning — let the FSM supersede it and bootstrap a fresh session for the correct upcoming morning.
                     fsm.onEvent(event)
                 }
                 enqueued = true
@@ -428,8 +414,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.w(TAG, "retryAiPlan failed before the worker was enqueued", e)
             } finally {
-                // Once enqueued, the worker's own finally owns the streaming-store lifecycle; until then,
-                // every exit must roll the optimistic UI back or the seed wedges the home screen.
+                // Once enqueued, the worker's own finally owns the streaming-store lifecycle; until then, every exit must roll the optimistic UI back or the seed wedges the home screen.
                 if (!enqueued) {
                     seeded?.let { (sessionId, turn) -> StreamingTurnStore.clear(sessionId, turn) }
                     _optimisticTurn.value = null

@@ -45,8 +45,7 @@ fun PageAppBar(
     val barContainer = CronColors.pageBackground
     LargeFlexibleTopAppBar(
         title = {
-            // Brand face at Medium — between the theme's SemiBold headline default (too heavy here) and
-            // the old Light page title; the bar's size + large→small interpolation are left intact.
+            // Brand face at Medium — between the theme's SemiBold headline default (too heavy) and the old Light page title; bar size + large→small interpolation left intact.
             Text(
                 text = title,
                 style = if (LocalInspectionMode.current) {

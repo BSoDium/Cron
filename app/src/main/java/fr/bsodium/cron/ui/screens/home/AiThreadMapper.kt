@@ -94,12 +94,10 @@ object AiThreadMapper {
     ): AiThreadUi {
         val toolResults = toolResultBlocks.associateBy { it.tool_use_id }
 
-        // Model-authored pill labels: "STATUS: <gerund>" while working, leading "SUMMARY: <past>" on
-        // the answer. Pull them out in order and strip them so they never render.
+        // Model-authored pill labels ("STATUS: <gerund>" while working, "SUMMARY: <past>" on the answer): pulled out in order and stripped so they never render.
         val statuses = mutableListOf<String>()
         var summaryLine: String? = null
-        // [committable] = false for the still-streaming tail block: a STATUS gerund may be half-typed
-        // ("Evaluating"…), so strip it from display but don't surface it as the live step title yet.
+        // [committable] = false for the still-streaming tail block: a STATUS gerund may be half-typed, so strip it from display without surfacing it as the live step title yet.
         fun stripDirectives(text: String, committable: Boolean = true): String {
             val kept = mutableListOf<String>()
             text.lineSequence().forEach { line ->
@@ -112,16 +110,14 @@ object AiThreadMapper {
                     else -> kept += line
                 }
             }
-            // While streaming, a trailing line still typing out a directive ("STATU", "SUMMAR") hasn't
-            // matched the full STATUS:/SUMMARY: regex yet — drop it so the prefix never flashes.
+            // While streaming, a trailing line still mid-typing a directive hasn't matched the full STATUS:/SUMMARY: regex yet — drop it so the prefix never flashes.
             if (isStreaming && kept.lastOrNull()?.let { isPartialDirectivePrefix(it.trim()) } == true) {
                 kept.removeAt(kept.lastIndex)
             }
             return kept.joinToString("\n").trim()
         }
 
-        // The answer begins at the model's SUMMARY marker (see [answerStartOf]); everything before it is
-        // thinking-process narration. While streaming, nothing is the answer until the marker lands.
+        // The answer begins at the model's SUMMARY marker (see [answerStartOf]); while streaming, nothing is the answer until that marker lands.
         val answerStart = answerStartOf(blocks, isStreaming)
 
         val process = blocks.take(answerStart).mapIndexedNotNull { index, block ->
@@ -153,8 +149,7 @@ object AiThreadMapper {
             .let(::stripLeadingRule)
             .takeIf { it.isNotBlank() }
 
-        // A do_nothing turn ends with no trailing text; fall back to the SUMMARY line, then the
-        // do_nothing reason, so the card still explains the decision.
+        // A do_nothing turn ends with no trailing text; fall back to the SUMMARY line, then the do_nothing reason, so the card still explains the decision.
         val doNothingReason = blocks
             .filterIsInstance<ContentBlock.ToolUse>()
             .firstOrNull { it.name == "do_nothing" }
@@ -164,13 +159,10 @@ object AiThreadMapper {
                     .getOrNull()
             }
             ?.takeIf { it.isNotBlank() }
-        // While streaming, never let the SUMMARY (a pill label) or do_nothing reason stand in for the
-        // answer — that flashed the summary in the response area before the real body streamed in. Only
-        // fall back once settled (a do_nothing turn legitimately has no body).
+        // Never let the SUMMARY or do_nothing reason stand in for the answer while streaming — that flashed the summary before the real body streamed in; fall back only once settled.
         val answer = response ?: if (isStreaming) null else (summaryLine ?: doNothingReason)
 
-        // Pill preview: gerund while working, past-tense summary once answered; falls back to the
-        // first reasoning line if the model skipped the directives.
+        // Pill preview: gerund while working, past-tense summary once answered; falls back to the first reasoning line if the model skipped the directives.
         val fallback = process
             .firstNotNullOfOrNull { (it as? ProcessItem.Reasoning)?.text ?: (it as? ProcessItem.Narration)?.text }
             ?.lineSequence()

@@ -104,18 +104,21 @@ internal fun AlarmShell(
     }
 }
 
-/** The expanded card body: bold date, hero LCD time, and the sleep block. Renders in `onPrimary`. */
+/**
+ * The expanded card body: bold date, hero LCD time, and the sleep block. Renders in `onPrimary`.
+ *
+ * @param timeRowAlpha The collapsing card hides this layer's time row (clock + countdown become moving
+ * copies drawn on top) while still measuring it, so this stays the single source of expanded geometry.
+ * @param dateAlpha The collapsing card hides the date here and draws it as a moving copy that slides up
+ * out the top, so it leaves/enters opposite the time (which moves from the bottom).
+ */
 @Composable
 internal fun AlarmCardContent(
     dateLabel: String,
     alarmTime: LocalTime?,
     timing: AlarmTiming,
     modifier: Modifier = Modifier,
-    // The collapsing card hides this layer's time row (clock + countdown — both become moving copies
-    // drawn on top) while still measuring it, so this stays the single source of expanded geometry.
     timeRowAlpha: Float = 1f,
-    // The date is hidden here (dateAlpha = 0) in the collapsing card and drawn as a moving copy that
-    // slides up out the top, so it leaves/enters opposite the time (which moves from the bottom).
     dateAlpha: Float = 1f,
 ) {
     val onCard = MaterialTheme.colorScheme.onPrimary
@@ -216,6 +219,9 @@ private fun LcdTimeDisplay(
 /**
  * The "HH:MM" LCD clock (custom-colon, side-bearing-trimmed). Reused both inline in [LcdTimeDisplay]
  * and as one of the moving copies of the collapsing card, so [progress] (the reveal) is hoisted in.
+ *
+ * @param strokeWidthPx The single-weight LCD face has no bold; this (local px) overlays a stroke that
+ * thickens the glyphs as the clock shrinks, so the small digits read with more weight.
  */
 @Composable
 internal fun LcdClock(
@@ -223,8 +229,6 @@ internal fun LcdClock(
     reveal: LcdReveal,
     color: Color,
     modifier: Modifier = Modifier,
-    // The single-weight LCD face has no bold; [strokeWidthPx] (local px) overlays a stroke that
-    // thickens the glyphs as the clock shrinks, so the small digits read with more weight.
     strokeWidthPx: Float = 0f,
 ) {
     val pending = alarmTime == null
@@ -306,8 +310,7 @@ internal fun rememberLcdReveal(alarmTime: LocalTime?): LcdReveal {
         } else if (valueKey != animatedKey) {
             fromKey = requireNotNull(animatedKey) { "checked non-null by the enclosing else-if" }
             progressAnim.snapTo(0f)
-            // Sanctioned motionScheme exception (docs/expressive.md § Sanctioned exceptions): the reveal
-            // gates digit rolling on a 0→1 progress; a spring's overshoot past 1 would re-roll the digits.
+            // Sanctioned motionScheme exception (docs/expressive.md § Sanctioned exceptions): a spring's overshoot past 1 would re-roll the 0→1 gated digits.
             progressAnim.animateTo(1f, tween(durationMillis = LCD_REVEAL_MILLIS, easing = EaseOutCubic))
             fromKey = valueKey
             animatedKey = valueKey

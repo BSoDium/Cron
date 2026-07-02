@@ -84,14 +84,20 @@ sealed interface ThreadRole {
     data class Older(val ranAtEpochMs: Long?, val onJumpToLatest: () -> Unit) : ThreadRole
 }
 
+/**
+ * Renders one turn's AI thread: header disclosure, answer body, and (for the latest turn) the
+ * live thinking shape.
+ *
+ * [expanded]/[onExpandedChange] make disclosure controlled/uncontrolled: when [expanded] is null
+ * the disclosure manages its own state (previews, tests); HomeScreen hoists it so the pull gesture
+ * can drive it. [expandPx] peeks the timeline open by an absolute pixel height (1:1 with the drag);
+ * [onFullHeight] reports its measured full height. Both per-frame values arrive as providers, read
+ * only in measure/draw, so a drag never recomposes.
+ */
 @Composable
 fun AiThinkingThread(
     thread: AiThreadUi,
     modifier: Modifier = Modifier,
-    // Controlled/uncontrolled: when [expanded] is null the disclosure manages its own state (previews,
-    // tests); HomeScreen hoists it so the pull gesture can drive it. [expandPx] peeks the timeline open
-    // by an absolute pixel height (1:1 with the drag); [onFullHeight] reports its measured full height.
-    // Both per-frame values arrive as PROVIDERS, read only in measure/draw — a drag never recomposes.
     expanded: Boolean? = null,
     onExpandedChange: ((Boolean) -> Unit)? = null,
     expandPx: () -> Float = { 0f },
@@ -107,8 +113,7 @@ fun AiThinkingThread(
         val inProgress = thread.isStreaming
         // Loader only while genuinely thinking — it stops the instant the answer starts streaming.
         val thinking = inProgress && thread.response.isNullOrBlank()
-        // Always present, even with no tools/reasoning, so the block settles into a "Thought for Xs" header
-        // instead of vanishing the moment the response lands (canExpand still gates the chevron/reveal).
+        // Always present so it settles into a "Thought for Xs" header instead of vanishing when the response lands.
         ThinkingDisclosure(
             summary = thread.summary,
             process = thread.process,
@@ -125,11 +130,7 @@ fun AiThinkingThread(
             onFullHeight = onFullHeight,
             expansionFraction = expansionFraction,
         )
-        // Alpha-only in AND out: any size-changing transition (e.g. shrinkVertically) makes
-        // AnimatedVisibility clipToBounds the block, which clips the streaming markdown to its
-        // first-frame (too-small) height as the answer appears. Pure fades never clip. Hold the last
-        // answer so the exit renders real content while it fades.
-        // The response and the "no response" note share one crossfading slot (see [AnswerArea]).
+        // Alpha-only fades: a size-changing exit (e.g. shrinkVertically) would clipToBounds the streaming markdown to its first-frame height.
         AnswerArea(
             response = thread.response,
             inProgress = inProgress,
@@ -148,8 +149,7 @@ fun AiThinkingThread(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 ThinkingShape(phase = phase, restKey = thread.turnIndex)
-                // The shape itself is the down-arrow cue while thinking; this label sits beside it and fades
-                // out as the timeline is pulled open.
+                // The shape is the down-arrow cue while thinking; this label sits beside it and fades out as the timeline opens.
                 if (phase == ShapePhase.Thinking) {
                     Text(
                         text = "Pull down to show thinking",
@@ -184,8 +184,7 @@ internal fun ThinkingDisclosure(
     // Chevron pivot from the live reveal, resolved lazily so the drag only invalidates the draw layer.
     val openFraction = { if (expanded) 1f else expansionFraction().coerceIn(0f, 1f) }
     Column(modifier = Modifier.fillMaxWidth()) {
-        // The header (and its tap ripple) bleeds past the list's content padding to span the full
-        // screen width; start/end padding re-insets the summary, avatars, and chevron to the margin.
+        // The header (and its tap ripple) bleeds to the full screen width; start/end padding re-insets the content to the margin.
         Row(
             modifier = Modifier
                 .bleedHorizontally(Spacing.xl)
@@ -196,8 +195,7 @@ internal fun ThinkingDisclosure(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            // The tools called so far + a trailing pending loader disc; with no tools, a fallback assistant
-            // disc (inside ToolStack) so the header always leads with an icon, never floating text.
+            // Tools called so far + a trailing pending loader disc; ToolStack falls back to an assistant disc so the header always leads with an icon.
             val tools = process.filterIsInstance<ProcessItem.Tool>()
             ToolStack(tools, pending = pending)
             val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -226,9 +224,7 @@ internal fun ThinkingDisclosure(
                 )
             }
             if (canExpand) {
-                // Anchored on ExpandMore so the EXPANDED state is the glyph's true direction (down) in both
-                // layout directions; collapsed rotates it ±90° toward the reading direction (right in LTR,
-                // left in RTL) — a direction-aware animation between the two states, not a faked icon.
+                // Anchored on ExpandMore (true direction when expanded); collapsed rotates ±90° toward the reading direction, not a faked icon.
                 val ltr = LocalLayoutDirection.current == LayoutDirection.Ltr
                 Symbol(
                     symbol = MaterialSymbol.ExpandMore,
@@ -240,11 +236,7 @@ internal fun ThinkingDisclosure(
                 )
             }
         }
-        // Single pixel-accurate reveal: the pull drives expandPx 1:1 with the finger; tap/release animate
-        // the same value (owned by HomeScreen), so there's no second source to dip against. Fully expanded
-        // clips to Float.MAX_VALUE → the natural height, re-measured so a still-streaming timeline isn't
-        // cut. Settled turns always compose (at h=0 when collapsed) so the full height is ready for tap/pull.
-        // Derived: expandPx changes per drag frame, but composition only cares whether it crossed zero.
+        // expandPx (owned by HomeScreen) drives both the drag and tap/release, so there's one source of truth; expanded clips to Float.MAX_VALUE for the natural, re-measured height.
         val revealing by remember(expanded, inProgress) {
             derivedStateOf { expanded || expandPx() > 0f || !inProgress }
         }
@@ -317,8 +309,7 @@ private val TOOL_DISC_LOADER = 18.dp
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ToolStack(tools: List<ProcessItem.Tool>, pending: Boolean = false) {
-    // Tools present when the stack first composes don't individually animate (its appearance is enough);
-    // any that arrive later fade in.
+    // Tools present on first composition don't individually animate; only ones arriving later fade in.
     val seen = remember { tools.size }
     LookaheadScope {
         Row(horizontalArrangement = Arrangement.spacedBy(-TOOL_STACK_OVERLAP)) {
@@ -340,8 +331,7 @@ private fun ToolStack(tools: List<ProcessItem.Tool>, pending: Boolean = false) {
                     )
                 }
             } else if (tools.isEmpty()) {
-                // No tools and not pending (a no-tool turn): a fallback assistant icon so the header always
-                // leads with a disc instead of floating text.
+                // No tools and not pending (a no-tool turn): fallback assistant icon so the header always leads with a disc.
                 ToolDisc(modifier = Modifier.animateBounds(this@LookaheadScope)) {
                     Symbol(
                         symbol = MaterialSymbol.AutoAwesome,
@@ -406,15 +396,13 @@ private fun AnswerArea(
     LaunchedEffect(response) { if (!response.isNullOrBlank()) lastResponse = response }
     val hasAnswer = !response.isNullOrBlank()
     val showFallback = !inProgress && !hasAnswer && hasProcess
-    // Animate the slot size only when settled (the answer↔fallback crossfade). While streaming, the
-    // typewriter outpaces the spring, so a lagging container clips the freshest lines — grow instantly.
+    // Animate slot size only when settled; while streaming the typewriter outpaces the spring, so grow instantly to avoid clipping fresh lines.
     Box(modifier = modifier.fillMaxWidth().then(if (inProgress) Modifier else Modifier.animateContentSize())) {
         AnimatedVisibility(visible = hasAnswer, enter = fadeIn(), exit = fadeOut(), label = "response-body") {
             Column {
                 Spacer(Modifier.height(Spacing.sm))
                 ResponseBody(response?.takeIf { it.isNotBlank() } ?: lastResponse)
-                // Descender clearance: the serif body's last line extends below its measured line box, so
-                // without this the slot/pager (sized to the measured height) clips it.
+                // Descender clearance: the serif body's last line extends below its measured line box, else the slot clips it.
                 Spacer(Modifier.height(Spacing.sm))
             }
         }

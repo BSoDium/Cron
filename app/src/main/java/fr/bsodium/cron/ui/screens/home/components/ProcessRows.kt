@@ -80,8 +80,7 @@ private fun stepFirstLineHeight(): Dp {
 internal fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
     var expanded by rememberSaveable(text) { mutableStateOf(false) }
     val collapsible = text.length > REASONING_COLLAPSE_CHARS
-    // When a growing block first crosses the collapse threshold, ease the fade + "See more" pill in
-    // instead of popping. Already-long blocks start at 1f (initial composition), so no spurious fade.
+    // Ease the fade + "See more" pill in on first crossing the collapse threshold; already-long blocks start at 1f.
     val affordance by animateFloatAsState(
         targetValue = if (collapsible) 1f else 0f,
         animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
@@ -98,8 +97,7 @@ internal fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
         icon = { ThinkingIcon() },
     ) {
         Column {
-            // The full markdown is always rendered (parsed once — never blanks on toggle); collapsing
-            // just clips an animated height, so expand/collapse glides instead of jumping.
+            // Markdown is parsed once and always rendered; collapsing just clips an animated height so it glides instead of jumping.
             if (collapsible) {
                 ClippedReveal(
                     expanded = expanded,
@@ -108,15 +106,13 @@ internal fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
                 ) {
                     MarkdownBlock(text = text, bodyStyle = bodyStyle, serif = false)
                 }
-                // Snug transparent pill — ripple only on press. minimumInteractiveComponentSize keeps
-                // the touch target at 48dp while the visible pill stays compact.
+                // Snug transparent pill (ripple only on press); minimumInteractiveComponentSize keeps the touch target at 48dp while the visible pill stays compact.
                 Box(
                     modifier = Modifier
                         .graphicsLayer { alpha = affordance } // fade the pill in with the gradient
                         // Tuck the toggle up under the fade so the soft dissolve leads straight into it.
                         .offset(x = -Spacing.xs, y = -Spacing.sm)
-                        // No start padding so the label aligns with the reasoning-text column; the
-                        // 48dp touch target is preserved by minimumInteractiveComponentSize.
+                        // No start padding: label aligns with the reasoning-text column; touch target still 48dp via minimumInteractiveComponentSize.
                         .minimumInteractiveComponentSize()
                         .clip(Radius.full)
                         .clickable { expanded = !expanded }
@@ -170,8 +166,7 @@ private fun ClippedReveal(
 ) {
     val collapsedPx = with(LocalDensity.current) { collapsedHeight.roundToPx() }
     var fullPx by remember { mutableIntStateOf(0) }
-    // Collapsed target is the constant collapsedPx (never `minOf(..., fullPx)` which is 0 before the first
-    // measure) — so animateIntAsState starts at the resting height and a static preview never catches it at 0.
+    // Collapsed target is always the constant collapsedPx, never `minOf(..., fullPx)` (0 before first measure) — so animateIntAsState never starts a static preview at 0.
     val target = if (expanded) (if (fullPx > 0) fullPx else collapsedPx) else collapsedPx
     val animatedPx by animateIntAsState(target, REASONING_HEIGHT_SPEC, label = "reasoning-reveal")
     val fading = fullPx > 0 && animatedPx < fullPx
@@ -220,8 +215,7 @@ internal fun ToolStepRow(step: ProcessItem.Tool, isFirst: Boolean, isLast: Boole
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            // "Calling" + name pill take their natural width (priority); the name pill never
-            // char-wraps. The result takes the remaining space and ellipsizes (e.g. long addresses).
+            // "Calling" + name pill take their natural width and never char-wrap; the result takes remaining space and ellipsizes (e.g. long addresses).
             Text(
                 text = "Calling",
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeightStyle = STEP_LINE_HEIGHT),

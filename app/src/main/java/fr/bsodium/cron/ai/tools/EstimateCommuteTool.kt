@@ -27,8 +27,10 @@ class EstimateCommuteTool(
     allowedModes: Set<CommuteMode> = CommuteMode.entries.toSet(),
 ) : Tool {
 
-    // The user's allowed modes, enforced in the schema (the model never sees excluded options) AND at
-    // execute time (a non-compliant call gets an error result instead of an excluded mode's duration).
+    /**
+     * The user's allowed modes, enforced in the schema (the model never sees excluded options) AND at
+     * execute time (a non-compliant call gets an error result instead of an excluded mode's duration).
+     */
     private val allowedTokens = allowedModes.map { it.promptToken }.toSet()
 
     @Serializable
@@ -65,8 +67,7 @@ class EstimateCommuteTool(
 
     override suspend fun execute(input: JsonElement): ToolResult {
         val obj = input.jsonObject
-        // Prefer the device's captured location as origin (overrides whatever the model passed — which
-        // can be (0,0) when the prompt's location was unavailable); fall back to the model's values.
+        // Prefer the device's captured location as origin (overrides the model's values, which can be (0,0) when the prompt's location was unavailable).
         val origin = originBias ?: run {
             val lat = obj["origin_lat"]?.jsonPrimitive?.content?.toDoubleOrNull()
                 ?: return ToolResult("""{"error":"origin_lat required and must be a number"}""", isError = true)

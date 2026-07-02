@@ -56,8 +56,7 @@ enum class ShapePhase { Resting, Thinking, Writing }
  */
 @Composable
 fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any? = null) {
-    // Smaller + muted while thinking (quiet, low-contrast), growing to full-size brand primary once the
-    // answer streams and at rest — so the shape visibly "wakes up" as it comes alive.
+    // Smaller + muted while thinking, growing to full-size brand primary once the answer streams — so the shape visibly "wakes up" as it comes alive.
     val shapeSize by animateDpAsState(
         targetValue = if (phase == ShapePhase.Thinking) THINKING_SHAPE_SIZE else SHAPE_SIZE,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -70,8 +69,7 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
         label = "shape-stroke",
     )
     val fillColor = MaterialTheme.colorScheme.primary
-    // Bouncy Expressive spring shared by the thinking pulse and the resting settle (captured here, used in
-    // the effect below).
+    // Bouncy Expressive spring shared by the thinking pulse and the resting settle (captured here, used in the effect below).
     val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     // Each turn ([restKey]) settles to a different soft, low-corner shape.
     val rest = remember(restKey) { RESTING_SET.random() }
@@ -90,10 +88,7 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
     )
 
     LaunchedEffect(phase) {
-        // One morph step: re-target and play the morph 0→1. Deliberately does NOT touch [current] — each
-        // caller holds the just-completed morph and reassigns current only right before the next step, so a
-        // static pause never renders a degenerate Morph(X, X) whose re-matched bounds would jump the
-        // fit-scale the instant the shape lands.
+        // One morph step: re-target and play 0→1. Deliberately does NOT touch `current` — callers reassign it only right before the next step, so a static pause never renders a degenerate Morph(X, X) that jumps the fit-scale.
         suspend fun morphTo(next: RoundedPolygon) {
             target = next
             progress.snapTo(0f)
@@ -101,10 +96,7 @@ fun ThinkingShape(phase: ShapePhase, modifier: Modifier = Modifier, restKey: Any
         }
         when (phase) {
             ShapePhase.Thinking -> {
-                // Bouncily pulse the down-arrow ⇄ a random shape (~once a second) — the pull-to-show-thinking
-                // cue. (A MaterialShapes polygon in the morph canvas, not a vector icon; the downward
-                // orientation is the intended pull affordance, not an accidental icon flip. The pool shapes
-                // read fine at this fixed rotation, so there's no spin.)
+                // Bouncily pulse the down-arrow (MaterialShapes polygon, not a vector icon) ⇄ a random shape (~once a second) as the pull-to-show-thinking cue; the downward orientation is intentional, not an icon flip.
                 rotation.snapTo(ARROW_DOWN_DEG)
                 morphTo(THINKING_ARROW)
                 while (true) {
@@ -219,8 +211,7 @@ private val RESTING_SET: List<RoundedPolygon> = listOf(
     MaterialShapes.Flower,
     MaterialShapes.Clover4Leaf,
 )
-// While thinking, the shape pulses between the downward arrow (rotated via ARROW_DOWN_DEG) and a random
-// shape from THINKING_POOL, as the pull-to-show cue.
+// While thinking, the shape pulses between the downward arrow (rotated via ARROW_DOWN_DEG) and a random shape from THINKING_POOL, as the pull-to-show cue.
 private val THINKING_ARROW: RoundedPolygon = MaterialShapes.Arrow
 private val SHARP: List<RoundedPolygon> = listOf(
     MaterialShapes.Burst,

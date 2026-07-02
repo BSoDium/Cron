@@ -26,9 +26,11 @@ private val DarkOnBackground = Color(0xFFF2F2F2)
 private val DarkOnSurfaceVariant = Color(0xFFA8A8AC)
 private val DarkOutline = Color(0xFF2A2A30)
 
-// Varied accents (Material You "apply varied accents") for the non-dynamic fallback — a cool teal
-// secondary and a soft blue tertiary alongside the warm primary, so accent-coded UI (trigger headers,
-// containers) reads as more than one hue on Android < 12. Dynamic colour supplies these on 12+.
+/**
+ * Varied accents (Material You "apply varied accents") for the non-dynamic fallback — a cool
+ * teal secondary and a soft blue tertiary alongside the warm primary, so accent-coded UI reads as
+ * more than one hue on Android < 12. Dynamic colour supplies these on 12+.
+ */
 private val DarkSecondary = Color(0xFF8FC7B3)
 private val DarkSecondaryContainer = Color(0xFF1E2A26)
 private val DarkOnSecondaryContainer = Color(0xFFBFE3D5)

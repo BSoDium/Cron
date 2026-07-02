@@ -86,25 +86,20 @@ internal fun MarkdownBlock(
             style = androidx.compose.ui.text.SpanStyle(color = MaterialTheme.colorScheme.primary),
         ),
     )
-    // retainState keeps the last successful render on screen while the next parse runs off-thread, and
-    // immediate parses the first frame synchronously — together they kill the blank-flash the library
-    // otherwise shows on every content change (per streamed token) and on first compose (expand/load).
+    // retainState (keep last render while next parses off-thread) + immediate (sync first frame) kill the library's blank-flash on content change and first compose.
     val markdownState = rememberMarkdownState(content = text, retainState = true, immediate = true)
     Markdown(
         markdownState = markdownState,
         colors = colors,
         typography = typography,
-        // The library adds a uniform `block` spacer after every block; keep it at the tight floor
-        // and let paragraphs/headers own their rhythm (headers get a roomy break above).
+        // Keep the library's uniform `block` spacer at the tight floor; paragraphs/headers own their own rhythm (headers get a roomy break above).
         padding = markdownPadding(
             block = MD_BLOCK_GAP,
             listItemTop = Spacing.xs,
             listItemBottom = Spacing.xs,
             listIndent = Spacing.lg,
         ),
-        // Draw the inline-code background as a rounded chip echoing the "Calling …" tool pill. The
-        // band is anchored to each line's baseline and sized from the code font, so it hugs the
-        // glyphs in both the serif response and the smaller sans thinking text.
+        // Inline-code background is a rounded chip echoing the "Calling …" tool pill, anchored to each line's baseline and sized from the code font so it hugs glyphs in both serif and sans contexts.
         extendedSpans = markdownExtendedSpans {
             ExtendedSpans(
                 InlineCodeChipPainter(
@@ -147,8 +142,7 @@ internal fun MarkdownBlock(
             },
             table = { model -> CronMarkdownTable(model, bodyStyle) },
         ),
-        // No-op the default animateContentSize(): per-segment height animation makes each streamed
-        // growth slide instead of appearing crisply, reading as laggy.
+        // No-op the default animateContentSize(): per-segment height animation makes each streamed growth slide instead of appearing crisply, reading as laggy.
         animations = markdownAnimations(animateTextSize = { this }),
         modifier = modifier,
     )
@@ -157,8 +151,7 @@ internal fun MarkdownBlock(
 /** Per-level header spacing: a section break above, a tighter gap below. */
 private class HeadingGap(val top: Dp, val bottom: Dp)
 
-// h1 roomiest, shrinking to h6 which nearly touches its following text. Below-gaps
-// stack on top of MD_BLOCK_GAP; the top-gaps separate a header from prior content.
+// h1 roomiest, shrinking to h6 which nearly touches its following text; below-gaps stack on MD_BLOCK_GAP, top-gaps separate a header from prior content.
 private val HEADING_GAP = listOf(
     HeadingGap(Spacing.md, Spacing.sm),                          // h1 — 12 / 8
     HeadingGap(Spacing.sm + Spacing.xxs, Spacing.xs + Spacing.xxs), // h2 — 10 / 6
@@ -168,13 +161,10 @@ private val HEADING_GAP = listOf(
     HeadingGap(Spacing.xs, 0.dp),                                // h6 — 4 / 0
 )
 private val MD_BLOCK_GAP = Spacing.xxs
-// Inline-code chip, tuned to echo the "Calling …" tool pill (rounded). InlineCodeChipPainter trims
-// the renderer's injected CODE_SPAN spaces out of the drawn range, so we add our own horizontal gap.
+// Inline-code chip, tuned to echo the "Calling …" tool pill; InlineCodeChipPainter trims the renderer's injected CODE_SPAN spaces, so we add our own horizontal gap.
 private val INLINE_CODE_CORNER = 6.sp
 private val INLINE_CODE_PAD_H = 4.sp
-// Band extents above/below the baseline, as a fraction of the code font size — so the chip hugs the
-// glyphs proportionally in both the serif and sans contexts. Descent runs deliberately past Martian
-// Mono's natural descender (~0.25em) for a little breathing room beneath the baseline.
+// Band extents above/below the baseline as a fraction of the code font size, so the chip hugs glyphs proportionally in both contexts; descent deliberately runs past Martian Mono's ~0.25em descender for breathing room.
 private const val INLINE_CODE_ASCENT_RATIO = 1.2f
 private const val INLINE_CODE_DESCENT_RATIO = 0.42f
 private val MD_PARA_BELOW = Spacing.xxs
