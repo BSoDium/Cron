@@ -70,7 +70,7 @@ internal fun OnboardingHint(modifier: Modifier = Modifier) {
                     CAKE_GROUND -> ground
                     CAKE_ACCENT -> accent
                     CAKE_SHADOW -> shadow
-                    else -> original
+                    else -> original // any fill outside the sentinel palette (open Color space) passes through unchanged
                 }
             }
         }
