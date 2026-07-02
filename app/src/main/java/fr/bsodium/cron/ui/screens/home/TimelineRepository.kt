@@ -18,11 +18,10 @@ class TimelineRepository(private val db: CronDatabase) {
         limit: Int,
         offset: Int,
     ): HistoryPage {
-        val totalCount = db.sessionDao().count()
-        val sessions = db.sessionDao().findPaginated(limit = limit + 1, offset = offset)
+        val sessions = db.sessionDao().findPaginated(limit = limit, offset = offset)
             .filter { it.id != excludeSessionId }
 
-        val result = sessions.take(limit).map { session ->
+        val result = sessions.map { session ->
             val events = runCatching { db.eventDao().findBySession(session.id).map { it.toModel() } }
                 .onFailure { Log.w(TAG, "Failed to load events for session ${session.id}", it) }
                 .getOrDefault(emptyList())
@@ -37,15 +36,8 @@ class TimelineRepository(private val db: CronDatabase) {
             )
         }
 
-        val loadedSoFar = offset + sessions.size
-        return HistoryPage(
-            sessions = result,
-            hasMore = loadedSoFar < totalCount,
-        )
+        return HistoryPage(sessions = result)
     }
 }
 
-data class HistoryPage(
-    val sessions: List<TimelineSession>,
-    val hasMore: Boolean,
-)
+data class HistoryPage(val sessions: List<TimelineSession>)

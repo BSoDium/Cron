@@ -141,7 +141,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
 
     private val _historicalSessions = MutableStateFlow<List<TimelineSession>>(emptyList())
-    private val _hasMoreHistory = MutableStateFlow(false)
     private val _dismissedSettingsAt = MutableStateFlow(0L)
 
     private val settingsChangedFlow = combine(
@@ -219,9 +218,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         displayFlow,
         aiPlanFlow,
         timelineFlow,
-        _hasMoreHistory,
         statusFlow,
-    ) { display, plan, timeline, hasMore, status ->
+    ) { display, plan, timeline, status ->
         HomeUiState(
             sessionDisplay = display.session,
             greetingPrefix = greetingPrefix(),
@@ -230,7 +228,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
             aiPlan = plan,
             timeline = timeline.items,
-            hasMoreHistory = hasMore || timeline.truncated,
+            hasMoreHistory = timeline.truncated,
             isRetrying = status.isRetrying,
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && plan != null,
@@ -250,7 +248,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 offset = 0,
             )
             _historicalSessions.value = page.sessions
-            _hasMoreHistory.value = page.hasMore
         }
     }
 
