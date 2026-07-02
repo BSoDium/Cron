@@ -94,6 +94,7 @@ internal fun formatDateLabel(session: SessionDisplayState?, autoAlarmsEnabled: B
     val dayPart = when (ChronoUnit.DAYS.between(today, date)) {
         0L -> "Today"
         1L -> "Tomorrow"
+        // locale-default weekday name is intentional here (human-language); any other day gap (unbounded)
         else -> date.format(DateTimeFormatter.ofPattern("EEEE", Locale.getDefault()))
     }
     return "$dayPart, you'll wake up at"

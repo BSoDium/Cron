@@ -141,6 +141,6 @@ private fun formatTimelineDateLabel(date: LocalDate): String {
     return when (ChronoUnit.DAYS.between(jDate, today)) {
         0L -> "Today"
         1L -> "Yesterday"
-        else -> jDate.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault()))
+        else -> jDate.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault())) // any other day gap (unbounded)
     }
 }

@@ -43,7 +43,7 @@ class SleepStageReader(private val context: Context) {
     fun availability(): Availability = when (HealthConnectClient.getSdkStatus(context)) {
         HealthConnectClient.SDK_AVAILABLE -> Availability.Available
         HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> Availability.ProviderUpdateRequired
-        else -> Availability.NotInstalled
+        else -> Availability.NotInstalled // covers SDK_UNAVAILABLE and any future status the SDK adds
     }
 
     /** Whether the sleep read permission is currently granted (false if HC is unavailable). */
@@ -123,7 +123,7 @@ class SleepStageReader(private val context: Context) {
         STAGE_TYPE_DEEP -> SleepStage.Deep
         STAGE_TYPE_REM -> SleepStage.Rem
         STAGE_TYPE_OUT_OF_BED, STAGE_TYPE_UNKNOWN -> null
-        else -> null
+        else -> null // any stage code the SDK adds later; skip rather than misclassify
     }
 
     companion object {

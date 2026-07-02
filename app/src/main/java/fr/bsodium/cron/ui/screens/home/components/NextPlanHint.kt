@@ -115,7 +115,7 @@ private fun NoPlanIllustration(modifier: Modifier = Modifier) {
                 NO_PLAN_TERTIARY_LIGHT -> scheme.tertiaryContainer
                 NO_PLAN_PAPER -> scheme.surface
                 NO_PLAN_GROUND -> scheme.surfaceVariant
-                else -> original
+                else -> original // any fill outside the sentinel palette (open Color space) passes through unchanged
             }
         }
     }

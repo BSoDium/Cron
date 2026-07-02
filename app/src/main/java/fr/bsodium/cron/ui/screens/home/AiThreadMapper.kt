@@ -230,7 +230,7 @@ object AiThreadMapper {
                 .minOrNull()
                 ?.let { "${it / 60} min" }
             "geocode_address" -> obj["formatted"]?.jsonPrimitive?.content?.take(28)
-            else -> null
+            else -> null // unrecognized or future tool name (LLM-controlled, open input) — no summary rather than guess
         }
     }.onFailure { Log.w(TAG, "summarize tool result failed for $name", it) }.getOrNull()
 
