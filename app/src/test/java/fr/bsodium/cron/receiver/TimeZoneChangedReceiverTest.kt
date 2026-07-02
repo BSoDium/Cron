@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import androidx.test.core.app.ApplicationProvider
 import fr.bsodium.cron.alarm.AlarmConstants
 import fr.bsodium.cron.settings.SettingsRepository
@@ -32,7 +33,9 @@ class TimeZoneChangedReceiverTest {
     @Test
     fun timezone_change_rearms_the_evening_plan_trigger() {
         val receiver = TimeZoneChangedReceiver()
-        app.registerReceiver(receiver, IntentFilter(Intent.ACTION_TIMEZONE_CHANGED))
+        ContextCompat.registerReceiver(
+            app, receiver, IntentFilter(Intent.ACTION_TIMEZONE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         app.sendBroadcast(Intent(Intent.ACTION_TIMEZONE_CHANGED))
         shadowOf(Looper.getMainLooper()).idle()
         app.unregisterReceiver(receiver)

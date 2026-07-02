@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import fr.bsodium.cron.alarm.AlarmConstants
@@ -52,7 +53,7 @@ class AlarmReceiverTest {
 
     private fun dispatch(action: String, extras: Intent.() -> Unit = {}) {
         val receiver = AlarmReceiver()
-        app.registerReceiver(receiver, IntentFilter(action))
+        ContextCompat.registerReceiver(app, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED)
         app.sendBroadcast(Intent(action).apply(extras))
         shadowOf(Looper.getMainLooper()).idle()
         app.unregisterReceiver(receiver)

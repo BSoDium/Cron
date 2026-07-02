@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import androidx.test.core.app.ApplicationProvider
 import fr.bsodium.cron.alarm.AlarmConstants
 import fr.bsodium.cron.settings.SettingsRepository
@@ -33,7 +34,9 @@ class EveningPlanReceiverTest {
 
     private fun dispatch() {
         val receiver = EveningPlanReceiver()
-        app.registerReceiver(receiver, IntentFilter(EveningPlanReceiver.ACTION_FIRE))
+        ContextCompat.registerReceiver(
+            app, receiver, IntentFilter(EveningPlanReceiver.ACTION_FIRE), ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         app.sendBroadcast(Intent(EveningPlanReceiver.ACTION_FIRE))
         shadowOf(Looper.getMainLooper()).idle()
         app.unregisterReceiver(receiver)
