@@ -188,7 +188,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             history.filter { it.sessionId != currentSession.sessionId }
         } else history
         val allSessions = listOfNotNull(currentSession) + dedupedHistory
-        buildTimeline(allSessions)
+        capTimeline(buildTimeline(allSessions))
     }.flowOn(Dispatchers.Default)
 
     private val statusFlow = combine(
@@ -229,8 +229,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             dateLabel = formatDateLabel(display.session, status.autoAlarmsEnabled),
 
             aiPlan = plan,
-            timeline = timeline,
-            hasMoreHistory = hasMore,
+            timeline = timeline.items,
+            hasMoreHistory = hasMore || timeline.truncated,
             isRetrying = status.isRetrying,
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && plan != null,

@@ -51,6 +51,16 @@ private val SHOWN_TRIGGERS = setOf(
     TriggerType.WakeWindowOpportunity,
 )
 
+/** Result of [capTimeline]: the display-bound slice of a timeline, plus whether anything was cut off. */
+data class CappedTimeline(val items: List<TimelineItem>, val truncated: Boolean)
+
+private const val TIMELINE_ITEM_CAP = 24
+
+/** Bounds a (already latest-first) timeline to [cap] items — the home screen renders this, not the raw
+ *  merged list, since an unbounded number of sessions/iterations otherwise makes it laggy to compose. */
+fun capTimeline(items: List<TimelineItem>, cap: Int = TIMELINE_ITEM_CAP): CappedTimeline =
+    CappedTimeline(items = items.take(cap), truncated = items.size > cap)
+
 fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
     val items = mutableListOf<TimelineItem>()
     val tz = TimeZone.currentSystemDefault()
