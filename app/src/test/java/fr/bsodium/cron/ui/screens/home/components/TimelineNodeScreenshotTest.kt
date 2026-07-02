@@ -13,10 +13,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
+import fr.bsodium.cron.ui.screens.home.AiIterationUi
+import fr.bsodium.cron.ui.screens.home.AiThreadUi
+import fr.bsodium.cron.ui.screens.home.RunKind
+import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlinx.datetime.Instant
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -135,6 +140,40 @@ class TimelineNodeScreenshotTest {
                         isLast = true,
                         title = { Text("You fell asleep", style = MaterialTheme.typography.bodyMedium, color = dim) },
                         status = { Text("23:10", style = CronTypography.labelMonoSmall, color = dim) },
+                    )
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    @Test
+    fun ai_run_node_latest_shows_summary_and_inverted_icon() {
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            CronTheme {
+                Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                    AiRunNode(
+                        item = TimelineItem.AiRun(
+                            timestamp = Instant.fromEpochMilliseconds(0L),
+                            iteration = AiIterationUi(
+                                turnIndex = 0,
+                                timeLabel = "23:14",
+                                kind = RunKind.ScheduledBase,
+                                thread = AiThreadUi(
+                                    turnIndex = 0,
+                                    summary = "Moved alarm to 07:15 — your first meeting shifted to 09:00.",
+                                    process = emptyList(),
+                                    response = "Moved alarm to **07:15** — your first meeting shifted to 09:00.",
+                                ),
+                            ),
+                            sessionId = "s1",
+                            isStreaming = false,
+                            isLatest = true,
+                        ),
+                        isFirst = true,
+                        isLast = true,
+                        onClick = {},
                     )
                 }
             }

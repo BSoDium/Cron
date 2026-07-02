@@ -87,7 +87,7 @@ internal fun LazyListScope.sessionTimelineItems(
 }
 
 @Composable
-private fun AiRunNode(
+internal fun AiRunNode(
     item: TimelineItem.AiRun,
     isFirst: Boolean,
     isLast: Boolean,
@@ -100,16 +100,17 @@ private fun AiRunNode(
         item.isStreaming -> TimelineAnchor.Loader
         iter.thread.isMocked -> TimelineAnchor.Icon(
             symbol = MaterialSymbol.Code,
-            tint = if (item.isLatest) scheme.primary else null,
-            containerColor = if (item.isLatest) scheme.primaryContainer else null,
+            tint = if (item.isLatest) scheme.onPrimary else null,
+            containerColor = if (item.isLatest) scheme.primary else null,
         )
         else -> TimelineAnchor.Icon(
             symbol = runSymbol(iter.kind),
-            tint = if (item.isLatest) scheme.primary else null,
-            containerColor = if (item.isLatest) scheme.primaryContainer else null,
+            tint = if (item.isLatest) scheme.onPrimary else null,
+            containerColor = if (item.isLatest) scheme.primary else null,
         )
     }
     val contentColor = scheme.onSurfaceVariant
+    val latestSummary = iter.thread.summary?.takeIf { item.isLatest && it.isNotBlank() }
 
     TimelineNode(
         anchor = anchor,
@@ -135,6 +136,17 @@ private fun AiRunNode(
                 maxLines = 1,
                 softWrap = false,
             )
+        },
+        content = latestSummary?.let { summary ->
+            {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         },
     )
 }
