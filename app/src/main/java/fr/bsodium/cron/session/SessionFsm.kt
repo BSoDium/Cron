@@ -179,8 +179,9 @@ class SessionFsm(
             SessionStatus.Complete -> {
                 alarmScheduler.cancel(session.date)
                 hardLatestScheduler.clear(session.date)
+                repository.cancelAiTurn(session.id)
                 context.startService(SleepSessionService.stopIntent(context))
-                Log.i(TAG, "Session ${session.id} complete — alarms cleared, service stopped")
+                Log.i(TAG, "Session ${session.id} complete — alarms cleared, AI turn cancelled, service stopped")
             }
             SessionStatus.Planning, SessionStatus.Monitoring, SessionStatus.ReMonitoring -> {}
         }
