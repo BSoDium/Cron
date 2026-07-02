@@ -33,6 +33,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -133,10 +134,14 @@ internal fun TimelineNode(
         if (onClick != null) {
             Surface(
                 onClick = onClick,
-                modifier = Modifier.fillMaxWidth(),
+                // Bleeds the tap/ripple target out to the true screen edges, past HomeContent's LazyColumn
+                // contentPadding — the compensating padding below keeps inner() at its original position.
+                modifier = Modifier.fillMaxWidth().bleedHorizontally(Spacing.md),
                 color = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onSurface,
-            ) { inner() }
+            ) {
+                Box(Modifier.padding(horizontal = Spacing.md)) { inner() }
+            }
         } else {
             inner()
         }
