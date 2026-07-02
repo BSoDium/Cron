@@ -20,6 +20,7 @@ import fr.bsodium.cron.ai.SystemPrompts
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolRegistry
 import fr.bsodium.cron.ai.ToolRegistryFactory
+import fr.bsodium.cron.ai.TurnIndexResolver
 import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.wire.ThinkingConfig
 import fr.bsodium.cron.ai.wire.ToolChoice
@@ -54,11 +55,11 @@ import kotlinx.datetime.TimeZone
 /**
  * Resumable WorkManager worker that drives one AI tool-use turn for a session.
  *
- * The turn index is resolved at startup by reading the max already-persisted
- * index from Room (+1). This means: if the OS kills the worker mid-turn and
- * WorkManager re-runs it, [TurnRunner.loadOrSeed] finds the existing messages
- * for that turn and resumes from the last persisted block rather than starting
- * over.
+ * The turn index comes from [TurnIndexResolver]: first attempts start a fresh
+ * turn after the highest persisted index, while a retry whose failed predecessor
+ * left partial rows resumes that turn — [TurnRunner.loadOrSeed] finds the
+ * existing messages and continues from the last persisted block instead of
+ * re-running (and re-billing) the round-trips that already succeeded.
  *
  * Only one instance per session can run at a time (UNIQUE_WORK with REPLACE).
  */
@@ -104,7 +105,7 @@ class AiTurnWorker(
             return Result.failure(workDataOf(KEY_REASON to REASON_BUDGET, KEY_USED to used, KEY_LIMIT to limit))
         }
 
-        val turnIndex = (db.aiMessageDao().maxTurnIndex(sessionId) ?: -1) + 1
+        val turnIndex = TurnIndexResolver.resolve(db.aiMessageDao(), sessionId, isRetry = runAttemptCount > 0)
         // A manual replan re-appends an EveningPlan event (→ Sonnet); sensor-driven overnight replans leave the latest trigger ≠ EveningPlan, so they stay on Haiku.
         val isEveningPlan = session.events.lastOrNull()?.trigger == TriggerType.EveningPlan
 
