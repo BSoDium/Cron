@@ -45,8 +45,7 @@ class SessionFsm(
      * session exists and the event cannot bootstrap one.
      */
     suspend fun onEvent(event: SessionEvent): String? = withContext(Dispatchers.IO) {
-        // Auto-plan off = full stand-down: drop every automatic event. A manual run (the "run one
-        // yourself" CTA) carries isManual and is exempt, so it still works with the toggle off.
+        // Auto-plan off = full stand-down: drop every automatic event, except a manual run (isManual), which stays exempt.
         if (!SettingsRepository(context).autoAlarmsEnabledNow() &&
             (event.data as? EventData.EveningPlan)?.isManual != true
         ) {
@@ -80,8 +79,7 @@ class SessionFsm(
         }
 
         if (shouldTriggerAi(event.trigger, nextStatus, session.lastAiCallAt)) {
-            // Stamp the trigger time before enqueueing so the cooldown is effective immediately —
-            // a burst of noisy events otherwise each slip through before the worker's tool sets it.
+            // Stamp the trigger time before enqueueing so the cooldown is immediate — a noise burst would otherwise all slip through before the worker's tool sets it.
             repository.markAiTriggered(session.id)
             repository.triggerAiTurn(session.id)
         }
@@ -184,7 +182,7 @@ class SessionFsm(
                 context.startService(SleepSessionService.stopIntent(context))
                 Log.i(TAG, "Session ${session.id} complete — alarms cleared, service stopped")
             }
-            else -> {} // Planning/Monitoring/ReMonitoring: no status-change side effect
+            SessionStatus.Planning, SessionStatus.Monitoring, SessionStatus.ReMonitoring -> {}
         }
     }
 
@@ -254,14 +252,22 @@ class SessionFsm(
                 TriggerType.SleepOnset -> when (session.status) {
                     SessionStatus.Planning, SessionStatus.Monitoring -> SessionStatus.Monitoring
                     SessionStatus.Awake -> SessionStatus.ReMonitoring
-                    else -> session.status // already past monitoring: no change
+                    SessionStatus.ReMonitoring, SessionStatus.Complete -> session.status
                 }
                 TriggerType.OutOfBedConfirmed -> when (session.status) {
                     SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
                     SessionStatus.Awake -> SessionStatus.Complete
-                    else -> session.status
+                    SessionStatus.Planning, SessionStatus.Complete -> session.status
                 }
-                else -> session.status // other triggers don't change status
+                // Advisory/AI-only signals: inform a replan but never move status themselves.
+                TriggerType.EveningPlan,
+                TriggerType.HcStageUpdate,
+                TriggerType.MidSleepActivity,
+                TriggerType.WakeWindowOpportunity,
+                TriggerType.AlarmSnoozed,
+                TriggerType.CalendarChange,
+                TriggerType.HardLatestFired,
+                -> session.status
             }
 
         /**
