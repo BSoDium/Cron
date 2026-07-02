@@ -45,11 +45,7 @@ internal fun OnboardingHint(modifier: Modifier = Modifier) {
     ) {
         val scheme = MaterialTheme.colorScheme
         val source = ImageVector.vectorResource(R.drawable.ic_onboarding_illustration)
-        // Tonal ramp around the dynamic accent: highlights blend toward white, shadows toward black so
-        // they stay lighter/darker than the body in both themes (Material role pairs would invert).
-        // Dark mode flips `primary` to a light pastel, and the fallback accent is itself low-chroma. Build the
-        // dark body in HSL — keep the accent hue, floor its saturation so the layers read as *tinted* (not grey),
-        // and set a deep lightness so they stay darker than the near-white frosting. Light mode is untouched.
+        // Tonal ramp around the dynamic accent; dark mode's low-chroma pastel `primary` is rebuilt in HSL with a saturation floor and deep lightness so layers read as tinted, not grey.
         val dark = isSystemInDarkTheme()
         val body = if (dark) {
             val hsl = FloatArray(3)

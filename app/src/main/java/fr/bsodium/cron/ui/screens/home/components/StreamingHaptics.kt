@@ -7,9 +7,7 @@ import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import kotlinx.coroutines.delay
 
-// Feel-tuned spread drain for the answer: tick once per interval while there's any un-ticked text,
-// advancing by up to CHARS_PER_TICK each tick — so a burst stretches into a steady rhythm that bridges
-// the gap to the next burst instead of machine-gunning then idling. MAX_BACKLOG_CHARS caps the trail.
+// Feel-tuned spread drain: tick once per interval, advancing by up to CHARS_PER_TICK, so a burst stretches into a steady rhythm bridging to the next burst instead of machine-gunning then idling. MAX_BACKLOG_CHARS caps the trail.
 private const val TICK_INTERVAL_MS = 50L
 private const val CHARS_PER_TICK = 6
 private const val MAX_BACKLOG_CHARS = 120
@@ -41,8 +39,7 @@ fun StreamingHaptics(thread: AiThreadUi?, enabled: Boolean) {
         while (true) {
             delay(TICK_INTERVAL_MS)
 
-            // Thinking: one tick per new timeline item; resync silently if it shrinks (e.g. the answer
-            // block leaves the process once its SUMMARY line is detected).
+            // Thinking: one tick per new timeline item; resync silently if it shrinks (e.g. the answer block leaves the process once its SUMMARY line is detected).
             val bullets = bulletCount.value
             when {
                 bullets > lastBullets -> { lastBullets = bullets; haptics.tick() }

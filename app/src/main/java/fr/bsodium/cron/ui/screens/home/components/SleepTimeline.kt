@@ -25,8 +25,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 
-// Canvas strokes in dp (resolved via toPx in the DrawScope) so bar/tick weights track density —
-// the old raw-px literals rendered ~3x heavier on 1x screens. Values match the previous look at ~3.5x.
+// Canvas strokes in dp (resolved via toPx) so bar/tick weights track density; old raw-px literals rendered ~3x heavier on 1x screens. Values match the previous look at ~3.5x.
 private val TICK_HALF_HEIGHT = 1.dp
 private val TICK_STROKE = 0.4.dp
 private val SEGMENT_STROKE = 1.dp
@@ -45,8 +44,7 @@ internal fun SleepTimeline(
     val tile = MaterialTheme.colorScheme.onPrimary
     val onTile = MaterialTheme.colorScheme.primary
     val barColor = onTile.copy(alpha = 0.95f)
-    // Martian Mono's line box runs taller than the condensed face it replaced; trim the font
-    // padding and pin line height to the point size so both label rows clear the fixed-height tile.
+    // Martian Mono's line box runs taller than the condensed face it replaced; pin line height to the point size so both label rows clear the fixed-height tile.
     val timeStyle = CronTypography.timeMono.copy(color = onTile)
     val stageStyle = timeStyle.copy(fontSize = 14.sp, lineHeight = 14.sp)
     Surface(

@@ -47,14 +47,12 @@ internal fun TimelineRow(
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHighest
     // The disc masks the connector rule behind the icon, so it matches the page it sits on.
     val maskColor = CronColors.pageBackground
-    // Centre the disc on the content's FIRST line (not the whole multi-line row): disc centre =
-    // contentTopPad + firstLine/2, so its top inset is that minus half the disc.
+    // Centre the disc on the content's FIRST line (not the whole row): disc centre = contentTopPad + firstLine/2, so its top inset is that minus half the disc.
     val discTop = (TIMELINE_CONTENT_VPAD + (firstLineHeight - ICON_MASK_SIZE) / 2)
         .coerceAtLeast(0.dp)
     val iconCenter = discTop + ICON_MASK_SIZE / 2
     Box(modifier = Modifier.fillMaxWidth()) {
-        // Content drives the row height. No IntrinsicSize.Min here, so an animating-height child
-        // (see ClippedReveal) can actually resize the row instead of being snapped to full.
+        // Content drives the row height; no IntrinsicSize.Min here, so an animating-height child (see ClippedReveal) can actually resize the row instead of being snapped to full.
         Row(modifier = Modifier.fillMaxWidth()) {
             Spacer(Modifier.width(GUTTER_WIDTH))
             Spacer(Modifier.width(Spacing.sm))
@@ -64,8 +62,7 @@ internal fun TimelineRow(
                     .padding(top = TIMELINE_CONTENT_VPAD, bottom = TIMELINE_CONTENT_VPAD, end = Spacing.md),
             ) { content() }
         }
-        // Gutter overlay: matchParentSize reads the content-driven height (it doesn't drive it), so
-        // the connector rule and the masking icon disc track the content as it animates.
+        // Gutter overlay: matchParentSize reads the content-driven height (it doesn't drive it), so the connector rule and masking icon disc track the content as it animates.
         Box(modifier = Modifier.matchParentSize()) {
             Box(
                 modifier = Modifier

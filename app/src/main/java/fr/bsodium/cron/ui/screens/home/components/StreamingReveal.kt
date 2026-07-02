@@ -15,8 +15,7 @@ import kotlin.math.max
 
 // A tool step costs one reveal unit so it pops in *in order*, right after the preceding text.
 private const val TOOL_COST = 1
-// Proportional catch-up: each frame advance the cursor by backlog/divisor (min MIN_STEP). Tracks
-// generation speed but smooths bursts and bounds lag to ~divisor frames. Feel-tuned.
+// Proportional catch-up: each frame advance the cursor by backlog/divisor (min MIN_STEP) — tracks generation speed but smooths bursts and bounds lag to ~divisor frames. Feel-tuned.
 private const val REVEAL_CATCHUP_DIVISOR = 8
 private const val MIN_REVEAL_STEP = 1
 
@@ -58,8 +57,7 @@ internal fun revealThread(thread: AiThreadUi, revealed: Int): AiThreadUi {
         }
     }
     val revealedResponse = thread.response?.takeIf { budget > 0 }?.take(budget)?.takeIf { it.isNotEmpty() }
-    // Auto-close a half-typed **/` at the streaming edge so a partial bold/code span renders live
-    // instead of flashing literal markers. The edge is the response if present, else the last text item.
+    // Auto-close a half-typed **/` at the streaming edge (response if present, else the last text item) so a partial bold/code span renders live instead of flashing literal markers.
     return if (revealedResponse != null) {
         thread.copy(process = revealedProcess, response = balanceInlineMarkers(revealedResponse))
     } else {
@@ -126,9 +124,7 @@ fun rememberRevealedThread(thread: AiThreadUi?): AiThreadUi? {
         !thread.isStreaming -> thread
         else -> revealThread(thread, revealed)
     }
-    // No-regress within a turn: hold the last thread that had an answer across the brief window where the
-    // store has cleared but observeBySession hasn't re-emitted the final row yet (or a retry dropped the
-    // streamed tail) — otherwise the thread flashes back to its early, answer-less state.
+    // No-regress within a turn: hold the last answer-bearing thread across the window where the store cleared but observeBySession hasn't re-emitted the final row (or a retry dropped the streamed tail).
     var lastShown by remember { mutableStateOf<AiThreadUi?>(null) }
     return preferNonRegressed(lastShown, candidate).also { lastShown = it }
 }
