@@ -19,7 +19,9 @@ import kotlin.math.min
  * Drives a single AI tool-use loop for one [sessionId] + [turnIndex] pair.
  *
  * Behaviour:
- *  1. Reads any persisted messages for the (session, turn) — supports resume.
+ *  1. Reads any persisted messages for the (session, turn) — supports resume. A resumed turn
+ *     whose last message is an assistant tool_use with no persisted results runs those tools
+ *     first, so the conversation is valid for the API again.
  *  2. Sends them to Anthropic via [client].
  *  3. For each tool_use block in the response, runs the tool and appends the
  *     tool_result block back to the conversation. Persists both before the
@@ -28,6 +30,9 @@ import kotlin.math.min
  *     round-trip budget is exhausted.
  *
  * Retries on 429 / 5xx with exponential backoff, capped at [maxRetries].
+ *
+ * [onRoundTripUsage] fires after every successful round-trip — not just at the end of the
+ * turn — so spend already billed by the API is recorded even when the turn later fails.
  */
 class TurnRunner(
     private val client: AnthropicMessages,
@@ -41,6 +46,7 @@ class TurnRunner(
     private val toolChoice: ToolChoice? = null,
     private val thinking: ThinkingConfig? = null,
     private val isMocked: Boolean = false,
+    private val onRoundTripUsage: (Usage) -> Unit = {},
 ) {
 
     sealed class Outcome {
@@ -86,6 +92,11 @@ class TurnRunner(
         var aggregateUsage = Usage()
 
         return try {
+            answerPendingToolUses(sessionId, turnIndex, messages)?.let { toolResults ->
+                committedBlocks = committedBlocks + toolResults
+                publish(sessionId, turnIndex, committedBlocks, startedAtMs)
+            }
+
             repeat(maxRoundTrips) { round ->
                 val request = MessagesRequest(
                     model = model,
@@ -98,6 +109,7 @@ class TurnRunner(
                 )
 
                 val response = streamWithRetries(sessionId, turnIndex, request, committedBlocks, startedAtMs)
+                response.usage?.let(onRoundTripUsage)
                 aggregateUsage = aggregateUsage.plus(response.usage)
 
                 // Persist assistant message (complete — keeps resume safe), then settle the partial.
@@ -127,6 +139,30 @@ class TurnRunner(
         } finally {
             StreamingTurnStore.clear(sessionId, turnIndex)
         }
+    }
+
+    /**
+     * On resume, a turn interrupted between persisting the assistant tool_use message and its
+     * tool results ends with unanswered tool_use blocks — the API rejects such a conversation.
+     * Executes those tools, persists the results, appends them to [messages], and returns them;
+     * null when there's nothing pending.
+     */
+    private suspend fun answerPendingToolUses(
+        sessionId: String,
+        turnIndex: Int,
+        messages: MutableList<MessageInput>,
+    ): List<ContentBlock>? {
+        val pending = messages.last()
+            .takeIf { it.role == "assistant" }
+            ?.content
+            ?.filterIsInstance<ContentBlock.ToolUse>()
+            .orEmpty()
+        if (pending.isEmpty()) return null
+
+        val toolResults: List<ContentBlock> = pending.map { executeToolCall(it) }
+        persistMessage(sessionId, turnIndex, role = "user", blocks = toolResults)
+        messages.add(MessageInput(role = "user", content = toolResults))
+        return toolResults
     }
 
     private fun publish(sessionId: String, turnIndex: Int, blocks: List<ContentBlock>, startedAtMs: Long) =

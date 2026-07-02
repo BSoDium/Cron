@@ -20,6 +20,7 @@ import fr.bsodium.cron.ai.SystemPrompts
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolRegistry
 import fr.bsodium.cron.ai.ToolRegistryFactory
+import fr.bsodium.cron.ai.TurnIndexResolver
 import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.wire.ThinkingConfig
 import fr.bsodium.cron.ai.wire.ToolChoice
@@ -39,6 +40,7 @@ import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.LocationSource
+import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSession
 import fr.bsodium.cron.session.model.latestEveningPlanLocation
 import fr.bsodium.cron.session.model.TriggerType
@@ -53,11 +55,11 @@ import kotlinx.datetime.TimeZone
 /**
  * Resumable WorkManager worker that drives one AI tool-use turn for a session.
  *
- * The turn index is resolved at startup by reading the max already-persisted
- * index from Room (+1). This means: if the OS kills the worker mid-turn and
- * WorkManager re-runs it, [TurnRunner.loadOrSeed] finds the existing messages
- * for that turn and resumes from the last persisted block rather than starting
- * over.
+ * The turn index comes from [TurnIndexResolver]: first attempts start a fresh
+ * turn after the highest persisted index, while a retry whose failed predecessor
+ * left partial rows resumes that turn — [TurnRunner.loadOrSeed] finds the
+ * existing messages and continues from the last persisted block instead of
+ * re-running (and re-billing) the round-trips that already succeeded.
  *
  * Only one instance per session can run at a time (UNIQUE_WORK with REPLACE).
  */
@@ -80,6 +82,12 @@ class AiTurnWorker(
             return Result.failure()
         }
 
+        // Second line of defense behind SessionFsm's cancelAiTurn-on-Complete: never bill a finished session.
+        if (session.status == SessionStatus.Complete) {
+            Log.i(TAG, "Session $sessionId already complete — skipping AI turn")
+            return Result.success()
+        }
+
         val useMock = ToolRegistryFactory.shouldUseMock(applicationContext)
         Log.i(TAG, "Mock decision for $sessionId: useMock=$useMock")
 
@@ -97,7 +105,7 @@ class AiTurnWorker(
             return Result.failure(workDataOf(KEY_REASON to REASON_BUDGET, KEY_USED to used, KEY_LIMIT to limit))
         }
 
-        val turnIndex = (db.aiMessageDao().maxTurnIndex(sessionId) ?: -1) + 1
+        val turnIndex = TurnIndexResolver.resolve(db.aiMessageDao(), sessionId, isRetry = runAttemptCount > 0)
         // A manual replan re-appends an EveningPlan event (→ Sonnet); sensor-driven overnight replans leave the latest trigger ≠ EveningPlan, so they stay on Haiku.
         val isEveningPlan = session.events.lastOrNull()?.trigger == TriggerType.EveningPlan
 
@@ -122,6 +130,8 @@ class AiTurnWorker(
             toolChoice = toolChoice,
             thinking = thinking,
             isMocked = mockTools != null,
+            // Billed per round-trip so a turn that fails partway still counts against the daily cap.
+            onRoundTripUsage = budget::record,
         )
 
         val instructions = settingsRepository.currentUserInstructions()
@@ -129,7 +139,6 @@ class AiTurnWorker(
 
         return try {
             val outcome = runner.run(sessionId, turnIndex, userMessage)
-            budget.record(outcome.totalUsage)
             when (outcome) {
                 is TurnRunner.Outcome.Completed ->
                     Log.i(TAG, "Turn $turnIndex complete for $sessionId (stop=${outcome.response.stop_reason}, tokens=${outcome.totalUsage.input_tokens + outcome.totalUsage.output_tokens})")
@@ -145,10 +154,19 @@ class AiTurnWorker(
             Result.failure(workDataOf(KEY_REASON to REASON_NO_API_KEY))
         } catch (e: AnthropicClient.AnthropicHttpException) {
             Log.e(TAG, "Anthropic HTTP ${e.code} during turn for $sessionId", e)
-            if (e.isRetryable) Result.retry() else Result.failure(workDataOf(KEY_REASON to REASON_HTTP))
+            if (e.isRetryable && runAttemptCount < MAX_RETRY_ATTEMPTS) {
+                Result.retry()
+            } else {
+                Result.failure(workDataOf(KEY_REASON to REASON_HTTP))
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error during AI turn for $sessionId", e)
-            Result.retry()
+            if (runAttemptCount < MAX_RETRY_ATTEMPTS) {
+                Result.retry()
+            } else {
+                Log.w(TAG, "Turn $turnIndex for $sessionId gave up after $runAttemptCount attempts")
+                Result.failure(workDataOf(KEY_REASON to REASON_MAX_RETRIES))
+            }
         }
     }
 
@@ -236,10 +254,12 @@ class AiTurnWorker(
         const val REASON_BUDGET = "budget_exhausted"
         const val REASON_NO_API_KEY = "no_api_key"
         const val REASON_HTTP = "http_error"
+        const val REASON_MAX_RETRIES = "max_retries_exceeded"
 
         private const val TAG = "AiTurnWorker"
 
         /** Total across the turn; with interleaved thinking it's spread over a fresh think after each tool result. Kept modest so reasoning stays on the anchor decision, not mechanical recompute. */
         private const val THINKING_BUDGET = 2_560
+        private const val MAX_RETRY_ATTEMPTS = 5
     }
 }
