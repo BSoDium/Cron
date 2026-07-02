@@ -130,6 +130,8 @@ class AiTurnWorker(
             toolChoice = toolChoice,
             thinking = thinking,
             isMocked = mockTools != null,
+            // Billed per round-trip so a turn that fails partway still counts against the daily cap.
+            onRoundTripUsage = budget::record,
         )
 
         val instructions = settingsRepository.currentUserInstructions()
@@ -137,7 +139,6 @@ class AiTurnWorker(
 
         return try {
             val outcome = runner.run(sessionId, turnIndex, userMessage)
-            budget.record(outcome.totalUsage)
             when (outcome) {
                 is TurnRunner.Outcome.Completed ->
                     Log.i(TAG, "Turn $turnIndex complete for $sessionId (stop=${outcome.response.stop_reason}, tokens=${outcome.totalUsage.input_tokens + outcome.totalUsage.output_tokens})")
@@ -153,10 +154,19 @@ class AiTurnWorker(
             Result.failure(workDataOf(KEY_REASON to REASON_NO_API_KEY))
         } catch (e: AnthropicClient.AnthropicHttpException) {
             Log.e(TAG, "Anthropic HTTP ${e.code} during turn for $sessionId", e)
-            if (e.isRetryable) Result.retry() else Result.failure(workDataOf(KEY_REASON to REASON_HTTP))
+            if (e.isRetryable && runAttemptCount < MAX_RETRY_ATTEMPTS) {
+                Result.retry()
+            } else {
+                Result.failure(workDataOf(KEY_REASON to REASON_HTTP))
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error during AI turn for $sessionId", e)
-            Result.retry()
+            if (runAttemptCount < MAX_RETRY_ATTEMPTS) {
+                Result.retry()
+            } else {
+                Log.w(TAG, "Turn $turnIndex for $sessionId gave up after $runAttemptCount attempts")
+                Result.failure(workDataOf(KEY_REASON to REASON_MAX_RETRIES))
+            }
         }
     }
 
@@ -244,10 +254,12 @@ class AiTurnWorker(
         const val REASON_BUDGET = "budget_exhausted"
         const val REASON_NO_API_KEY = "no_api_key"
         const val REASON_HTTP = "http_error"
+        const val REASON_MAX_RETRIES = "max_retries_exceeded"
 
         private const val TAG = "AiTurnWorker"
 
         /** Total across the turn; with interleaved thinking it's spread over a fresh think after each tool result. Kept modest so reasoning stays on the anchor decision, not mechanical recompute. */
         private const val THINKING_BUDGET = 2_560
+        private const val MAX_RETRY_ATTEMPTS = 5
     }
 }

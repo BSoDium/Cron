@@ -30,6 +30,9 @@ import kotlin.math.min
  *     round-trip budget is exhausted.
  *
  * Retries on 429 / 5xx with exponential backoff, capped at [maxRetries].
+ *
+ * [onRoundTripUsage] fires after every successful round-trip — not just at the end of the
+ * turn — so spend already billed by the API is recorded even when the turn later fails.
  */
 class TurnRunner(
     private val client: AnthropicMessages,
@@ -43,6 +46,7 @@ class TurnRunner(
     private val toolChoice: ToolChoice? = null,
     private val thinking: ThinkingConfig? = null,
     private val isMocked: Boolean = false,
+    private val onRoundTripUsage: (Usage) -> Unit = {},
 ) {
 
     sealed class Outcome {
@@ -105,6 +109,7 @@ class TurnRunner(
                 )
 
                 val response = streamWithRetries(sessionId, turnIndex, request, committedBlocks, startedAtMs)
+                response.usage?.let(onRoundTripUsage)
                 aggregateUsage = aggregateUsage.plus(response.usage)
 
                 // Persist assistant message (complete — keeps resume safe), then settle the partial.
