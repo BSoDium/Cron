@@ -210,8 +210,7 @@ private fun FsmEventInjector(
     val repo = remember { SessionRepository(context) }
     var driveFsm by remember { mutableStateOf(false) }
 
-    // Append-only records the event; FSM mode routes through SessionFsm.onEvent so transitions,
-    // the auto-plan gate (Bug 4) and the AI cooldown (Bug 3) actually run.
+    // Append-only records the event; FSM mode routes through SessionFsm.onEvent so transitions, the auto-plan gate (Bug 4) and the AI cooldown (Bug 3) actually run.
     val inject: suspend (SessionEvent) -> String? = { event ->
         if (driveFsm) {
             SessionFsm(context, repo).onEvent(event)?.let { sessionId ->

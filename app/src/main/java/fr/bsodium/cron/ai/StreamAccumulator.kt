@@ -51,8 +51,7 @@ class StreamAccumulator {
         }
         is StreamEvent.MessageStop -> true
         is StreamEvent.Ping -> false
-        // Mid-stream errors (e.g. overloaded_error) arrive after a 200; map to 529 so the
-        // runner's retry wrapper treats them as retryable, just like a pre-stream 529.
+        // Mid-stream errors (e.g. overloaded_error) arrive after a 200; map to 529 so the runner's retry wrapper treats them as retryable, just like a pre-stream 529.
         is StreamEvent.Error -> throw AnthropicClient.AnthropicHttpException(
             code = 529,
             type = event.error.type,

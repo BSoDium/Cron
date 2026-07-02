@@ -66,14 +66,18 @@ class TurnRunner(
         val startedAtMs = Clock.System.now().toEpochMilliseconds()
         val (loaded, isFreshSeed) = loadOrSeed(sessionId, turnIndex, initialUserMessage)
         val messages = loaded.toMutableList()
-        // The turn's renderable blocks so far (assistant content + tool_result, never the user prompt),
-        // seeded from any already-persisted messages on resume. Streamed deltas append onto this.
+        /**
+         * The turn's renderable blocks so far (assistant content + tool_result, never the user prompt),
+         * seeded from any already-persisted messages on resume. Streamed deltas append onto this.
+         */
         var committedBlocks = renderableBlocks(messages)
 
-        // Mark the turn streaming BEFORE its seed row is persisted, so the home thread renders "thinking"
-        // from the first frame instead of briefly showing the bare user row as a settled turn ("Thought
-        // for a moment"). Skip if something already seeded this turn (the FAB path's seedPending carries a
-        // trigger label we mustn't clobber). The finally-clear ends the streaming state on completion.
+        /**
+         * True if the turn was already marked streaming before this call (e.g. the FAB path's
+         * seedPending carries a trigger label we mustn't clobber). Otherwise mark it streaming here,
+         * before the seed row is persisted, so the home thread renders "thinking" from the first frame
+         * instead of briefly showing the bare user row as a settled turn. The `finally` below clears it.
+         */
         val alreadySeeded = StreamingTurnStore.active.value
             ?.let { it.sessionId == sessionId && it.turnIndex == turnIndex } == true
         if (!alreadySeeded) publish(sessionId, turnIndex, committedBlocks, startedAtMs)
@@ -183,8 +187,7 @@ class TurnRunner(
                 }
             } catch (e: AnthropicClient.AnthropicHttpException) {
                 if (!e.isRetryable || attempt >= maxRetries) throw e
-                // A fresh attempt re-streams from scratch — drop the half-streamed tail so the UI
-                // doesn't briefly show doubled text.
+                // A fresh attempt re-streams from scratch — drop the half-streamed tail so the UI doesn't briefly show doubled text.
                 publish(sessionId, turnIndex, committedBlocks, startedAtMs)
                 val backoffMs = min(BASE_BACKOFF_MS shl attempt, MAX_BACKOFF_MS)
                 delay(backoffMs)

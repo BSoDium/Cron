@@ -58,8 +58,7 @@ class LocationProvider(private val context: Context) {
 
         val fused = LocationServices.getFusedLocationProviderClient(context)
 
-        // Step 1: high-accuracy GPS fix — engages the GPS chip for a precise fix. If it's coarser
-        // than MAX_ACCURACY_METERS, persistAndReturn returns null and we fall through.
+        // Step 1: high-accuracy GPS fix. If coarser than MAX_ACCURACY_METERS, persistAndReturn returns null and we fall through.
         val fresh = withTimeoutOrNull(20.seconds.inWholeMilliseconds) {
             val req = CurrentLocationRequest.Builder()
                 .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
@@ -73,8 +72,7 @@ class LocationProvider(private val context: Context) {
             persistAndReturn(fresh, LocationSource.Gps, checkpoints)?.let { return it }
         }
 
-        // Step 2: balanced-power CURRENT fix (wifi/cell — works indoors without a GPS lock). A
-        // current city-level fix beats a stale precise one elsewhere, so accept a coarser cap.
+        // Step 2: balanced-power CURRENT fix (wifi/cell, works indoors) — a current city-level fix beats a stale precise one, so accept a coarser cap.
         val coarse = withTimeoutOrNull(10.seconds.inWholeMilliseconds) {
             val req = CurrentLocationRequest.Builder()
                 .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
@@ -88,8 +86,7 @@ class LocationProvider(private val context: Context) {
             persistAndReturn(coarse, LocationSource.Gps, checkpoints, COARSE_MAX_ACCURACY_METERS)?.let { return it }
         }
 
-        // Step 3: a recent last-known fix — labelled LastKnown (it is NOT a fresh fix), so the
-        // prompt treats it with appropriate caution rather than as a confident current position.
+        // Step 3: a recent last-known fix — labelled LastKnown (not a fresh fix), so the prompt treats it with appropriate caution.
         val last = runCatching { fused.lastLocation.awaitNullable() }
             .onFailure { Log.w(TAG, "lastLocation failed", it) }.getOrNull()
         if (last != null && isRecent(last, maxAge = 2.hours)) {
@@ -105,9 +102,7 @@ class LocationProvider(private val context: Context) {
         checkpoints: PollCheckpointStore,
         maxAccuracyMeters: Float = MAX_ACCURACY_METERS,
     ): LocationPayload? {
-        // Reject fixes coarser than the cap — a precise fix is gated at 500 m (cell-tower-only
-        // positions misplace by kilometres); the balanced current fix uses a looser cap since a
-        // current city-level position is still far better than a stale precise one elsewhere.
+        // Reject fixes coarser than the cap — a precise fix is gated at 500 m (cell-tower-only positions misplace by kilometres); the balanced fix uses a looser cap.
         if (!isWithinAccuracyCap(location.accuracy, maxAccuracyMeters)) return null
         val capturedAt = Instant.fromEpochMilliseconds(location.time)
         checkpoints.setLastLocationFix(location.latitude, location.longitude, capturedAt)
@@ -170,8 +165,7 @@ class LocationProvider(private val context: Context) {
      */
     private suspend fun reverseGeocode(lat: Double, lng: Double): String? {
         if (!Geocoder.isPresent()) return null
-        // Locale.getDefault(): the address is human-language for the model, not a numeric readout —
-        // the documented exception to the Locale.US formatting rule.
+        // Locale.getDefault(): the address is human-language for the model, not a numeric readout — the documented exception to the Locale.US formatting rule.
         val geocoder = Geocoder(context, Locale.getDefault())
         return withTimeoutOrNull(REVERSE_GEOCODE_TIMEOUT.inWholeMilliseconds) {
             runCatching {
@@ -202,8 +196,10 @@ class LocationProvider(private val context: Context) {
     companion object {
         private const val TAG = "LocationProvider"
         private const val MAX_ACCURACY_METERS = 500f
-        // Looser cap for a balanced-power CURRENT fix: city-level accuracy is acceptable when the
-        // alternative is a stale fix in the wrong city (commute origin only needs the right area).
+        /**
+         * Looser cap for a balanced-power CURRENT fix: city-level accuracy is acceptable when the
+         * alternative is a stale fix in the wrong city (commute origin only needs the right area).
+         */
         private const val COARSE_MAX_ACCURACY_METERS = 5000f
         private val REVERSE_GEOCODE_TIMEOUT = 5.seconds
 
