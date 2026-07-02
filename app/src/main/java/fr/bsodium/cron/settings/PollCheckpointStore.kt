@@ -15,6 +15,7 @@ class PollCheckpointStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
+    /** End of the newest stage segment emitted so far — the next poll's dedup cutoff. */
     fun lastHealthConnectPoll(): Instant? = prefs.getLong(KEY_HC, -1L)
         .takeIf { it > 0 }
         ?.let { Instant.fromEpochMilliseconds(it) }
