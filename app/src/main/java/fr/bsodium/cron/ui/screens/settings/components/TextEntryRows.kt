@@ -55,8 +55,7 @@ internal fun DisplayNameRow(
             color = if (name != null) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
-            // Match TextButton content padding so the value aligns with the
-            // Sign in / Clear buttons in the rows below.
+            // Match TextButton content padding so the value aligns with the Sign in / Clear buttons in the rows below.
             modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
         )
     }

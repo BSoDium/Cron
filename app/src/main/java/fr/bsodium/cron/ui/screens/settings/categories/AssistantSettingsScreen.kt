@@ -22,8 +22,7 @@ fun AssistantSettingsScreen(
     onRefreshUsage: () -> Unit,
     onBack: () -> Unit,
 ) {
-    // Token spend is read from SharedPreferences, not observed — refresh whenever the screen resumes
-    // (e.g. after a turn ran while the app was backgrounded) so "used today" stays current.
+    // Token spend is read from SharedPreferences, not observed — refresh on resume (e.g. after a backgrounded turn) so "used today" stays current.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->

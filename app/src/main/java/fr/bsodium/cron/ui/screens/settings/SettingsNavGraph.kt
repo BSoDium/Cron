@@ -85,11 +85,7 @@ fun NavGraphBuilder.settingsGraph(
     navigation(route = SETTINGS_GRAPH, startDestination = SETTINGS_ROOT) {
         composable(
             SETTINGS_ROOT,
-            // A tab destination: tab switch IN uses the fade-through (enter); tab switch AWAY uses it
-            // (popExit). Drilling into a child is the forward push (pushExit). On a child pop, the child's
-            // PredictiveBackCard already animates the root coming forward, so popEnter MUST be None — a
-            // transition here would re-scale the real root on top of the card's copy (a ghostly double
-            // entrance). See docs/navigation.md.
+            // popEnter MUST be None: the child's PredictiveBackCard already animates the root forward, so a transition here would re-scale it on top of the card's copy. See docs/navigation.md.
             enterTransition = tabEnter,
             exitTransition = { if (targetState.isSettingsChild()) pushExit() else tabExit() },
             popEnterTransition = { EnterTransition.None },
