@@ -39,6 +39,7 @@ import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.LocationSource
+import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSession
 import fr.bsodium.cron.session.model.latestEveningPlanLocation
 import fr.bsodium.cron.session.model.TriggerType
@@ -78,6 +79,12 @@ class AiTurnWorker(
         if (session == null) {
             Log.w(TAG, "Session $sessionId not found — skipping turn")
             return Result.failure()
+        }
+
+        // Second line of defense behind SessionFsm's cancelAiTurn-on-Complete: never bill a finished session.
+        if (session.status == SessionStatus.Complete) {
+            Log.i(TAG, "Session $sessionId already complete — skipping AI turn")
+            return Result.success()
         }
 
         val useMock = ToolRegistryFactory.shouldUseMock(applicationContext)
