@@ -95,8 +95,12 @@ object AiPlanMapper {
 
         // The live partial overrides the persisted rows of its turn → never a duplicate/stale iteration.
         fun threadOf(turn: Int): AiThreadUi =
-            if (turn == streamingTurn && streaming != null) AiThreadMapper.buildFromBlocks(turn, streaming.blocks, isMocked = streaming.isMocked)
-            else threadFor(turn, byTurn.getValue(turn))
+            if (turn == streamingTurn) {
+                requireNotNull(streaming) { "streamingTurn is non-null only when streaming is set" }
+                AiThreadMapper.buildFromBlocks(turn, streaming.blocks, isMocked = streaming.isMocked)
+            } else {
+                threadFor(turn, byTurn.getValue(turn))
+            }
 
         fun startOf(turn: Int): Long =
             byTurn[turn]?.minOfOrNull { it.createdAt }

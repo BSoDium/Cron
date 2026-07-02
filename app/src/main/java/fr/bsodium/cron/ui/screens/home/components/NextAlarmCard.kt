@@ -304,7 +304,7 @@ internal fun rememberLcdReveal(alarmTime: LocalTime?): LcdReveal {
             progressAnim.snapTo(1f)
             animatedKey = valueKey
         } else if (valueKey != animatedKey) {
-            fromKey = animatedKey!!
+            fromKey = requireNotNull(animatedKey) { "checked non-null by the enclosing else-if" }
             progressAnim.snapTo(0f)
             // Sanctioned motionScheme exception (docs/expressive.md § Sanctioned exceptions): the reveal
             // gates digit rolling on a 0→1 progress; a spring's overshoot past 1 would re-roll the digits.
