@@ -15,6 +15,7 @@ import fr.bsodium.cron.MainActivity
 import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.screens.alarm.AlarmActivity
 import fr.bsodium.cron.alarm.AlarmConstants
+import fr.bsodium.cron.alarm.AlarmRingingState
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
@@ -62,6 +63,8 @@ class AlarmReceiver : BroadcastReceiver() {
         val kind = intent.getStringExtra(AlarmConstants.EXTRA_KIND) ?: "legacy"
         val sessionId = intent.getStringExtra(AlarmConstants.EXTRA_SESSION_ID)
         Log.i(TAG, "Alarm fired kind=$kind label=$label sessionId=$sessionId")
+
+        AlarmRingingState.markRinging()
 
         if (kind == AlarmConstants.KIND_HARD_LATEST && !sessionId.isNullOrBlank()) {
             val pending = goAsync()
@@ -120,6 +123,7 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     private fun handleDismiss(context: Context) {
+        AlarmRingingState.markNotRinging()
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIFICATION_ID)
 
@@ -145,6 +149,7 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     private fun handleSnooze(context: Context, intent: Intent) {
+        AlarmRingingState.markNotRinging()
         val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0)
         val label = intent.getStringExtra(EXTRA_LABEL) ?: "Cron Alarm"
 

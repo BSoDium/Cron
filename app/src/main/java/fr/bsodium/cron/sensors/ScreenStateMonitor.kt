@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.PowerManager
 import android.util.Log
+import fr.bsodium.cron.alarm.AlarmRingingState
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
@@ -40,6 +41,7 @@ class ScreenStateMonitor(
     private val sleepOnsetThreshold: Duration = 20.minutes,
     private val rearmThreshold: Duration = REARM_ONSET_THRESHOLD,
     private val lightReader: AmbientLightReader = AmbientLightReader(context),
+    private val isAlarmRinging: () -> Boolean = { AlarmRingingState.isRinging },
 ) {
 
     private var screenOffSince: Instant? = null
@@ -117,11 +119,23 @@ class ScreenStateMonitor(
      * A genuine unlock is our strongest "awake" signal — the user is handling the phone, not stirring
      * in their sleep. If we'd latched sleep, treat it as getting out of bed (one event → FSM Awake →
      * [rearm]) rather than firing a plan on every pickup.
+     *
+     * Suppressed while an alarm is actively ringing: [AlarmActivity][fr.bsodium.cron.ui.screens.alarm.AlarmActivity]
+     * dismisses the keyguard as soon as it launches, so USER_PRESENT fires a beat before the user's
+     * actual slide-to-dismiss gesture. Without this guard that unlock alone would drive the session to
+     * Awake, and the dismiss gesture right behind it would then complete the session immediately —
+     * collapsing the dismiss-while-asleep re-ring guarantee on the very first (and only) real
+     * dismissal. Suppressing here leaves status Monitoring/ReMonitoring, so AlarmDismissed itself
+     * carries the transition to Awake as intended.
      */
     private fun onUserPresent() {
         screenOffSince = null
         pendingOnset?.cancel()
         if (!sleepOnsetEmitted) return
+        if (isAlarmRinging()) {
+            Log.i(TAG, "User present while an alarm is ringing — treating as the dismiss unlock, not out-of-bed")
+            return
+        }
         sleepOnsetEmitted = false
         scope.launch {
             sink.emit(
