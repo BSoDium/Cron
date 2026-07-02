@@ -75,22 +75,21 @@ class SleepSessionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                stop()
-                return START_NOT_STICKY
-            }
-            ACTION_REARM -> {
-                screenStateMonitor?.rearm()
-                return START_STICKY
-            }
+        if (intent?.action == ACTION_STOP) {
+            stop()
+            return START_NOT_STICKY
         }
+        val isRearm = intent?.action == ACTION_REARM
         val eveningPlan = intent?.action == ACTION_EVENING_PLAN
         ensureNotificationChannel()
         // Location-typed FGS keeps the fetch "in use" on foreground permission alone; a sticky restart (null intent) only resumes monitoring, never re-fires the plan.
         startForegroundService(includeLocation = eveningPlan)
 
-        if (screenStateMonitor == null) {
+        // A REARM after the service was killed and restarted fresh finds screenStateMonitor null —
+        // treat that the same as a normal start (build the monitors) before rearming, so REARM never
+        // silently no-ops and leaves the session with no sensors and no foreground notification.
+        val freshlyConstructed = screenStateMonitor == null
+        if (freshlyConstructed) {
             screenStateMonitor = ScreenStateMonitor(
                 applicationContext,
                 fsmSink,
@@ -101,6 +100,12 @@ class SleepSessionService : Service() {
         }
         if (activityRecognitionMonitor == null) {
             activityRecognitionMonitor = ActivityRecognitionMonitor(applicationContext, fsmSink, serviceScope).also { it.start() }
+        }
+
+        // Only rearm explicitly on a fresh construction — start() already seeds onset detection
+        // from the current screen state, and rearm() would just redundantly reset the same latch.
+        if (isRearm && !freshlyConstructed) {
+            screenStateMonitor?.rearm()
         }
 
         if (eveningPlan) {
