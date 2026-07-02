@@ -7,7 +7,9 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -69,6 +71,9 @@ import kotlinx.datetime.LocalTime
 private data class PlanDetailKey(val turnIndex: Int, val sessionId: String)
 
 private const val EMPTY_STATE_DATE_LABEL = "No alarm is set"
+
+// Matches SettingsNavGraph's PUSH_MS/EaseOutCubic push — see docs/expressive.md § Sanctioned exceptions.
+private const val PLAN_DETAIL_ENTER_MS = 240
 
 /** What the home body should show — kept coarse (not the thread content) so it only crossfades on a
  *  real state change, never on each streaming update. */
@@ -180,7 +185,7 @@ fun HomeScreen(
             LaunchedEffect(Unit) { entered = true }
             val enterOffset by animateFloatAsState(
                 targetValue = if (entered) 0f else 1f,
-                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                animationSpec = tween(PLAN_DETAIL_ENTER_MS, easing = EaseOutCubic),
                 label = "plan-detail-enter",
             )
 

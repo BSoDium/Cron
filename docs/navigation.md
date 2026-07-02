@@ -218,9 +218,11 @@ Box(Modifier.fillMaxSize()) {
 }
 ```
 
-**Forward entrance** uses `animateFloatAsState` with `motionScheme.defaultSpatialSpec()` to slide the detail
-in from the right — the same visual direction as the Settings push, but driven by Compose state rather than
-NavHost transitions (because NavHost isn't involved).
+**Forward entrance** uses `animateFloatAsState` with a `tween(PUSH_MS, easing = EaseOutCubic)` — the same
+timing and easing as the Settings push (§2), not just the same direction — driven by Compose state rather
+than NavHost transitions (because NavHost isn't involved). See `docs/expressive.md` § Sanctioned exceptions
+for why this opts out of `motionScheme` despite being able to read it (a spring's overshoot reads wrong on a
+full-screen translation).
 
 **Why the `PredictiveBackCard` has no `parentContent` here:** with the home always composed behind, the
 card's scrim reveals the live home directly. `parentContent` would add a second stateful instance.

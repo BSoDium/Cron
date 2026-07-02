@@ -75,3 +75,10 @@ spring is *structurally* wrong for the job, not as a tuning preference. Anything
 - **Continuous shader clock** (`AiPulse.kt` time uniform): a `rememberInfiniteTransition` driving a
   monotonic time float into an AGSL shader. There is no state transition to map to spatial/effects
   specs — the animation is a GPU-side continuous function of time.
+- **Plan-detail push entrance** (`HomeScreen.kt` `enterOffset`): unlike the entries above, this one is
+  *not* structurally forced — it's Compose-state-driven (not a `NavGraphBuilder` lambda), so it could read
+  `MaterialTheme.motionScheme` just fine. It opts out anyway to match the non-bouncy feel of the analogous
+  NavGraphBuilder-based Settings push (`SettingsNavGraph.kt` `pushEnter`, `docs/navigation.md` §2):
+  `defaultSpatialSpec()`'s underdamped spring overshoots past the resting position, which reads as a jarring
+  bounce on a big full-screen translation where the Settings push is crisp. Uses the same
+  `PUSH_MS`/`EaseOutCubic` tween as that push for visual parity.
