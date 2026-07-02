@@ -82,8 +82,7 @@ object AiPlanMapper {
         rows: List<AiMessageEntity>,
         streaming: StreamingTurn?,
         events: List<SessionEvent>,
-        // Builds a settled turn's thread from its rows. Defaulted to the direct mapping; callers pass a
-        // memoizing impl so immutable settled turns aren't re-decoded on every emission.
+        // Builds a settled turn's thread; callers pass a memoizing impl so immutable turns aren't re-decoded per emission.
         threadFor: (turn: Int, rows: List<AiMessageEntity>) -> AiThreadUi = { turn, turnRows ->
             AiThreadMapper.build(turnRows) ?: AiThreadUi(turn, summary = null, process = emptyList(), response = null)
         },
@@ -118,13 +117,10 @@ object AiPlanMapper {
         }
 
         val iterations = turns.mapIndexed { index, turn ->
-            // The latest event appended at/before this turn started: it names a replan, and for turn 0
-            // it's the bootstrap evening-plan — read only to tell a manual FAB plan from the nightly one.
-            // lastOrNull over the id-ASC list so an equal-timestamp tie resolves to the latest-appended event.
+            // Latest event at/before this turn's start names the replan (or, for turn 0, the bootstrap evening-plan); lastOrNull breaks equal-timestamp ties toward the latest-appended event.
             val start = startOf(turn)
             val sourceEvent = events.lastOrNull { it.timestamp.toEpochMilliseconds() <= start }
-            // Prefer the seeded trigger for the still-streaming turn: its triggering event may not be persisted
-            // yet (the seed beats the event write), so inferring from `events` alone would briefly mislabel it.
+            // Prefer the seeded trigger for the still-streaming turn: it may not be persisted to `events` yet (the seed beats the event write).
             val effectiveTrigger = streaming?.trigger?.takeIf { turn == streamingTurn } ?: sourceEvent?.trigger
             val kind = when {
                 index > 0 -> RunKind.Replan(

@@ -96,8 +96,7 @@ object AiPromptBuilder {
     ): String {
         val plan = session.plan
         val instr = session.currentInstruction
-        // Same origin the evening plan captured — without it the replan model has no coordinates and
-        // guesses a city.
+        // Same origin the evening plan captured — without it the replan model has no coordinates and guesses a city.
         val location = session.latestEveningPlanLocation()
 
         return buildString {

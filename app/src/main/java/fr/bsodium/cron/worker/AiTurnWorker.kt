@@ -98,8 +98,7 @@ class AiTurnWorker(
         }
 
         val turnIndex = (db.aiMessageDao().maxTurnIndex(sessionId) ?: -1) + 1
-        // A manual replan re-appends an EveningPlan event (→ Sonnet); sensor-driven overnight
-        // replans leave the latest trigger ≠ EveningPlan, so they stay on Haiku.
+        // A manual replan re-appends an EveningPlan event (→ Sonnet); sensor-driven overnight replans leave the latest trigger ≠ EveningPlan, so they stay on Haiku.
         val isEveningPlan = session.events.lastOrNull()?.trigger == TriggerType.EveningPlan
 
         val model = if (isEveningPlan) TurnRunner.MODEL_SONNET else TurnRunner.MODEL_HAIKU
@@ -166,15 +165,12 @@ class AiTurnWorker(
             val sharedHttp = RoutesClient.defaultHttp()
             val routesClient = RoutesClient(routesKey, sharedHttp)
             val geocoder = GeocodingClient(routesKey, sharedHttp)
-            // The device's captured location anchors geocoding + commute to the user's actual area, so
-            // ambiguous destinations resolve nearby (not the capital) and the origin is never a bogus (0,0).
-            // The LATEST fix, via the shared helper — the prompt reads the same one, so they can't diverge.
+            // The device's captured location anchors geocoding + commute to the user's actual area (ambiguous destinations resolve nearby, origin is never a bogus (0,0)); the LATEST fix via the shared helper, same one the prompt reads, so they can't diverge.
             val bias = session.latestEveningPlanLocation()
                 ?.takeIf { it.source != LocationSource.Unavailable }
                 ?.let { LatLng(it.lat, it.lng) }
             tools.add(GeocodeTool(geocoder, bias))
-            // Enforce the user's allowed commute modes in the tools themselves — prompt prose alone still
-            // hands the model an excluded mode's duration to plan around.
+            // Enforce the user's allowed commute modes in the tools themselves — prompt prose alone still hands the model an excluded mode's duration to plan around.
             tools.add(EstimateCommuteTool(routesClient, geocoder, bias, session.plan.allowedCommuteModes))
             tools.add(EstimateCommuteMultiModeTool(routesClient, geocoder, bias, session.plan.allowedCommuteModes))
         }
@@ -242,8 +238,8 @@ class AiTurnWorker(
         const val REASON_HTTP = "http_error"
 
         private const val TAG = "AiTurnWorker"
-        // Total across the turn; with interleaved thinking it's spread over a fresh think after each
-        // tool result. Kept modest so reasoning stays on the anchor decision, not mechanical recompute.
+
+        /** Total across the turn; with interleaved thinking it's spread over a fresh think after each tool result. Kept modest so reasoning stays on the anchor decision, not mechanical recompute. */
         private const val THINKING_BUDGET = 2_560
     }
 }
