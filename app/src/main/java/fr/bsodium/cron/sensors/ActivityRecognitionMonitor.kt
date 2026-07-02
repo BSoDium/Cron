@@ -115,7 +115,7 @@ class ActivityRecognitionMonitor(
             DetectedActivity.STILL -> ActivityType.Still
             DetectedActivity.WALKING -> ActivityType.Walking
             DetectedActivity.RUNNING -> ActivityType.Running
-            else -> return
+            else -> return // only STILL/WALKING/RUNNING are subscribed to; other Play Services codes can't arrive
         }
         scope.launch {
             sink.emit(

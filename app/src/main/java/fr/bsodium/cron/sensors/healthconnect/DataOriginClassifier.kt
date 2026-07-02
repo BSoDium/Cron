@@ -24,6 +24,6 @@ object DataOriginClassifier {
     fun classify(packageName: String, ownPackage: String): SignalConfidence = when {
         packageName == ownPackage -> SignalConfidence.Low
         HIGH_CONFIDENCE_PACKAGES.any { packageName.startsWith(it) } -> SignalConfidence.High
-        else -> SignalConfidence.Medium
+        else -> SignalConfidence.Medium // any other origin (open set of installed apps) is unverified
     }
 }

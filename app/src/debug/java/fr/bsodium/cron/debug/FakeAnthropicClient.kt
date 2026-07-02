@@ -89,7 +89,7 @@ class FakeAnthropicClient : AnthropicMessages {
             onPartial(listOf(thinking.signed(), toolUse))
             response(model, listOf(thinking.signed(), toolUse), stopReason = "tool_use")
         }
-        else -> {
+        else -> { // turn is an unbounded call counter; every turn past the scripted 3 lands here
             val thinking = streamThinking(THINK_DONE.random(), onPartial)
             val text = streamText(ANSWERS.random(), listOf(thinking.signed()), onPartial)
             response(model, listOf(thinking.signed(), text))
