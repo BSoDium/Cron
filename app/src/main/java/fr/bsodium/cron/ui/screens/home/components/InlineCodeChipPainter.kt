@@ -46,8 +46,7 @@ class InlineCodeChipPainter(
         builder: AnnotatedString.Builder,
     ): SpanStyle {
         if (span.background.isUnspecified) return span
-        // Exclude the injected leading/trailing space from the drawn range, but still strip the
-        // background off the whole span so the text layer paints no rectangle behind it.
+        // Exclude the injected leading/trailing space from the drawn range, but strip the background off the whole span so the text layer paints no rectangle.
         val drawStart = (start + 1).coerceAtMost(end)
         val drawEnd = (end - 1).coerceAtLeast(drawStart)
         if (drawStart < drawEnd) builder.addStringAnnotation(TAG, annotation = "", start = drawStart, end = drawEnd)

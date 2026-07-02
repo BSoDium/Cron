@@ -43,8 +43,7 @@ internal fun CronMarkdownTable(model: MarkdownComponentModel, cellStyle: TextSty
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val numCols = rows.maxOf { it.size }
-    // Weight columns by measured width, clamped into a band so a long column can't dominate
-    // (squeezing neighbours to per-character wrapping) and a short one can't collapse.
+    // Weight columns by measured width, clamped into a band so a long column can't dominate and a short one can't collapse.
     val minColPx = with(density) { TABLE_COL_MIN.toPx() }
     val maxColPx = with(density) { TABLE_COL_MAX.toPx() }
     val colWeights = remember(rows, headerStyle, minColPx, maxColPx) {
