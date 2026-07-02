@@ -5,24 +5,12 @@ import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.SleepSessionRecord
-import androidx.health.connect.client.records.SleepSessionRecord.Companion.STAGE_TYPE_AWAKE
-import androidx.health.connect.client.records.SleepSessionRecord.Companion.STAGE_TYPE_AWAKE_IN_BED
-import androidx.health.connect.client.records.SleepSessionRecord.Companion.STAGE_TYPE_DEEP
-import androidx.health.connect.client.records.SleepSessionRecord.Companion.STAGE_TYPE_LIGHT
-import androidx.health.connect.client.records.SleepSessionRecord.Companion.STAGE_TYPE_OUT_OF_BED
-import androidx.health.connect.client.records.SleepSessionRecord.Companion.STAGE_TYPE_REM
-import androidx.health.connect.client.records.SleepSessionRecord.Companion.STAGE_TYPE_SLEEPING
-import androidx.health.connect.client.records.SleepSessionRecord.Companion.STAGE_TYPE_UNKNOWN
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
-import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
-import fr.bsodium.cron.session.model.SleepStage
-import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.toJavaInstant
-import kotlinx.datetime.toKotlinInstant
 
 /**
  * Reads sleep stage data from Health Connect.
@@ -30,7 +18,7 @@ import kotlinx.datetime.toKotlinInstant
  * Health Connect has no push API for sleep records, so this reader is
  * driven by [fr.bsodium.cron.worker.HealthConnectPollWorker] on a 15-min
  * periodic schedule. Each poll fetches new stage segments since the last
- * one and emits one [TriggerType.HcStageUpdate] event per segment.
+ * one and emits one `HcStageUpdate` event per segment.
  */
 class SleepStageReader(private val context: Context) {
 
@@ -54,9 +42,12 @@ class SleepStageReader(private val context: Context) {
     }
 
     /**
-     * Read all sleep-stage segments overlapping [start..now], emitting a
-     * [SessionEvent] per stage segment to [emit]. Returns the latest
-     * segment end so the caller can checkpoint progress.
+     * Emit a [SessionEvent] per sleep-stage segment that ended after [start].
+     * The record query fetches everything overlapping [start..now] (a session
+     * record spans the whole night), so segments already seen by a previous
+     * poll are dropped by [StageEventMapper] before they reach [emit].
+     * Returns the latest emitted segment end so the caller can checkpoint
+     * progress, or null when nothing new was found.
      */
     suspend fun readSince(
         start: Instant,
@@ -90,40 +81,18 @@ class SleepStageReader(private val context: Context) {
         val ownPackage = context.packageName
 
         for (record in response.records) {
-            val confidence = DataOriginClassifier.classify(
-                packageName = record.metadata.dataOrigin.packageName,
+            val events = StageEventMapper.newStageEvents(
+                stages = record.stages,
+                source = record.metadata.dataOrigin.packageName,
                 ownPackage = ownPackage,
+                seenThrough = start,
             )
-            for (stage in record.stages) {
-                val mapped = mapStage(stage.stage) ?: continue
-                val startK = stage.startTime.toKotlinInstant()
-                val endK = stage.endTime.toKotlinInstant()
-                if (latestEnd == null || endK > latestEnd) latestEnd = endK
-                emit(
-                    SessionEvent(
-                        trigger = TriggerType.HcStageUpdate,
-                        timestamp = endK,
-                        data = EventData.HcStageUpdate(
-                            stage = mapped,
-                            source = record.metadata.dataOrigin.packageName,
-                            confidence = confidence,
-                            recordStart = startK,
-                            recordEnd = endK,
-                        ),
-                    )
-                )
+            for (event in events) {
+                if (latestEnd == null || event.timestamp > latestEnd) latestEnd = event.timestamp
+                emit(event)
             }
         }
         return latestEnd
-    }
-
-    private fun mapStage(hcStage: Int): SleepStage? = when (hcStage) {
-        STAGE_TYPE_AWAKE, STAGE_TYPE_AWAKE_IN_BED -> SleepStage.Awake
-        STAGE_TYPE_LIGHT, STAGE_TYPE_SLEEPING -> SleepStage.Light
-        STAGE_TYPE_DEEP -> SleepStage.Deep
-        STAGE_TYPE_REM -> SleepStage.Rem
-        STAGE_TYPE_OUT_OF_BED, STAGE_TYPE_UNKNOWN -> null
-        else -> null // any stage code the SDK adds later; skip rather than misclassify
     }
 
     companion object {
