@@ -37,8 +37,7 @@ class RoutesClient(
                 put("origin", JSONObject().put("location", JSONObject().put("latLng",
                     JSONObject().put("latitude", originLat).put("longitude", originLng)
                 )))
-                // Destination as coordinates (geocoded upstream with a location bias) so it can't snap
-                // to a same-named place in another city.
+                // Destination as coordinates (geocoded upstream with a location bias) so it can't snap to a same-named place in another city.
                 put("destination", JSONObject().put("location", JSONObject().put("latLng",
                     JSONObject().put("latitude", destLat).put("longitude", destLng)
                 )))

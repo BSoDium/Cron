@@ -87,8 +87,7 @@ class SleepSessionService : Service() {
         }
         val eveningPlan = intent?.action == ACTION_EVENING_PLAN
         ensureNotificationChannel()
-        // Location-typed FGS so the in-service fetch counts as "in use" (fresh, unthrottled) on
-        // foreground permission alone. A sticky restart (null intent) resumes monitoring only — never re-fires the plan.
+        // Location-typed FGS keeps the fetch "in use" on foreground permission alone; a sticky restart (null intent) only resumes monitoring, never re-fires the plan.
         startForegroundService(includeLocation = eveningPlan)
 
         if (screenStateMonitor == null) {

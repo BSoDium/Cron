@@ -11,8 +11,7 @@ import androidx.compose.ui.unit.Dp
  * siblings are unaffected. Compensate with extra start/end padding to keep inner content put.
  */
 internal fun Modifier.bleedHorizontally(bleed: Dp): Modifier = layout { measurable, constraints ->
-    // Only meaningful under a bounded-width parent (e.g. a LazyColumn item); if width is unbounded
-    // there's nothing to bleed into, so measure and place normally.
+    // Only meaningful under a bounded-width parent (e.g. a LazyColumn item); unbounded width has nothing to bleed into, so measure and place normally.
     if (constraints.maxWidth == Constraints.Infinity) {
         val placeable = measurable.measure(constraints)
         return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }

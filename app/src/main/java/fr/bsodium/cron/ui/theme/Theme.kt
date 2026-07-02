@@ -30,9 +30,7 @@ fun CronTheme(content: @Composable () -> Unit) {
     } else {
         if (dark) FallbackDarkColors else FallbackLightColors
     }
-    // Dark neutrals ship near-black; lift them a touch so the page, list rows and icon chips read as
-    // distinct dark greys (Android-Settings feel) and the predictive-back card has contrast against the
-    // dimmed page behind it. Light mode is already light, so it's left alone.
+    // Dark neutrals ship near-black; lift them so page, list rows and icon chips read as distinct dark greys and the predictive-back card contrasts against the dimmed page behind it. Light mode is already light, so it's left alone.
     val colorScheme = if (dark) base.liftedSurfaces() else base
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
