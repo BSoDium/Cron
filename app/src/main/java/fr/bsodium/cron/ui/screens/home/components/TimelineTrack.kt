@@ -7,6 +7,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -15,16 +16,21 @@ import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
 @Composable
-internal fun MonoPill(text: String, modifier: Modifier = Modifier) {
+internal fun MonoPill(
+    text: String,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+) {
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = containerColor,
         shape = RoundedCornerShape(Radius.sm),
     ) {
         Text(
             text = text,
             style = CronTypography.labelMonoSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = contentColor,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,

@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.session.model.TriggerType
@@ -40,6 +41,42 @@ internal fun triggerSymbol(trigger: TriggerType?): MaterialSymbol = when (trigge
     TriggerType.AlarmSnoozed -> MaterialSymbol.Snooze
     TriggerType.AlarmDismissed -> MaterialSymbol.AlarmOff
     TriggerType.HardLatestFired -> MaterialSymbol.NotificationImportant
+}
+
+/** Semantic color category for a timeline event — carries meaning instead of the flat neutral gray
+ *  every row used to share (docs/expressive.md "apply varied accents"). AI runs use their own
+ *  primary-based treatment in [AiRunNode], so this only covers non-AI [TriggerType] events. */
+internal enum class TimelineAccent { Body, AlarmAction, Schedule }
+
+/** Exhaustive so a new [TriggerType] forces a deliberate accent choice rather than falling through. */
+internal fun TriggerType.timelineAccent(): TimelineAccent = when (this) {
+    TriggerType.SleepOnset,
+    TriggerType.OutOfBedConfirmed,
+    TriggerType.MidSleepActivity,
+    TriggerType.HcStageUpdate,
+    -> TimelineAccent.Body
+    TriggerType.AlarmSnoozed,
+    TriggerType.AlarmDismissed,
+    TriggerType.HardLatestFired,
+    -> TimelineAccent.AlarmAction
+    TriggerType.CalendarChange,
+    TriggerType.WakeWindowOpportunity,
+    TriggerType.EveningPlan,
+    -> TimelineAccent.Schedule
+}
+
+@Composable
+internal fun TimelineAccent.containerColor(): Color = when (this) {
+    TimelineAccent.Body -> MaterialTheme.colorScheme.tertiaryContainer
+    TimelineAccent.AlarmAction -> MaterialTheme.colorScheme.secondaryContainer
+    TimelineAccent.Schedule -> MaterialTheme.colorScheme.surfaceContainerHigh
+}
+
+@Composable
+internal fun TimelineAccent.onContainerColor(): Color = when (this) {
+    TimelineAccent.Body -> MaterialTheme.colorScheme.onTertiaryContainer
+    TimelineAccent.AlarmAction -> MaterialTheme.colorScheme.onSecondaryContainer
+    TimelineAccent.Schedule -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 @Preview(showBackground = true)

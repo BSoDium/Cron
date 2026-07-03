@@ -12,17 +12,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
+import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.Symbol
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
@@ -73,12 +77,12 @@ internal fun LazyListScope.sessionTimelineItems(
 
     if (hasMore) {
         item(key = "view-history") {
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = onNavigateToHistory,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = Spacing.lg),
-                shape = RoundedCornerShape(50),
+                shape = Radius.full,
             ) {
                 Text("View full history")
             }
@@ -96,18 +100,13 @@ internal fun AiRunNode(
 ) {
     val scheme = MaterialTheme.colorScheme
     val iter = item.iteration
+    val symbol = if (iter.thread.isMocked) MaterialSymbol.Code else runSymbol(iter.kind)
+    // Every AI run shares the primary family (docs/expressive.md "AI runs → primary"); the latest one
+    // steps up from the container tone to its own morphing hero anchor.
     val anchor = when {
         item.isStreaming -> TimelineAnchor.Loader
-        iter.thread.isMocked -> TimelineAnchor.Icon(
-            symbol = MaterialSymbol.Code,
-            tint = if (item.isLatest) scheme.onPrimary else null,
-            containerColor = if (item.isLatest) scheme.primary else null,
-        )
-        else -> TimelineAnchor.Icon(
-            symbol = runSymbol(iter.kind),
-            tint = if (item.isLatest) scheme.onPrimary else null,
-            containerColor = if (item.isLatest) scheme.primary else null,
-        )
+        item.isLatest -> TimelineAnchor.Latest(symbol)
+        else -> TimelineAnchor.Icon(symbol = symbol, tint = scheme.onPrimaryContainer, containerColor = scheme.primaryContainer)
     }
     val contentColor = scheme.onSurfaceVariant
     val latestSummary = iter.thread.summary?.takeIf { item.isLatest && it.isNotBlank() }
@@ -121,7 +120,7 @@ internal fun AiRunNode(
         title = {
             Text(
                 text = iter.systemMessage,
-                style = MaterialTheme.typography.bodyMedium,
+                style = if (item.isLatest) CronTypography.timelineHeroTitle else MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
@@ -139,13 +138,31 @@ internal fun AiRunNode(
         },
         content = latestSummary?.let { summary ->
             {
-                Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = contentColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Surface(
+                    color = scheme.surfaceContainer,
+                    shape = RoundedCornerShape(Radius.lg),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(Spacing.md),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    ) {
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = contentColor,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Symbol(
+                            symbol = MaterialSymbol.ArrowForward,
+                            contentDescription = null,
+                            tint = contentColor,
+                            size = 18.dp,
+                        )
+                    }
+                }
             }
         },
     )
@@ -159,6 +176,9 @@ internal fun EventNode(
     modifier: Modifier = Modifier,
 ) {
     val contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val accent = item.trigger.timelineAccent()
+    val accentContainer = accent.containerColor()
+    val onAccentContainer = accent.onContainerColor()
     val tz = TimeZone.currentSystemDefault()
     val local = item.timestamp.toLocalDateTime(tz)
     val timeText = String.format(Locale.US, "%02d:%02d", local.hour, local.minute)
@@ -166,7 +186,8 @@ internal fun EventNode(
     TimelineNode(
         anchor = TimelineAnchor.Icon(
             symbol = triggerSymbol(item.trigger),
-            tint = contentColor,
+            tint = onAccentContainer,
+            containerColor = accentContainer,
         ),
         isFirst = isFirst,
         isLast = isLast,
@@ -187,7 +208,7 @@ internal fun EventNode(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (item.detail != null) {
-                    MonoPill(text = item.detail)
+                    MonoPill(text = item.detail, containerColor = accentContainer, contentColor = onAccentContainer)
                 }
                 Text(
                     text = timeText,

@@ -2,7 +2,10 @@
 
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +25,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +34,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -57,12 +63,17 @@ sealed interface TimelineAnchor {
     ) : TimelineAnchor
 
     data object Loader : TimelineAnchor
+
+    /** The single latest AI run — a morphing Material shape instead of a plain circle, sized up so
+     *  the newest entry reads first at a glance. */
+    data class Latest(val symbol: MaterialSymbol) : TimelineAnchor
 }
 
 private fun TimelineAnchor.diameter(): Dp = when (this) {
     TimelineAnchor.Plain -> PLAIN_DOT_SIZE
     is TimelineAnchor.Icon -> ICON_DOT_SIZE
     TimelineAnchor.Loader -> LOADER_DOT_SIZE
+    is TimelineAnchor.Latest -> LATEST_ANCHOR_SIZE
 }
 
 @Composable
@@ -132,11 +143,22 @@ internal fun TimelineNode(
             },
     ) {
         if (onClick != null) {
+            val interactionSource = remember { MutableInteractionSource() }
+            val pressed by interactionSource.collectIsPressedAsState()
+            val pressScale by animateFloatAsState(
+                targetValue = if (pressed) 0.98f else 1f,
+                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                label = "timeline-node-press-scale",
+            )
             Surface(
                 onClick = onClick,
+                interactionSource = interactionSource,
                 // Bleeds the tap/ripple target out to the true screen edges, past HomeContent's LazyColumn
                 // contentPadding — the compensating padding below keeps inner() at its original position.
-                modifier = Modifier.fillMaxWidth().bleedHorizontally(Spacing.md),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
+                    .bleedHorizontally(Spacing.md),
                 color = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onSurface,
             ) {
@@ -185,6 +207,7 @@ private fun AnchorCircle(anchor: TimelineAnchor) {
                 indicatorColor = MaterialTheme.colorScheme.primary,
             )
         }
+        is TimelineAnchor.Latest -> LatestAnchor(symbol = anchor.symbol)
     }
 }
 
