@@ -131,7 +131,10 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
         }
     }
 
-    return insertDayHeaders(withLatest, tz)
+    // Defensive: a data-layer race can occasionally surface the same underlying event twice (e.g.
+    // across a session boundary); the LazyColumn key must be unique regardless, so collapse duplicates
+    // here rather than let a rare data race crash the UI.
+    return insertDayHeaders(withLatest, tz).distinctBy { it.id }
 }
 
 /** Threads a [TimelineItem.DayHeader] in front of the first item of each local day. */

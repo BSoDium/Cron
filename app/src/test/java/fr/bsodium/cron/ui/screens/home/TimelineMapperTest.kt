@@ -99,4 +99,30 @@ class TimelineMapperTest {
         assertTrue(timeline[2] is TimelineItem.DayHeader)
         assertTrue(timeline[3] is TimelineItem.Event)
     }
+
+    @Test
+    fun buildTimeline_collapses_the_same_event_appearing_in_two_sessions() {
+        // Regression: a data-layer race can surface the identical (trigger, timestamp) event under two
+        // different sessions; the LazyColumn key must stay unique regardless of how that happens.
+        val duplicate = SessionEvent(
+            timestamp = Instant.fromEpochMilliseconds(1_783_065_605_883L),
+            trigger = TriggerType.AlarmDismissed,
+            data = EventData.Empty,
+        )
+        val sessionA = TimelineSession(
+            sessionId = "s1",
+            iterations = emptyList(),
+            events = listOf(duplicate),
+            streamingTurnIndex = null,
+        )
+        val sessionB = TimelineSession(
+            sessionId = "s2",
+            iterations = emptyList(),
+            events = listOf(duplicate),
+            streamingTurnIndex = null,
+        )
+        val timeline = buildTimeline(listOf(sessionA, sessionB))
+        assertEquals(1, timeline.count { it is TimelineItem.Event })
+        assertEquals(timeline.map { it.id }.toSet().size, timeline.size)
+    }
 }

@@ -235,6 +235,9 @@ private fun HomeRootContent(
             !uiState.initialized -> HomePhase.Loading
             displayPlan != null -> HomePhase.Plan
             lastPlan != null && uiState.isRetrying -> HomePhase.Plan
+            // No current plan, but there's history worth showing (e.g. right after a crash left no
+            // fresh plan yet) — show it instead of a blank splash that hides data that's still there.
+            uiState.timeline.isNotEmpty() -> HomePhase.Plan
             else -> HomePhase.Idle
         }
         Crossfade(
