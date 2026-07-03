@@ -1,11 +1,19 @@
 package fr.bsodium.cron.ui.screens.home
 
+import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Duration.Companion.hours
 
 class TimelineMapperTest {
 
@@ -17,6 +25,13 @@ class TimelineMapperTest {
             detail = null,
         )
     }
+
+    private fun dayHeader(date: LocalDate) = TimelineItem.DayHeader(
+        date = date,
+        timestamp = Instant.fromEpochMilliseconds(0),
+        weekdayLabel = date.toString(),
+        dateLabel = date.toString(),
+    )
 
     @Test
     fun under_cap_is_untouched_and_not_truncated() {
@@ -39,5 +54,49 @@ class TimelineMapperTest {
         assertEquals(24, result.items.size)
         assertTrue(result.truncated)
         assertEquals(items.take(24), result.items)
+    }
+
+    @Test
+    fun headers_do_not_count_toward_the_cap() {
+        val items = listOf(dayHeader(LocalDate(2026, 7, 1))) + events(24)
+        val result = capTimeline(items, cap = 24)
+        assertEquals(24, result.items.count { it !is TimelineItem.DayHeader })
+        assertFalse(result.truncated)
+    }
+
+    @Test
+    fun a_trailing_dangling_header_is_dropped() {
+        val items = events(5) + dayHeader(LocalDate(2026, 7, 1))
+        val result = capTimeline(items, cap = 24)
+        assertEquals(5, result.items.size)
+        assertTrue(result.items.none { it is TimelineItem.DayHeader })
+    }
+
+    @Test
+    fun buildTimeline_inserts_a_header_at_every_local_day_boundary() {
+        val tz = TimeZone.currentSystemDefault()
+        val today = Clock.System.now().toLocalDateTime(tz).date
+        val todayEvent = SessionEvent(
+            timestamp = today.atStartOfDayIn(tz) + 12.hours,
+            trigger = TriggerType.AlarmDismissed,
+            data = EventData.Empty,
+        )
+        val yesterdayEvent = SessionEvent(
+            timestamp = today.atStartOfDayIn(tz) - 12.hours,
+            trigger = TriggerType.AlarmDismissed,
+            data = EventData.Empty,
+        )
+        val session = TimelineSession(
+            sessionId = "s1",
+            iterations = emptyList(),
+            events = listOf(todayEvent, yesterdayEvent),
+            streamingTurnIndex = null,
+        )
+        val timeline = buildTimeline(listOf(session))
+        assertEquals(4, timeline.size)
+        assertTrue(timeline[0] is TimelineItem.DayHeader)
+        assertTrue(timeline[1] is TimelineItem.Event)
+        assertTrue(timeline[2] is TimelineItem.DayHeader)
+        assertTrue(timeline[3] is TimelineItem.Event)
     }
 }

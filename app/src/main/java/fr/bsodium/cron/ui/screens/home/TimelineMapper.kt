@@ -4,8 +4,14 @@ import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toLocalDateTime
+import java.time.LocalDate as JavaLocalDate
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /** One item in the vertical timeline. Ordered reverse-chronologically (latest first). */
@@ -30,6 +36,16 @@ sealed interface TimelineItem {
         val detail: String?,
     ) : TimelineItem {
         override val id = "event-${trigger.name}-${timestamp.toEpochMilliseconds()}"
+    }
+
+    /** A day boundary marker, inserted wherever consecutive items' local dates differ. */
+    data class DayHeader(
+        val date: LocalDate,
+        override val timestamp: Instant,
+        val weekdayLabel: String,
+        val dateLabel: String,
+    ) : TimelineItem {
+        override val id = "day-$date"
     }
 }
 
@@ -56,10 +72,22 @@ data class CappedTimeline(val items: List<TimelineItem>, val truncated: Boolean)
 
 private const val TIMELINE_ITEM_CAP = 24
 
-/** Bounds a (already latest-first) timeline to [cap] items — the home screen renders this, not the raw
- *  merged list, since an unbounded number of sessions/iterations otherwise makes it laggy to compose. */
-fun capTimeline(items: List<TimelineItem>, cap: Int = TIMELINE_ITEM_CAP): CappedTimeline =
-    CappedTimeline(items = items.take(cap), truncated = items.size > cap)
+/** Bounds a (already latest-first) timeline to [cap] content items — the home screen renders this, not
+ *  the raw merged list, since an unbounded number of sessions/iterations otherwise makes it laggy to
+ *  compose. [DayHeader]s ride along for free and a trailing dangling one is dropped, so the cut never
+ *  leaves an empty day heading as the last visible row. */
+fun capTimeline(items: List<TimelineItem>, cap: Int = TIMELINE_ITEM_CAP): CappedTimeline {
+    val result = mutableListOf<TimelineItem>()
+    var contentCount = 0
+    for (item in items) {
+        if (item !is TimelineItem.DayHeader && contentCount >= cap) break
+        result += item
+        if (item !is TimelineItem.DayHeader) contentCount++
+    }
+    while (result.lastOrNull() is TimelineItem.DayHeader) result.removeAt(result.lastIndex)
+    val totalContent = items.count { it !is TimelineItem.DayHeader }
+    return CappedTimeline(items = result, truncated = totalContent > cap)
+}
 
 fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
     val items = mutableListOf<TimelineItem>()
@@ -94,7 +122,7 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
     items.sortByDescending { it.timestamp }
 
     var latestFound = false
-    return items.map { item ->
+    val withLatest = items.map { item ->
         if (item is TimelineItem.AiRun && !latestFound) {
             latestFound = true
             item.copy(isLatest = true)
@@ -102,6 +130,45 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
             item
         }
     }
+
+    return insertDayHeaders(withLatest, tz)
+}
+
+/** Threads a [TimelineItem.DayHeader] in front of the first item of each local day. */
+private fun insertDayHeaders(items: List<TimelineItem>, tz: TimeZone): List<TimelineItem> {
+    var lastDate: LocalDate? = null
+    return buildList {
+        for (item in items) {
+            val date = item.timestamp.toLocalDateTime(tz).date
+            if (date != lastDate) {
+                add(dayHeader(date, tz))
+                lastDate = date
+            }
+            add(item)
+        }
+    }
+}
+
+private fun dayHeader(date: LocalDate, tz: TimeZone): TimelineItem.DayHeader {
+    val today = JavaLocalDate.now()
+    val javaDate = date.toJavaLocalDate()
+    val relativeLabel = when (ChronoUnit.DAYS.between(javaDate, today)) {
+        0L -> "Today"
+        1L -> "Yesterday"
+        // locale-default weekday name is intentional here (human-language); any other day gap (unbounded)
+        else -> javaDate.format(DateTimeFormatter.ofPattern("EEEE", Locale.getDefault()))
+    }
+    // locale-default uppercasing of a human-language label, purely for the header's display styling
+    val weekdayLabel = relativeLabel.uppercase(Locale.getDefault())
+    // locale-default month abbreviation is intentional here (human-language)
+    val dateLabel = javaDate.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+        .uppercase(Locale.getDefault())
+    return TimelineItem.DayHeader(
+        date = date,
+        timestamp = date.atStartOfDayIn(tz),
+        weekdayLabel = weekdayLabel,
+        dateLabel = dateLabel,
+    )
 }
 
 private fun eventLabel(trigger: TriggerType): String = when (trigger) {

@@ -216,6 +216,26 @@ object CronTypography {
         fontSize = 16.sp,
         lineHeight = 16.sp,
     )
+
+    /** Timeline day-boundary heading — an oversized wide-stretched word ("TODAY"). Pairs with
+     *  [labelMonoSmall] for the companion date figure, echoing the wide-display/mono contrast
+     *  from the Material Expressive reference material. */
+    val timelineDayHeader: TextStyle = TextStyle(
+        fontFamily = ExpressiveWideFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp,
+        lineHeight = 32.sp,
+        letterSpacing = (-0.02).em,
+    )
+
+    /** Latest timeline run's title — condensed and a step larger than the regular `bodyMedium`
+     *  history rows, so the newest entry reads first. */
+    val timelineHeroTitle: TextStyle = TextStyle(
+        fontFamily = ExpressiveCondensedFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 19.sp,
+        lineHeight = 24.sp,
+    )
 }
 
 /** The hero LCD clock size — the SINGLE source for the 76sp contract shared by the rendered clock
