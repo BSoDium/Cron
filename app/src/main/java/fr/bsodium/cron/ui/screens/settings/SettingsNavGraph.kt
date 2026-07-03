@@ -171,8 +171,15 @@ fun NavGraphBuilder.settingsGraph(
                 onBack = { navController.popBackStack() },
             )
         }
-        settingsDetail(SETTINGS_RELIABILITY) {
-            ReliabilitySettingsScreen(onBack = { navController.popBackStack() })
+        settingsDetail(SETTINGS_RELIABILITY) { entry ->
+            val vm = entry.settingsViewModel(navController)
+            val state by vm.uiState.collectAsState()
+            ReliabilitySettingsScreen(
+                saveSleepToHealthConnect = state.saveSleepToHealthConnect,
+                onSaveSleepToHealthConnect = vm::setSaveSleepToHealthConnect,
+                hapticsEnabled = state.hapticsEnabled,
+                onBack = { navController.popBackStack() },
+            )
         }
         settingsDetail(SETTINGS_ACCOUNT) { entry ->
             val vm = entry.settingsViewModel(navController)

@@ -34,6 +34,7 @@ data class SettingsUiState(
     val tokensUsedToday: Int = 0,
     val hapticsEnabled: Boolean = true,
     val compactNavEnabled: Boolean = false,
+    val saveSleepToHealthConnect: Boolean = true,
 )
 
 class SettingsViewModel @JvmOverloads constructor(
@@ -84,6 +85,8 @@ class SettingsViewModel @JvmOverloads constructor(
         state.copy(hapticsEnabled = haptics)
     }.combine(repo.compactNavEnabled) { state, compact ->
         state.copy(compactNavEnabled = compact)
+    }.combine(repo.saveSleepToHealthConnect) { state, saveSleep ->
+        state.copy(saveSleepToHealthConnect = saveSleep)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setEveningTrigger(time: LocalTime) {
@@ -139,6 +142,10 @@ class SettingsViewModel @JvmOverloads constructor(
 
     fun setCompactNavEnabled(enabled: Boolean) {
         viewModelScope.launch { repo.setCompactNavEnabled(enabled) }
+    }
+
+    fun setSaveSleepToHealthConnect(enabled: Boolean) {
+        viewModelScope.launch { repo.setSaveSleepToHealthConnect(enabled) }
     }
 
     /** Re-reads today's token spend; called when the Settings screen resumes. */

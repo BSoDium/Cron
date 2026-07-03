@@ -12,25 +12,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.health.connect.client.PermissionController
 import fr.bsodium.cron.permissions.SystemPermissions
+import fr.bsodium.cron.sensors.healthconnect.SleepSessionWriter
 import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
 import fr.bsodium.cron.ui.screens.settings.components.ActionRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
+import fr.bsodium.cron.ui.screens.settings.components.SwitchRow
 
 /**
  * No `@Preview`: this screen reads live system-permission state and wires Activity-result launchers,
  * which the preview renderer can't supply. The individual [ActionRow]s are previewed in `ActionRow.kt`.
  */
 @Composable
-fun ReliabilitySettingsScreen(onBack: () -> Unit) {
+fun ReliabilitySettingsScreen(
+    saveSleepToHealthConnect: Boolean,
+    onSaveSleepToHealthConnect: (Boolean) -> Unit,
+    hapticsEnabled: Boolean,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     val reader = remember { SleepStageReader(context) }
     val hcAvailable = remember { reader.availability() == SleepStageReader.Availability.Available }
+    val writer = remember { SleepSessionWriter(context) }
 
     var bgLocation by remember { mutableStateOf(SystemPermissions.hasBackgroundLocation(context)) }
     var battery by remember { mutableStateOf(SystemPermissions.isIgnoringBatteryOptimizations(context)) }
     var exactAlarms by remember { mutableStateOf(SystemPermissions.canScheduleExactAlarms(context)) }
     var hcConnected by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { hcConnected = reader.hasSleepPermission() }
+    var hcWriteConnected by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        hcConnected = reader.hasSleepPermission()
+        hcWriteConnected = writer.hasWritePermission()
+    }
 
     val bgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         bgLocation = SystemPermissions.hasBackgroundLocation(context)
@@ -43,6 +55,9 @@ fun ReliabilitySettingsScreen(onBack: () -> Unit) {
     val hcLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted -> hcConnected = granted.containsAll(reader.requiredPermissions) }
+    val hcWriteLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted -> hcWriteConnected = granted.containsAll(writer.requiredPermissions) }
 
     SettingsDetailScaffold(title = "Reliability", onBack = onBack) {
         ActionRow(
@@ -77,6 +92,22 @@ fun ReliabilitySettingsScreen(onBack: () -> Unit) {
             actionLabel = "Connect",
             enabled = hcAvailable,
             onClick = { hcLauncher.launch(reader.requiredPermissions) },
+        )
+        ActionRow(
+            title = "Save sleep to Health Connect",
+            subtitle = if (hcAvailable) "Let other apps see when Cron detected you were asleep"
+                else "Install Health Connect to save your sleep data",
+            done = hcWriteConnected,
+            actionLabel = "Connect",
+            enabled = hcAvailable,
+            onClick = { hcWriteLauncher.launch(writer.requiredPermissions) },
+        )
+        SwitchRow(
+            title = "Auto-save sleep sessions",
+            subtitle = "Automatically write each night's detected sleep window",
+            checked = saveSleepToHealthConnect,
+            onCheckedChange = onSaveSleepToHealthConnect,
+            hapticsEnabled = hapticsEnabled,
         )
     }
 }
