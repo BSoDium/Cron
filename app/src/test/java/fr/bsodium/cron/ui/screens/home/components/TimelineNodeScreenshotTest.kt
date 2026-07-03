@@ -75,6 +75,14 @@ class TimelineNodeScreenshotTest {
                         status = { Text("Latest · 23:14", style = CronTypography.labelMonoSmall, color = dim) },
                     )
                     TimelineNode(
+                        anchor = TimelineAnchor.Latest(MaterialSymbol.Schedule),
+                        isFirst = false,
+                        isLast = false,
+                        onClick = {},
+                        title = { Text("Re-planned", style = CronTypography.timelineHeroTitle) },
+                        status = { Text("Latest · 23:27", style = CronTypography.labelMonoSmall, color = dim) },
+                    )
+                    TimelineNode(
                         anchor = TimelineAnchor.Plain,
                         isFirst = false,
                         isLast = false,
@@ -91,6 +99,8 @@ class TimelineNodeScreenshotTest {
                 }
             }
         }
+        // Let the latest-anchor's arrival morph (circle → Cookie9Sided) settle before capturing.
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
         composeTestRule.onRoot().captureRoboImage()
     }
 
@@ -148,7 +158,7 @@ class TimelineNodeScreenshotTest {
     }
 
     @Test
-    fun ai_run_node_latest_shows_summary_and_inverted_icon() {
+    fun ai_run_node_latest_shows_summary_and_hero_anchor() {
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent {
             CronTheme {
@@ -178,6 +188,8 @@ class TimelineNodeScreenshotTest {
                 }
             }
         }
+        // Let the latest-anchor's arrival morph (circle → Cookie9Sided) settle before capturing.
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
         composeTestRule.onRoot().captureRoboImage()
     }
 }

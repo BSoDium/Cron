@@ -3,6 +3,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
@@ -126,44 +127,59 @@ internal fun AiRunNode(
                 overflow = TextOverflow.Ellipsis,
             )
         },
-        status = {
-            val meta = if (item.isLatest) "Latest · ${iter.timeLabel}" else iter.timeLabel
-            Text(
-                text = meta,
-                style = CronTypography.labelMonoSmall,
-                color = contentColor,
-                maxLines = 1,
-                softWrap = false,
-            )
-        },
-        content = latestSummary?.let { summary ->
+        // The hero row's timestamp moves into the content column below instead of sharing the title
+        // row, so the (bigger, condensed) hero title gets the row's full width rather than truncating
+        // against "Latest · HH:MM".
+        status = if (item.isLatest) null else {
             {
-                Surface(
-                    color = scheme.surfaceContainer,
-                    shape = RoundedCornerShape(Radius.lg),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(Spacing.md),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        Text(
-                            text = summary,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = contentColor,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Symbol(
-                            symbol = MaterialSymbol.ArrowForward,
-                            contentDescription = null,
-                            tint = contentColor,
-                            size = 18.dp,
-                        )
+                Text(
+                    text = iter.timeLabel,
+                    style = CronTypography.labelMonoSmall,
+                    color = contentColor,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+        },
+        content = if (item.isLatest) {
+            {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    Text(
+                        text = "Latest · ${iter.timeLabel}",
+                        style = CronTypography.labelMonoSmall,
+                        color = contentColor,
+                    )
+                    if (latestSummary != null) {
+                        Surface(
+                            color = scheme.surfaceContainer,
+                            shape = RoundedCornerShape(Radius.lg),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(Spacing.md),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            ) {
+                                Text(
+                                    text = latestSummary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = contentColor,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Symbol(
+                                    symbol = MaterialSymbol.ArrowForward,
+                                    contentDescription = null,
+                                    tint = contentColor,
+                                    size = 18.dp,
+                                )
+                            }
+                        }
                     }
                 }
             }
+        } else {
+            null
         },
     )
 }
