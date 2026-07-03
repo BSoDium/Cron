@@ -1,11 +1,9 @@
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
@@ -13,18 +11,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -113,13 +108,9 @@ internal fun AiRunNode(
         else -> TimelineAnchor.Icon(symbol = symbol, tint = scheme.onPrimaryContainer, containerColor = scheme.primaryContainer)
     }
     val contentColor = scheme.onSurfaceVariant
-    val latestSummary = iter.thread.summary?.takeIf { item.isLatest && it.isNotBlank() }
-    // Settled tool calls only — a live/errored one belongs on the plan-detail thread, not this summary.
-    val completedTools = if (item.isLatest) {
-        iter.thread.process.filterIsInstance<ProcessItem.Tool>().filter { it.isComplete && !it.isError }
-    } else {
-        emptyList()
-    }
+    // The AI's resolved outcome (e.g. "Set alarm for 07:45") carries the headline; systemMessage is
+    // only the trigger category (RunKind.label) and demotes to a small kicker above it.
+    val heroHeadline = iter.thread.summary?.takeIf { item.isLatest && it.isNotBlank() }
 
     TimelineNode(
         anchor = anchor,
@@ -127,25 +118,42 @@ internal fun AiRunNode(
         isLast = isLast,
         onClick = onClick,
         modifier = modifier,
+        verticalPadding = if (item.isLatest) Spacing.lg else Spacing.md,
         title = {
             if (item.isLatest) {
-                // The tap-through affordance sits beside the title (what it opens), not the summary
-                // below — grouping it with the title also costs far less width than the status text did.
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    Text(
-                        text = iter.systemMessage,
-                        style = CronTypography.timelineHeroTitle,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = 18.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+                    if (heroHeadline != null) {
+                        // Shares the countdown card's `primary` fill so the newest run visually
+                        // rhymes with it — touches only the neutral page background, so this is a
+                        // plain on-role pairing, not a nested-container case (docs/color-roles.md).
+                        Text(
+                            text = iter.systemMessage.uppercase(Locale.US),
+                            style = CronTypography.timelineHeroKicker,
+                            color = scheme.primary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    // The tap-through affordance sits beside the headline (what it opens). 3 lines
+                    // (not 2) so a realistic AI outcome sentence gets a fair chance to fit in full —
+                    // 2 lines truncated mid-word on anything but a short summary.
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                        Text(
+                            text = heroHeadline ?: iter.systemMessage,
+                            style = CronTypography.timelineHeroTitle,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = 18.dp)
+                    }
                 }
             } else {
                 Text(
                     text = iter.systemMessage,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = CronTypography.timelineRowTitle,
+                    color = contentColor,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
@@ -161,39 +169,6 @@ internal fun AiRunNode(
                 maxLines = 1,
                 softWrap = false,
             )
-        },
-        content = if (latestSummary != null || completedTools.isNotEmpty()) {
-            {
-                Surface(
-                    color = scheme.surfaceContainer,
-                    shape = RoundedCornerShape(Radius.lg),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(Spacing.md),
-                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        if (latestSummary != null) {
-                            Text(
-                                text = latestSummary,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = contentColor,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (completedTools.isNotEmpty()) {
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                completedTools.forEach { tool ->
-                                    MonoPill(text = tool.contextLabel?.let { "${tool.name} · $it" } ?: tool.name)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            null
         },
     )
 }
@@ -226,7 +201,7 @@ internal fun EventNode(
         title = {
             Text(
                 text = item.label,
-                style = MaterialTheme.typography.bodyMedium,
+                style = CronTypography.timelineRowTitle,
                 color = contentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

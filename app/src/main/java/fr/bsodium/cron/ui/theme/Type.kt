@@ -228,13 +228,34 @@ object CronTypography {
         letterSpacing = (-0.02).em,
     )
 
-    /** Latest timeline run's title — condensed and a step larger than the regular `bodyMedium`
-     *  history rows, so the newest entry reads first. */
+    /** Latest timeline run's headline — the AI's resolved outcome sentence, set at headlineMedium
+     *  scale so it reads as the one bold fact on the row (Material Expressive reference: a big
+     *  isolated headline paired with a small muted caption, not a gradient of medium sizes). */
     val timelineHeroTitle: TextStyle = TextStyle(
         fontFamily = ExpressiveCondensedFontFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 19.sp,
-        lineHeight = 24.sp,
+        fontWeight = FontWeight.Bold,
+        fontSize = 26.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.01).em,
+    )
+
+    /** Small caption above [timelineHeroTitle] carrying the run's trigger category (e.g. "PLANNED",
+     *  "ALARM DISMISSED") now that the headline itself carries the outcome sentence. */
+    val timelineHeroKicker: TextStyle = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.08.em,
+    )
+
+    /** History timeline row title — condensed and muted so it reads as clearly subordinate to
+     *  [timelineHeroTitle] through weight/width, not just size. */
+    val timelineRowTitle: TextStyle = TextStyle(
+        fontFamily = ExpressiveCondensedFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
     )
 }
 

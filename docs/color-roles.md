@@ -47,3 +47,5 @@ Applied example — `AiRunNode`'s hero content bubble (`SessionTimeline.kt`) is 
 ## Current audit
 
 As of this pass, every accent usage in the timeline (`TriggerVisuals.kt`, `TimelineNode.kt`'s `TimelineAnchor.Icon`/`Latest`) only ever touches the neutral page background directly — no accent is nested inside a differently-hued container yet. No changes were needed; this doc exists so the next addition doesn't regress it.
+
+Round 3 added one more direct (non-nested) `primary` usage: the latest timeline run's kicker label (`SessionTimeline.kt`'s `AiRunNode`) is now tinted `colorScheme.primary`, deliberately matching the `LatestAnchor`'s `primary` fill and the countdown card's (`NextAlarmCard.kt`) `primary` fill, so the newest run visually rhymes with the alarm card above it. All three still only touch the neutral page background — none nests inside a differently-hued container — so this is a plain on-role pairing (`primary` on `surface`), not a case requiring one of the three nesting strategies above.
