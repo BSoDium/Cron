@@ -43,6 +43,7 @@ Dynamic color (Android 12+) generates `primary`, `secondary`, `tertiary` and the
 - Inject variety with `secondaryContainer`/`tertiaryContainer` + their `on*` roles at focal points; keep boldness **restrained** (containers, not saturated fills).
 - Map semantic categories to accent roles so colour carries meaning (e.g. event-trigger categories → distinct accents).
 - Keep the non-dynamic fallback scheme's `secondary`/`tertiary` distinct too, so older devices aren't monochrome.
+- **Read `docs/color-roles.md` before nesting one accent-colored surface inside another's container** — it covers tone-vs-hue contrast, the container/on-container pairing rule, and the sanctioned strategies (surface-level buffering, harmonization, neutral/outlined) for when nesting is unavoidable.
 
 ## Shape & flatness
 
