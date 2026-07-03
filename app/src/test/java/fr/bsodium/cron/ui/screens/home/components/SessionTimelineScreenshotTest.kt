@@ -12,6 +12,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
+import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -24,11 +25,16 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
 import org.junit.runner.RunWith
 
-private fun fixedIteration(turn: Int, kind: RunKind, summary: String?) = AiIterationUi(
+private fun fixedIteration(
+    turn: Int,
+    kind: RunKind,
+    summary: String?,
+    process: List<ProcessItem> = emptyList(),
+) = AiIterationUi(
     turnIndex = turn,
     timeLabel = "23:14",
     kind = kind,
-    thread = AiThreadUi(turnIndex = turn, summary = summary, process = emptyList(), response = summary),
+    thread = AiThreadUi(turnIndex = turn, summary = summary, process = process, response = summary),
 )
 
 /** Deterministic day header — bypasses the real-clock [TimelineItem.DayHeader] mapper so the golden
@@ -59,6 +65,11 @@ class SessionTimelineScreenshotTest {
                     turn = 1,
                     kind = RunKind.Replan(TriggerType.CalendarChange),
                     summary = "Moved alarm to 07:15 — your first meeting shifted to 09:00.",
+                    process = listOf(
+                        ProcessItem.Reasoning("Checking calendar for changes..."),
+                        ProcessItem.Tool("read_calendar", isComplete = true, contextLabel = "3 events"),
+                        ProcessItem.Tool("set_alarm", isComplete = true, contextLabel = "07:15"),
+                    ),
                 ),
                 sessionId = "s1",
                 isStreaming = false,

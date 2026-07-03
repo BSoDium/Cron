@@ -112,7 +112,9 @@ internal fun TimelineNode(
                 ) {
                     AnchorCircle(anchor)
                 }
-                Spacer(Modifier.width(Spacing.xs))
+                // The Latest anchor is visually heavier than a regular icon dot, so it gets a bigger gap
+                // to the title instead of feeling compressed against it.
+                Spacer(Modifier.width(if (anchor is TimelineAnchor.Latest) Spacing.md else Spacing.xs))
                 Box(modifier = Modifier.weight(1f).wrapContentHeight()) { title() }
                 if (status != null) status()
             }
@@ -154,15 +156,17 @@ internal fun TimelineNode(
                 onClick = onClick,
                 interactionSource = interactionSource,
                 // Bleeds the tap/ripple target out to the true screen edges, past HomeContent's LazyColumn
-                // contentPadding — the compensating padding below keeps inner() at its original position.
+                // contentPadding (Spacing.xl start) — the compensating padding below keeps inner() at its
+                // original position. Symmetric bleed slightly overshoots the narrower Spacing.md end
+                // inset, which is harmless (the extra reach just falls outside the viewport).
                 modifier = Modifier
                     .fillMaxWidth()
                     .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
-                    .bleedHorizontally(Spacing.md),
+                    .bleedHorizontally(Spacing.xl),
                 color = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onSurface,
             ) {
-                Box(Modifier.padding(horizontal = Spacing.md)) { inner() }
+                Box(Modifier.padding(horizontal = Spacing.xl)) { inner() }
             }
         } else {
             inner()

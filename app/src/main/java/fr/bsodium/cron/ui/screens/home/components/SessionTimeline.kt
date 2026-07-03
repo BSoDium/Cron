@@ -1,9 +1,11 @@
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -111,6 +114,12 @@ internal fun AiRunNode(
     }
     val contentColor = scheme.onSurfaceVariant
     val latestSummary = iter.thread.summary?.takeIf { item.isLatest && it.isNotBlank() }
+    // Settled tool calls only — a live/errored one belongs on the plan-detail thread, not this summary.
+    val completedTools = if (item.isLatest) {
+        iter.thread.process.filterIsInstance<ProcessItem.Tool>().filter { it.isComplete && !it.isError }
+    } else {
+        emptyList()
+    }
 
     TimelineNode(
         anchor = anchor,
@@ -119,60 +128,65 @@ internal fun AiRunNode(
         onClick = onClick,
         modifier = modifier,
         title = {
-            Text(
-                text = iter.systemMessage,
-                style = if (item.isLatest) CronTypography.timelineHeroTitle else MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        // The hero row's timestamp moves into the content column below instead of sharing the title
-        // row, so the (bigger, condensed) hero title gets the row's full width rather than truncating
-        // against "Latest · HH:MM".
-        status = if (item.isLatest) null else {
-            {
+            if (item.isLatest) {
+                // The tap-through affordance sits beside the title (what it opens), not the summary
+                // below — grouping it with the title also costs far less width than the status text did.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Text(
+                        text = iter.systemMessage,
+                        style = CronTypography.timelineHeroTitle,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = 18.dp)
+                }
+            } else {
                 Text(
-                    text = iter.timeLabel,
-                    style = CronTypography.labelMonoSmall,
-                    color = contentColor,
+                    text = iter.systemMessage,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         },
-        content = if (item.isLatest) {
+        status = {
+            val meta = if (item.isLatest) "Latest · ${iter.timeLabel}" else iter.timeLabel
+            Text(
+                text = meta,
+                style = CronTypography.labelMonoSmall,
+                color = contentColor,
+                maxLines = 1,
+                softWrap = false,
+            )
+        },
+        content = if (latestSummary != null || completedTools.isNotEmpty()) {
             {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    Text(
-                        text = "Latest · ${iter.timeLabel}",
-                        style = CronTypography.labelMonoSmall,
-                        color = contentColor,
-                    )
-                    if (latestSummary != null) {
-                        Surface(
-                            color = scheme.surfaceContainer,
-                            shape = RoundedCornerShape(Radius.lg),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(Spacing.md),
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                            ) {
-                                Text(
-                                    text = latestSummary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = contentColor,
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Symbol(
-                                    symbol = MaterialSymbol.ArrowForward,
-                                    contentDescription = null,
-                                    tint = contentColor,
-                                    size = 18.dp,
-                                )
+                Surface(
+                    color = scheme.surfaceContainer,
+                    shape = RoundedCornerShape(Radius.lg),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(Spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    ) {
+                        if (latestSummary != null) {
+                            Text(
+                                text = latestSummary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = contentColor,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (completedTools.isNotEmpty()) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                                completedTools.forEach { tool ->
+                                    MonoPill(text = tool.contextLabel?.let { "${tool.name} · $it" } ?: tool.name)
+                                }
                             }
                         }
                     }

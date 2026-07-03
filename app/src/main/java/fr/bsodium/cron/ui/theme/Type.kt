@@ -217,11 +217,11 @@ object CronTypography {
         lineHeight = 16.sp,
     )
 
-    /** Timeline day-boundary heading — an oversized wide-stretched word ("TODAY"). Pairs with
-     *  [labelMonoSmall] for the companion date figure, echoing the wide-display/mono contrast
-     *  from the Material Expressive reference material. */
+    /** Timeline day-boundary heading — a bold condensed word ("TODAY"). Pairs with [labelMonoSmall]
+     *  for the companion date figure, echoing the display/mono contrast from the Material Expressive
+     *  reference material. */
     val timelineDayHeader: TextStyle = TextStyle(
-        fontFamily = ExpressiveWideFontFamily,
+        fontFamily = ExpressiveCondensedFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 28.sp,
         lineHeight = 32.sp,

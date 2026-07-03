@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.home.TimelineItem
@@ -27,19 +26,21 @@ internal fun DayHeaderRow(item: TimelineItem.DayHeader, modifier: Modifier = Mod
         modifier = modifier
             .fillMaxWidth()
             .padding(top = Spacing.xxl, bottom = Spacing.sm),
-        verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
+        // alignByBaseline (not verticalAlignment = Bottom) — the two faces have different descender
+        // depths, so aligning by box bottom leaves their baselines visibly offset.
         Text(
             text = item.weekdayLabel,
             style = CronTypography.timelineDayHeader,
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.alignByBaseline(),
         )
         Text(
             text = item.dateLabel,
             style = CronTypography.labelMonoSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = Spacing.xxs),
+            modifier = Modifier.alignByBaseline(),
         )
     }
 }
