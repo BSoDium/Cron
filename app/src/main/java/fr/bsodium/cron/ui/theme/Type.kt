@@ -239,6 +239,10 @@ object CronTypography {
         letterSpacing = (-0.01).em,
     )
 
+    /** The lighter "before" value in a [timelineHeroTitle]-scale PREV › NEW time pair — same face and
+     *  size as the (bold) new time, so the pair reads as a weight contrast, not a size mismatch. */
+    val timelineHeroTimePrev: TextStyle = timelineHeroTitle.copy(fontWeight = FontWeight.Normal)
+
     /** Small caption above [timelineHeroTitle] carrying the run's trigger category (e.g. "PLANNED",
      *  "ALARM DISMISSED") now that the headline itself carries the outcome sentence. */
     val timelineHeroKicker: TextStyle = TextStyle(

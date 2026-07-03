@@ -19,6 +19,7 @@ import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.robolectric.RobolectricTestRunner
@@ -30,11 +31,14 @@ private fun fixedIteration(
     kind: RunKind,
     summary: String?,
     process: List<ProcessItem> = emptyList(),
+    newAlarmTime: LocalTime? = null,
+    previousAlarmTime: LocalTime? = null,
 ) = AiIterationUi(
     turnIndex = turn,
     timeLabel = "23:14",
     kind = kind,
-    thread = AiThreadUi(turnIndex = turn, summary = summary, process = process, response = summary),
+    thread = AiThreadUi(turnIndex = turn, summary = summary, process = process, response = summary, newAlarmTime = newAlarmTime),
+    previousAlarmTime = previousAlarmTime,
 )
 
 /** Deterministic day header — bypasses the real-clock [TimelineItem.DayHeader] mapper so the golden
@@ -70,6 +74,8 @@ class SessionTimelineScreenshotTest {
                         ProcessItem.Tool("read_calendar", isComplete = true, contextLabel = "3 events"),
                         ProcessItem.Tool("set_alarm", isComplete = true, contextLabel = "07:15"),
                     ),
+                    newAlarmTime = LocalTime(7, 15),
+                    previousAlarmTime = LocalTime(7, 45),
                 ),
                 sessionId = "s1",
                 isStreaming = false,

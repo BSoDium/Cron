@@ -5,6 +5,7 @@ import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.session.db.AiMessageEntity
 import fr.bsodium.cron.session.db.SessionJson
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.jsonArray
@@ -23,6 +24,10 @@ data class AiThreadUi(
     val isStreaming: Boolean = false,
     /** True when this turn was produced by the FakeAnthropicClient (debug mock mode). */
     val isMocked: Boolean = false,
+    /** The alarm time this turn's `set_alarm` call resolved to (the actual clamped instant scheduled),
+     *  or null for a turn that didn't set one (`cancel_alarm`, `do_nothing`) — the timeline hero row's
+     *  headline source, kept as a raw time rather than [ProcessItem.Tool.contextLabel]'s formatted string. */
+    val newAlarmTime: LocalTime? = null,
 )
 
 /** One ordered step of the assistant's thinking process, shown inside the collapsible. */
@@ -181,8 +186,28 @@ object AiThreadMapper {
             durationSeconds = durationSeconds,
             isStreaming = isStreaming,
             isMocked = isMocked,
+            newAlarmTime = resolveNewAlarmTime(blocks, toolResults),
         )
     }
+
+    /** The last successful `set_alarm` call's resolved time across the whole turn (not just the
+     *  pre-answer [process] window) — a turn's terminal action can in principle land after the
+     *  answer marker, so this scans every tool-use block, not [buildFromBlocks]'s `answerStart`-bounded slice. */
+    private fun resolveNewAlarmTime(blocks: List<ContentBlock>, toolResults: Map<String, ContentBlock.ToolResult>): LocalTime? =
+        blocks.filterIsInstance<ContentBlock.ToolUse>()
+            .filter { it.name == "set_alarm" }
+            .mapNotNull { use -> toolResults[use.id]?.takeIf { it.is_error != true } }
+            .lastOrNull()
+            ?.let { result -> parseAlarmTime(result.content) }
+
+    /** Extracts and parses a `set_alarm` tool result's `alarm_time` field. Shared by [resolveNewAlarmTime]
+     *  (raw [LocalTime], the timeline hero headline's source) and [summarizeToolResult] (formatted string,
+     *  the process-step chip's source) — the two consumers stay independent past this shared parse. */
+    private fun parseAlarmTime(content: String): LocalTime? = runCatching {
+        SessionJson.parseToJsonElement(content).jsonObject["alarm_time"]
+            ?.jsonPrimitive?.content
+            ?.let { iso -> Instant.parse(iso).toLocalDateTime(TimeZone.currentSystemDefault()).time }
+    }.onFailure { Log.w(TAG, "parse alarm time failed", it) }.getOrNull()
 
     internal fun decodeBlocks(json: String): List<ContentBlock> = runCatching {
         SessionJson.decodeFromString<List<ContentBlock>>(json)
@@ -209,9 +234,8 @@ object AiThreadMapper {
                 val n = obj["events"]?.jsonArray?.size ?: 0
                 if (n == 1) "1 event" else "$n events"
             }
-            "set_alarm" -> obj["alarm_time"]?.jsonPrimitive?.content?.let { iso ->
-                val local = Instant.parse(iso).toLocalDateTime(TimeZone.currentSystemDefault())
-                String.format(Locale.US, "set for %02d:%02d", local.hour, local.minute)
+            "set_alarm" -> parseAlarmTime(content)?.let { time ->
+                String.format(Locale.US, "set for %02d:%02d", time.hour, time.minute)
             }
             "cancel_alarm" -> "cancelled"
             "estimate_commute" -> obj["duration_sec"]?.jsonPrimitive?.content?.toLongOrNull()

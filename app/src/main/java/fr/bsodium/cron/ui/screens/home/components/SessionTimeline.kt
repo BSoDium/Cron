@@ -26,6 +26,7 @@ import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
@@ -108,8 +109,10 @@ internal fun AiRunNode(
         else -> TimelineAnchor.Icon(symbol = symbol, tint = scheme.onPrimaryContainer, containerColor = scheme.primaryContainer)
     }
     val contentColor = scheme.onSurfaceVariant
-    // The AI's resolved outcome (e.g. "Set alarm for 07:45") carries the headline; systemMessage is
-    // only the trigger category (RunKind.label) and demotes to a small kicker above it.
+    // The alarm time this run resolved to is the "key fact" headline; a cancel/do_nothing turn has no
+    // new time, so it falls back to the AI's prose outcome (iter.thread.summary) instead of a time pair.
+    val newTime = iter.thread.newAlarmTime.takeIf { item.isLatest }
+    val prevTime = iter.previousAlarmTime.takeIf { item.isLatest }
     val heroHeadline = iter.thread.summary?.takeIf { item.isLatest && it.isNotBlank() }
 
     TimelineNode(
@@ -122,28 +125,40 @@ internal fun AiRunNode(
         title = {
             if (item.isLatest) {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                    if (heroHeadline != null) {
-                        // Shares the countdown card's `primary` fill so the newest run visually
-                        // rhymes with it — touches only the neutral page background, so this is a
-                        // plain on-role pairing, not a nested-container case (docs/color-roles.md).
-                        Text(
-                            text = iter.systemMessage.uppercase(Locale.US),
-                            style = CronTypography.timelineHeroKicker,
-                            color = scheme.primary,
-                            maxLines = 1,
-                            softWrap = false,
+                    // Shares the countdown card's `primary` fill so the newest run visually rhymes
+                    // with it — touches only the neutral page background, so this is a plain
+                    // on-role pairing, not a nested-container case (docs/color-roles.md).
+                    Text(
+                        text = iter.systemMessage.uppercase(Locale.US),
+                        style = CronTypography.timelineHeroKicker,
+                        color = scheme.primary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    when {
+                        // A real change: show it as a PREV › NEW pair, NEW bolder — the key fact at a
+                        // glance, not a prose sentence.
+                        newTime != null && prevTime != null && prevTime != newTime -> Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        ) {
+                            Text(text = prevTime.asClock(), style = CronTypography.timelineHeroTimePrev)
+                            Text(text = "›", style = CronTypography.timelineHeroTimePrev, color = contentColor)
+                            Text(text = newTime.asClock(), style = CronTypography.timelineHeroTitle)
+                        }
+                        // No prior time to compare against, or it didn't actually change — the pair
+                        // would just read as a redundant "7:30 › 7:30".
+                        newTime != null -> Text(text = newTime.asClock(), style = CronTypography.timelineHeroTitle)
+                        // No new time at all (cancel/do_nothing) — nothing "key" to headline, fall
+                        // back to the AI's own outcome sentence.
+                        else -> Text(
+                            text = heroHeadline ?: iter.systemMessage,
+                            style = CronTypography.timelineHeroTitle,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    // The tap-through affordance now lives in the status slot (see below), so the
-                    // headline gets the title column's full width instead of sharing it with an
-                    // inline arrow — 2 lines holds noticeably more text as a result.
-                    Text(
-                        text = heroHeadline ?: iter.systemMessage,
-                        style = CronTypography.timelineHeroTitle,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
                 }
             } else {
                 Text(
@@ -173,17 +188,30 @@ internal fun AiRunNode(
         },
         content = if (item.isLatest) {
             {
-                Text(
-                    text = "Latest · ${iter.timeLabel}",
-                    style = CronTypography.labelMonoSmall,
-                    color = contentColor,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Text(
+                        text = "Latest · ${iter.timeLabel}",
+                        style = CronTypography.labelMonoSmall,
+                        color = contentColor,
+                    )
+                    // Only when the headline above is a time (pair or alone) — the prose-fallback
+                    // headline already IS this same summary, so showing it again here would duplicate it.
+                    if (newTime != null && heroHeadline != null) {
+                        Text(
+                            text = heroHeadline,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor,
+                        )
+                    }
+                }
             }
         } else {
             null
         },
     )
 }
+
+private fun LocalTime.asClock(): String = String.format(Locale.US, "%02d:%02d", hour, minute)
 
 @Composable
 internal fun EventNode(

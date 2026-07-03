@@ -22,6 +22,7 @@ import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -157,29 +158,41 @@ class TimelineNodeScreenshotTest {
         composeTestRule.onRoot().captureRoboImage()
     }
 
+    private fun latestAiRun(
+        summary: String?,
+        newAlarmTime: LocalTime?,
+        previousAlarmTime: LocalTime?,
+    ) = TimelineItem.AiRun(
+        timestamp = Instant.fromEpochMilliseconds(0L),
+        iteration = AiIterationUi(
+            turnIndex = 0,
+            timeLabel = "23:14",
+            kind = RunKind.ScheduledBase,
+            thread = AiThreadUi(
+                turnIndex = 0,
+                summary = summary,
+                process = emptyList(),
+                response = summary,
+                newAlarmTime = newAlarmTime,
+            ),
+            previousAlarmTime = previousAlarmTime,
+        ),
+        sessionId = "s1",
+        isStreaming = false,
+        isLatest = true,
+    )
+
     @Test
-    fun ai_run_node_latest_shows_summary_and_hero_anchor() {
+    fun ai_run_node_latest_shows_a_prev_new_time_pair_headline() {
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent {
             CronTheme {
                 Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     AiRunNode(
-                        item = TimelineItem.AiRun(
-                            timestamp = Instant.fromEpochMilliseconds(0L),
-                            iteration = AiIterationUi(
-                                turnIndex = 0,
-                                timeLabel = "23:14",
-                                kind = RunKind.ScheduledBase,
-                                thread = AiThreadUi(
-                                    turnIndex = 0,
-                                    summary = "Moved alarm to 07:15 — your first meeting shifted to 09:00.",
-                                    process = emptyList(),
-                                    response = "Moved alarm to **07:15** — your first meeting shifted to 09:00.",
-                                ),
-                            ),
-                            sessionId = "s1",
-                            isStreaming = false,
-                            isLatest = true,
+                        item = latestAiRun(
+                            summary = "Moved alarm to 07:15 — your first meeting shifted to 09:00.",
+                            newAlarmTime = LocalTime(7, 15),
+                            previousAlarmTime = LocalTime(7, 45),
                         ),
                         isFirst = true,
                         isLast = true,
@@ -189,6 +202,52 @@ class TimelineNodeScreenshotTest {
             }
         }
         // Let the latest-anchor's arrival morph (circle → Cookie9Sided) settle before capturing.
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    @Test
+    fun ai_run_node_latest_shows_the_new_time_alone_with_no_previous() {
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            CronTheme {
+                Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                    AiRunNode(
+                        item = latestAiRun(
+                            summary = "Set your first alarm for the day.",
+                            newAlarmTime = LocalTime(7, 45),
+                            previousAlarmTime = null,
+                        ),
+                        isFirst = true,
+                        isLast = true,
+                        onClick = {},
+                    )
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    @Test
+    fun ai_run_node_latest_falls_back_to_prose_with_no_new_time() {
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            CronTheme {
+                Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                    AiRunNode(
+                        item = latestAiRun(
+                            summary = "Cancelled today's alarm — no early meetings on your calendar.",
+                            newAlarmTime = null,
+                            previousAlarmTime = LocalTime(7, 45),
+                        ),
+                        isFirst = true,
+                        isLast = true,
+                        onClick = {},
+                    )
+                }
+            }
+        }
         composeTestRule.mainClock.advanceTimeBy(1_000L)
         composeTestRule.onRoot().captureRoboImage()
     }

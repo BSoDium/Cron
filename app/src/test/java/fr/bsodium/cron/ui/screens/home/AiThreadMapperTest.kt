@@ -3,6 +3,10 @@ package fr.bsodium.cron.ui.screens.home
 import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.session.db.AiMessageEntity
 import fr.bsodium.cron.session.db.SessionJson
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,6 +23,9 @@ class AiThreadMapperTest {
         contentJson = SessionJson.encodeToString<List<ContentBlock>>(blocks.toList()),
         createdAt = 0L,
     )
+
+    private fun localTime(iso: String): LocalTime =
+        Instant.parse(iso).toLocalDateTime(TimeZone.currentSystemDefault()).time
 
     @Test
     fun empty_rows_produce_null() {
@@ -69,6 +76,54 @@ class AiThreadMapperTest {
         assertEquals("set_alarm", tool.name)
         assertTrue(tool.isComplete)
         assertFalse(tool.isError)
+    }
+
+    @Test
+    fun set_alarm_resolves_a_raw_new_alarm_time() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("plan it")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.ToolUse(id = "t1", name = "set_alarm", input = SessionJson.parseToJsonElement("{}")),
+                ContentBlock.Text("SUMMARY: Set your alarm\n\nSet a 6:40 alarm so you make stand-up."),
+            ),
+            row(0, "user", ContentBlock.ToolResult(tool_use_id = "t1", content = "{\"alarm_time\":\"2026-05-22T06:40:00Z\"}", is_error = false)),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+        assertEquals(localTime("2026-05-22T06:40:00Z"), thread.newAlarmTime)
+    }
+
+    @Test
+    fun do_nothing_has_no_new_alarm_time() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("plan it")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.ToolUse(id = "t1", name = "do_nothing", input = SessionJson.parseToJsonElement("{\"reason\":\"already good\"}")),
+                ContentBlock.Text("SUMMARY: No change needed\n\nThe existing alarm still fits."),
+            ),
+            row(0, "user", ContentBlock.ToolResult(tool_use_id = "t1", content = "{}", is_error = false)),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+        assertNull(thread.newAlarmTime)
+    }
+
+    @Test
+    fun cancel_alarm_has_no_new_alarm_time() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("plan it")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.ToolUse(id = "t1", name = "cancel_alarm", input = SessionJson.parseToJsonElement("{}")),
+                ContentBlock.Text("SUMMARY: Cancelled\n\nNo alarm needed today."),
+            ),
+            row(0, "user", ContentBlock.ToolResult(tool_use_id = "t1", content = "{}", is_error = false)),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+        assertNull(thread.newAlarmTime)
     }
 
     @Test

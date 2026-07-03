@@ -6,6 +6,7 @@ import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
@@ -55,6 +56,10 @@ data class AiIterationUi(
     val thread: AiThreadUi,
     /** When this turn ran (epoch ms), for the "Ran X ago" footer on older iterations. */
     val ranAtEpochMs: Long? = null,
+    /** The last earlier turn's [AiThreadUi.newAlarmTime] in this session (skipping over any turn that
+     *  didn't set one), or null if no earlier turn ever resolved a time — the timeline hero row's
+     *  "before" value for a PREV › NEW headline. Never looks across session boundaries. */
+    val previousAlarmTime: LocalTime? = null,
 ) {
     /** The tab label for this run. */
     val systemMessage: String get() = if (thread.isMocked) "Test plan" else kind.label
@@ -116,7 +121,12 @@ object AiPlanMapper {
             return String.format(Locale.US, "%02d:%02d", local.hour, local.minute)
         }
 
-        val iterations = turns.mapIndexed { index, turn ->
+        // Built once per turn up front (not inline per-iteration) so a later iteration's previousAlarmTime
+        // lookup can read an earlier turn's already-computed thread instead of re-decoding it.
+        val orderedTurns = turns.toList()
+        val threadsByTurn = orderedTurns.associateWith { threadOf(it) }
+
+        val iterations = orderedTurns.mapIndexed { index, turn ->
             // Latest event at/before this turn's start names the replan (or, for turn 0, the bootstrap evening-plan); lastOrNull breaks equal-timestamp ties toward the latest-appended event.
             val start = startOf(turn)
             val sourceEvent = events.lastOrNull { it.timestamp.toEpochMilliseconds() <= start }
@@ -130,12 +140,17 @@ object AiPlanMapper {
                 (sourceEvent?.data as? EventData.EveningPlan)?.isManual == true -> RunKind.ManualBase
                 else -> RunKind.ScheduledBase
             }
+            // Skips over any intervening turn that didn't resolve a time (e.g. do_nothing), so the
+            // "before" value is always the last turn that actually set one, not just the immediate prior turn.
+            val previousAlarmTime = orderedTurns.take(index).asReversed()
+                .firstNotNullOfOrNull { threadsByTurn.getValue(it).newAlarmTime }
             AiIterationUi(
                 turnIndex = turn,
                 timeLabel = timeLabelOf(turn),
                 kind = kind,
-                thread = threadOf(turn),
+                thread = threadsByTurn.getValue(turn),
                 ranAtEpochMs = ranAtOf(turn),
+                previousAlarmTime = previousAlarmTime,
             )
         }
         return AiPlanUi(iterations = iterations)

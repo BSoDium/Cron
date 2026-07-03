@@ -96,6 +96,11 @@ internal fun TimelineNode(
     // is anchorDiam tall and the anchor sits at its own center = verticalPadding + anchorDiam/2.
     val anchorCenter = verticalPadding + anchorDiam / 2
 
+    // The Latest anchor is visually heavier than a regular icon dot, so it gets a bigger gap to the
+    // title instead of feeling compressed against it — content below (same left edge as the title)
+    // must track the same value or the two columns visibly drift apart.
+    val titleSpacer = if (anchor is TimelineAnchor.Latest) Spacing.md else Spacing.xs
+
     val inner = @Composable {
         Column(modifier = Modifier.fillMaxWidth()) {
             // includeFontPadding=true shifts the visual glyph center above the circle center; TightTextStyle strips it.
@@ -118,9 +123,7 @@ internal fun TimelineNode(
                 ) {
                     AnchorCircle(anchor)
                 }
-                // The Latest anchor is visually heavier than a regular icon dot, so it gets a bigger gap
-                // to the title instead of feeling compressed against it.
-                Spacer(Modifier.width(if (anchor is TimelineAnchor.Latest) Spacing.md else Spacing.xs))
+                Spacer(Modifier.width(titleSpacer))
                 Box(modifier = Modifier.weight(1f).wrapContentHeight()) { title() }
                 if (status != null) status()
             }
@@ -128,7 +131,7 @@ internal fun TimelineNode(
             if (content != null) {
                 Box(
                     modifier = Modifier.padding(
-                        start = NODE_GUTTER + Spacing.xs,
+                        start = NODE_GUTTER + titleSpacer,
                         end = Spacing.md,
                         top = Spacing.sm,
                     ),
