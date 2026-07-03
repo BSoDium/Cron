@@ -135,19 +135,15 @@ internal fun AiRunNode(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    // The tap-through affordance sits beside the headline (what it opens). 3 lines
-                    // (not 2) so a realistic AI outcome sentence gets a fair chance to fit in full —
-                    // 2 lines truncated mid-word on anything but a short summary.
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                        Text(
-                            text = heroHeadline ?: iter.systemMessage,
-                            style = CronTypography.timelineHeroTitle,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = 18.dp)
-                    }
+                    // The tap-through affordance now lives in the status slot (see below), so the
+                    // headline gets the title column's full width instead of sharing it with an
+                    // inline arrow — 2 lines holds noticeably more text as a result.
+                    Text(
+                        text = heroHeadline ?: iter.systemMessage,
+                        style = CronTypography.timelineHeroTitle,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             } else {
                 Text(
@@ -161,14 +157,30 @@ internal fun AiRunNode(
             }
         },
         status = {
-            val meta = if (item.isLatest) "Latest · ${iter.timeLabel}" else iter.timeLabel
-            Text(
-                text = meta,
-                style = CronTypography.labelMonoSmall,
-                color = contentColor,
-                maxLines = 1,
-                softWrap = false,
-            )
+            if (item.isLatest) {
+                // status is the row's trailing, vertically-centered slot by construction — the
+                // tap-through affordance belongs here, not inline with the headline.
+                Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = 18.dp)
+            } else {
+                Text(
+                    text = iter.timeLabel,
+                    style = CronTypography.labelMonoSmall,
+                    color = contentColor,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+        },
+        content = if (item.isLatest) {
+            {
+                Text(
+                    text = "Latest · ${iter.timeLabel}",
+                    style = CronTypography.labelMonoSmall,
+                    color = contentColor,
+                )
+            }
+        } else {
+            null
         },
     )
 }

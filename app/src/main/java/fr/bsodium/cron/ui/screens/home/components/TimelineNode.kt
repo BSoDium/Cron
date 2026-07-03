@@ -107,7 +107,13 @@ internal fun TimelineNode(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    modifier = Modifier.width(NODE_GUTTER),
+                    // The Latest anchor's title can wrap past the anchor's own height, unlike every
+                    // other row (single-line titles never exceed their anchor's size) — top-align it
+                    // there so it stays flush with anchorCenter's assumed position instead of drifting
+                    // to the now-taller row's true center, which would desync the drawn track line.
+                    modifier = Modifier
+                        .width(NODE_GUTTER)
+                        .let { if (anchor is TimelineAnchor.Latest) it.align(Alignment.Top) else it },
                     contentAlignment = Alignment.Center,
                 ) {
                     AnchorCircle(anchor)
