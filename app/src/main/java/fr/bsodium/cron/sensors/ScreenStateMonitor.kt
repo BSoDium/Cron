@@ -20,6 +20,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Listens to ACTION_SCREEN_OFF / SCREEN_ON / USER_PRESENT broadcasts and synthesizes:
@@ -40,6 +41,7 @@ class ScreenStateMonitor(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob()),
     private val sleepOnsetThreshold: Duration = 20.minutes,
     private val rearmThreshold: Duration = REARM_ONSET_THRESHOLD,
+    private val outOfBedThreshold: Duration = OUT_OF_BED_CONFIRM_THRESHOLD,
     private val lightReader: AmbientLightReader = AmbientLightReader(context),
     private val isAlarmRinging: () -> Boolean = { AlarmRingingState.isRinging },
 ) {
@@ -47,6 +49,7 @@ class ScreenStateMonitor(
     private var screenOffSince: Instant? = null
     private var sleepOnsetEmitted: Boolean = false
     private var pendingOnset: Job? = null
+    private var pendingOutOfBed: Job? = null
     /** True after [rearm] has been called; consumed by the next SleepOnset emission. */
     private var isRearm: Boolean = false
     /** The threshold the pending onset check is using; survives a screen-on/off blip during rearm. */
@@ -85,6 +88,7 @@ class ScreenStateMonitor(
             .onFailure { Log.w(TAG, "unregisterReceiver failed", it) }
         lightReader.stop()
         pendingOnset?.cancel()
+        pendingOutOfBed?.cancel()
         Log.i(TAG, "ScreenStateMonitor stopped")
     }
 
@@ -103,6 +107,9 @@ class ScreenStateMonitor(
 
     private fun onScreenOff() {
         screenOffSince = Clock.System.now()
+        // A re-lock before out-of-bed confirms aborts it — that's the fix for a momentary glance
+        // in bed (pick up phone, put it back down) being mistaken for getting up.
+        pendingOutOfBed?.cancel()
         Log.d(TAG, "Screen off — onset check scheduled (threshold=$currentOnsetThreshold)")
         scheduleOnsetCheck(currentOnsetThreshold)
     }
@@ -116,9 +123,11 @@ class ScreenStateMonitor(
     }
 
     /**
-     * A genuine unlock is our strongest "awake" signal — the user is handling the phone, not stirring
-     * in their sleep. If we'd latched sleep, treat it as getting out of bed (one event → FSM Awake →
-     * [rearm]) rather than firing a plan on every pickup.
+     * A genuine unlock is a candidate "awake" signal, but on its own it doesn't distinguish a
+     * momentary glance in bed (checking the time, a notification) from actually getting up — so it
+     * only starts a [scheduleOutOfBedConfirm] debounce rather than emitting immediately. If we'd
+     * latched sleep and the unlock is sustained, treat it as getting out of bed (one event → FSM
+     * Awake → [rearm]) rather than firing a plan on every pickup.
      *
      * Suppressed while an alarm is actively ringing: [AlarmActivity][fr.bsodium.cron.ui.screens.alarm.AlarmActivity]
      * dismisses the keyguard as soon as it launches, so USER_PRESENT fires a beat before the user's
@@ -136,17 +145,33 @@ class ScreenStateMonitor(
             Log.i(TAG, "User present while an alarm is ringing — treating as the dismiss unlock, not out-of-bed")
             return
         }
-        sleepOnsetEmitted = false
-        scope.launch {
+        scheduleOutOfBedConfirm()
+    }
+
+    /** Debounce-then-confirm, mirroring [scheduleOnsetCheck]'s shape: a genuine wake-up keeps the
+     *  screen interactive past [outOfBedThreshold]; a glance re-locks or times out before then and
+     *  [onScreenOff]/[stop] cancel this job, so [sleepOnsetEmitted] stays true and the session
+     *  remains correctly latched as asleep. Reaching the end of the delay uncancelled already proves
+     *  the interactive duration was met; [powerManager.isInteractive] is rechecked only as a safety
+     *  net against the rare race where the screen times out just before its off-broadcast is delivered. */
+    private fun scheduleOutOfBedConfirm() {
+        pendingOutOfBed?.cancel()
+        pendingOutOfBed = scope.launch {
+            kotlinx.coroutines.delay(outOfBedThreshold)
+            if (!shouldConfirmOutOfBed(outOfBedThreshold, outOfBedThreshold, powerManager.isInteractive)) {
+                Log.i(TAG, "Unlock not sustained — treating as an in-bed glance, not out-of-bed")
+                return@launch
+            }
+            sleepOnsetEmitted = false
             sink.emit(
                 SessionEvent(
                     trigger = TriggerType.OutOfBedConfirmed,
                     timestamp = Clock.System.now(),
-                    data = EventData.OutOfBedConfirmed(evidence = listOf("device_unlocked")),
+                    data = EventData.OutOfBedConfirmed(evidence = listOf("device_unlocked", "sustained_${outOfBedThreshold.inWholeSeconds}s")),
                 )
             )
+            Log.i(TAG, "Sustained unlock while asleep — out of bed")
         }
-        Log.i(TAG, "User present while asleep — out of bed")
     }
 
     private fun scheduleOnsetCheck(threshold: Duration = sleepOnsetThreshold) {
@@ -186,6 +211,10 @@ class ScreenStateMonitor(
         private val REARM_ONSET_THRESHOLD = 15.minutes
         /** How often to re-test the dark/charging gate while the screen stays off. */
         private val ONSET_RECHECK_INTERVAL = 5.minutes
+        /** A momentary in-bed glance (checking the time, a notification) rarely keeps the screen
+         *  interactive this long; a genuine wake-up comfortably does, and 90s is trivial next to the
+         *  15-20 min onset windows, so a real wake-driven replan isn't noticeably delayed. */
+        private val OUT_OF_BED_CONFIRM_THRESHOLD = 90.seconds
 
         /**
          * Pure onset decision — unit-testable. Sleep onset requires a dark room; an uncharged device
@@ -202,5 +231,17 @@ class ScreenStateMonitor(
             val required = if (isCharging) baseThreshold else baseThreshold * 2
             return screenOff >= required
         }
+
+        /**
+         * Pure out-of-bed decision — unit-testable. A genuine unlock ends sleep only if the screen
+         * stayed interactive for [threshold]; a momentary pickup (re-locked/screen-off before then) is
+         * a glance in bed, not getting up. Conservative like onset: a missed confirmation only delays
+         * a replan, a false one wrongly ends tracking.
+         */
+        internal fun shouldConfirmOutOfBed(
+            interactiveFor: Duration,
+            threshold: Duration,
+            stillInteractive: Boolean,
+        ): Boolean = stillInteractive && interactiveFor >= threshold
     }
 }

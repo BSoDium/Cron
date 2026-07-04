@@ -96,6 +96,7 @@ class SleepSessionService : Service() {
                 serviceScope,
                 sleepOnsetThreshold = SleepTuning.onsetThreshold(applicationContext),
                 rearmThreshold = SleepTuning.rearmThreshold(applicationContext),
+                outOfBedThreshold = SleepTuning.outOfBedConfirmThreshold(applicationContext),
             ).also { it.start() }
         }
         if (activityRecognitionMonitor == null) {

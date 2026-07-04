@@ -16,4 +16,7 @@ object SleepTuning {
 
     fun rearmThreshold(context: Context): Duration =
         if (SleepTestPrefs(context).fastOnset) 5.seconds else 15.minutes
+
+    fun outOfBedConfirmThreshold(context: Context): Duration =
+        if (SleepTestPrefs(context).fastOnset) 5.seconds else 90.seconds
 }

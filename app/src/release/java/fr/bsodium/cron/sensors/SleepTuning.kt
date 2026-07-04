@@ -3,6 +3,7 @@ package fr.bsodium.cron.sensors
 import android.content.Context
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /** RELEASE variant — production sleep-detection timings; no debug overrides. */
 object SleepTuning {
@@ -11,4 +12,7 @@ object SleepTuning {
 
     @Suppress("UNUSED_PARAMETER")
     fun rearmThreshold(context: Context): Duration = 15.minutes
+
+    @Suppress("UNUSED_PARAMETER")
+    fun outOfBedConfirmThreshold(context: Context): Duration = 90.seconds
 }
