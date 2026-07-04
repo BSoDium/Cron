@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -238,16 +239,33 @@ class SessionFsm(
 
         private val AI_COOLDOWN = 15.minutes
 
+        /** A dismiss from ReMonitoring more than this long after the prior dismiss is the morning
+         *  wake, not a rapid re-ring chain — see [transition]'s AlarmDismissed/ReMonitoring case. */
+        private val DISMISS_GRACE = 30.minutes
+
         /**
          * Pure status transition, unit-testable: given the session's current status and an incoming
          * event, what status should it become? A dismiss while still asleep re-arms (→ Awake) rather
          * than completing outright, so a second sleep onset can re-ring the alarm; a second dismiss
          * (already Awake) ends the session.
          */
-        internal fun transition(session: SleepSession, event: SessionEvent): SessionStatus =
+        internal fun transition(
+            session: SleepSession,
+            event: SessionEvent,
+            dismissGrace: Duration = DISMISS_GRACE,
+        ): SessionStatus =
             when (event.trigger) {
                 TriggerType.AlarmDismissed -> when (session.status) {
-                    SessionStatus.Monitoring, SessionStatus.ReMonitoring -> SessionStatus.Awake
+                    SessionStatus.Monitoring -> SessionStatus.Awake
+                    // Reaching ReMonitoring means the session already had a full sleep→wake→resleep
+                    // cycle. A dismiss from here is the morning wake unless it's a rapid genuine
+                    // re-ring (dismiss → fall back asleep → re-ring, all within dismissGrace of the
+                    // prior dismiss) — that legitimate chain still re-arms; anything later completes.
+                    SessionStatus.ReMonitoring -> {
+                        val lastDismiss = session.events.lastOrNull { it.trigger == TriggerType.AlarmDismissed }?.timestamp
+                        val withinGrace = lastDismiss != null && event.timestamp - lastDismiss < dismissGrace
+                        if (withinGrace) SessionStatus.Awake else SessionStatus.Complete
+                    }
                     SessionStatus.Planning, SessionStatus.Awake, SessionStatus.Complete -> SessionStatus.Complete
                 }
                 TriggerType.SleepOnset -> when (session.status) {

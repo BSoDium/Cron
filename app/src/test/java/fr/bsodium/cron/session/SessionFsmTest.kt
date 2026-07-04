@@ -10,6 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 class SessionFsmTest {
@@ -53,8 +54,27 @@ class SessionFsmTest {
     }
 
     @Test
-    fun alarm_dismissed_from_remonitoring_rearms_to_awake() {
+    fun alarm_dismissed_from_remonitoring_with_no_prior_dismiss_completes_session() {
+        // Reaching ReMonitoring with no prior dismiss in the event history means this dismiss is the
+        // morning wake — completing outright is the fix for the false-wake bug (a spurious
+        // OutOfBedConfirmed re-armed onset detection hours before the real dismissal).
         val session = Fixtures.session(status = SessionStatus.ReMonitoring)
+        assertEquals(SessionStatus.Complete, SessionFsm.transition(session, alarmDismissed))
+    }
+
+    @Test
+    fun alarm_dismissed_from_remonitoring_long_after_a_prior_dismiss_completes_session() {
+        val priorDismiss = alarmDismissed.copy(timestamp = now - 6.hours)
+        val session = Fixtures.session(status = SessionStatus.ReMonitoring, events = listOf(priorDismiss))
+        assertEquals(SessionStatus.Complete, SessionFsm.transition(session, alarmDismissed))
+    }
+
+    @Test
+    fun alarm_dismissed_from_remonitoring_shortly_after_a_prior_dismiss_rearms_to_awake() {
+        // A rapid dismiss -> fall back asleep -> re-ring -> dismiss chain, all within the grace
+        // window — the legitimate re-ring flow, still re-arms rather than completing.
+        val priorDismiss = alarmDismissed.copy(timestamp = now - 10.minutes)
+        val session = Fixtures.session(status = SessionStatus.ReMonitoring, events = listOf(priorDismiss))
         assertEquals(SessionStatus.Awake, SessionFsm.transition(session, alarmDismissed))
     }
 
