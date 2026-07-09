@@ -121,8 +121,7 @@ object AiPlanMapper {
             return String.format(Locale.US, "%02d:%02d", local.hour, local.minute)
         }
 
-        // Built once per turn up front (not inline per-iteration) so a later iteration's previousAlarmTime
-        // lookup can read an earlier turn's already-computed thread instead of re-decoding it.
+        // Built once per turn up front so a later iteration's previousAlarmTime lookup can read an earlier turn's already-computed thread instead of re-decoding it.
         val orderedTurns = turns.toList()
         val threadsByTurn = orderedTurns.associateWith { threadOf(it) }
 
@@ -140,8 +139,7 @@ object AiPlanMapper {
                 (sourceEvent?.data as? EventData.EveningPlan)?.isManual == true -> RunKind.ManualBase
                 else -> RunKind.ScheduledBase
             }
-            // Skips over any intervening turn that didn't resolve a time (e.g. do_nothing), so the
-            // "before" value is always the last turn that actually set one, not just the immediate prior turn.
+            // Skips any intervening turn that didn't resolve a time (e.g. do_nothing) so "before" is always the last turn that actually set one.
             val previousAlarmTime = orderedTurns.take(index).asReversed()
                 .firstNotNullOfOrNull { threadsByTurn.getValue(it).newAlarmTime }
             AiIterationUi(

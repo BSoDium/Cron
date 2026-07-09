@@ -90,15 +90,10 @@ internal fun TimelineNode(
 ) {
     val ruleColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val anchorDiam = anchor.diameter()
-    // Anchor center is always verticalPadding + anchorDiam/2:
-    // the Row puts anchor + title side-by-side with CenterVertically, so the Row height is
-    // max(anchorDiam, titleHeight). Since anchorDiam typically >= titleHeight, the Row
-    // is anchorDiam tall and the anchor sits at its own center = verticalPadding + anchorDiam/2.
+    // The Row's CenterVertically sizes it to max(anchorDiam, titleHeight); since anchorDiam typically >= titleHeight, the anchor sits at its own center = verticalPadding + anchorDiam/2.
     val anchorCenter = verticalPadding + anchorDiam / 2
 
-    // The Latest anchor is visually heavier than a regular icon dot, so it gets a bigger gap to the
-    // title instead of feeling compressed against it — content below (same left edge as the title)
-    // must track the same value or the two columns visibly drift apart.
+    // The Latest anchor is visually heavier, so it gets a bigger gap to the title; content below (same left edge as the title) must track the same value or the two columns drift apart.
     val titleSpacer = if (anchor is TimelineAnchor.Latest) Spacing.md else Spacing.xs
 
     val inner = @Composable {
@@ -112,10 +107,7 @@ internal fun TimelineNode(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    // The Latest anchor's title can wrap past the anchor's own height, unlike every
-                    // other row (single-line titles never exceed their anchor's size) — top-align it
-                    // there so it stays flush with anchorCenter's assumed position instead of drifting
-                    // to the now-taller row's true center, which would desync the drawn track line.
+                    // The Latest anchor's title can wrap past its own height (unlike every other row) — top-align it there so it stays flush with anchorCenter instead of drifting to the taller row's true center, which would desync the drawn track line.
                     modifier = Modifier
                         .width(NODE_GUTTER)
                         .let { if (anchor is TimelineAnchor.Latest) it.align(Alignment.Top) else it },
@@ -164,10 +156,7 @@ internal fun TimelineNode(
             Surface(
                 onClick = onClick,
                 interactionSource = interactionSource,
-                // Bleeds the tap/ripple target out to the true screen edges, past HomeContent's LazyColumn
-                // contentPadding (Spacing.xl start) — the compensating padding below keeps inner() at its
-                // original position. Symmetric bleed slightly overshoots the narrower Spacing.md end
-                // inset, which is harmless (the extra reach just falls outside the viewport).
+                // Bleeds the tap/ripple target to the screen edges past HomeContent's LazyColumn contentPadding; the compensating padding below keeps inner() at its original position.
                 modifier = Modifier
                     .fillMaxWidth()
                     .graphicsLayer { scaleX = pressScale; scaleY = pressScale }

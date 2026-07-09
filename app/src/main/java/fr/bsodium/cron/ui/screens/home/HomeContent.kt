@@ -96,9 +96,7 @@ internal fun HomePlanContent(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                // Wider than `end` so the greeting text, day headers, and timeline icons all align to
-                // the same left inset as the greeting name (which used to carry its own extra Spacing.sm
-                // on top of this — now this is the single source of truth).
+                // Wider than `end` so the greeting text, day headers, and timeline icons all align to the greeting name's left inset — the single source of truth for that alignment.
                 start = Spacing.xl,
                 end = Spacing.md,
                 top = statusInsetTop + Spacing.md,

@@ -42,7 +42,7 @@ The pairing rule above covers a color touching the neutral page background. It g
 2. **Harmonize.** Blend a fraction of the parent's hue into the nested accent so their color temperatures agree instead of fighting. (No blend utility is wired into this app yet — reach for strategy 1 or 3 unless a case specifically needs it.)
 3. **Go neutral/outlined.** Skip the accent entirely for the nested element — a plain `surfaceContainerHigh` (or an outlined style) sidesteps the clash altogether. This is the right default for small, secondary elements where the accent doesn't carry meaning worth the risk.
 
-Applied example — `AiRunNode`'s hero content bubble (`SessionTimeline.kt`) is itself a neutral `surfaceContainer` card (not accent-tinted, since it belongs to every AI run regardless of category). The tool-call chips nested inside it reuse the plain `MonoPill` (`surfaceContainerHigh`/`onSurface`, strategy 3) rather than borrowing a `TimelineAccent` color — there's no parent hue to harmonize against, and the tool list isn't categorically meaningful the way an event trigger is, so neutral is correct.
+Applied example — none currently in this codebase. `AiRunNode`'s content slot (`SessionTimeline.kt`) is a plain `Column` of `Text` sitting directly on the neutral page background, not a card, and carries no nested chips — see "Current audit" below for the actual current state of accent nesting here.
 
 ## Current audit
 

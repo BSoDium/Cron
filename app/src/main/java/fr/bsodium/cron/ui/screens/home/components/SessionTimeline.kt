@@ -31,6 +31,8 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 
+private val ARROW_ICON_SIZE = 18.dp
+
 internal fun LazyListScope.sessionTimelineItems(
     timeline: List<TimelineItem>,
     hasMore: Boolean,
@@ -47,8 +49,7 @@ internal fun LazyListScope.sessionTimelineItems(
         contentType = { timeline[it]::class },
     ) { index ->
         val item = timeline[index]
-        // A day header breaks the track visually (it renders no connector of its own), so the node on
-        // either side of one is a fresh segment boundary — same as the true first/last row of the list.
+        // A day header renders no connector of its own, so the node on either side is a fresh segment boundary, same as the list's true first/last row.
         val isFirst = index == 0 || timeline[index - 1] is TimelineItem.DayHeader
         val isLast = index == timeline.lastIndex || timeline[index + 1] is TimelineItem.DayHeader
         val placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
@@ -101,16 +102,14 @@ internal fun AiRunNode(
     val scheme = MaterialTheme.colorScheme
     val iter = item.iteration
     val symbol = if (iter.thread.isMocked) MaterialSymbol.Code else runSymbol(iter.kind)
-    // Every AI run shares the primary family (docs/expressive.md "AI runs → primary"); the latest one
-    // steps up from the container tone to its own morphing hero anchor.
+    // Every AI run shares the primary family (docs/expressive.md "AI runs → primary"); the latest one steps up to its own morphing hero anchor.
     val anchor = when {
         item.isStreaming -> TimelineAnchor.Loader
         item.isLatest -> TimelineAnchor.Latest(symbol)
         else -> TimelineAnchor.Icon(symbol = symbol, tint = scheme.onPrimaryContainer, containerColor = scheme.primaryContainer)
     }
     val contentColor = scheme.onSurfaceVariant
-    // The alarm time this run resolved to is the "key fact" headline; a cancel/do_nothing turn has no
-    // new time, so it falls back to the AI's prose outcome (iter.thread.summary) instead of a time pair.
+    // The resolved alarm time is the "key fact" headline; a cancel/do_nothing turn has none, so it falls back to the AI's prose outcome instead of a time pair.
     val newTime = iter.thread.newAlarmTime.takeIf { item.isLatest }
     val prevTime = iter.previousAlarmTime.takeIf { item.isLatest }
     val heroHeadline = iter.thread.summary?.takeIf { item.isLatest && it.isNotBlank() }
@@ -125,9 +124,7 @@ internal fun AiRunNode(
         title = {
             if (item.isLatest) {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                    // Shares the countdown card's `primary` fill so the newest run visually rhymes
-                    // with it — touches only the neutral page background, so this is a plain
-                    // on-role pairing, not a nested-container case (docs/color-roles.md).
+                    // Shares the countdown card's `primary` fill so the newest run visually rhymes with it; a plain on-role pairing, not a nested-container case (docs/color-roles.md).
                     Text(
                         text = iter.systemMessage.uppercase(Locale.US),
                         style = CronTypography.timelineHeroKicker,
@@ -137,8 +134,7 @@ internal fun AiRunNode(
                         overflow = TextOverflow.Ellipsis,
                     )
                     when {
-                        // A real change: show it as a PREV › NEW pair, NEW bolder — the key fact at a
-                        // glance, not a prose sentence.
+                        // A real change: show it as a PREV › NEW pair, NEW bolder — the key fact at a glance, not a prose sentence.
                         newTime != null && prevTime != null && prevTime != newTime -> Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -147,11 +143,9 @@ internal fun AiRunNode(
                             Text(text = "›", style = CronTypography.timelineHeroTimePrev, color = contentColor)
                             Text(text = newTime.asClock(), style = CronTypography.timelineHeroTitle)
                         }
-                        // No prior time to compare against, or it didn't actually change — the pair
-                        // would just read as a redundant "7:30 › 7:30".
+                        // No prior time to compare against, or it didn't change — the pair would just read as a redundant "7:30 › 7:30".
                         newTime != null -> Text(text = newTime.asClock(), style = CronTypography.timelineHeroTitle)
-                        // No new time at all (cancel/do_nothing) — nothing "key" to headline, fall
-                        // back to the AI's own outcome sentence.
+                        // No new time at all (cancel/do_nothing) — falls back to the AI's own outcome sentence.
                         else -> Text(
                             text = heroHeadline ?: iter.systemMessage,
                             style = CronTypography.timelineHeroTitle,
@@ -173,9 +167,8 @@ internal fun AiRunNode(
         },
         status = {
             if (item.isLatest) {
-                // status is the row's trailing, vertically-centered slot by construction — the
-                // tap-through affordance belongs here, not inline with the headline.
-                Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = 18.dp)
+                // The tap-through affordance belongs in this trailing, vertically-centered slot, not inline with the headline.
+                Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = ARROW_ICON_SIZE)
             } else {
                 Text(
                     text = iter.timeLabel,
@@ -194,8 +187,7 @@ internal fun AiRunNode(
                         style = CronTypography.labelMonoSmall,
                         color = contentColor,
                     )
-                    // Only when the headline above is a time (pair or alone) — the prose-fallback
-                    // headline already IS this same summary, so showing it again here would duplicate it.
+                    // Only when the headline above is a time — the prose-fallback headline already IS this summary, so showing it again here would duplicate it.
                     if (newTime != null && heroHeadline != null) {
                         Text(
                             text = heroHeadline,

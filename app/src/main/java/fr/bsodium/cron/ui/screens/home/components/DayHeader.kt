@@ -28,8 +28,7 @@ internal fun DayHeaderRow(item: TimelineItem.DayHeader, modifier: Modifier = Mod
             .padding(top = Spacing.xxl, bottom = Spacing.sm),
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        // alignByBaseline (not verticalAlignment = Bottom) — the two faces have different descender
-        // depths, so aligning by box bottom leaves their baselines visibly offset.
+        // alignByBaseline, not verticalAlignment = Bottom — the two faces have different descender depths, so box-bottom alignment leaves their baselines visibly offset.
         Text(
             text = item.weekdayLabel,
             style = CronTypography.timelineDayHeader,
