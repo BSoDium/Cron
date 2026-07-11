@@ -158,6 +158,8 @@ class MainActivity : ComponentActivity() {
                 // Pages with a PageAppBar own the status-bar strip; the top edge-fade would two-tone it against the bar's scrolled surfaceContainer shade, so suppress it there.
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
                     currentRoute?.startsWith("settings") == true
+                // Home owns its own top-of-screen occlusion via StickyAlarm's collapse-driven fade (HomeContent.kt) — layering this generic scrim on top produced a visible "double gradient" while scrolling.
+                val showTopScrim = !hasTopAppBar && currentRoute != ROUTE_HOME
                 val fabRegistry = remember { FabRegistry() }
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
@@ -298,7 +300,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                             }
-                            EdgeFades(showTopScrim = !hasTopAppBar)
+                            EdgeFades(showTopScrim = showTopScrim, showNavPillClearance = showBottomBar)
                         }
                     }
                 }

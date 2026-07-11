@@ -8,6 +8,8 @@ import fr.bsodium.cron.ai.wire.ToolDefinition
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * DEBUG-ONLY. Returns a [ToolRegistry] whose tools return canned responses
@@ -37,11 +39,7 @@ object FakeToolRegistry {
                 description = "Geocode an address to lat/lng",
                 response = """{"lat":48.8566,"lng":2.3522}""",
             ),
-            stub(
-                name = "set_alarm",
-                description = "Set an alarm",
-                response = """{"status":"ok"}""",
-            ),
+            setAlarmStub(),
             stub(
                 name = "do_nothing",
                 description = "Skip planning",
@@ -73,5 +71,22 @@ object FakeToolRegistry {
         )
 
         override suspend fun execute(input: JsonElement) = ToolResult(response)
+    }
+
+    /** Unlike every other stub, `set_alarm`'s result has to echo the requested `time_iso` back as
+     *  `alarm_time` — `AiThreadMapper.resolveNewAlarmTime` reads that field to resolve the timeline's
+     *  PREV › NEW headline, so a flat canned "ok" (no side effects, matching every other stub here)
+     *  left every mocked run showing "No alarm set" regardless of what the mock LLM client requested. */
+    private fun setAlarmStub() = object : Tool {
+        override val definition = ToolDefinition(
+            name = "set_alarm",
+            description = "Set an alarm",
+            input_schema = toolSchema(),
+        )
+
+        override suspend fun execute(input: JsonElement): ToolResult {
+            val timeIso = input.jsonObject["time_iso"]?.jsonPrimitive?.content
+            return ToolResult("""{"status":"ok","alarm_time":"$timeIso"}""")
+        }
     }
 }

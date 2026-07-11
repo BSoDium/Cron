@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.theme
 
+import android.content.Context
 import android.graphics.Paint
 import android.util.Log
 import android.graphics.Typeface
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.R
+import java.io.File
 
 /**
  * Material Symbols (Rounded), rendered from the bundled variable font with its FILL / wght / GRAD / opsz
@@ -116,18 +119,69 @@ private fun rememberSymbolTypeface(): Typeface? {
     }
 }
 
+private data class VariationKey(val weight: Int, val grade: Int, val opticalSize: Float)
+
+/** `Typeface.Builder` has no constructor that wraps an already-resolved [Typeface] or reads a `res/font`
+ *  id directly — only a raw [File]/`FileDescriptor`/asset path. [get] extracts the bundled subset once
+ *  per process into the app's cache dir so [rememberVariedTypeface] has a real file to rebuild from.
+ *  `openRawResource` accepts any compiled resource's raw byte blob regardless of its declared type — a
+ *  `res/font` ttf id works exactly like a `res/raw` one here, lint's `@RawRes` contract just doesn't
+ *  know that. */
+private object VariedFontFile {
+    @Volatile private var cached: File? = null
+
+    @Suppress("ResourceType")
+    fun get(context: Context): File = cached ?: synchronized(this) {
+        cached ?: File(context.cacheDir, "material_symbols_rounded.ttf").also { file ->
+            if (!file.exists()) {
+                context.resources.openRawResource(R.font.material_symbols_rounded).use { input ->
+                    file.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+        }.also { cached = it }
+    }
+}
+
+/** Bakes `wght`/`GRAD`/`opsz` into a real [Typeface] variant, cached per [VariationKey], instead of a
+ *  live per-Paint `fontVariationSettings` string. A per-Paint override isn't guaranteed to resolve
+ *  identically on [Paint.getTextBounds]'s measurement path and [android.graphics.Canvas.drawText]'s
+ *  render path on every OEM/API level — for a compound glyph (e.g. a bell-plus-slash icon like
+ *  [MaterialSymbol.AlarmOff]) where those axes reshape one part relative to another, that divergence
+ *  shows up as a visible centering offset; a simple convex glyph's silhouette barely changes shape
+ *  across the axes, so the same divergence stays invisible (see docs/color-roles.md Round 12). Baking
+ *  the axes into the [Typeface] itself makes both paths resolve the same physical glyph outline.
+ *  `fill` is deliberately excluded — it's animated per-frame elsewhere ([CronNavigationBar]'s
+ *  tab-selection morph) and mostly affects interior strokework, not the outer bbox centering depends
+ *  on, so it stays on the cheap per-Paint path instead of rebuilding a [Typeface] every frame. */
+@Composable
+private fun rememberVariedTypeface(fallback: Typeface?, weight: Int, grade: Int, opticalSize: Float): Typeface? {
+    val context = LocalContext.current
+    val key = VariationKey(weight, grade, opticalSize)
+    return remember(key) {
+        runCatching {
+            Typeface.Builder(VariedFontFile.get(context))
+                .setFontVariationSettings("'wght' $weight,'GRAD' $grade,'opsz' $opticalSize")
+                .build()
+        }
+            .onFailure { e -> Log.w("MaterialSymbols", "variation axis bake failed for $key — falling back to unvaried typeface", e) }
+            .getOrNull()
+    } ?: fallback
+}
+
 /**
  * Renders a Material Symbol as a font glyph. Drop-in for `Icon`: pass [tint] and [size] the same way.
  * [fill] 0→1 morphs outlined→filled (animate it for selection states); [weight]/[grade] tune stroke and
  * emphasis; `opsz` tracks [size] for optical correctness. [autoMirror] flips the glyph under RTL (the
  * replacement for the old `Icons.AutoMirrored.*`).
  *
- * Drawn straight onto the canvas rather than via `Text`: Material Symbol glyphs are centred on the em
- * (design centre = em/2 above the baseline), but the font's line metrics are top-heavy and the ink sits
- * entirely above the baseline, so a `Text` line box centres the glyph low. Placing the baseline at the
- * box bottom maps the em exactly onto the [size] box → glyph centred, independent of those metrics. The
- * px-derived `textSize` also keeps the icon fixed-size under the user's font-scale setting, and the axes
- * ride on the Paint (no per-frame `FontFamily` rebuild for an animated [fill]).
+ * Drawn straight onto the canvas rather than via `Text`: a `Text` line box centres the glyph using line
+ * metrics, which sit low for this font. Instead, [Paint.getTextBounds] measures the glyph's actual ink
+ * rectangle for the current size/variation settings, and the draw origin is placed so that rectangle's
+ * centre lands on the box's centre — this stays correct regardless of a specific font's side-bearings or
+ * baseline assumptions, unlike a fixed `(size/2, size)` origin (which measured ~3px off-centre for this
+ * bundled subset font; see docs/color-roles.md Round 10). The px-derived `textSize` also keeps the icon
+ * fixed-size under the user's font-scale setting, and the axes ride on the Paint (no per-frame
+ * `FontFamily` rebuild for an animated [fill]).
  */
 @Composable
 fun Symbol(
@@ -141,9 +195,10 @@ fun Symbol(
     grade: Int = 0,
     autoMirror: Boolean = false,
 ) {
-    val typeface = rememberSymbolTypeface()
+    val baseTypeface = rememberSymbolTypeface()
     val mirror = autoMirror && LocalLayoutDirection.current == LayoutDirection.Rtl
     val opticalSize = size.value.coerceIn(20f, 48f)
+    val typeface = rememberVariedTypeface(baseTypeface, weight, grade, opticalSize)
     Canvas(
         modifier = modifier
             .size(size)
@@ -159,20 +214,24 @@ fun Symbol(
             isAntiAlias = true
             this.typeface = typeface
             textSize = px
-            textAlign = Paint.Align.CENTER
+            textAlign = Paint.Align.LEFT
             color = tint.toArgb()
             // Float.toString is locale-independent ('.'), so this needs no Locale guard.
-            fontVariationSettings = "'FILL' $fill,'wght' $weight,'GRAD' $grade,'opsz' $opticalSize"
+            fontVariationSettings = "'FILL' $fill"
         }
+        val inkBounds = android.graphics.Rect()
+        paint.getTextBounds(symbol.code, 0, symbol.code.length, inkBounds)
+        val originX = px / 2f - inkBounds.exactCenterX()
+        val originY = px / 2f - inkBounds.exactCenterY()
         drawIntoCanvas { canvas ->
             val nc = canvas.nativeCanvas
             if (mirror) {
                 val count = nc.save()
                 nc.scale(-1f, 1f, px / 2f, px / 2f)
-                nc.drawText(symbol.code, px / 2f, px, paint)
+                nc.drawText(symbol.code, originX, originY, paint)
                 nc.restoreToCount(count)
             } else {
-                nc.drawText(symbol.code, px / 2f, px, paint)
+                nc.drawText(symbol.code, originX, originY, paint)
             }
         }
     }

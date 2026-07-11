@@ -22,23 +22,27 @@ class CalendarChangeAnalyzer(
     data class Result(
         val firstEventChanged: Boolean,
         val newSig: String?,
+        /** The first event's own title, threaded out so the timeline can build a human-readable
+         *  summary of what changed instead of just "your first event changed". */
+        val firstEventTitle: String?,
     )
 
     fun analyze(session: SleepSession): Result {
         val tz = TimeZone.of(session.timezone)
-        val currentSig = computeFirstEventSig(session, tz)
+        val first = firstMorningEvent(session, tz)
+        val currentSig = first?.let { "${it.id}|${it.start.toEpochMilliseconds()}|${it.location.orEmpty()}|${it.selfAttendeeStatus}" }
         return Result(
             firstEventChanged = currentSig != session.cachedFirstEventSig,
             newSig = currentSig,
+            firstEventTitle = first?.title,
         )
     }
 
-    private fun computeFirstEventSig(session: SleepSession, timezone: TimeZone): String? {
+    private fun firstMorningEvent(session: SleepSession, timezone: TimeZone): CalendarReader.Event? {
         val dayStart = session.date.atStartOfDayIn(timezone)
         val dayEnd = dayStart + MORNING_WINDOW
         val events = CalendarReader(contentResolver).readEvents(dayStart, dayEnd, allowedRsvpStatuses = allowedRsvpStatuses)
-        val first = events.firstOrNull { !it.allDay } ?: return null
-        return "${first.id}|${first.start.toEpochMilliseconds()}|${first.location.orEmpty()}|${first.selfAttendeeStatus}"
+        return events.firstOrNull { !it.allDay }
     }
 
     companion object {

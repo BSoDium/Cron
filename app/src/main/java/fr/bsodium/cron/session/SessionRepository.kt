@@ -193,7 +193,18 @@ class SessionRepository(private val context: Context) {
         ))
     }
 
-    suspend fun clearAll(): Int = db.sessionDao().deleteAll()
+    /** Deletes every session, its events, and its AI messages. The `ON DELETE CASCADE` declared on
+     *  [fr.bsodium.cron.session.db.SessionEventEntity]/[fr.bsodium.cron.session.db.AiMessageEntity]'s
+     *  foreign keys is inert here — Room's default `Room.databaseBuilder(...).build()` never enables
+     *  SQLite's `PRAGMA foreign_keys`, so it's never enforced and cascade never fires. Delete the
+     *  children explicitly (order doesn't matter for correctness with FKs unenforced, but children-
+     *  first is the safer habit if that ever changes) rather than rely on a constraint that isn't
+     *  actually active. */
+    suspend fun clearAll(): Int {
+        db.eventDao().deleteAll()
+        db.aiMessageDao().deleteAll()
+        return db.sessionDao().deleteAll()
+    }
 
     companion object {
         private const val TAG = "SessionRepository"

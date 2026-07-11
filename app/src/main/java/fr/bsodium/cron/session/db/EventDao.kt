@@ -20,4 +20,7 @@ interface EventDao {
 
     @Query("SELECT * FROM session_events WHERE sessionId = :sessionId AND trigger = :trigger ORDER BY id DESC LIMIT 1")
     suspend fun findLatestByTrigger(sessionId: String, trigger: String): SessionEventEntity?
+
+    @Query("DELETE FROM session_events")
+    suspend fun deleteAll(): Int
 }

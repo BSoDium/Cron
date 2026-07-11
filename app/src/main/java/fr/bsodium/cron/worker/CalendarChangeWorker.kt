@@ -55,6 +55,7 @@ class CalendarChangeWorker(
                 changeType = "first_event_changed",
                 eventId = diff.newSig?.substringBefore("|") ?: "",
                 affectsFirstEvent = true,
+                firstEventTitle = diff.firstEventTitle,
             ),
         )
         repository.appendEventAndTriggerAi(session.id, event)

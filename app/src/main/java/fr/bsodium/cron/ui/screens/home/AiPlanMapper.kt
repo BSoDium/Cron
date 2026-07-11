@@ -28,7 +28,12 @@ sealed interface RunKind {
     data class Replan(val trigger: TriggerType?, val rearm: Boolean = false) : RunKind
 }
 
-/** The tab label for a run. Exhaustive over [RunKind] and [TriggerType]. */
+/** The tab label for a run. Exhaustive over [RunKind] and [TriggerType].
+ *
+ *  The [Replan][RunKind.Replan] cases describe the AI's *response*, not a restatement of the
+ *  triggering event — `TimelineMapper.kt`'s `eventLabel()` renders that event as its own sibling
+ *  timeline row, and the two used to share identical wording (e.g. both "You fell asleep"), which
+ *  read as an unexplained duplicate rather than an event and the plan that responded to it. */
 val RunKind.label: String
     get() = when (this) {
         RunKind.ScheduledBase -> "Planned"
@@ -36,15 +41,15 @@ val RunKind.label: String
         is RunKind.Replan -> when (trigger) {
             null -> "Re-planned"
             TriggerType.EveningPlan -> "Re-planned"
-            TriggerType.CalendarChange -> "Your schedule changed"
-            TriggerType.SleepOnset -> if (rearm) "You fell back asleep" else "You fell asleep"
-            TriggerType.HcStageUpdate -> "Sleep update"
-            TriggerType.MidSleepActivity -> "Movement detected"
-            TriggerType.OutOfBedConfirmed -> "You got up"
-            TriggerType.WakeWindowOpportunity -> "A good moment to wake"
-            TriggerType.AlarmDismissed -> "Alarm dismissed"
-            TriggerType.AlarmSnoozed -> "Alarm snoozed"
-            TriggerType.HardLatestFired -> "Safety alarm fired"
+            TriggerType.CalendarChange -> "Replanned for your schedule"
+            TriggerType.SleepOnset -> if (rearm) "Replanned after falling back asleep" else "Replanned for the night"
+            TriggerType.HcStageUpdate -> "Replanned from sleep data"
+            TriggerType.MidSleepActivity -> "Replanned after movement"
+            TriggerType.OutOfBedConfirmed -> "Replanned after waking"
+            TriggerType.WakeWindowOpportunity -> "Replanned for a better wake time"
+            TriggerType.AlarmDismissed -> "Replanned after dismissing"
+            TriggerType.AlarmSnoozed -> "Replanned after snoozing"
+            TriggerType.HardLatestFired -> "Replanned after the safety alarm"
         }
     }
 
@@ -121,7 +126,9 @@ object AiPlanMapper {
             return String.format(Locale.US, "%02d:%02d", local.hour, local.minute)
         }
 
-        // Built once per turn up front so a later iteration's previousAlarmTime lookup can read an earlier turn's already-computed thread instead of re-decoding it.
+        /** Built once per turn up front (not inline per-iteration) so a later iteration's
+         *  `previousAlarmTime` lookup can read an earlier turn's already-computed thread instead of
+         *  re-decoding it. */
         val orderedTurns = turns.toList()
         val threadsByTurn = orderedTurns.associateWith { threadOf(it) }
 
@@ -139,7 +146,9 @@ object AiPlanMapper {
                 (sourceEvent?.data as? EventData.EveningPlan)?.isManual == true -> RunKind.ManualBase
                 else -> RunKind.ScheduledBase
             }
-            // Skips any intervening turn that didn't resolve a time (e.g. do_nothing) so "before" is always the last turn that actually set one.
+            /** Skips over any intervening turn that didn't resolve a time (e.g. do_nothing), so the
+             *  "before" value is always the last turn that actually set one, not just the immediate
+             *  prior turn. */
             val previousAlarmTime = orderedTurns.take(index).asReversed()
                 .firstNotNullOfOrNull { threadsByTurn.getValue(it).newAlarmTime }
             AiIterationUi(

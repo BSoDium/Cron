@@ -20,10 +20,17 @@ import kotlin.random.Random
  *
  * Flow per run: read_calendar → estimate_commute → set_alarm → final answer.
  * Wired in via [fr.bsodium.cron.ai.AnthropicClientFactory] when [MockApiPrefs.isEnabled] is true.
+ *
+ * A fresh instance is created per AI turn (see `AnthropicClientFactory.create`), so [scenario] is
+ * picked once at construction — every turn (base plan or replan alike) gets its own random
+ * destination/timing instead of the same hardcoded one, which is also what makes a replan's
+ * resolved wake time actually differ from the previous turn's (needed for the timeline's PREV ›
+ * NEW pair to ever render — it only shows when the two times differ).
  */
 class FakeAnthropicClient : AnthropicMessages {
 
     private var call = 0
+    private val scenario = SCENARIOS.random()
 
     override suspend fun send(request: MessagesRequest): MessagesResponse =
         throw UnsupportedOperationException("FakeAnthropicClient supports the streaming path only")
@@ -33,7 +40,7 @@ class FakeAnthropicClient : AnthropicMessages {
         onPartial: suspend (List<ContentBlock>) -> Unit,
     ): MessagesResponse {
         val turn = call++
-        Log.i(TAG, "stream turn=$turn model=${request.model}")
+        Log.i(TAG, "stream turn=$turn model=${request.model} scenario=${scenario.destination}")
         return realisticRun(turn, request.model, onPartial)
     }
 
@@ -60,30 +67,34 @@ class FakeAnthropicClient : AnthropicMessages {
             }
         }
         1 -> {
-            val thinking = streamThinking(THINK_COMMUTE.random(), onPartial)
+            val thinking = streamThinking(commuteThought(), onPartial)
             val toolUse = ContentBlock.ToolUse(
                 id = SIM_COMMUTE_ID,
                 name = "estimate_commute",
                 input = buildJsonObject {
                     put("origin_lat", SIM_LAT)
                     put("origin_lng", SIM_LNG)
-                    put("destination", SIM_DESTINATION)
-                    put("mode", "TRANSIT")
-                    put("arrival_time_iso", SIM_ANCHOR_ISO)
+                    put("destination", scenario.destination)
+                    put("mode", scenario.transitMode)
+                    put("arrival_time_iso", scenario.anchorIso)
                 },
             )
             onPartial(listOf(thinking.signed(), toolUse))
             response(model, listOf(thinking.signed(), toolUse), stopReason = "tool_use")
         }
         2 -> {
-            val thinking = streamThinking(THINK_ALARM.random(), onPartial)
+            val thinking = streamThinking(alarmThought(), onPartial)
             val toolUse = ContentBlock.ToolUse(
                 id = SIM_ALARM_ID,
                 name = "set_alarm",
                 input = buildJsonObject {
-                    put("time_iso", SIM_WAKE_ISO)
+                    put("time_iso", scenario.wakeIso)
                     put("label", "Morning alarm")
-                    put("reason", "45 min prep + transit to ${SIM_DESTINATION.substringBefore(",")}, arriving ${SIM_ANCHOR_ISO.take(16).replace("T", " ")} UTC")
+                    put(
+                        "reason",
+                        "${scenario.prepMinutes} min prep + transit to ${scenario.destination.substringBefore(",")}, " +
+                            "arriving ${scenario.anchorIso.take(16).replace("T", " ")} UTC",
+                    )
                 },
             )
             onPartial(listOf(thinking.signed(), toolUse))
@@ -91,9 +102,32 @@ class FakeAnthropicClient : AnthropicMessages {
         }
         else -> { // turn is an unbounded call counter; every turn past the scripted 3 lands here
             val thinking = streamThinking(THINK_DONE.random(), onPartial)
-            val text = streamText(ANSWERS.random(), listOf(thinking.signed()), onPartial)
+            val text = streamText(finalAnswer(), listOf(thinking.signed()), onPartial)
             response(model, listOf(thinking.signed(), text))
         }
+    }
+
+    private fun commuteThought(): String {
+        val place = scenario.destination.substringBefore(",")
+        return COMMUTE_THOUGHT_TEMPLATES.random()
+            .replace("%anchor%", scenario.anchorLabel)
+            .replace("%place%", place)
+    }
+
+    private fun alarmThought(): String = ALARM_THOUGHT_TEMPLATES.random()
+        .replace("%commute%", scenario.commuteMinutes.toString())
+        .replace("%prep%", scenario.prepMinutes.toString())
+        .replace("%rawWake%", scenario.rawWakeLabel)
+        .replace("%wake%", scenario.wakeLabel)
+
+    private fun finalAnswer(): String {
+        val place = scenario.destination.substringBefore(",")
+        return ANSWER_TEMPLATES.random()
+            .replace("%wake%", scenario.wakeLabel)
+            .replace("%anchor%", scenario.anchorLabel)
+            .replace("%place%", place)
+            .replace("%commute%", scenario.commuteMinutes.toString())
+            .replace("%prep%", scenario.prepMinutes.toString())
     }
 
     private suspend fun injectStreamingError(
@@ -157,6 +191,23 @@ class FakeAnthropicClient : AnthropicMessages {
         usage = Usage(),
     )
 
+    /** One self-contained planning scenario: a destination, an anchor event to be on time for, and
+     *  the wake time it resolves to. Picked once per [FakeAnthropicClient] instance (i.e. once per
+     *  AI turn) so a single run's calendar → commute → alarm steps stay narratively consistent,
+     *  while different turns (a base plan vs. a later replan, each its own fresh instance) land on
+     *  genuinely different destinations/times instead of the same hardcoded one every time. */
+    private data class Scenario(
+        val destination: String,
+        val transitMode: String,
+        val anchorIso: String,
+        val anchorLabel: String,
+        val commuteMinutes: Int,
+        val prepMinutes: Int,
+        val rawWakeLabel: String,
+        val wakeLabel: String,
+        val wakeIso: String,
+    )
+
     companion object {
         private const val TAG = "FakeAnthropicClient"
         private const val SIM_SIGNATURE = "sim-sig"
@@ -167,14 +218,68 @@ class FakeAnthropicClient : AnthropicMessages {
         private const val BURST_PAUSE_MS = 280L
         private const val ERROR_RATE = 0.10f
 
-        // Fictional planning scenario: 8:45 in-person meeting, Paris.
         private const val SIM_START_ISO = "2025-12-17T00:00:00Z"
         private const val SIM_END_ISO = "2025-12-18T00:00:00Z"
-        private const val SIM_ANCHOR_ISO = "2025-12-17T08:45:00Z"
-        private const val SIM_WAKE_ISO = "2025-12-17T07:30:00Z"
         private const val SIM_LAT = "48.8566"
         private const val SIM_LNG = "2.3522"
-        private const val SIM_DESTINATION = "Tour Montparnasse, Paris"
+
+        private val SCENARIOS = listOf(
+            Scenario(
+                destination = "Tour Montparnasse, Paris",
+                transitMode = "TRANSIT",
+                anchorIso = "2025-12-17T08:45:00Z",
+                anchorLabel = "8:45 in-person meeting",
+                commuteMinutes = 22,
+                prepMinutes = 45,
+                rawWakeLabel = "7:38",
+                wakeLabel = "7:30",
+                wakeIso = "2025-12-17T07:30:00Z",
+            ),
+            Scenario(
+                destination = "Gare de Lyon, Paris",
+                transitMode = "TRANSIT",
+                anchorIso = "2025-12-17T07:15:00Z",
+                anchorLabel = "7:15 train departure",
+                commuteMinutes = 20,
+                prepMinutes = 30,
+                rawWakeLabel = "6:25",
+                wakeLabel = "6:10",
+                wakeIso = "2025-12-17T06:10:00Z",
+            ),
+            Scenario(
+                destination = "La Défense, Paris",
+                transitMode = "TRANSIT",
+                anchorIso = "2025-12-17T09:00:00Z",
+                anchorLabel = "9:00 all-hands",
+                commuteMinutes = 32,
+                prepMinutes = 40,
+                rawWakeLabel = "7:48",
+                wakeLabel = "7:35",
+                wakeIso = "2025-12-17T07:35:00Z",
+            ),
+            Scenario(
+                destination = "Le Marais, Paris",
+                transitMode = "WALKING",
+                anchorIso = "2025-12-17T10:30:00Z",
+                anchorLabel = "10:30 client meeting",
+                commuteMinutes = 25,
+                prepMinutes = 35,
+                rawWakeLabel = "9:30",
+                wakeLabel = "9:20",
+                wakeIso = "2025-12-17T09:20:00Z",
+            ),
+            Scenario(
+                destination = "Charles de Gaulle Airport T2E, Roissy",
+                transitMode = "TRANSIT",
+                anchorIso = "2025-12-17T06:20:00Z",
+                anchorLabel = "6:20 flight check-in",
+                commuteMinutes = 48,
+                prepMinutes = 60,
+                rawWakeLabel = "4:32",
+                wakeLabel = "4:20",
+                wakeIso = "2025-12-17T04:20:00Z",
+            ),
+        )
 
         private val THINK_READ_CAL = listOf(
             "Let me check the calendar for the next 24 hours to find the first hard anchor — any event you must be on time for. " +
@@ -188,18 +293,18 @@ class FakeAnthropicClient : AnthropicMessages {
                 "I'll ignore all-day events unless they're the only thing on the schedule.",
         )
 
-        private val THINK_COMMUTE = listOf(
-            "The calendar shows an 8:45 in-person meeting. I need the commute duration so I can work backwards " +
+        private val COMMUTE_THOUGHT_TEMPLATES = listOf(
+            "The calendar shows a %anchor%. I need the commute duration so I can work backwards " +
                 "to the required departure time. Querying by transit from the current location, arriving a few minutes early.",
-            "There's an 8:45 anchor at the office. Let me estimate the commute via transit — I want to arrive " +
-                "with a couple of minutes to spare, so I'll target 8:43 as the arrival time.",
+            "There's a %anchor% at %place%. Let me estimate the commute — I want to arrive " +
+                "with a couple of minutes to spare.",
         )
 
-        private val THINK_ALARM = listOf(
-            "Transit comes in at about 22 minutes. I need to depart by 8:23, so waking at 7:40 gives me 45 minutes of " +
-                "preparation. The nearest 90-minute light-sleep window lands at 7:30 — within the ±15 min snap tolerance. Using 7:30.",
-            "Commute is roughly 26 minutes. Departure at 8:19, minus 45 minutes prep time, gives a 7:34 raw wake time. " +
-                "The sleep cycle places a light-sleep moment at 7:30, well within tolerance. Setting the alarm there.",
+        private val ALARM_THOUGHT_TEMPLATES = listOf(
+            "Transit comes in at about %commute% minutes. Waking at %rawWake% gives me %prep% minutes of " +
+                "preparation. The nearest 90-minute light-sleep window lands at %wake% — within the ±15 min snap tolerance. Using %wake%.",
+            "Commute is roughly %commute% minutes. Minus %prep% minutes of prep time gives a %rawWake% raw wake time. " +
+                "The sleep cycle places a light-sleep moment at %wake%, well within tolerance. Setting the alarm there.",
         )
 
         private val THINK_DONE = listOf(
@@ -207,13 +312,13 @@ class FakeAnthropicClient : AnthropicMessages {
             "Done.",
         )
 
-        private val ANSWERS = listOf(
-            "SUMMARY: Wake at 7:30 to make your 8:45 meeting\n\n" +
-                "Set a **7:30** alarm for your 8:45 in-person at ${SIM_DESTINATION.substringBefore(",")}. " +
-                "Transit is ~22 min; I added 45 min of preparation time and snapped to a light-sleep window.",
-            "SUMMARY: Alarm set for 7:30 — 75 min before your 8:45 anchor\n\n" +
-                "Your **7:30** alarm is set. You have an 8:45 meeting at ${SIM_DESTINATION.substringBefore(",")} (~26 min by transit). " +
-                "I added 45 min prep time and landed on the nearest 90-minute light-sleep window.",
+        private val ANSWER_TEMPLATES = listOf(
+            "SUMMARY: Wake at %wake% to make your %anchor%\n\n" +
+                "Set a **%wake%** alarm for your %anchor% at %place%. " +
+                "Transit is ~%commute% min; I added %prep% min of preparation time and snapped to a light-sleep window.",
+            "SUMMARY: Alarm set for %wake% — ahead of your %anchor%\n\n" +
+                "Your **%wake%** alarm is set. You have a %anchor% at %place% (~%commute% min by transit). " +
+                "I added %prep% min prep time and landed on the nearest 90-minute light-sleep window.",
         )
     }
 }
