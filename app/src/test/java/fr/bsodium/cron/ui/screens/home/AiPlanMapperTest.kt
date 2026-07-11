@@ -171,10 +171,10 @@ class AiPlanMapperTest {
         assertEquals(firstTime, plan.iterations[2].previousAlarmTime)
     }
 
+    /** A manual replan seeds its turn with EveningPlan BEFORE the event is persisted; the latest
+     *  persisted event is still the prior CalendarChange — the seed must win or the tab mislabels. */
     @Test
     fun seeded_streaming_trigger_beats_a_stale_persisted_event() {
-        // A manual replan seeds its turn with EveningPlan BEFORE the event is persisted; the latest
-        // persisted event is still the prior CalendarChange — the seed must win or the tab mislabels.
         val rows = listOf(assistant(0, createdAt = 0L))
         val events = listOf(event(TriggerType.CalendarChange, 500L, EventData.CalendarChange("modified", "e1", true)))
         val streaming = StreamingTurn(

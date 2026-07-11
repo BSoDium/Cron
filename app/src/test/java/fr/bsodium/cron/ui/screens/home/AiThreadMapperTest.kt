@@ -166,10 +166,10 @@ class AiThreadMapperTest {
         assertTrue(thread.isStreaming)
     }
 
+    /** A turn streams reasoning then prose narration before any tool call. The prose must stay in
+     *  the thinking process, never flash as the answer (it has no SUMMARY marker yet). */
     @Test
     fun streaming_leading_narration_is_not_shown_as_the_answer() {
-        // A turn streams reasoning then prose narration before any tool call. The prose must stay in
-        // the thinking process, never flash as the answer (it has no SUMMARY marker yet).
         val thread = AiThreadMapper.buildFromBlocks(
             turnIndex = 0,
             blocks = listOf(
@@ -182,10 +182,10 @@ class AiThreadMapperTest {
         assertEquals("I can see tomorrow's picture clearly — a packed morning.", narration.text)
     }
 
+    /** The model has typed "SUMMARY: …" but not the answer body yet. The summary belongs in the
+     *  pill; the response area must stay empty (no flash) until the body streams in. */
     @Test
     fun streaming_summary_line_alone_is_the_pill_not_the_response() {
-        // The model has typed "SUMMARY: …" but not the answer body yet. The summary belongs in the pill;
-        // the response area must stay empty (no flash) until the body streams in.
         val thread = AiThreadMapper.buildFromBlocks(
             turnIndex = 0,
             blocks = listOf(
@@ -216,10 +216,10 @@ class AiThreadMapperTest {
         ContentBlock.ToolUse(id = "t1", name = "set_alarm", input = SessionJson.parseToJsonElement("{}")),
     )
 
+    /** The answer is anchored to the SUMMARY marker, so a trailing tool_use can't demote it back
+     *  into the thinking thread — the bug that the positional "trailing run" heuristic produced. */
     @Test
     fun a_tool_after_the_summary_answer_does_not_pull_it_back_into_thinking() {
-        // The answer is anchored to the SUMMARY marker, so a trailing tool_use can't demote it back
-        // into the thinking thread — the bug that the positional "trailing run" heuristic produced.
         val thread = AiThreadMapper.buildFromBlocks(turnIndex = 0, blocks = answerThenTool)
         assertEquals("Set a 6:40 alarm so you make stand-up.", thread.response)
         assertTrue(thread.process.filterIsInstance<ProcessItem.Narration>().isEmpty())

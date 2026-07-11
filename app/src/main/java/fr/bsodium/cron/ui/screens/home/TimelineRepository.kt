@@ -18,8 +18,7 @@ class TimelineRepository(private val db: CronDatabase) {
         limit: Int,
         offset: Int,
     ): HistoryPage {
-        // Fetch one extra row to detect whether more sessions exist beyond this page, independent of
-        // how many display items they end up producing.
+        // Fetch one extra row to detect whether more sessions exist beyond this page, independent of how many display items they end up producing.
         val fetched = db.sessionDao().findPaginated(limit = limit + 1, offset = offset)
             .filter { it.id != excludeSessionId }
         val hasMore = fetched.size > limit

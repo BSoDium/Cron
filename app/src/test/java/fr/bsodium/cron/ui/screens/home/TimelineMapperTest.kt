@@ -100,10 +100,10 @@ class TimelineMapperTest {
         assertTrue(timeline[3] is TimelineItem.Event)
     }
 
+    /** Regression: a data-layer race can surface the identical (trigger, timestamp) event under two
+     *  different sessions; the LazyColumn key must stay unique regardless of how that happens. */
     @Test
     fun buildTimeline_collapses_the_same_event_appearing_in_two_sessions() {
-        // Regression: a data-layer race can surface the identical (trigger, timestamp) event under two
-        // different sessions; the LazyColumn key must stay unique regardless of how that happens.
         val duplicate = SessionEvent(
             timestamp = Instant.fromEpochMilliseconds(1_783_065_605_883L),
             trigger = TriggerType.AlarmDismissed,
