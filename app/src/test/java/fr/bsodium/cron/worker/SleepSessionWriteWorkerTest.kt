@@ -32,8 +32,7 @@ class SleepSessionWriteWorkerTest {
         app = ApplicationProvider.getApplicationContext()
         WorkManagerTestInitHelper.initializeTestWorkManager(app)
         db = CronDatabase.get(app)
-        // The production CronDatabase singleton is file-backed and persists across tests in the JVM;
-        // wipe it (cascades to events) so each test starts from a clean slate.
+        // The production CronDatabase singleton is file-backed and persists across tests in the JVM; wipe it (cascades to events) so each test starts from a clean slate.
         runBlocking { db.sessionDao().deleteOlderThan(Long.MAX_VALUE) }
     }
 
