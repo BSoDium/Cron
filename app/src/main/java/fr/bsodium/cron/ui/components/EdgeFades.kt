@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -27,12 +28,17 @@ import fr.bsodium.cron.ui.theme.Spacing
  * [showTopScrim] is off for pages with a [PageAppBar]: the app bar already owns the
  * status-bar strip, and its scrolled `surfaceContainer` shade would otherwise show a
  * two-tone band under the `background`-tinted top scrim.
+ *
+ * [showNavPillClearance] is off for routes where the floating nav pill itself is hidden (settings
+ * sub-screens) — without this, every route reserved [Spacing.navBarClearance] worth of scrim
+ * regardless, needlessly dimming/obscuring a pill-less screen's own last few rows of content.
  */
 @Composable
-fun EdgeFades(modifier: Modifier = Modifier, showTopScrim: Boolean = true) {
+fun EdgeFades(modifier: Modifier = Modifier, showTopScrim: Boolean = true, showNavPillClearance: Boolean = true) {
     val background = CronColors.pageBackground
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val pillClearance = if (showNavPillClearance) Spacing.navBarClearance else 0.dp
     Box(modifier = modifier.fillMaxSize()) {
         if (showTopScrim) {
             Box(
@@ -47,7 +53,7 @@ fun EdgeFades(modifier: Modifier = Modifier, showTopScrim: Boolean = true) {
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(navBottom + Spacing.navBarClearance + Spacing.xxxl)
+                .height(navBottom + pillClearance + Spacing.xxxl)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, background))),
         )
     }

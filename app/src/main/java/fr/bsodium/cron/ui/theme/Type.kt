@@ -3,6 +3,7 @@ package fr.bsodium.cron.ui.theme
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.em
@@ -182,6 +183,16 @@ object CronTypography {
     /** Smaller code label — tool-call name chips and result labels in the thinking timeline. */
     val labelMonoSmall: TextStyle = labelMono.copy(fontSize = 11.sp, lineHeight = 15.sp)
 
+    /** The trailing clock/relative-time figure on a minor (non-hero) timeline row — sized up from
+     *  [labelMonoSmall] specifically for this context rather than resizing that shared role, which
+     *  is also used well beyond the timeline (tool-call chips, etc.). Based on [tight] (Round 31),
+     *  not [labelMono] directly — passing an explicit `style` to a `Text` bypasses whatever
+     *  `LocalTextStyle` a `CompositionLocalProvider` might supply entirely, so a timeline row's own
+     *  extra font leading can only be stripped by baking [tight] into the style itself, not by
+     *  wrapping the composable in a provider (an earlier attempt at exactly that silently did
+     *  nothing, since every `Text` in this timeline passes its own `style`). */
+    val timelineRowTime: TextStyle = tight.copy(fontFamily = CodeFontFamily, fontSize = 13.sp, lineHeight = 17.sp)
+
     /** Bold code label — emphasis pills (e.g. the sleep-duration badge). */
     val labelMonoBold: TextStyle = labelMono.copy(fontWeight = FontWeight.Bold)
 
@@ -217,21 +228,54 @@ object CronTypography {
         lineHeight = 16.sp,
     )
 
-    /** Timeline day-boundary heading — a bold condensed word ("TODAY"). Pairs with [labelMonoSmall]
-     *  for the companion date figure, echoing the display/mono contrast from the Material Expressive
-     *  reference material. */
-    val timelineDayHeader: TextStyle = TextStyle(
-        fontFamily = ExpressiveCondensedFontFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 32.sp,
+    /** Timeline day-boundary heading's headline — the bare day-of-month figure ("7"), rendered
+     *  colossal and heavy, calendar-tear-off style, with [timelineDayMonth] as its caption
+     *  underneath rather than a same-size sibling beside it. `Black` (900) is the *inactive*-state
+     *  ceiling here; `DayHeaderLabel` itself drives a live variable-font `wght`/`wdth` animation on
+     *  top of this base style as the header becomes/stops being the active section, so this fixed
+     *  style is really just the animation's resting point. `lineHeight` is deliberately tighter than
+     *  `fontSize` — `DayHeaderLabel` also applies a bottom-anchored `graphicsLayer` vertical squash
+     *  to the glyph itself, and a matching tighter line height keeps the row's own layout height in
+     *  step instead of leaving dead space below the now-shorter-looking digit. */
+    val timelineDayNumber: TextStyle = TextStyle(
+        fontFamily = ExpressiveUltraCondensedFontFamily,
+        fontWeight = FontWeight.Black,
+        fontSize = 56.sp,
+        lineHeight = 40.sp,
         letterSpacing = (-0.02).em,
+    )
+
+    /** The month caption underneath [timelineDayNumber] — written in full ("JUNE", not "JUN"), sized
+     *  and weighted to read clearly next to the colossal number. Shares [timelineDayActiveLabel]'s
+     *  size exactly — the two sit on the same line, one right-aligned, one left — so only the weight
+     *  tells them apart. */
+    val timelineDayMonth: TextStyle = TextStyle(
+        fontFamily = ExpressiveCondensedFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.01.em,
+    )
+
+    /** The relative-day label ("TODAY"/"TOMORROW"/"TWO DAYS AGO"/weekday name) — sits on
+     *  [timelineDayMonth]'s own line, left-aligned opposite the month; italic, thinner, and rounder
+     *  than the month label. [ExpressiveCondensedThinFontFamily] (85 width, a genuine sub-400 `wght`
+     *  face) is *less* condensed than the number's own 30-width family, which is what "rounder" means
+     *  here: less condensing leaves round letterforms (O, D) closer to their natural shape instead of
+     *  squeezed into narrow ovals. Same `fontSize`/`lineHeight` as [timelineDayMonth] — same line,
+     *  same size, only weight/style/family differ. */
+    val timelineDayActiveLabel: TextStyle = timelineDayMonth.copy(
+        fontFamily = ExpressiveCondensedThinFontFamily,
+        fontWeight = FontWeight.Light,
+        fontStyle = FontStyle.Italic,
     )
 
     /** Latest timeline run's headline — the AI's resolved outcome sentence, set at headlineMedium
      *  scale so it reads as the one bold fact on the row (Material Expressive reference: a big
-     *  isolated headline paired with a small muted caption, not a gradient of medium sizes). */
-    val timelineHeroTitle: TextStyle = TextStyle(
+     *  isolated headline paired with a small muted caption, not a gradient of medium sizes). Based
+     *  on [tight] (Round 31) — see [timelineRowTime]'s KDoc for why; [timelineHeroTimeNew] and
+     *  [timelineHeroTimePrev] inherit it for free via `.copy()`. */
+    val timelineHeroTitle: TextStyle = tight.copy(
         fontFamily = ExpressiveCondensedFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 26.sp,
@@ -239,13 +283,23 @@ object CronTypography {
         letterSpacing = (-0.01).em,
     )
 
-    /** The lighter "before" value in a [timelineHeroTitle]-scale PREV › NEW time pair — same face and
-     *  size as the (bold) new time, so the pair reads as a weight contrast, not a size mismatch. */
-    val timelineHeroTimePrev: TextStyle = timelineHeroTitle.copy(fontWeight = FontWeight.Normal)
+    /** The bold, emphasized NEW time in a hero PREV › NEW pair — same face/size/weight as
+     *  [timelineHeroTitle]; bold alone is enough contrast against [timelineHeroTimePrev]'s thin face,
+     *  no italic needed. */
+    val timelineHeroTimeNew: TextStyle = timelineHeroTitle
+
+    /** The super-thin "before" value in a [timelineHeroTitle]-scale PREV › NEW time pair — a real
+     *  sub-400 `wght` face ([ExpressiveCondensedThinFontFamily]), not just a Normal-vs-Bold contrast,
+     *  so the pair reads as thin-vs-bold-italic rather than two similarly-weighted numbers. */
+    val timelineHeroTimePrev: TextStyle = timelineHeroTitle.copy(
+        fontFamily = ExpressiveCondensedThinFontFamily,
+        fontWeight = FontWeight.Light,
+    )
 
     /** Small caption above [timelineHeroTitle] carrying the run's trigger category (e.g. "PLANNED",
-     *  "ALARM DISMISSED") now that the headline itself carries the outcome sentence. */
-    val timelineHeroKicker: TextStyle = TextStyle(
+     *  "ALARM DISMISSED") now that the headline itself carries the outcome sentence. Based on
+     *  [tight] (Round 31) — see [timelineRowTime]'s KDoc for why. */
+    val timelineHeroKicker: TextStyle = tight.copy(
         fontFamily = ExpressiveFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
@@ -254,12 +308,13 @@ object CronTypography {
     )
 
     /** History timeline row title — condensed and muted so it reads as clearly subordinate to
-     *  [timelineHeroTitle] through weight/width, not just size. */
-    val timelineRowTitle: TextStyle = TextStyle(
+     *  [timelineHeroTitle] through weight/width, not just size. Sized up from 14sp for legibility.
+     *  Based on [tight] (Round 31) — see [timelineRowTime]'s KDoc for why. */
+    val timelineRowTitle: TextStyle = tight.copy(
         fontFamily = ExpressiveCondensedFontFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 18.sp,
+        fontSize = 16.sp,
+        lineHeight = 20.sp,
     )
 }
 

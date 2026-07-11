@@ -66,6 +66,20 @@ val ExpressiveNarrowFontFamily: FontFamily = expressiveWidth(40f)
 val ExpressiveCondensedFontFamily: FontFamily = expressiveWidth(85f)
 val ExpressiveWideFontFamily: FontFamily = expressiveWidth(120f)
 
+/** Narrower than [ExpressiveNarrowFontFamily] — the timeline's day-boundary heading ("TODAY") needs
+ *  to read as more condensed than the home greeting's username, which already uses the narrowest
+ *  width otherwise defined. */
+val ExpressiveUltraCondensedFontFamily: FontFamily = expressiveWidth(30f)
+
+/** A genuinely thin face at the timeline hero's condensed width — [expressiveWidth] only registers
+ *  Normal/Medium/SemiBold/Bold, so a "super thin" contrast needs its own sub-400 `wght` face, the same
+ *  technique [CountdownFontFamily] already uses for its light face. */
+val ExpressiveCondensedThinFontFamily: FontFamily = FontFamily(
+    Font(R.font.roboto_flex, weight = FontWeight.Light, variationSettings = FontVariation.Settings(
+        FontVariation.weight(200), FontVariation.Setting("wdth", 85f),
+    )),
+)
+
 /**
  * Hero LCD face for the next-alarm time. Bundled .ttf files resolve first,
  * with the downloadable Google Fonts entry as a network fallback. The

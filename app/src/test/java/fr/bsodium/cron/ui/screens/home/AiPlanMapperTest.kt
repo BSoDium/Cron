@@ -62,7 +62,7 @@ class AiPlanMapperTest {
         val rows = listOf(assistant(0, createdAt = 0L), assistant(1, createdAt = 1000L))
         val events = listOf(event(TriggerType.CalendarChange, 500L, EventData.CalendarChange("modified", "e1", true)))
         val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, events))
-        assertEquals(listOf("Planned", "Your schedule changed"), plan.iterations.map { it.systemMessage })
+        assertEquals(listOf("Planned", "Replanned for your schedule"), plan.iterations.map { it.systemMessage })
         assertEquals(1, plan.iterations.last().turnIndex)
     }
 
@@ -82,7 +82,7 @@ class AiPlanMapperTest {
             event(TriggerType.AlarmSnoozed, 1500L), // after the turn started — must be ignored
         )
         val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, events))
-        assertEquals("Your schedule changed", plan.iterations.last().systemMessage)
+        assertEquals("Replanned for your schedule", plan.iterations.last().systemMessage)
     }
 
     @Test

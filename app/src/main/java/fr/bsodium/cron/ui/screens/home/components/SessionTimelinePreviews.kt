@@ -1,24 +1,37 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.TimelineItem
+import fr.bsodium.cron.ui.screens.home.timelineAsleepStates
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
-import kotlinx.datetime.Clock
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+
+private fun previewDayHeader(dateOffsetDays: Int): TimelineItem.DayHeader {
+    val ts = Instant.fromEpochMilliseconds(System.currentTimeMillis() - dateOffsetDays * 86_400_000L)
+    return TimelineItem.DayHeader(date = ts.toLocalDateTime(TimeZone.currentSystemDefault()).date, timestamp = ts)
+}
 
 private fun previewIteration(
     turn: Int,
@@ -40,24 +53,14 @@ private fun previewIteration(
     ranAtEpochMs = System.currentTimeMillis(),
 )
 
-private fun previewDayHeader(dateOffsetDays: Int, weekdayLabel: String, dateLabel: String): TimelineItem.DayHeader {
-    val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-    return TimelineItem.DayHeader(
-        date = today.plus(dateOffsetDays, DateTimeUnit.DAY),
-        timestamp = Instant.fromEpochMilliseconds(System.currentTimeMillis()),
-        weekdayLabel = weekdayLabel,
-        dateLabel = dateLabel,
-    )
-}
-
-@Preview(showBackground = true, name = "Timeline — full example")
+@PreviewLightDark
 @Composable
 private fun SessionTimelinePreview() {
     val now = Instant.fromEpochMilliseconds(System.currentTimeMillis())
     val yesterday = Instant.fromEpochMilliseconds(System.currentTimeMillis() - 86_400_000L)
     val twoDaysAgo = Instant.fromEpochMilliseconds(System.currentTimeMillis() - 172_800_000L)
     val timeline = listOf(
-        previewDayHeader(0, "TODAY", "3 JUL"),
+        previewDayHeader(0),
         TimelineItem.AiRun(
             timestamp = now,
             iteration = previewIteration(
@@ -74,7 +77,8 @@ private fun SessionTimelinePreview() {
             timestamp = now,
             trigger = TriggerType.AlarmSnoozed,
             label = "Alarm snoozed",
-            detail = "9 min",
+            detail = "You get to sleep for 9 extra minutes",
+            detailEmphasis = "9 extra minutes",
         ),
         TimelineItem.AiRun(
             timestamp = now,
@@ -113,7 +117,7 @@ private fun SessionTimelinePreview() {
             isStreaming = false,
             isLatest = false,
         ),
-        previewDayHeader(-1, "YESTERDAY", "2 JUL"),
+        previewDayHeader(1),
         TimelineItem.Event(
             timestamp = yesterday,
             trigger = TriggerType.OutOfBedConfirmed,
@@ -163,7 +167,7 @@ private fun SessionTimelinePreview() {
             isStreaming = false,
             isLatest = false,
         ),
-        previewDayHeader(-2, "MONDAY", "1 JUL"),
+        previewDayHeader(2),
         TimelineItem.Event(
             timestamp = twoDaysAgo,
             trigger = TriggerType.HardLatestFired,
@@ -182,25 +186,86 @@ private fun SessionTimelinePreview() {
             isLatest = false,
         ),
     )
+    val asleepStates = timelineAsleepStates(timeline)
+    val firstAnchorIndex = timeline.indexOfFirst { it !is TimelineItem.DayHeader }
+    val lastAnchorIndex = timeline.indexOfLast { it !is TimelineItem.DayHeader }
     CronTheme {
-        Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
-            timeline.forEachIndexed { index, item ->
-                val isFirst = index == 0 || timeline[index - 1] is TimelineItem.DayHeader
-                val isLast = index == timeline.lastIndex || timeline[index + 1] is TimelineItem.DayHeader
-                when (item) {
-                    is TimelineItem.AiRun -> AiRunNode(
-                        item = item,
-                        isFirst = isFirst,
-                        isLast = isLast,
-                        onClick = {},
-                    )
-                    is TimelineItem.Event -> EventNode(
-                        item = item,
-                        isFirst = isFirst,
-                        isLast = isLast,
-                    )
-                    is TimelineItem.DayHeader -> DayHeaderRow(item = item)
+        val registry = rememberTimelineTrackRegistry()
+        Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
+            TimelineTrackOverlay(registry = registry)
+            Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
+                timeline.forEachIndexed { index, item ->
+                    val isSegmentTop = index == firstAnchorIndex
+                    val isSegmentBottom = index == lastAnchorIndex
+                    val isAsleepAbove = asleepStates[index]
+                    val isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index]
+                    when (item) {
+                        is TimelineItem.AiRun -> AiRunNode(
+                            item = item,
+                            registry = registry,
+                            isSegmentTop = isSegmentTop,
+                            isSegmentBottom = isSegmentBottom,
+                            isAsleepAbove = isAsleepAbove,
+                            isAsleepBelow = isAsleepBelow,
+                            onClick = {},
+                        )
+                        is TimelineItem.Event -> EventNode(
+                            item = item,
+                            registry = registry,
+                            isSegmentTop = isSegmentTop,
+                            isSegmentBottom = isSegmentBottom,
+                            isAsleepAbove = isAsleepAbove,
+                            isAsleepBelow = isAsleepBelow,
+                        )
+                        is TimelineItem.DayHeader -> DayHeaderRow(item = item)
+                    }
                 }
+            }
+        }
+    }
+}
+
+/** Interactive: tap to toggle the run between latest (hero PREV › NEW) and superseded (plain row) so
+ *  the Animation Inspector can scrub the `ai-run-hero-demote` crossfade + the anchor's radius shrink.
+ *  See docs/animation-previews.md's interactive-preview pattern. */
+@PreviewLightDark
+@Composable
+private fun AiRunNodeHeroDemotePreview() {
+    val now = Instant.fromEpochMilliseconds(System.currentTimeMillis())
+    CronTheme {
+        var isLatest by remember { mutableStateOf(true) }
+        val registry = rememberTimelineTrackRegistry()
+        Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground).clickable { isLatest = !isLatest }) {
+            TimelineTrackOverlay(registry = registry)
+            Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
+                AiRunNode(
+                    item = TimelineItem.AiRun(
+                        timestamp = now,
+                        iteration = AiIterationUi(
+                            turnIndex = 2,
+                            timeLabel = "07:15",
+                            kind = RunKind.Replan(TriggerType.CalendarChange),
+                            thread = AiThreadUi(
+                                turnIndex = 2,
+                                summary = "Moved alarm to 07:15 — your first meeting shifted to 09:00.",
+                                process = emptyList(),
+                                response = "Moved alarm to 07:15 — your first meeting shifted to 09:00.",
+                                newAlarmTime = LocalTime(7, 15),
+                            ),
+                            previousAlarmTime = LocalTime(7, 45),
+                            ranAtEpochMs = System.currentTimeMillis(),
+                        ),
+                        sessionId = "s1",
+                        isStreaming = false,
+                        isLatest = isLatest,
+                    ),
+                    registry = registry,
+                    isSegmentTop = true,
+                    isSegmentBottom = true,
+                    isAsleepAbove = false,
+                    isAsleepBelow = false,
+                    onClick = {},
+                )
             }
         }
     }

@@ -32,4 +32,7 @@ interface AiMessageDao {
 
     @Query("SELECT * FROM ai_messages WHERE sessionId = :sessionId ORDER BY id ASC")
     fun observeBySession(sessionId: String): Flow<List<AiMessageEntity>>
+
+    @Query("DELETE FROM ai_messages")
+    suspend fun deleteAll(): Int
 }

@@ -29,8 +29,26 @@ class TimelineMapperTest {
     private fun dayHeader(date: LocalDate) = TimelineItem.DayHeader(
         date = date,
         timestamp = Instant.fromEpochMilliseconds(0),
-        weekdayLabel = date.toString(),
-        dateLabel = date.toString(),
+    )
+
+    private fun event(ms: Long, trigger: TriggerType) = TimelineItem.Event(
+        timestamp = Instant.fromEpochMilliseconds(ms),
+        trigger = trigger,
+        label = trigger.name,
+        detail = null,
+    )
+
+    private fun aiRun(ms: Long) = TimelineItem.AiRun(
+        timestamp = Instant.fromEpochMilliseconds(ms),
+        iteration = AiIterationUi(
+            turnIndex = 0,
+            timeLabel = "00:00",
+            kind = RunKind.ScheduledBase,
+            thread = AiThreadUi(turnIndex = 0, summary = null, process = emptyList(), response = null),
+        ),
+        sessionId = "s",
+        isStreaming = false,
+        isLatest = false,
     )
 
     @Test
@@ -72,8 +90,13 @@ class TimelineMapperTest {
         assertTrue(result.items.none { it is TimelineItem.DayHeader })
     }
 
+    /** DayHeader is purely a sticky decoration — it's still inserted structurally into the list at
+     *  every local-day boundary so `stickyHeader` has something to pin, but it must stay invisible
+     *  to segment/cap/asleep-state derivation (see the timelineAsleepStates tests below and
+     *  SessionTimeline.kt's firstAnchorIndex/lastAnchorIndex). Today's own header is skipped
+     *  entirely — the user already knows it's today. */
     @Test
-    fun buildTimeline_inserts_a_header_at_every_local_day_boundary() {
+    fun buildTimeline_inserts_a_header_at_every_local_day_boundary_except_today() {
         val tz = TimeZone.currentSystemDefault()
         val today = Clock.System.now().toLocalDateTime(tz).date
         val todayEvent = SessionEvent(
@@ -93,11 +116,10 @@ class TimelineMapperTest {
             streamingTurnIndex = null,
         )
         val timeline = buildTimeline(listOf(session))
-        assertEquals(4, timeline.size)
-        assertTrue(timeline[0] is TimelineItem.DayHeader)
-        assertTrue(timeline[1] is TimelineItem.Event)
-        assertTrue(timeline[2] is TimelineItem.DayHeader)
-        assertTrue(timeline[3] is TimelineItem.Event)
+        assertEquals(3, timeline.size)
+        assertTrue(timeline[0] is TimelineItem.Event)
+        assertTrue(timeline[1] is TimelineItem.DayHeader)
+        assertTrue(timeline[2] is TimelineItem.Event)
     }
 
     /** Regression: a data-layer race can surface the identical (trigger, timestamp) event under two
@@ -124,5 +146,98 @@ class TimelineMapperTest {
         val timeline = buildTimeline(listOf(sessionA, sessionB))
         assertEquals(1, timeline.count { it is TimelineItem.Event })
         assertEquals(timeline.map { it.id }.toSet().size, timeline.size)
+    }
+
+    @Test
+    fun timelineAsleepStates_with_no_sleep_events_is_all_awake() {
+        val timeline = listOf(event(30, TriggerType.CalendarChange), event(20, TriggerType.AlarmDismissed), aiRun(10))
+        assertEquals(listOf(false, false, false), timelineAsleepStates(timeline))
+    }
+
+    @Test
+    fun timelineAsleepStates_marks_the_span_between_onset_and_wake_asleep() {
+        // Reverse-chronological: index 0 newest. Sandwiched item at 20 sits between wake (30) and onset (10).
+        val timeline = listOf(
+            event(40, TriggerType.CalendarChange), // after wake -> awake
+            event(30, TriggerType.OutOfBedConfirmed), // the wake row itself -> awake
+            aiRun(20), // sandwiched between onset and wake -> asleep
+            event(10, TriggerType.SleepOnset), // the onset row itself -> asleep
+            event(0, TriggerType.CalendarChange), // before onset -> awake
+        )
+        assertEquals(listOf(false, false, true, true, false), timelineAsleepStates(timeline))
+    }
+
+    @Test
+    fun timelineAsleepStates_alternates_across_multiple_onset_wake_pairs() {
+        val timeline = listOf(
+            event(70, TriggerType.CalendarChange), // after 2nd wake -> awake
+            event(60, TriggerType.OutOfBedConfirmed), // 2nd wake -> awake
+            event(50, TriggerType.SleepOnset), // 2nd nap -> asleep
+            event(40, TriggerType.OutOfBedConfirmed), // 1st wake -> awake
+            event(30, TriggerType.SleepOnset), // 1st nap -> asleep
+        )
+        assertEquals(listOf(false, false, true, false, true), timelineAsleepStates(timeline))
+    }
+
+    /** A day boundary must never reset the asleep flag — most sleep sessions span midnight, and
+     *  DayHeader is purely visual, a no-op for this derivation. */
+    @Test
+    fun timelineAsleepStates_stays_asleep_across_a_day_header_even_mid_sleep() {
+        val timeline = listOf(
+            event(20, TriggerType.CalendarChange), // new day, still asleep -> asleep
+            dayHeader(LocalDate(2026, 7, 2)),
+            event(10, TriggerType.SleepOnset), // asleep at the end of the prior day
+        )
+        assertEquals(listOf(true, true, true), timelineAsleepStates(timeline))
+    }
+
+    /** True cold start: no reference point yet, so the first load must render fully static, never
+     *  an animated reveal. */
+    @Test
+    fun diffNewlyArrivedIds_the_very_first_check_never_marks_anything_new() {
+        assertEquals(emptySet<String>(), diffNewlyArrivedIds(setOf("a", "b"), previousIds = null))
+    }
+
+    @Test
+    fun diffNewlyArrivedIds_a_later_check_marks_only_the_added_id() {
+        assertEquals(setOf("c"), diffNewlyArrivedIds(setOf("a", "b", "c"), previousIds = setOf("a", "b")))
+    }
+
+    @Test
+    fun diffNewlyArrivedIds_an_identical_re_check_marks_nothing_new() {
+        // The Home→Settings→back case: same ids as last time, nothing should animate.
+        assertEquals(emptySet<String>(), diffNewlyArrivedIds(setOf("a", "b"), previousIds = setOf("a", "b")))
+    }
+
+    @Test
+    fun diffNewlyArrivedIds_a_removed_id_does_not_appear_as_new() {
+        assertEquals(emptySet<String>(), diffNewlyArrivedIds(setOf("a"), previousIds = setOf("a", "b")))
+    }
+
+    /** Guards the entrance-animation pipeline: newlyArrivedIds is only meaningful if buildTimeline
+     *  itself doesn't spuriously reshuffle/rename ids across repeated calls with the same underlying
+     *  session data. */
+    @Test
+    fun buildTimeline_is_idempotent_given_identical_input() {
+        val session = TimelineSession(
+            sessionId = "s1",
+            iterations = listOf(
+                AiIterationUi(
+                    turnIndex = 0,
+                    timeLabel = "07:45",
+                    kind = RunKind.ScheduledBase,
+                    thread = AiThreadUi(turnIndex = 0, summary = null, process = emptyList(), response = null),
+                    ranAtEpochMs = 1_000L,
+                ),
+            ),
+            events = listOf(
+                SessionEvent(timestamp = Instant.fromEpochMilliseconds(500L), trigger = TriggerType.AlarmDismissed, data = EventData.Empty),
+            ),
+            streamingTurnIndex = null,
+        )
+        val first = buildTimeline(listOf(session))
+        val second = buildTimeline(listOf(session))
+        assertEquals(first, second)
+        assertEquals(first.map { it.id }, second.map { it.id })
     }
 }

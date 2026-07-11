@@ -3,7 +3,10 @@ package fr.bsodium.cron.ui.screens.home
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -70,6 +73,12 @@ fun PlanDetailScreen(
                 hapticsEnabled = hapticsEnabled,
             )
 
+            /** Read explicitly rather than guessing a flat bottom padding — a 3-button nav bar and a
+             *  gesture nav bar differ enough in height that a single guessed constant cleared one but
+             *  not the other, leaving the assistant shape uncleared once the thinking timeline is
+             *  expanded and scrolled to the bottom. Layered on top of Scaffold's own `innerPadding`,
+             *  which only reserves top/side safe-drawing insets. */
+            val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -77,7 +86,7 @@ fun PlanDetailScreen(
                     .nestedScroll(pullConnection)
                     .verticalScroll(scrollState)
                     .padding(horizontal = Spacing.xl)
-                    .padding(bottom = Spacing.xxxl),
+                    .padding(bottom = navBarBottom + Spacing.xxxxl),
             ) {
                 AiThinkingThread(
                     thread = iteration.thread,

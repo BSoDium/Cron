@@ -62,7 +62,7 @@ internal fun OldPlanFooter(
 
 /** A coarse "X ago" string from [epochMs], re-ticked each minute so it stays current while viewed. */
 @Composable
-private fun rememberRelativeAgo(epochMs: Long): String {
+internal fun rememberRelativeAgo(epochMs: Long): String {
     val now by produceState(initialValue = Clock.System.now().toEpochMilliseconds()) {
         while (true) {
             delay(60_000L)

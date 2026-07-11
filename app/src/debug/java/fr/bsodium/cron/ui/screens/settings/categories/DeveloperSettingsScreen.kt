@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import fr.bsodium.cron.debug.HistorySeeder
 import fr.bsodium.cron.debug.MockApiPrefs
 import fr.bsodium.cron.debug.SleepTestPrefs
 import fr.bsodium.cron.service.SleepSessionService
@@ -50,6 +51,7 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
     val sleepPrefs = remember { SleepTestPrefs(context) }
     var fastOnset by remember { mutableStateOf(sleepPrefs.fastOnset) }
     var showClearDialog by remember { mutableStateOf(false) }
+    var showSeedDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     SettingsDetailScaffold(title = "Developer", onBack = onBack) {
@@ -103,12 +105,12 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Clear all runs",
+                    text = "Clear all history",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
-                    text = "Delete every session and its AI messages",
+                    text = "Delete every session, its AI messages, and its events",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -118,6 +120,26 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
                     text = "Clear",
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Seed sample history",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "Replace every session with 4 days of realistic plans, replans, and sleep events",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = { showSeedDialog = true }) {
+                Text("Seed")
             }
         }
         Row(
@@ -182,8 +204,8 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Delete all sessions?") },
-            text = { Text("This removes every run, including AI messages and events. This cannot be undone.") },
+            title = { Text("Delete all history?") },
+            text = { Text("This removes every session, including its AI messages and events. This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     showClearDialog = false
@@ -194,6 +216,27 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showSeedDialog) {
+        AlertDialog(
+            onDismissRequest = { showSeedDialog = false },
+            title = { Text("Replace history with sample data?") },
+            text = { Text("This deletes every existing session and writes back 4 days of synthetic plans, replans, and sleep events for visual testing. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSeedDialog = false
+                    scope.launch { HistorySeeder.seed(context) }
+                }) {
+                    Text("Seed", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSeedDialog = false }) {
                     Text("Cancel")
                 }
             },

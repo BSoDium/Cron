@@ -79,6 +79,9 @@ sealed class EventData {
         val changeType: String,
         val eventId: String,
         val affectsFirstEvent: Boolean,
+        /** Defaults to null so an already-persisted event missing this field still deserializes —
+         *  see [fr.bsodium.cron.calendar.CalendarChangeAnalyzer.Result.firstEventTitle]. */
+        val firstEventTitle: String? = null,
     ) : EventData()
 
     @Serializable
