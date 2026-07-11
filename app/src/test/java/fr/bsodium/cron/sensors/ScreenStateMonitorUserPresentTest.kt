@@ -100,8 +100,7 @@ class ScreenStateMonitorUserPresentTest {
             advanceUntilIdle()
             sink.received.clear()
 
-            // A real unlock leaves the device interactive — the sustained-unlock debounce checks
-            // this at confirm time (see ScreenStateMonitorOutOfBedDebounceTest for the debounce itself).
+            // A real unlock leaves the device interactive — the sustained-unlock debounce itself is covered by ScreenStateMonitorOutOfBedDebounceTest.
             (app.getSystemService(Context.POWER_SERVICE) as PowerManager).let { shadowOf(it).setIsInteractive(true) }
             sendBroadcastAndIdle(Intent.ACTION_USER_PRESENT)
             advanceUntilIdle()

@@ -107,8 +107,7 @@ class ScreenStateMonitor(
 
     private fun onScreenOff() {
         screenOffSince = Clock.System.now()
-        // A re-lock before out-of-bed confirms aborts it — that's the fix for a momentary glance
-        // in bed (pick up phone, put it back down) being mistaken for getting up.
+        // A re-lock before out-of-bed confirms aborts it, so a momentary glance in bed isn't mistaken for getting up.
         pendingOutOfBed?.cancel()
         Log.d(TAG, "Screen off — onset check scheduled (threshold=$currentOnsetThreshold)")
         scheduleOnsetCheck(currentOnsetThreshold)
@@ -158,7 +157,12 @@ class ScreenStateMonitor(
         pendingOutOfBed?.cancel()
         pendingOutOfBed = scope.launch {
             kotlinx.coroutines.delay(outOfBedThreshold)
-            if (!shouldConfirmOutOfBed(outOfBedThreshold, outOfBedThreshold, powerManager.isInteractive)) {
+            if (!shouldConfirmOutOfBed(
+                    interactiveFor = outOfBedThreshold,
+                    threshold = outOfBedThreshold,
+                    stillInteractive = powerManager.isInteractive,
+                )
+            ) {
                 Log.i(TAG, "Unlock not sustained — treating as an in-bed glance, not out-of-bed")
                 return@launch
             }

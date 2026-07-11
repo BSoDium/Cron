@@ -257,10 +257,7 @@ class SessionFsm(
             when (event.trigger) {
                 TriggerType.AlarmDismissed -> when (session.status) {
                     SessionStatus.Monitoring -> SessionStatus.Awake
-                    // Reaching ReMonitoring means the session already had a full sleep→wake→resleep
-                    // cycle. A dismiss from here is the morning wake unless it's a rapid genuine
-                    // re-ring (dismiss → fall back asleep → re-ring, all within dismissGrace of the
-                    // prior dismiss) — that legitimate chain still re-arms; anything later completes.
+                    // A dismiss here completes the session unless it's a rapid genuine re-ring within dismissGrace of the prior dismiss, which still re-arms.
                     SessionStatus.ReMonitoring -> {
                         val lastDismiss = session.events.lastOrNull { it.trigger == TriggerType.AlarmDismissed }?.timestamp
                         val withinGrace = lastDismiss != null && event.timestamp - lastDismiss < dismissGrace
