@@ -18,11 +18,13 @@ class TimelineRepository(private val db: CronDatabase) {
         limit: Int,
         offset: Int,
     ): HistoryPage {
-        val totalCount = db.sessionDao().count()
-        val sessions = db.sessionDao().findPaginated(limit = limit + 1, offset = offset)
+        // Fetch one extra row to detect whether more sessions exist beyond this page, independent of how many display items they end up producing.
+        val fetched = db.sessionDao().findPaginated(limit = limit + 1, offset = offset)
             .filter { it.id != excludeSessionId }
+        val hasMore = fetched.size > limit
+        val sessions = fetched.take(limit)
 
-        val result = sessions.take(limit).map { session ->
+        val result = sessions.map { session ->
             val events = runCatching { db.eventDao().findBySession(session.id).map { it.toModel() } }
                 .onFailure { Log.w(TAG, "Failed to load events for session ${session.id}", it) }
                 .getOrDefault(emptyList())
@@ -37,15 +39,8 @@ class TimelineRepository(private val db: CronDatabase) {
             )
         }
 
-        val loadedSoFar = offset + sessions.size
-        return HistoryPage(
-            sessions = result,
-            hasMore = loadedSoFar < totalCount,
-        )
+        return HistoryPage(sessions = result, hasMore = hasMore)
     }
 }
 
-data class HistoryPage(
-    val sessions: List<TimelineSession>,
-    val hasMore: Boolean,
-)
+data class HistoryPage(val sessions: List<TimelineSession>, val hasMore: Boolean)

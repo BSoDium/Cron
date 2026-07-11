@@ -9,6 +9,7 @@ import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.testutil.Fixtures
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.encodeToString
@@ -39,6 +40,9 @@ class AiPlanMapperTest {
         val t = Instant.parse(iso).toLocalDateTime(TimeZone.currentSystemDefault())
         return String.format(Locale.US, "%02d:%02d", t.hour, t.minute)
     }
+
+    private fun localTime(iso: String): LocalTime =
+        Instant.parse(iso).toLocalDateTime(TimeZone.currentSystemDefault()).time
 
     @Test
     fun empty_and_no_streaming_is_null() {
@@ -136,9 +140,41 @@ class AiPlanMapperTest {
     }
 
     @Test
+    fun previous_alarm_time_skips_a_no_op_turn_to_find_the_last_real_time() {
+        val rows = listOf(
+            row(
+                0, "assistant", 0L,
+                ContentBlock.ToolUse(id = "t0", name = "set_alarm", input = SessionJson.parseToJsonElement("{}")),
+                ContentBlock.Text("SUMMARY: Set your alarm\n\nSet an alarm."),
+            ),
+            row(0, "user", 0L, ContentBlock.ToolResult(tool_use_id = "t0", content = "{\"alarm_time\":\"2026-05-22T06:40:00Z\"}", is_error = false)),
+            row(
+                1, "assistant", 1000L,
+                ContentBlock.ToolUse(id = "t1", name = "do_nothing", input = SessionJson.parseToJsonElement("{\"reason\":\"still good\"}")),
+                ContentBlock.Text("SUMMARY: No change\n\nStill fits."),
+            ),
+            row(1, "user", 1000L, ContentBlock.ToolResult(tool_use_id = "t1", content = "{}", is_error = false)),
+            row(
+                2, "assistant", 2000L,
+                ContentBlock.ToolUse(id = "t2", name = "set_alarm", input = SessionJson.parseToJsonElement("{}")),
+                ContentBlock.Text("SUMMARY: Moved it\n\nMoved the alarm."),
+            ),
+            row(2, "user", 2000L, ContentBlock.ToolResult(tool_use_id = "t2", content = "{\"alarm_time\":\"2026-05-22T07:15:00Z\"}", is_error = false)),
+        )
+        val plan = requireNotNull(AiPlanMapper.buildPlan(rows, null, emptyList()))
+        val firstTime = localTime("2026-05-22T06:40:00Z")
+
+        assertNull(plan.iterations[0].previousAlarmTime)
+        // turn 1 (do_nothing) looks back to turn 0, the only earlier turn — a real "before" value.
+        assertEquals(firstTime, plan.iterations[1].previousAlarmTime)
+        // turn 2 must skip over turn 1's no-op and still find turn 0's time, not null.
+        assertEquals(firstTime, plan.iterations[2].previousAlarmTime)
+    }
+
+    /** A manual replan seeds its turn with EveningPlan BEFORE the event is persisted; the latest
+     *  persisted event is still the prior CalendarChange — the seed must win or the tab mislabels. */
+    @Test
     fun seeded_streaming_trigger_beats_a_stale_persisted_event() {
-        // A manual replan seeds its turn with EveningPlan BEFORE the event is persisted; the latest
-        // persisted event is still the prior CalendarChange — the seed must win or the tab mislabels.
         val rows = listOf(assistant(0, createdAt = 0L))
         val events = listOf(event(TriggerType.CalendarChange, 500L, EventData.CalendarChange("modified", "e1", true)))
         val streaming = StreamingTurn(

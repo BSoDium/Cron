@@ -33,7 +33,7 @@ fun HomeGreetingRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        Column(modifier = Modifier.weight(1f).padding(start = Spacing.sm)) {
+        Column(modifier = Modifier.weight(1f)) {
             if (!name.isNullOrBlank()) {
                 Text(
                     text = "$prefix,",

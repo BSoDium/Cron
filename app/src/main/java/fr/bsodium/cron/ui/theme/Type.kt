@@ -216,6 +216,51 @@ object CronTypography {
         fontSize = 16.sp,
         lineHeight = 16.sp,
     )
+
+    /** Timeline day-boundary heading — a bold condensed word ("TODAY"). Pairs with [labelMonoSmall]
+     *  for the companion date figure, echoing the display/mono contrast from the Material Expressive
+     *  reference material. */
+    val timelineDayHeader: TextStyle = TextStyle(
+        fontFamily = ExpressiveCondensedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp,
+        lineHeight = 32.sp,
+        letterSpacing = (-0.02).em,
+    )
+
+    /** Latest timeline run's headline — the AI's resolved outcome sentence, set at headlineMedium
+     *  scale so it reads as the one bold fact on the row (Material Expressive reference: a big
+     *  isolated headline paired with a small muted caption, not a gradient of medium sizes). */
+    val timelineHeroTitle: TextStyle = TextStyle(
+        fontFamily = ExpressiveCondensedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 26.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.01).em,
+    )
+
+    /** The lighter "before" value in a [timelineHeroTitle]-scale PREV › NEW time pair — same face and
+     *  size as the (bold) new time, so the pair reads as a weight contrast, not a size mismatch. */
+    val timelineHeroTimePrev: TextStyle = timelineHeroTitle.copy(fontWeight = FontWeight.Normal)
+
+    /** Small caption above [timelineHeroTitle] carrying the run's trigger category (e.g. "PLANNED",
+     *  "ALARM DISMISSED") now that the headline itself carries the outcome sentence. */
+    val timelineHeroKicker: TextStyle = TextStyle(
+        fontFamily = ExpressiveFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.08.em,
+    )
+
+    /** History timeline row title — condensed and muted so it reads as clearly subordinate to
+     *  [timelineHeroTitle] through weight/width, not just size. */
+    val timelineRowTitle: TextStyle = TextStyle(
+        fontFamily = ExpressiveCondensedFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
+    )
 }
 
 /** The hero LCD clock size — the SINGLE source for the 76sp contract shared by the rendered clock

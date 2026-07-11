@@ -141,7 +141,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
 
     private val _historicalSessions = MutableStateFlow<List<TimelineSession>>(emptyList())
-    private val _hasMoreHistory = MutableStateFlow(false)
+    private val _moreHistoryAvailable = MutableStateFlow(false)
     private val _dismissedSettingsAt = MutableStateFlow(0L)
 
     private val settingsChangedFlow = combine(
@@ -188,7 +188,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             history.filter { it.sessionId != currentSession.sessionId }
         } else history
         val allSessions = listOfNotNull(currentSession) + dedupedHistory
-        buildTimeline(allSessions)
+        capTimeline(buildTimeline(allSessions))
     }.flowOn(Dispatchers.Default)
 
     private val statusFlow = combine(
@@ -219,9 +219,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         displayFlow,
         aiPlanFlow,
         timelineFlow,
-        _hasMoreHistory,
         statusFlow,
-    ) { display, plan, timeline, hasMore, status ->
+        _moreHistoryAvailable,
+    ) { display, plan, timeline, status, moreHistoryAvailable ->
         HomeUiState(
             sessionDisplay = display.session,
             greetingPrefix = greetingPrefix(),
@@ -229,8 +229,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             dateLabel = formatDateLabel(display.session, status.autoAlarmsEnabled),
 
             aiPlan = plan,
-            timeline = timeline,
-            hasMoreHistory = hasMore,
+            timeline = timeline.items,
+            hasMoreHistory = timeline.truncated || moreHistoryAvailable,
             isRetrying = status.isRetrying,
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && plan != null,
@@ -250,7 +250,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 offset = 0,
             )
             _historicalSessions.value = page.sessions
-            _hasMoreHistory.value = page.hasMore
+            _moreHistoryAvailable.value = page.hasMore
         }
     }
 
@@ -309,6 +309,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         infos.any { !it.state.isFinished } -> _isRetrying.value = true
                         infos.isNotEmpty() -> {
                             _isRetrying.value = false
+                            if (infos.any { it.state == WorkInfo.State.FAILED }) {
+                                _optimisticTurn.value?.let { (sid, turn) ->
+                                    viewModelScope.launch(Dispatchers.IO) {
+                                        db.aiMessageDao().deleteByTurn(sid, turn)
+                                    }
+                                }
+                            }
                             clearOptimisticTurn() // safety net if the worker died before streaming
                         }
                     }

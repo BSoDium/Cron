@@ -1,6 +1,7 @@
 package fr.bsodium.cron.session
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -74,13 +75,25 @@ class SessionRepository(private val context: Context) {
     }
 
     suspend fun appendEvent(sessionId: String, event: SessionEvent) {
+        warnIfDuplicate(sessionId, event)
         db.eventDao().insert(event.toEntity(sessionId))
     }
 
     /** Appends the event then enqueues an AI replan, replacing any in-flight turn. */
     suspend fun appendEventAndTriggerAi(sessionId: String, event: SessionEvent) {
+        warnIfDuplicate(sessionId, event)
         db.eventDao().insert(event.toEntity(sessionId))
         triggerAiTurn(sessionId)
+    }
+
+    /** The timeline dedupes by (trigger, timestamp) as a last-resort safety net (TimelineMapper.kt),
+     *  but a duplicate write here is the actual bug — log it loudly so it's diagnosable instead of only
+     *  silently absorbed downstream. */
+    private suspend fun warnIfDuplicate(sessionId: String, event: SessionEvent) {
+        val latest = db.eventDao().findLatestByTrigger(sessionId, event.trigger.name)
+        if (latest != null && latest.timestamp == event.timestamp.toEpochMilliseconds()) {
+            Log.w(TAG, "Duplicate ${event.trigger} event for session $sessionId at ${event.timestamp} — appending anyway")
+        }
     }
 
     fun triggerAiTurn(sessionId: String) {
@@ -167,6 +180,8 @@ class SessionRepository(private val context: Context) {
     suspend fun clearAll(): Int = db.sessionDao().deleteAll()
 
     companion object {
+        private const val TAG = "SessionRepository"
+
         /**
          * The "morning" date the session targets.
          *
