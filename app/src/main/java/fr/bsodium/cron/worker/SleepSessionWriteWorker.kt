@@ -23,7 +23,10 @@ class SleepSessionWriteWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val sessionId = inputData.getString(KEY_SESSION_ID) ?: return Result.failure()
+        val sessionId = inputData.getString(KEY_SESSION_ID) ?: run {
+            Log.w(TAG, "Missing session id in input data — skipping HC write")
+            return Result.failure()
+        }
 
         if (!SettingsRepository(applicationContext).saveSleepToHealthConnectNow()) {
             Log.d(TAG, "Health Connect sleep write disabled — skipping")
