@@ -4,10 +4,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class ScreenStateMonitorTest {
 
     private val base = 20.minutes
+    private val outOfBedThreshold = 90.seconds
 
     @Test
     fun never_fires_in_a_lit_room() {
@@ -38,6 +40,27 @@ class ScreenStateMonitorTest {
         )
         assertTrue(
             ScreenStateMonitor.shouldEmitOnset(base * 2, base, isDark = true, isCharging = false),
+        )
+    }
+
+    @Test
+    fun sustained_interactive_unlock_confirms_out_of_bed() {
+        assertTrue(
+            ScreenStateMonitor.shouldConfirmOutOfBed(outOfBedThreshold, outOfBedThreshold, stillInteractive = true),
+        )
+    }
+
+    @Test
+    fun a_glance_below_threshold_does_not_confirm() {
+        assertFalse(
+            ScreenStateMonitor.shouldConfirmOutOfBed(outOfBedThreshold - 1.seconds, outOfBedThreshold, stillInteractive = true),
+        )
+    }
+
+    @Test
+    fun relocked_before_confirming_does_not_confirm_even_past_threshold() {
+        assertFalse(
+            ScreenStateMonitor.shouldConfirmOutOfBed(outOfBedThreshold * 2, outOfBedThreshold, stillInteractive = false),
         )
     }
 }

@@ -9,28 +9,28 @@ import androidx.test.core.app.ApplicationProvider
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import kotlin.time.Duration.Companion.ZERO
+import kotlin.time.Duration.Companion.seconds
 
 /**
- * Regresses Bug 3: [AlarmActivity][fr.bsodium.cron.ui.screens.alarm.AlarmActivity] dismisses the
- * keyguard on launch, so a real device fires USER_PRESENT a beat before the user's actual
- * slide-to-dismiss gesture. Left unguarded, that unlock alone drives the session to Awake and the
- * dismiss gesture right behind it then completes the session immediately — collapsing the
- * dismiss-while-asleep re-ring guarantee on the very first real dismissal.
+ * Regresses the false-wake bug: a momentary phone pickup while still asleep must not end sleep
+ * tracking. [ScreenStateMonitor.onUserPresent] only confirms out-of-bed after the unlock has stayed
+ * sustained for [outOfBedThreshold] — a re-lock before then must abort it.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-class ScreenStateMonitorUserPresentTest {
+class ScreenStateMonitorOutOfBedDebounceTest {
 
     private val app: Application = ApplicationProvider.getApplicationContext()
+    private val threshold = 90.seconds
 
     private class RecordingSink : SensorEventSink {
         val received = mutableListOf<SessionEvent>()
@@ -39,10 +39,7 @@ class ScreenStateMonitorUserPresentTest {
         }
     }
 
-    private fun seedScreenOff() {
-        val powerManager = app.getSystemService(Context.POWER_SERVICE) as PowerManager
-        shadowOf(powerManager).setIsInteractive(false)
-    }
+    private fun powerManager() = app.getSystemService(Context.POWER_SERVICE) as PowerManager
 
     private fun sendBroadcastAndIdle(action: String) {
         app.sendBroadcast(Intent(action))
@@ -50,48 +47,15 @@ class ScreenStateMonitorUserPresentTest {
     }
 
     @Test
-    fun user_present_while_alarm_ringing_does_not_emit_out_of_bed() = runTest {
-        seedScreenOff()
+    fun a_momentary_glance_that_relocks_before_threshold_does_not_end_sleep_tracking() = runTest {
+        shadowOf(powerManager()).setIsInteractive(false)
         val sink = RecordingSink()
         val monitor = ScreenStateMonitor(
             context = app,
             sink = sink,
             scope = this,
             sleepOnsetThreshold = ZERO,
-            lightReader = AmbientLightReader(app),
-            isAlarmRinging = { true },
-        )
-        try {
-            monitor.start()
-            advanceUntilIdle()
-            assertTrue(
-                "precondition: onset should have latched before USER_PRESENT",
-                sink.received.any { it.trigger == TriggerType.SleepOnset },
-            )
-            sink.received.clear()
-
-            sendBroadcastAndIdle(Intent.ACTION_USER_PRESENT)
-            advanceUntilIdle()
-
-            assertTrue(
-                "OutOfBedConfirmed must be suppressed while an alarm is ringing",
-                sink.received.none { it.trigger == TriggerType.OutOfBedConfirmed },
-            )
-        } finally {
-            monitor.stop()
-        }
-    }
-
-    @Test
-    fun user_present_while_no_alarm_ringing_emits_out_of_bed() = runTest {
-        seedScreenOff()
-        val sink = RecordingSink()
-        val monitor = ScreenStateMonitor(
-            context = app,
-            sink = sink,
-            scope = this,
-            sleepOnsetThreshold = ZERO,
-            outOfBedThreshold = ZERO,
+            outOfBedThreshold = threshold,
             lightReader = AmbientLightReader(app),
             isAlarmRinging = { false },
         )
@@ -100,8 +64,45 @@ class ScreenStateMonitorUserPresentTest {
             advanceUntilIdle()
             sink.received.clear()
 
-            // A real unlock leaves the device interactive — the sustained-unlock debounce itself is covered by ScreenStateMonitorOutOfBedDebounceTest.
-            (app.getSystemService(Context.POWER_SERVICE) as PowerManager).let { shadowOf(it).setIsInteractive(true) }
+            // User picks up the phone briefly, still in bed.
+            shadowOf(powerManager()).setIsInteractive(true)
+            sendBroadcastAndIdle(Intent.ACTION_USER_PRESENT)
+            advanceTimeBy(30.seconds)
+
+            // ...then puts it back down and falls back asleep, well before the threshold.
+            shadowOf(powerManager()).setIsInteractive(false)
+            sendBroadcastAndIdle(Intent.ACTION_SCREEN_OFF)
+            advanceUntilIdle()
+
+            assertEquals(
+                "a glance that re-locks before the threshold must not confirm out-of-bed",
+                0,
+                sink.received.count { it.trigger == TriggerType.OutOfBedConfirmed },
+            )
+        } finally {
+            monitor.stop()
+        }
+    }
+
+    @Test
+    fun a_sustained_unlock_past_threshold_confirms_out_of_bed() = runTest {
+        shadowOf(powerManager()).setIsInteractive(false)
+        val sink = RecordingSink()
+        val monitor = ScreenStateMonitor(
+            context = app,
+            sink = sink,
+            scope = this,
+            sleepOnsetThreshold = ZERO,
+            outOfBedThreshold = threshold,
+            lightReader = AmbientLightReader(app),
+            isAlarmRinging = { false },
+        )
+        try {
+            monitor.start()
+            advanceUntilIdle()
+            sink.received.clear()
+
+            shadowOf(powerManager()).setIsInteractive(true)
             sendBroadcastAndIdle(Intent.ACTION_USER_PRESENT)
             advanceUntilIdle()
 

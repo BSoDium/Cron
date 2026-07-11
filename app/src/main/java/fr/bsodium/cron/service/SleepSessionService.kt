@@ -85,9 +85,7 @@ class SleepSessionService : Service() {
         // Location-typed FGS keeps the fetch "in use" on foreground permission alone; a sticky restart (null intent) only resumes monitoring, never re-fires the plan.
         startForegroundService(includeLocation = eveningPlan)
 
-        // A REARM after the service was killed and restarted fresh finds screenStateMonitor null —
-        // treat that the same as a normal start (build the monitors) before rearming, so REARM never
-        // silently no-ops and leaves the session with no sensors and no foreground notification.
+        // A REARM after the service was killed and restarted fresh finds screenStateMonitor null — treat that the same as a normal start (build the monitors) before rearming, so REARM never silently no-ops.
         val freshlyConstructed = screenStateMonitor == null
         if (freshlyConstructed) {
             screenStateMonitor = ScreenStateMonitor(
@@ -96,14 +94,14 @@ class SleepSessionService : Service() {
                 serviceScope,
                 sleepOnsetThreshold = SleepTuning.onsetThreshold(applicationContext),
                 rearmThreshold = SleepTuning.rearmThreshold(applicationContext),
+                outOfBedThreshold = SleepTuning.outOfBedConfirmThreshold(applicationContext),
             ).also { it.start() }
         }
         if (activityRecognitionMonitor == null) {
             activityRecognitionMonitor = ActivityRecognitionMonitor(applicationContext, fsmSink, serviceScope).also { it.start() }
         }
 
-        // Only rearm explicitly on a fresh construction — start() already seeds onset detection
-        // from the current screen state, and rearm() would just redundantly reset the same latch.
+        // Only rearm explicitly on a fresh construction — start() already seeds onset detection from the current screen state, and rearm() would just redundantly reset the same latch.
         if (isRearm && !freshlyConstructed) {
             screenStateMonitor?.rearm()
         }
