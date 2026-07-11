@@ -180,6 +180,7 @@ class SessionFsm(
                 alarmScheduler.cancel(session.date)
                 hardLatestScheduler.clear(session.date)
                 repository.cancelAiTurn(session.id)
+                repository.triggerSleepSessionWrite(session.id)
                 context.startService(SleepSessionService.stopIntent(context))
                 Log.i(TAG, "Session ${session.id} complete — alarms cleared, AI turn cancelled, service stopped")
             }

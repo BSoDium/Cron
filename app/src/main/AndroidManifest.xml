@@ -50,6 +50,7 @@
 
     <!-- Health Connect: sleep session records -->
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.WRITE_SLEEP" />
 
     <!-- Health Connect provider visibility (Android 11+) -->
     <queries>

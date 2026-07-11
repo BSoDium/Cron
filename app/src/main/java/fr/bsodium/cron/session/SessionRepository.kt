@@ -19,6 +19,7 @@ import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSession
 import fr.bsodium.cron.worker.AiTurnWorker
+import fr.bsodium.cron.worker.SleepSessionWriteWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -114,6 +115,21 @@ class SessionRepository(private val context: Context) {
     /** Cancels the in-flight AI turn for [sessionId], if any. */
     fun cancelAiTurn(sessionId: String) {
         WorkManager.getInstance(context).cancelUniqueWork("${AiTurnWorker.WORK_PREFIX}$sessionId")
+    }
+
+    /** Enqueues the Health Connect sleep-window write for a just-completed session. KEEP (not REPLACE,
+     *  unlike [triggerAiTurn]): there's only ever one legitimate write per session, so a duplicate
+     *  enqueue should be dropped rather than restarted — idempotency is otherwise backstopped by
+     *  Health Connect's clientRecordId upsert semantics in [fr.bsodium.cron.sensors.healthconnect.SleepSessionWriter]. */
+    fun triggerSleepSessionWrite(sessionId: String) {
+        val request = OneTimeWorkRequestBuilder<SleepSessionWriteWorker>()
+            .setInputData(Data.Builder().putString(SleepSessionWriteWorker.KEY_SESSION_ID, sessionId).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "${SleepSessionWriteWorker.NAME_PREFIX}$sessionId",
+            ExistingWorkPolicy.KEEP,
+            request,
+        )
     }
 
     /** Live WorkInfo for the session's AI turn — drives the home "working" indicator. */

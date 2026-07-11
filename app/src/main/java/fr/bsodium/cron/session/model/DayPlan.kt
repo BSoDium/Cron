@@ -41,3 +41,16 @@ data class SleepSession(
  *  reading the bootstrap's first event routes commutes from a stale location. */
 fun SleepSession.latestEveningPlanLocation(): LocationPayload? =
     (events.lastOrNull { it.trigger == TriggerType.EveningPlan }?.data as? EventData.EveningPlan)?.location
+
+data class SleepWindow(val start: Instant, val end: Instant)
+
+/** Cron's own coarse asleep→awake window for this session: the earliest [TriggerType.SleepOnset]
+ *  (later ones are re-arms after an interruption, not a new bedtime) through the latest
+ *  [TriggerType.OutOfBedConfirmed]. Null if either boundary is missing or the window is malformed —
+ *  [androidx.health.connect.client.records.SleepSessionRecord] rejects a start not strictly before end. */
+fun SleepSession.detectedSleepWindow(): SleepWindow? {
+    val start = events.filter { it.trigger == TriggerType.SleepOnset }.minByOrNull { it.timestamp } ?: return null
+    val end = events.filter { it.trigger == TriggerType.OutOfBedConfirmed }.maxByOrNull { it.timestamp } ?: return null
+    if (end.timestamp <= start.timestamp) return null
+    return SleepWindow(start.timestamp, end.timestamp)
+}

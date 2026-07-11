@@ -111,6 +111,12 @@ class SettingsRepository(private val context: Context) {
         prefs[AUTO_ALARMS_ENABLED] ?: true
     }
 
+    /** Whether Cron's own detected sleep window is written to Health Connect on session completion.
+     *  Defaults on; the actual write still requires the user to grant the write permission. */
+    val saveSleepToHealthConnect: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[SAVE_SLEEP_TO_HC] ?: true
+    }
+
     /** User-supplied display name shown in the home greeting. */
     val displayName: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[DISPLAY_NAME]?.takeIf { it.isNotBlank() }
@@ -188,6 +194,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun autoAlarmsEnabledNow(): Boolean = autoAlarmsEnabled.first()
 
+    /** Plain edit: a UX toggle, so it mustn't raise the "replan?" pill. */
+    suspend fun setSaveSleepToHealthConnect(enabled: Boolean) =
+        context.dataStore.edit { it[SAVE_SLEEP_TO_HC] = enabled }
+
+    /** One-shot read for use from [fr.bsodium.cron.worker.SleepSessionWriteWorker], which can't collect a Flow. */
+    suspend fun saveSleepToHealthConnectNow(): Boolean = saveSleepToHealthConnect.first()
+
     suspend fun setDisplayName(name: String) =
         context.dataStore.edit { it[DISPLAY_NAME] = name.trim() }
 
@@ -226,6 +239,7 @@ class SettingsRepository(private val context: Context) {
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         val COMPACT_NAV_ENABLED = booleanPreferencesKey("compact_nav_enabled")
         val AUTO_ALARMS_ENABLED = booleanPreferencesKey("auto_alarms_enabled")
+        val SAVE_SLEEP_TO_HC = booleanPreferencesKey("save_sleep_to_health_connect")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val USER_INSTRUCTIONS = stringPreferencesKey("user_instructions")
         val DAILY_TOKEN_LIMIT = intPreferencesKey("daily_token_limit")
