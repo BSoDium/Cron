@@ -98,7 +98,7 @@ internal fun TimelineTrackOverlay(
                 // Read directly in the draw phase (not via derivedStateOf) so a position change redraws the same frame with no recomposition round-trip; see computePlacedAnchors.
                 if (visible) {
                     val placed = computePlacedAnchors(registry, overlayCoordinates)
-                    drawTrack(placed, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch)
+                    drawTrack(placed, registry, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch)
                 }
             },
     )
@@ -136,6 +136,7 @@ private fun computePlacedAnchors(
 
 private fun DrawScope.drawTrack(
     placed: List<PlacedAnchor>,
+    registry: TimelineTrackRegistry,
     awakeColor: Color,
     asleepColor: Color,
     awakeSpineColor: Color,
@@ -148,6 +149,13 @@ private fun DrawScope.drawTrack(
     // Every anchor centers in the same fixed-width gutter; averaging their x's is order-independent and self-corrects if one row's position lands a frame stale.
     val trackCenterX = placed.map { it.cx }.average().toFloat()
     val corner = CornerRadius(halfTrack)
+    // A descriptor claiming the segment top/bottom exists in the registry (SideEffect-written,
+    // pre-layout) but hasn't produced a placed anchor yet (position registers post-layout, one
+    // frame later for a brand-new row) — see drawSegment's KDoc for why this, and not the placed
+    // list alone, is what distinguishes "new top row not yet positioned" from "true top row
+    // disposed by ordinary scrolling" (registry.remove clears both maps together on disposal).
+    val topUnplaced = registry.descriptors.values.any { it.isSegmentTop } && placed.none { it.descriptor.isSegmentTop }
+    val bottomUnplaced = registry.descriptors.values.any { it.isSegmentBottom } && placed.none { it.descriptor.isSegmentBottom }
 
     drawSegment(
         anchors = placed.sortedBy { it.cy },
@@ -159,6 +167,8 @@ private fun DrawScope.drawTrack(
         awakeSpineColor = awakeSpineColor,
         asleepSpineColor = asleepSpineColor,
         scratch = scratch,
+        topUnplaced = topUnplaced,
+        bottomUnplaced = bottomUnplaced,
     )
 }
 
@@ -167,10 +177,14 @@ private fun DrawScope.drawTrack(
  *
  *  Driven by `descriptor.isSegmentTop`/`isSegmentBottom`, computed fresh from `uiState.timeline` on
  *  every recomposition (`SessionTimeline.kt`'s `firstAnchorIndex`/`lastAnchorIndex`), so it never
- *  races with scrolling — scrolling doesn't change `uiState.timeline` at all. A narrow case (a stale
- *  reading right after a new anchor is prepended and hasn't registered yet, flushing the track to the
- *  screen edge under the alarm card) is real but rare and not yet addressed; see docs/color-roles.md
- *  for prior attempts and why they made things worse. */
+ *  races with scrolling — scrolling doesn't change `uiState.timeline` at all. [topUnplaced]/
+ *  [bottomUnplaced] (from `drawTrack`) additionally catch the case where a new anchor is prepended
+ *  and its descriptor has registered `isSegmentTop`/`isSegmentBottom` but its position hasn't yet —
+ *  without that, the track would flush to the screen edge under the alarm card for one frame. See
+ *  docs/color-roles.md Round 35/36 for why a plain `anchors`-only fallback (`anchors.none {
+ *  isSegmentTop }`) was rejected: it can't distinguish that transient case from the true top/bottom
+ *  anchor being disposed by ordinary scrolling, which reintroduces the flicker a prior
+ *  `visibleItemsInfo`-based attempt was reverted for. */
 private fun DrawScope.drawSegment(
     anchors: List<PlacedAnchor>,
     trackCenterX: Float,
@@ -181,11 +195,13 @@ private fun DrawScope.drawSegment(
     awakeSpineColor: Color,
     asleepSpineColor: Color,
     scratch: android.graphics.Path,
+    topUnplaced: Boolean,
+    bottomUnplaced: Boolean,
 ) {
     val top = anchors.first()
     val bottom = anchors.last()
-    val roundTop = top.descriptor.isSegmentTop
-    val roundBottom = bottom.descriptor.isSegmentBottom
+    val roundTop = top.descriptor.isSegmentTop || topUnplaced
+    val roundBottom = bottom.descriptor.isSegmentBottom || bottomUnplaced
     // Cap edge sits a full halfTrack beyond the terminal anchor's center (not at it) so the anchor nests concentrically inside the cap's rounded corner.
     val bgTop = if (roundTop) top.cy - halfTrack else 0f
     val bgBottom = if (roundBottom) bottom.cy + halfTrack else size.height

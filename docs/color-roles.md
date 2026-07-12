@@ -1068,3 +1068,25 @@ tweaks, plus two follow-up refinements once the fixes were tested more broadly.
   the test clock past the settle gate an earlier round introduced — all of `TimelineNodeScreenshotTest`'s
   cases plus `PillPressMorphScreenshotTest`, confirmed by tracing every `captureRoboImage()` call site
   in the touched test files, not just the handful first noticed.
+
+Round 36 — addresses Round 35's "track flush-to-screen-edge flash on a new arrival," left open there.
+
+- **A first attempt — `roundTop = top.descriptor.isSegmentTop || anchors.none { it.descriptor
+  .isSegmentTop }` — was tried and rejected.** `registry.remove(id)` clears both `descriptors` and
+  `positions` together on disposal, including ordinary scroll-driven disposal (the same "row disposes
+  while still visually on-screen" behavior Round 35's ghost-caching attempt above already found). So
+  once the *true* top row is disposed by plain scrolling, no placed anchor has `isSegmentTop == true`
+  either — the exact same observable signal as "the new top row registered a descriptor but not yet a
+  position." An `anchors`-only check can't tell these apart, and rounds the current top cap on every
+  ordinary scroll past the original first row — reintroducing the same class of flicker the
+  `visibleItemsInfo` cross-check was reverted for in Round 35, just reached through registry state
+  instead of layout state.
+- **Fix: disambiguate using `registry.descriptors` directly**, which still distinguishes the two cases
+  — a descriptor claiming `isSegmentTop`/`isSegmentBottom` exists somewhere in the registry (new row,
+  descriptor written but position not yet registered) vs. no descriptor anywhere claims it (true top/
+  bottom genuinely disposed by scrolling, both maps cleared together). `drawTrack` now computes
+  `topUnplaced = registry.descriptors.values.any { it.isSegmentTop } && placed.none { it.descriptor
+  .isSegmentTop }` (and the bottom equivalent), passed into `drawSegment` as `roundTop = top.descriptor
+  .isSegmentTop || topUnplaced`. Still purely data-derived (registry descriptor state, not scroll/
+  layoutInfo) — self-corrects the next frame once the new anchor's position registers, and is `false`
+  in the ordinary-disposal case since no descriptor anywhere claims the flag anymore.
