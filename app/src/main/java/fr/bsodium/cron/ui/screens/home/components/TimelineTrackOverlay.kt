@@ -163,11 +163,16 @@ private fun DrawScope.drawTrack(
     // Every anchor centers in the same fixed-width gutter; averaging their x's is order-independent and self-corrects if one row's position lands a frame stale.
     val trackCenterX = placed.map { it.cx }.average().toFloat()
     val corner = CornerRadius(halfTrack)
-    // A fresh claim this frame (an anchor that's both placed AND whose descriptor says
-    // isSegmentTop/isSegmentBottom) updates the remembered id; see drawSegment's KDoc for why an
-    // absent claim falls back to the last confirmed id instead of ever flushing to the edge.
-    val freshTopClaim = placed.firstOrNull { it.descriptor.isSegmentTop }
-    val freshBottomClaim = placed.firstOrNull { it.descriptor.isSegmentBottom }
+    // A fresh claim requires BOTH a descriptor claiming isSegmentTop/isSegmentBottom AND that same
+    // anchor being the topmost/bottommost by CURRENT position (cy) — an anchor can be "placed" (has
+    // a registered position) before that position has animated to its final, topmost spot, so
+    // checking descriptor+placement alone isn't enough; see drawSegment's KDoc for the live capture
+    // that caught this (Round 38) and why an absent claim falls back to the last confirmed id
+    // instead of ever flushing to the edge.
+    val topmostByPosition = placed.minByOrNull { it.cy }
+    val bottommostByPosition = placed.maxByOrNull { it.cy }
+    val freshTopClaim = topmostByPosition?.takeIf { it.descriptor.isSegmentTop }
+    val freshBottomClaim = bottommostByPosition?.takeIf { it.descriptor.isSegmentBottom }
     freshTopClaim?.let { endState.lastTopId = it.id }
     freshBottomClaim?.let { endState.lastBottomId = it.id }
     TimelineDebugLog.d(context) {
@@ -199,15 +204,22 @@ private fun DrawScope.drawTrack(
  *  own `SideEffect`, pre-layout) and its position (written by `onGloballyPositioned`, post-layout)
  *  can BOTH still be missing for more than one frame after it's prepended — confirmed live (see
  *  docs/color-roles.md Round 37) by logging the registry at the exact frame the track flushed to the
- *  screen edge: neither the outgoing nor incoming anchor's descriptor claimed `isSegmentTop` yet, so
- *  a same-frame registry lookup (Round 36's `anchors.none { isSegmentTop }` fallback) has nothing to
- *  fall back to either. Persisting the last anchor that was *both* placed and descriptor-confirmed
- *  sidesteps the exact inter-callback timing entirely: the outgoing anchor keeps its rounded cap
- *  (it's still the topmost *placed* anchor, so `top.id == topId` still holds) until the incoming one
- *  is fully confirmed, at which point `drawTrack` updates [TrackEndState] and the cap hands off
- *  cleanly. A row genuinely disposed by ordinary scrolling clears the id naturally: once it's gone
- *  from `placed`, `top.id == topId` stops matching (`topId` still names the disposed id, but nothing
- *  in `anchors` does), so the track correctly resumes flushing to the edge instead of a stale claim.
+ *  screen edge. Persisting the last anchor that was confirmed sidesteps that inter-callback timing.
+ *
+ *  A second, narrower gap surfaced live after that fix shipped (Round 38): `drawTrack`'s claim check
+ *  originally required only that the claiming anchor be *placed* (registered position exists), not
+ *  that its position is *currently topmost*. An anchor can register a position — satisfying
+ *  `computePlacedAnchors`'s inclusion filter — before `animateItem`'s placement animation has
+ *  actually carried it above the outgoing anchor, i.e. it's "placed" but still visually below the
+ *  old top for a frame or two. Promoting `lastTopId` to it immediately, while `anchors.first()`
+ *  (sorted by live `cy`) is still the old anchor, produces exactly one frame where `top.id != topId`
+ *  — `roundTop` false, `bgTop = 0f`. `drawTrack` now additionally requires the claiming anchor to be
+ *  `placed.minByOrNull { cy }` (genuinely topmost by position) before promoting it; until then the
+ *  outgoing anchor's id is left untouched, which is safe because it's still `anchors.first()` too.
+ *
+ *  A row genuinely disposed by ordinary scrolling clears the id naturally: once it's gone from
+ *  `placed`, `top.id == topId` stops matching (`topId` still names the disposed id, but nothing in
+ *  `anchors` does), so the track correctly resumes flushing to the edge instead of a stale claim.
  *  See docs/color-roles.md Round 35/36 for why an `anchors`-only, same-frame fallback was tried
  *  twice and rejected both times. */
 private fun DrawScope.drawSegment(
