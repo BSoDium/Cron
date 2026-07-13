@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -10,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -90,6 +92,7 @@ internal fun TimelineTrackOverlay(
     val scratch = remember { android.graphics.Path() }
     var overlayCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val endState = remember { TrackEndState() }
+    val context = LocalContext.current
 
     Box(
         modifier = modifier
@@ -99,7 +102,7 @@ internal fun TimelineTrackOverlay(
                 // Read directly in the draw phase (not via derivedStateOf) so a position change redraws the same frame with no recomposition round-trip; see computePlacedAnchors.
                 if (visible) {
                     val placed = computePlacedAnchors(registry, overlayCoordinates)
-                    drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch)
+                    drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch, context)
                 }
             },
     )
@@ -152,6 +155,7 @@ private fun DrawScope.drawTrack(
     awakeSpineColor: Color,
     asleepSpineColor: Color,
     scratch: android.graphics.Path,
+    context: Context,
 ) {
     if (placed.isEmpty()) return
 
@@ -162,8 +166,14 @@ private fun DrawScope.drawTrack(
     // A fresh claim this frame (an anchor that's both placed AND whose descriptor says
     // isSegmentTop/isSegmentBottom) updates the remembered id; see drawSegment's KDoc for why an
     // absent claim falls back to the last confirmed id instead of ever flushing to the edge.
-    placed.firstOrNull { it.descriptor.isSegmentTop }?.let { endState.lastTopId = it.id }
-    placed.firstOrNull { it.descriptor.isSegmentBottom }?.let { endState.lastBottomId = it.id }
+    val freshTopClaim = placed.firstOrNull { it.descriptor.isSegmentTop }
+    val freshBottomClaim = placed.firstOrNull { it.descriptor.isSegmentBottom }
+    freshTopClaim?.let { endState.lastTopId = it.id }
+    freshBottomClaim?.let { endState.lastBottomId = it.id }
+    TimelineDebugLog.d(context) {
+        "drawTrack placedIds=${placed.map { it.id }} freshTopClaim=${freshTopClaim?.id} " +
+            "freshBottomClaim=${freshBottomClaim?.id} resolvedTopId=${endState.lastTopId} resolvedBottomId=${endState.lastBottomId}"
+    }
 
     drawSegment(
         anchors = placed.sortedBy { it.cy },
@@ -177,6 +187,7 @@ private fun DrawScope.drawTrack(
         scratch = scratch,
         topId = endState.lastTopId,
         bottomId = endState.lastBottomId,
+        context = context,
     )
 }
 
@@ -211,6 +222,7 @@ private fun DrawScope.drawSegment(
     scratch: android.graphics.Path,
     topId: String?,
     bottomId: String?,
+    context: Context,
 ) {
     val top = anchors.first()
     val bottom = anchors.last()
@@ -221,6 +233,9 @@ private fun DrawScope.drawSegment(
     val bgBottom = if (roundBottom) bottom.cy + halfTrack else size.height
     val left = trackCenterX - halfTrack
     val right = trackCenterX + halfTrack
+    TimelineDebugLog.d(context) {
+        "drawSegment top.id=${top.id} bottom.id=${bottom.id} roundTop=$roundTop roundBottom=$roundBottom bgTop=$bgTop bgBottom=$bgBottom"
+    }
 
     // Plain fill; the sleep pills drawn after naturally cover their own range, no separate "subtract" geometry needed. See trackColorFor's KDoc for the fill-vs-outline history.
     drawPath(cappedRect(left, bgTop, right, bgBottom, roundTop, roundBottom, corner), awakeColor)
