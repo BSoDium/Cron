@@ -14,8 +14,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -108,18 +106,14 @@ internal fun TimelineTrackOverlay(
     )
 }
 
-private class PlacedAnchor(val id: String, val descriptor: AnchorDescriptor, val cx: Float, val cy: Float)
-
 /** Remembers which anchor id last legitimately confirmed the segment's top/bottom cap — a plain
  *  draw-phase-mutated field, not snapshot state, since it only needs to survive across this
  *  composable's own draw calls, never trigger recomposition. See [drawTrack]'s KDoc for why this
- *  replaces a same-frame registry lookup. */
+ *  replaces a same-frame registry lookup. Wraps [TrackEnds] (the pure, testable value) as a mutable
+ *  holder for the draw phase to update in place. */
 private class TrackEndState {
-    var lastTopId: String? = null
-    var lastBottomId: String? = null
+    var ends = TrackEnds(topId = null, bottomId = null)
 }
-
-private class SleepPill(val top: Float, val bottom: Float, val roundTop: Boolean, val roundBottom: Boolean)
 
 /** Reads every currently-registered anchor's live position and returns it. Returns an empty list
  *  while this overlay's own coordinates aren't attached yet (the first frame or two of any mount).
@@ -132,19 +126,22 @@ private class SleepPill(val top: Float, val bottom: Float, val roundTop: Boolean
  *  position is not cached or filtered against scroll state. This means a row disposing while still
  *  visually on-screen can flicker — an open issue, see docs/color-roles.md for prior attempts. A fix
  *  should control `LazyColumn`'s own beyond-viewport composition margin directly rather than caching
- *  or second-guessing its disposal decisions from outside. */
+ *  or second-guessing its disposal decisions from outside.
+ *
+ *  Resolving each row's live [LayoutCoordinates] into a plain [Offset] genuinely needs a real layout
+ *  tree, so it stays here; the actual inclusion filter is [resolvePlacedAnchors], a pure function
+ *  unit-tested separately in `TimelineTrackGeometryTest.kt`. */
 private fun computePlacedAnchors(
     registry: TimelineTrackRegistry,
     overlayCoordinates: LayoutCoordinates?,
 ): List<PlacedAnchor> {
     val overlay = overlayCoordinates?.takeIf { it.isAttached } ?: return emptyList()
-    return registry.descriptors.keys.mapNotNull { id ->
-        val descriptor = registry.descriptors[id] ?: return@mapNotNull null
-        val coords = registry.positions[id]?.coordinates?.takeIf { it.isAttached } ?: return@mapNotNull null
+    val resolvedPositions = registry.positions.mapNotNull { (id, position) ->
+        val coords = position.coordinates.takeIf { it.isAttached } ?: return@mapNotNull null
         val center = Offset(coords.size.width / 2f, coords.size.height / 2f)
-        val local = overlay.localPositionOf(coords, center)
-        PlacedAnchor(id, descriptor, local.x, local.y)
-    }
+        id to overlay.localPositionOf(coords, center)
+    }.toMap()
+    return resolvePlacedAnchors(registry.descriptors, resolvedPositions)
 }
 
 private fun DrawScope.drawTrack(
@@ -163,21 +160,9 @@ private fun DrawScope.drawTrack(
     // Every anchor centers in the same fixed-width gutter; averaging their x's is order-independent and self-corrects if one row's position lands a frame stale.
     val trackCenterX = placed.map { it.cx }.average().toFloat()
     val corner = CornerRadius(halfTrack)
-    // A fresh claim requires BOTH a descriptor claiming isSegmentTop/isSegmentBottom AND that same
-    // anchor being the topmost/bottommost by CURRENT position (cy) — an anchor can be "placed" (has
-    // a registered position) before that position has animated to its final, topmost spot, so
-    // checking descriptor+placement alone isn't enough; see drawSegment's KDoc for the live capture
-    // that caught this (Round 38) and why an absent claim falls back to the last confirmed id
-    // instead of ever flushing to the edge.
-    val topmostByPosition = placed.minByOrNull { it.cy }
-    val bottommostByPosition = placed.maxByOrNull { it.cy }
-    val freshTopClaim = topmostByPosition?.takeIf { it.descriptor.isSegmentTop }
-    val freshBottomClaim = bottommostByPosition?.takeIf { it.descriptor.isSegmentBottom }
-    freshTopClaim?.let { endState.lastTopId = it.id }
-    freshBottomClaim?.let { endState.lastBottomId = it.id }
+    endState.ends = resolveTrackEnds(placed, endState.ends)
     TimelineDebugLog.d(context) {
-        "drawTrack placedIds=${placed.map { it.id }} freshTopClaim=${freshTopClaim?.id} " +
-            "freshBottomClaim=${freshBottomClaim?.id} resolvedTopId=${endState.lastTopId} resolvedBottomId=${endState.lastBottomId}"
+        "drawTrack placedIds=${placed.map { it.id }} resolvedTopId=${endState.ends.topId} resolvedBottomId=${endState.ends.bottomId}"
     }
 
     drawSegment(
@@ -190,38 +175,14 @@ private fun DrawScope.drawTrack(
         awakeSpineColor = awakeSpineColor,
         asleepSpineColor = asleepSpineColor,
         scratch = scratch,
-        topId = endState.lastTopId,
-        bottomId = endState.lastBottomId,
+        ends = endState.ends,
         context = context,
     )
 }
 
-/** [roundTop]/[roundBottom] — a cap only rounds when the segment's true end is confirmed on-screen;
- *  otherwise the track runs flush to the viewport edge, implying it continues off-screen.
- *
- *  [topId]/[bottomId] are [TrackEndState]'s remembered anchor ids, not a same-frame
- *  `descriptor.isSegmentTop`/`isSegmentBottom` read: a brand-new anchor's descriptor (written by its
- *  own `SideEffect`, pre-layout) and its position (written by `onGloballyPositioned`, post-layout)
- *  can BOTH still be missing for more than one frame after it's prepended — confirmed live (see
- *  docs/color-roles.md Round 37) by logging the registry at the exact frame the track flushed to the
- *  screen edge. Persisting the last anchor that was confirmed sidesteps that inter-callback timing.
- *
- *  A second, narrower gap surfaced live after that fix shipped (Round 38): `drawTrack`'s claim check
- *  originally required only that the claiming anchor be *placed* (registered position exists), not
- *  that its position is *currently topmost*. An anchor can register a position — satisfying
- *  `computePlacedAnchors`'s inclusion filter — before `animateItem`'s placement animation has
- *  actually carried it above the outgoing anchor, i.e. it's "placed" but still visually below the
- *  old top for a frame or two. Promoting `lastTopId` to it immediately, while `anchors.first()`
- *  (sorted by live `cy`) is still the old anchor, produces exactly one frame where `top.id != topId`
- *  — `roundTop` false, `bgTop = 0f`. `drawTrack` now additionally requires the claiming anchor to be
- *  `placed.minByOrNull { cy }` (genuinely topmost by position) before promoting it; until then the
- *  outgoing anchor's id is left untouched, which is safe because it's still `anchors.first()` too.
- *
- *  A row genuinely disposed by ordinary scrolling clears the id naturally: once it's gone from
- *  `placed`, `top.id == topId` stops matching (`topId` still names the disposed id, but nothing in
- *  `anchors` does), so the track correctly resumes flushing to the edge instead of a stale claim.
- *  See docs/color-roles.md Round 35/36 for why an `anchors`-only, same-frame fallback was tried
- *  twice and rejected both times. */
+/** Delegates the cap/rounding decision to [segmentCapDecision] (see its KDoc, and
+ *  `TimelineTrackGeometryTest.kt`, for the full Round 37/38 history of why a cap only rounds when
+ *  [ends] confirms that end's anchor, not a same-frame `descriptor.isSegmentTop` read). */
 private fun DrawScope.drawSegment(
     anchors: List<PlacedAnchor>,
     trackCenterX: Float,
@@ -232,17 +193,13 @@ private fun DrawScope.drawSegment(
     awakeSpineColor: Color,
     asleepSpineColor: Color,
     scratch: android.graphics.Path,
-    topId: String?,
-    bottomId: String?,
+    ends: TrackEnds,
     context: Context,
 ) {
+    val decision = segmentCapDecision(anchors, ends, size.height, halfTrack)
+    val (roundTop, roundBottom, bgTop, bgBottom) = decision
     val top = anchors.first()
     val bottom = anchors.last()
-    val roundTop = top.id == topId
-    val roundBottom = bottom.id == bottomId
-    // Cap edge sits a full halfTrack beyond the terminal anchor's center (not at it) so the anchor nests concentrically inside the cap's rounded corner.
-    val bgTop = if (roundTop) top.cy - halfTrack else 0f
-    val bgBottom = if (roundBottom) bottom.cy + halfTrack else size.height
     val left = trackCenterX - halfTrack
     val right = trackCenterX + halfTrack
     TimelineDebugLog.d(context) {
@@ -280,23 +237,9 @@ private fun DrawScope.drawSpine(
     trackCenterX: Float,
     color: Color,
 ) {
-    val gap = SPINE_GAP.toPx()
     val strokeWidth = SPINE_WIDTH.toPx()
-    // Draws the complement of every in-range anchor's gap-range within [top, bottom].
-    var cursor = top
-    anchors
-        .filter { it.cy in top..bottom }
-        .forEach { anchor ->
-            val gapRadius = anchor.descriptor.contentRadiusPx + gap
-            val gapStart = anchor.cy - gapRadius
-            val gapEnd = anchor.cy + gapRadius
-            if (gapStart > cursor) {
-                drawLine(color, Offset(trackCenterX, cursor), Offset(trackCenterX, gapStart), strokeWidth, StrokeCap.Round)
-            }
-            cursor = maxOf(cursor, gapEnd)
-        }
-    if (bottom > cursor) {
-        drawLine(color, Offset(trackCenterX, cursor), Offset(trackCenterX, bottom), strokeWidth, StrokeCap.Round)
+    spineGapRanges(anchors, top, bottom, SPINE_GAP.toPx()).forEach { (start, end) ->
+        drawLine(color, Offset(trackCenterX, start), Offset(trackCenterX, end), strokeWidth, StrokeCap.Round)
     }
 }
 
@@ -337,41 +280,10 @@ private fun DrawScope.drawSocket(anchor: PlacedAnchor, scratch: android.graphics
     }
 }
 
-/** Walks a segment's anchors top→bottom and emits one rounded pill per contiguous asleep run. A run
- *  open above the topmost visible anchor (or still open below the bottom one) extends to [bgTop]/
- *  [bgBottom] and only rounds there if that edge is a real segment cap — so a sleep stretch continues
- *  seamlessly off the visible range instead of capping mid-scroll. */
-private fun buildSleepPills(
-    anchors: List<PlacedAnchor>,
-    bgTop: Float,
-    bgBottom: Float,
-    roundTop: Boolean,
-    roundBottom: Boolean,
-    halfTrack: Float,
-): List<SleepPill> {
-    val pills = mutableListOf<SleepPill>()
-    val startsAsleep = anchors.first().descriptor.asleepAbove
-    var openTop: Float? = if (startsAsleep) bgTop else null
-    var openRounded = if (startsAsleep) roundTop else false
-    for (anchor in anchors) {
-        val above = anchor.descriptor.asleepAbove
-        val below = anchor.descriptor.asleepBelow
-        // Same concentric-cap rule as the background — see drawSegment's comment on cap-edge placement.
-        if (above && !below) {
-            pills += SleepPill(openTop ?: (anchor.cy - halfTrack), anchor.cy + halfTrack, openRounded, roundBottom = true)
-            openTop = null
-        } else if (!above && below) {
-            openTop = anchor.cy - halfTrack
-            openRounded = true
-        }
-    }
-    val trailingOpen = openTop
-    if (anchors.last().descriptor.asleepBelow && trailingOpen != null) {
-        pills += SleepPill(trailingOpen, bgBottom, openRounded, roundBottom)
-    }
-    return pills
-}
-
+/** Wraps [cappedRoundRect] (the pure geometry, unit-tested in `TimelineTrackGeometryTest.kt`) into
+ *  an actual `Path` for painting — `Path()` construction is native-backed on Android and needs
+ *  Robolectric to run in a JVM test, which is why this thin wrapper stays outside the pure
+ *  `TimelineTrackGeometry.kt` file. */
 private fun cappedRect(
     left: Float,
     top: Float,
@@ -380,17 +292,4 @@ private fun cappedRect(
     roundTop: Boolean,
     roundBottom: Boolean,
     corner: CornerRadius,
-): Path {
-    val zero = CornerRadius.Zero
-    return Path().apply {
-        addRoundRect(
-            RoundRect(
-                Rect(left, top, right, bottom),
-                topLeft = if (roundTop) corner else zero,
-                topRight = if (roundTop) corner else zero,
-                bottomLeft = if (roundBottom) corner else zero,
-                bottomRight = if (roundBottom) corner else zero,
-            ),
-        )
-    }
-}
+): Path = Path().apply { addRoundRect(cappedRoundRect(left, top, right, bottom, roundTop, roundBottom, corner)) }
