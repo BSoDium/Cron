@@ -99,6 +99,7 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
         }
         FsmEventInjector(context, scope)
         WorkerInjector()
+        AiToolAvailabilitySection()
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
