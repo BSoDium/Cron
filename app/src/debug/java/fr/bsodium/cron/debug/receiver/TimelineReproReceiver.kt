@@ -35,6 +35,13 @@ import kotlinx.datetime.TimeZone
  * Usage: `adb shell am broadcast -a fr.bsodium.cron.debug.TRIGGER_AI_TURN` — fires while Home is
  * already composed and on-screen, no navigation, no tap coordinates. Uses whichever "Mock API
  * responses" setting is currently active, same as a real tap would.
+ *
+ * Registered dynamically by [fr.bsodium.cron.debug.DebugReceivers] (`CronApplication.onCreate`),
+ * not via a manifest `<receiver>`: Android's background execution limits (8.0+) block most implicit
+ * broadcasts to manifest-declared receivers unless the app is foregrounded at that exact moment —
+ * confirmed live via `dumpsys activity broadcasts`, which showed every manifest-registered attempt
+ * "skipped by policy at enqueue: Background execution not allowed." A receiver tied to this
+ * already-running process is exempt.
  */
 class TimelineReproReceiver : BroadcastReceiver() {
 
