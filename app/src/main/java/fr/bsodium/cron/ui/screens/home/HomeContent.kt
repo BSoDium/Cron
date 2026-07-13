@@ -120,9 +120,7 @@ internal fun HomePlanContent(
             } else {
                 ((collapseSafeTopPx - greetingTop).coerceAtLeast(0).toFloat() / collapseFadePx).coerceIn(0f, 1f)
             }
-            if (screenTop == null) {
-                AlarmCollapse(top = collapseSafeTopPx, gradientAlpha = gradientAlpha, fraction = 1f, distancePx = collapseRangePx)
-            } else {
+            if (screenTop != null) {
                 val distance = (collapseSafeTopPx - screenTop).coerceAtLeast(0).toFloat()
                 AlarmCollapse(
                     top = maxOf(collapseSafeTopPx, screenTop),
@@ -130,6 +128,14 @@ internal fun HomePlanContent(
                     fraction = (distance / collapseRangePx).coerceIn(0f, 1f),
                     distancePx = distance,
                 )
+            } else if (listState.firstVisibleItemIndex <= 1) {
+                // "alarm-spacer" is always index 1 (right after "greeting" at 0) — if we haven't
+                // scrolled past it yet, a missing visibleItemsInfo entry is a stale/transient read,
+                // not a genuine scroll-past. Forcing collapsed here was the discontinuity that got
+                // this state stuck (it also corrupts AlarmCollapseEffects' scrollingDown tracker).
+                AlarmCollapse(top = collapseSafeTopPx, gradientAlpha = gradientAlpha, fraction = 0f, distancePx = 0f)
+            } else {
+                AlarmCollapse(top = collapseSafeTopPx, gradientAlpha = gradientAlpha, fraction = 1f, distancePx = collapseRangePx)
             }
         }
     }

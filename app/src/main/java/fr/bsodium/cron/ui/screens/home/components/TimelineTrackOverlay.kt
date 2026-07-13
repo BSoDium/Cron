@@ -89,6 +89,7 @@ internal fun TimelineTrackOverlay(
     val asleepSpineColor = lerp(asleepColor, MaterialTheme.colorScheme.onSecondary, ASLEEP_SPINE_BLEND)
     val scratch = remember { android.graphics.Path() }
     var overlayCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val endState = remember { TrackEndState() }
 
     Box(
         modifier = modifier
@@ -98,13 +99,22 @@ internal fun TimelineTrackOverlay(
                 // Read directly in the draw phase (not via derivedStateOf) so a position change redraws the same frame with no recomposition round-trip; see computePlacedAnchors.
                 if (visible) {
                     val placed = computePlacedAnchors(registry, overlayCoordinates)
-                    drawTrack(placed, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch)
+                    drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch)
                 }
             },
     )
 }
 
 private class PlacedAnchor(val id: String, val descriptor: AnchorDescriptor, val cx: Float, val cy: Float)
+
+/** Remembers which anchor id last legitimately confirmed the segment's top/bottom cap — a plain
+ *  draw-phase-mutated field, not snapshot state, since it only needs to survive across this
+ *  composable's own draw calls, never trigger recomposition. See [drawTrack]'s KDoc for why this
+ *  replaces a same-frame registry lookup. */
+private class TrackEndState {
+    var lastTopId: String? = null
+    var lastBottomId: String? = null
+}
 
 private class SleepPill(val top: Float, val bottom: Float, val roundTop: Boolean, val roundBottom: Boolean)
 
@@ -136,6 +146,7 @@ private fun computePlacedAnchors(
 
 private fun DrawScope.drawTrack(
     placed: List<PlacedAnchor>,
+    endState: TrackEndState,
     awakeColor: Color,
     asleepColor: Color,
     awakeSpineColor: Color,
@@ -148,6 +159,11 @@ private fun DrawScope.drawTrack(
     // Every anchor centers in the same fixed-width gutter; averaging their x's is order-independent and self-corrects if one row's position lands a frame stale.
     val trackCenterX = placed.map { it.cx }.average().toFloat()
     val corner = CornerRadius(halfTrack)
+    // A fresh claim this frame (an anchor that's both placed AND whose descriptor says
+    // isSegmentTop/isSegmentBottom) updates the remembered id; see drawSegment's KDoc for why an
+    // absent claim falls back to the last confirmed id instead of ever flushing to the edge.
+    placed.firstOrNull { it.descriptor.isSegmentTop }?.let { endState.lastTopId = it.id }
+    placed.firstOrNull { it.descriptor.isSegmentBottom }?.let { endState.lastBottomId = it.id }
 
     drawSegment(
         anchors = placed.sortedBy { it.cy },
@@ -159,18 +175,30 @@ private fun DrawScope.drawTrack(
         awakeSpineColor = awakeSpineColor,
         asleepSpineColor = asleepSpineColor,
         scratch = scratch,
+        topId = endState.lastTopId,
+        bottomId = endState.lastBottomId,
     )
 }
 
 /** [roundTop]/[roundBottom] — a cap only rounds when the segment's true end is confirmed on-screen;
  *  otherwise the track runs flush to the viewport edge, implying it continues off-screen.
  *
- *  Driven by `descriptor.isSegmentTop`/`isSegmentBottom`, computed fresh from `uiState.timeline` on
- *  every recomposition (`SessionTimeline.kt`'s `firstAnchorIndex`/`lastAnchorIndex`), so it never
- *  races with scrolling — scrolling doesn't change `uiState.timeline` at all. A narrow case (a stale
- *  reading right after a new anchor is prepended and hasn't registered yet, flushing the track to the
- *  screen edge under the alarm card) is real but rare and not yet addressed; see docs/color-roles.md
- *  for prior attempts and why they made things worse. */
+ *  [topId]/[bottomId] are [TrackEndState]'s remembered anchor ids, not a same-frame
+ *  `descriptor.isSegmentTop`/`isSegmentBottom` read: a brand-new anchor's descriptor (written by its
+ *  own `SideEffect`, pre-layout) and its position (written by `onGloballyPositioned`, post-layout)
+ *  can BOTH still be missing for more than one frame after it's prepended — confirmed live (see
+ *  docs/color-roles.md Round 37) by logging the registry at the exact frame the track flushed to the
+ *  screen edge: neither the outgoing nor incoming anchor's descriptor claimed `isSegmentTop` yet, so
+ *  a same-frame registry lookup (Round 36's `anchors.none { isSegmentTop }` fallback) has nothing to
+ *  fall back to either. Persisting the last anchor that was *both* placed and descriptor-confirmed
+ *  sidesteps the exact inter-callback timing entirely: the outgoing anchor keeps its rounded cap
+ *  (it's still the topmost *placed* anchor, so `top.id == topId` still holds) until the incoming one
+ *  is fully confirmed, at which point `drawTrack` updates [TrackEndState] and the cap hands off
+ *  cleanly. A row genuinely disposed by ordinary scrolling clears the id naturally: once it's gone
+ *  from `placed`, `top.id == topId` stops matching (`topId` still names the disposed id, but nothing
+ *  in `anchors` does), so the track correctly resumes flushing to the edge instead of a stale claim.
+ *  See docs/color-roles.md Round 35/36 for why an `anchors`-only, same-frame fallback was tried
+ *  twice and rejected both times. */
 private fun DrawScope.drawSegment(
     anchors: List<PlacedAnchor>,
     trackCenterX: Float,
@@ -181,11 +209,13 @@ private fun DrawScope.drawSegment(
     awakeSpineColor: Color,
     asleepSpineColor: Color,
     scratch: android.graphics.Path,
+    topId: String?,
+    bottomId: String?,
 ) {
     val top = anchors.first()
     val bottom = anchors.last()
-    val roundTop = top.descriptor.isSegmentTop
-    val roundBottom = bottom.descriptor.isSegmentBottom
+    val roundTop = top.id == topId
+    val roundBottom = bottom.id == bottomId
     // Cap edge sits a full halfTrack beyond the terminal anchor's center (not at it) so the anchor nests concentrically inside the cap's rounded corner.
     val bgTop = if (roundTop) top.cy - halfTrack else 0f
     val bgBottom = if (roundBottom) bottom.cy + halfTrack else size.height

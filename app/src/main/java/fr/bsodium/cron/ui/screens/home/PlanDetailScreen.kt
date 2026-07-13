@@ -92,14 +92,20 @@ fun PlanDetailScreen(
                     thread = iteration.thread,
                     expanded = pullState.expanded,
                     onExpandedChange = { next ->
-                        pullState.expanded = next
-                        scope.launch {
-                            if (next) {
+                        // Expand must animate reveal to full BEFORE flipping `expanded`, mirroring
+                        // onPreFling below — ExpandReveal's targetPx clips straight to the full
+                        // measured height once `expanded` is true, bypassing this Animatable entirely,
+                        // so flipping it synchronously here made expand-by-tap snap instantly instead
+                        // of animating. Collapse has no such bypass, so it can flip first as before.
+                        if (next) {
+                            scope.launch {
                                 val full = pullState.fullPx.intValue
                                 if (full > 0) pullState.reveal.animateTo(full.toFloat())
-                            } else {
-                                pullState.reveal.animateTo(0f)
+                                pullState.expanded = true
                             }
+                        } else {
+                            pullState.expanded = false
+                            scope.launch { pullState.reveal.animateTo(0f) }
                         }
                     },
                     expandPx = { pullState.reveal.value },

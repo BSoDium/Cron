@@ -1068,3 +1068,66 @@ tweaks, plus two follow-up refinements once the fixes were tested more broadly.
   the test clock past the settle gate an earlier round introduced — all of `TimelineNodeScreenshotTest`'s
   cases plus `PillPressMorphScreenshotTest`, confirmed by tracing every `captureRoboImage()` call site
   in the touched test files, not just the handful first noticed.
+
+Round 36 — addresses Round 35's "track flush-to-screen-edge flash on a new arrival," left open there.
+
+- **A first attempt — `roundTop = top.descriptor.isSegmentTop || anchors.none { it.descriptor
+  .isSegmentTop }` — was tried and rejected.** `registry.remove(id)` clears both `descriptors` and
+  `positions` together on disposal, including ordinary scroll-driven disposal (the same "row disposes
+  while still visually on-screen" behavior Round 35's ghost-caching attempt above already found). So
+  once the *true* top row is disposed by plain scrolling, no placed anchor has `isSegmentTop == true`
+  either — the exact same observable signal as "the new top row registered a descriptor but not yet a
+  position." An `anchors`-only check can't tell these apart, and rounds the current top cap on every
+  ordinary scroll past the original first row — reintroducing the same class of flicker the
+  `visibleItemsInfo` cross-check was reverted for in Round 35, just reached through registry state
+  instead of layout state.
+- **Fix: disambiguate using `registry.descriptors` directly**, which still distinguishes the two cases
+  — a descriptor claiming `isSegmentTop`/`isSegmentBottom` exists somewhere in the registry (new row,
+  descriptor written but position not yet registered) vs. no descriptor anywhere claims it (true top/
+  bottom genuinely disposed by scrolling, both maps cleared together). `drawTrack` now computes
+  `topUnplaced = registry.descriptors.values.any { it.isSegmentTop } && placed.none { it.descriptor
+  .isSegmentTop }` (and the bottom equivalent), passed into `drawSegment` as `roundTop = top.descriptor
+  .isSegmentTop || topUnplaced`. Still purely data-derived (registry descriptor state, not scroll/
+  layoutInfo) — self-corrects the next frame once the new anchor's position registers, and is `false`
+  in the ordinary-disposal case since no descriptor anywhere claims the flag anymore.
+- **Not re-verified live as of this writing** (no device available this round) — build and the
+  existing screenshot suite pass, but per this file's own standing note, that's not a substitute for
+  a real new-arrival check on-device. See Round 37: a live pass found this fix insufficient.
+
+Round 37 — a live-device pass (screen-recorded at high frame rate, frame-by-frame inspection) found
+Round 36's fix did not actually stop the flush-to-screen-edge flash; this identifies why and corrects
+it.
+
+- **The flush was still fully reproducible**, captured as a light vertical stripe (the awake spine,
+  `AWAKE_SPINE_BLEND`-tinted and thus visible against the near-black background even though the wider
+  background fill itself — plain `surfaceContainerHigh` — blends in too closely to notice) running
+  from the true anchor position all the way up behind the status bar for one or two frames right at
+  the moment a new run's streaming placeholder is inserted (triggering at tap time, not at turn
+  completion — the streaming placeholder is itself the new `AiRun` row).
+- **Root cause: Round 36's assumption that the new anchor's descriptor (`SideEffect`, pre-layout)
+  always lands no later than its position (`onGloballyPositioned`, post-layout) — i.e. that they're
+  at most one frame apart — is false.** Temporary `Log.d` instrumentation in `drawTrack`/`drawSegment`,
+  read live off the device right at the flush, showed `registry.descriptors.values.any { isSegmentTop
+  }` was **also** false at the exact frame the track flushed — meaning neither the outgoing row's
+  descriptor (already flipped to `isSegmentTop = false`) nor the incoming row's (not yet written at
+  all) claimed the flag. Round 36's `topUnplaced` fallback reads `registry.descriptors` in the same
+  draw call as everything else, so when the incoming row's `SideEffect` genuinely hasn't fired yet —
+  not just its position — there's nothing in the registry for that fallback to find either.
+- **Fix: stop depending on same-frame inter-callback ordering entirely.** `TimelineTrackOverlay` now
+  holds a small `remember`-scoped `TrackEndState` (a plain draw-phase-mutated field, not snapshot
+  state — it only needs to survive across this composable's own draw calls) recording the last anchor
+  id that was genuinely confirmed (both placed **and** descriptor-claiming) as the segment's top and
+  bottom. `drawTrack` updates it only when a fresh claim exists this frame; `drawSegment`'s
+  `roundTop`/`roundBottom` become `top.id == topId`/`bottom.id == bottomId` against that remembered
+  id instead of any same-frame descriptor read. The outgoing row keeps the rounded cap — it's still
+  the topmost *placed* anchor, so the id still matches — for however many frames the incoming row's
+  descriptor and position take to land, however long that turns out to be; once the incoming row is
+  fully confirmed, `drawTrack` updates the remembered id and the cap hands off with no discontinuity.
+  A row disposed by ordinary scrolling still degrades correctly: once its id is no longer in `placed`,
+  the remembered id (still naming the disposed row) stops matching anything, so the track resumes
+  flushing to the edge exactly as before — same non-regression as Round 36's `registry`-based
+  disambiguation, without depending on how fast a new row's callbacks fire.
+- **Verified live**: re-recorded the same tap-triggered new-run-insertion transition at high frame
+  rate across three separate triggers after this fix, frame-by-frame inspected the entire transition
+  burst each time (the same window that showed the stripe unambiguously before the fix) — no
+  recurrence in any of them.
