@@ -184,12 +184,17 @@ private const val STALE_FRAME_THRESHOLD = 8
  *  (every anchor centers in the same fixed-width gutter), so per-frame staleness there is harmless.
  *  Y prefers [nonLatestAnchorCenterY] sourced from [listState]'s atomic `layoutInfo` snapshot for every
  *  anchor except the Latest row (see [nonLatestAnchorCenterY]'s KDoc and this file's own top-level KDoc
- *  for why — Phase 7, docs/color-roles.md), falling back to the live handle's Y when this id isn't in
- *  this frame's `visibleItemsInfo` at all — a row rendered outside a real `LazyColumn` (isolated
- *  screenshot tests, `@Preview`s) never populates `visibleItemsInfo`, and must keep resolving position
- *  exactly as before rather than losing its socket entirely. In production, `TimelineTrackOverlay` is
- *  always paired with the real `LazyColumn` its rows live in, so this fallback is a compatibility path,
- *  not the fix's actual safety net.
+ *  for why — Phase 7, docs/color-roles.md). The live handle's Y is used as a fallback in exactly one
+ *  case: `listState.layoutInfo.visibleItemsInfo` is entirely empty, meaning no real `LazyColumn` backs
+ *  this `listState` at all (isolated screenshot tests, `@Preview`s) — those must keep resolving position
+ *  exactly as before rather than losing every socket. A non-Latest anchor whose id simply isn't in *this
+ *  frame's* `visibleItemsInfo`, while a real `LazyColumn` genuinely has other items visible, is EXCLUDED
+ *  instead — a first attempt at this fix fell back to the live handle in that case too, which silently
+ *  reintroduced the exact race the fix targets: a large single-frame scroll jump under load can skip a
+ *  row clean over one frame's visible range without it ever being disposed, and painting it at its old
+ *  live-measured position there is precisely the frozen, disconnected socket this phase exists to kill.
+ *  Confirmed live twice — this distinction (empty `visibleItemsInfo` vs. this-id-missing) is required,
+ *  not a hardening nice-to-have.
  *
  *  A disposed row's position is not cached or filtered against scroll state beyond that. This means a
  *  row disposing while still visually on-screen can flicker — an open issue, see docs/color-roles.md
@@ -211,7 +216,17 @@ private fun computePlacedAnchors(
     val overlay = overlayCoordinates?.takeIf { it.isAttached } ?: return emptyList()
     val layoutInfo = listState.layoutInfo
     val viewportStartOffset = layoutInfo.viewportStartOffset
-    val visibleByKey = layoutInfo.visibleItemsInfo.associateBy { it.key }
+    val visibleItems = layoutInfo.visibleItemsInfo
+    val visibleByKey = visibleItems.associateBy { it.key }
+    // A real LazyColumn's visibleItemsInfo is never empty once anything's on screen — an isolated
+    // screenshot test/Preview that renders rows without a real LazyColumn behind listState never
+    // populates it at all. That distinction matters: a real LazyColumn genuinely can have a specific
+    // id transiently absent from this exact frame's visible range (a big single-frame scroll jump can
+    // skip clean over a row without it ever being "this frame's visible set") — that case must exclude
+    // the anchor, not fall back to the live handle, or it reintroduces the exact race this fixes (a
+    // fallback that fires mid-fling repaints the same stale, frozen position as before). The live-handle
+    // fallback below is only for the "no real LazyColumn at all" case, where nothing else is available.
+    val noRealLazyColumn = visibleItems.isEmpty()
     val detachedIds = mutableListOf<String>()
     val resolvedPositions = registry.descriptors.mapNotNull { (id, descriptor) ->
         val position = registry.positions[id] ?: return@mapNotNull null
@@ -221,14 +236,12 @@ private fun computePlacedAnchors(
         }
         val center = Offset(coords.size.width / 2f, coords.size.height / 2f)
         val liveCenter = overlay.localPositionOf(coords, center)
-        // Prefer layoutInfo (race-free) whenever this id is actually in it; fall back to the live
-        // handle otherwise — a row rendered outside a real LazyColumn (isolated screenshot tests,
-        // Previews) has no visibleItemsInfo entry at all, and must keep working exactly as before.
         val item = if (descriptor.isLatest) null else visibleByKey[id]
-        val cy = if (item != null) {
-            nonLatestAnchorCenterY(item.offset, viewportStartOffset, verticalPaddingPx, anchorDiamPx)
-        } else {
-            liveCenter.y
+        val cy = when {
+            descriptor.isLatest -> liveCenter.y
+            item != null -> nonLatestAnchorCenterY(item.offset, viewportStartOffset, verticalPaddingPx, anchorDiamPx)
+            noRealLazyColumn -> liveCenter.y
+            else -> return@mapNotNull null
         }
         id to Offset(liveCenter.x, cy)
     }.toMap()
