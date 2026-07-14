@@ -1180,3 +1180,37 @@ easy to miss a narrow case with) found Round 37's fix still had a gap, and fixed
   placed but not yet promoted) with zero `roundTop=false` lines anywhere across the full ~1,500-line
   capture spanning the entire turn — a stronger verification than frame-by-frame video review, since
   it directly asserts the invariant rather than inferring it from pixels.
+
+Round 39 — a second, narrower attempt at a mid-animation Roborazzi visual test (the Phase 5 spike from
+the timeline dev-tooling plan), scoped to the Round 37/38 insert-at-top scenario specifically. Tried and
+dropped within the time box; documented here per that plan's explicit keep/drop criterion rather than
+silently abandoned.
+
+- **What's different from Round 32's attempt**: Round 32 (see above) paused `mainClock.autoAdvance`
+  *before* mutating the `LazyColumn`'s backing state, and found that prevented even the first
+  non-animated remeasure from ever running, regardless of `advanceTimeByFrame` sequencing afterward.
+  This attempt never paused the clock at all — it kept the default `autoAdvance = true`, mutated a
+  `MutableState<List<TimelineItem>>` held outside `setContent` (so the test body can write to it
+  directly, the way a real `HomeViewModel.uiState` update would), and used Roborazzi's
+  `SemanticsNodeInteraction.captureRoboGif(composeRule) { ... }`, which registers a
+  `Snapshot.registerApplyObserver` and captures a frame on every Compose snapshot commit while its
+  `block` runs, rather than manually stepping the clock.
+- **This got further than Round 32**: the state-driven remeasure did happen — the recorded `.gif`
+  (`TimelineTrackOverlayVisualTest`, since deleted) contains a genuine before/after pair showing the
+  new row correctly inserted, tracked, and capped, with no overlap or overflow in the settled frame.
+  Round 32's exact wall (remeasure never running at all) is not what happened here.
+- **But it still didn't deliver what Phase 5 needed**: the `.gif` had exactly 2 frames — the initial
+  mount and the fully-settled end state — with no frame in between showing the row still sliding into
+  place. `RoborazziOptions.CompareOptions`'s defaults (`SimpleImageComparator(maxDistance = 0.007F)` +
+  `ThresholdValidator(0F)`, i.e. any detectable pixel difference is kept) rule out capture-side
+  deduplication as the cause. The remaining explanation, not confirmed further given the time-box: the
+  `fastSpatialSpec()` placement spring likely resolves to a small enough number of discrete
+  `withFrameNanos` steps under Robolectric's host-JVM clock model that intermediate positions were
+  never distinct render passes to begin with, rather than being captured-and-discarded.
+- **Dropped, not committed.** Doesn't add coverage beyond the existing static settled-frame Roborazzi
+  tests (`SessionTimelineScreenshotTest`'s `a_settled_demoted_run_and_its_successor_never_visually_overlap`,
+  etc.) or the Phase 3 unit suite (`TimelineTrackGeometryTest`), which is the real regression net for
+  this bug class going forward. If a future attempt wants to pursue this further, the open thread is:
+  confirm (e.g. by logging the `Animatable`'s intermediate values directly, not via screenshot capture)
+  whether the spring is genuinely completing in a handful of steps under test conditions, or whether
+  some other Robolectric-specific clock-coalescing behavior is skipping frames the spring did compute.
