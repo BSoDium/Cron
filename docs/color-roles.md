@@ -1214,3 +1214,70 @@ silently abandoned.
   confirm (e.g. by logging the `Animatable`'s intermediate values directly, not via screenshot capture)
   whether the spring is genuinely completing in a handful of steps under test conditions, or whether
   some other Robolectric-specific clock-coalescing behavior is skipping frames the spring did compute.
+
+Round 40 — a genuinely new symptom, distinct from every prior round: a socket ("pill") rendered at a
+static, frozen position, visually disconnected from the row it belongs to, during a fast fling scroll
+under real device jank. Reported with screenshots (two bare `AnchorShape.Pill` capsules with no icon,
+no row content), reproduced live on demand once the exact recipe was found, root-caused with hard
+position data (not inference), fixed, and the fix verified with the same data — the first round in this
+history where every step used the Phase 1–3 tooling instead of screen recordings.
+
+- **Repro recipe (device-dependent, not always reproducible on demand):** device already lagging/
+  skipping frames (occurs organically under real load, not something `adb input swipe` reliably
+  induces) → from the very top of the timeline, one fast flick *down*, finger released immediately —
+  not a held drag, the point is real scroll inertia, not a synthetic swipe whose distance/duration are
+  fixed up front → let inertia carry the scroll to the bottom on its own.
+- **`adb shell input swipe` could not reproduce it**, across several parameter combinations (large
+  single swipes, short high-velocity flicks, multi-swipe sequences). It's a coarse tool — linear
+  interpolation between two points over a fixed duration, dispatched via a real subprocess with its own
+  latency — with nowhere near the sample fidelity of an actual finger's touch trace, and Android's fling
+  classifier is sensitive to exactly that fidelity. The user reproduced it manually within minutes while
+  `adb logcat` ran continuously in the background; that combination — human does the physical gesture,
+  tooling captures data no eye can read off a video — is what actually cracked this one.
+- **Root cause, found from position values, not just presence.** Extending `TimelineDebugLog`'s
+  `drawTrack` line to log each anchor's `id@cy` (not just `id`) and diffing consecutive frames' values
+  found it directly: across one frame transition (fling under load, ~90% of the list moving ~1338px),
+  five specific anchor ids moved by exactly `0.0px` — their `onGloballyPositioned` callback simply didn't
+  fire that frame while their siblings' did. A later frame showed the mirror image: three *different*
+  ids jumped by ~1894px in a single step once their callback finally caught up, after the rest of the
+  list had already settled. `onGloballyPositioned` is a per-child callback with no cross-item atomicity
+  guarantee; `TimelineTrackRegistry`'s design trusted it was always fully fresh whenever the overlay
+  redrew, and that trust is what broke under a large single-frame scroll delta.
+- **Rejected fix: a "stale-vs-neighbors" heuristic to skip painting a frozen anchor.** Would need a
+  threshold and would misfire on legitimately non-uniform motion (a row still mid-`animateItem`
+  insertion genuinely moves differently from its settled neighbors) — papering over the cause with more
+  machinery rather than removing it.
+- **Actual fix: source position from `LazyListState.layoutInfo.visibleItemsInfo` instead of per-child
+  callbacks** — the same pattern already used in this codebase for the alarm card's collapse geometry
+  (`HomeContent.kt`'s `computeAlarmCollapse`). Verified directly against the resolved AndroidX Compose
+  Foundation source for this project's pinned version (`1.11.0-beta02`): `LazyListState.layoutInfoState`
+  is written exactly once per measure pass as a single atomic snapshot, so no per-item torn read is
+  possible. Every row's anchor Y is now `item.offset - viewportStartOffset + verticalPadding +
+  anchorDiam/2` (`nonLatestAnchorCenterY`, `TimelineTrackGeometry.kt`) — a fixed formula, not a live
+  measurement, verified against the actual row composables: `footprintDiameter()` is a single constant
+  for every anchor shape/kind, and every non-Latest row's title is `maxLines = 1`, so the anchor is
+  always the tallest sibling in its centering `Row` regardless of any optional `content` block below it.
+  The one deliberate exception is the Latest AI-run row, whose anchor aligns to a variable-height hero
+  headline via `alignBy(HeroHeadlineCenter)` — genuinely needs live measurement (a prior hand-computed
+  offset for that row "didn't hold up on-device," per `TimelineNode.kt`'s own KDoc) — so it stays on the
+  old `onGloballyPositioned`/`TimelineTrackRegistry` mechanism. At most one Latest row exists at a time,
+  so this narrows the race's blast radius from N rows to at most one, rather than eliminating it — a
+  scoped narrowing, documented as such rather than presented as a full fix.
+- **First fix attempt had a real gap, caught by re-running the exact same live verification.** The
+  initial version fell back to the old live-measured position whenever an anchor's id wasn't in the
+  current frame's `visibleItemsInfo` — intended only for isolated screenshot tests/`@Preview`s that
+  render rows without a real `LazyColumn` behind them (where `visibleItemsInfo` is always empty). But a
+  large single-frame scroll jump under load can skip a row clean over one frame's visible range without
+  disposing it, so the same fallback fired mid-fling in production too — silently reintroducing the
+  exact stale-position bug the fix targeted. The live re-verification (same position-delta technique)
+  caught this immediately: the same frozen-then-jumping signature, just relocated to different ids.
+  Fixed by gating the fallback on `visibleItemsInfo` being entirely empty (no real `LazyColumn` at all)
+  rather than on this specific id being absent from it — a real `LazyColumn` with a missing id now
+  excludes that anchor from painting for the frame instead of guessing.
+- **Verified live, twice** — first catching the gap above, then confirming zero position anomalies
+  among every non-Latest anchor across 446 frame transitions and several separate flick gestures (the
+  only remaining anomaly across the whole capture was the Latest row, exactly as scoped, and it produced
+  no visible symptom). Also verified via Roborazzi re-recording across every affected suite
+  (`SessionTimelineScreenshotTest`, `TimelineNodeScreenshotTest`, `PillPressMorphScreenshotTest`,
+  `HomeContentScreenshotTest`, `TimelineGalleryScreenshotTest`) — no visual regressions, including in the
+  isolated-rendering tests that exercise the compatibility fallback path.
