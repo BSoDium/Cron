@@ -21,6 +21,30 @@ internal class SleepPill(val top: Float, val bottom: Float, val roundTop: Boolea
  *  re-derived from scratch each time. */
 internal data class TrackEnds(val topId: String?, val bottomId: String?)
 
+/** A non-Latest row's anchor center Y, computed from its `LazyListItemInfo.offset` (Phase 7,
+ *  docs/color-roles.md) instead of a live per-child `onGloballyPositioned` measurement — the source of
+ *  a confirmed race during fast scrolling under load, where some rows' callbacks lagged a frame behind
+ *  their siblings', leaving the overlay painting a stale, frozen socket. `LazyListState.layoutInfo` is
+ *  written once per measure pass as a single atomic snapshot (verified against the actual AndroidX
+ *  Compose Foundation source for this project's pinned version — `LazyListState.kt`'s
+ *  `applyMeasureResult`), so there is no per-item torn read possible here, unlike the callback model.
+ *
+ *  Derivation: the anchor sits centered (`Alignment.CenterVertically`) in a `Row` padded `top =
+ *  verticalPaddingPx` from the item's own top edge (`TimelineNode.kt`). That Row's own height is always
+ *  exactly [anchorDiamPx] — never taller — because every non-Latest row's title is `maxLines = 1`
+ *  (`EventNode.kt`, the non-latest branch in `SessionTimeline.kt`) and `footprintDiameter()`
+ *  (`TimelineNode.kt`) is a single fixed constant for every anchor shape/kind, so the anchor itself is
+ *  always the tallest sibling in that Row regardless of any optional `content` block rendered below it
+ *  (a separate Column child, outside the centering Row). The Latest AI-run row is the one deliberate
+ *  exception — its anchor aligns to a variable-height hero headline via `alignBy(HeroHeadlineCenter)`,
+ *  which genuinely needs live measurement, so it stays on the old [AnchorPosition] mechanism. */
+internal fun nonLatestAnchorCenterY(
+    itemOffset: Int,
+    viewportStartOffset: Int,
+    verticalPaddingPx: Float,
+    anchorDiamPx: Float,
+): Float = (itemOffset - viewportStartOffset) + verticalPaddingPx + anchorDiamPx / 2f
+
 /** The pure filter behind `computePlacedAnchors`: which ids survive the "has both a descriptor AND a
  *  resolved position" requirement, in insertion order of [descriptors]. The caller resolves each
  *  registered [fr.bsodium.cron.ui.screens.home.components.AnchorPosition]'s live

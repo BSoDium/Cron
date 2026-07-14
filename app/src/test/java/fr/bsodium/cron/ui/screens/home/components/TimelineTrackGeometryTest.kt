@@ -31,6 +31,7 @@ class TimelineTrackGeometryTest {
         isSegmentBottom = isSegmentBottom,
         asleepAbove = asleepAbove,
         asleepBelow = asleepBelow,
+        isLatest = false,
     )
 
     private fun anchor(
@@ -415,5 +416,33 @@ class TimelineTrackGeometryTest {
         assertEquals(corner, rr.topRightCornerRadius)
         assertEquals(corner, rr.bottomLeftCornerRadius)
         assertEquals(corner, rr.bottomRightCornerRadius)
+    }
+
+    @Test
+    fun nonLatestAnchorCenterY_zeroViewportOffset_addsPaddingAndHalfDiameter() {
+        val y = nonLatestAnchorCenterY(itemOffset = 100, viewportStartOffset = 0, verticalPaddingPx = 20f, anchorDiamPx = 40f)
+        assertEquals(140f, y, 0f)
+    }
+
+    @Test
+    fun nonLatestAnchorCenterY_nonZeroViewportStartOffset_isSubtracted() {
+        // A LazyColumn with beforeContentPadding reports a negative viewportStartOffset; the item's
+        // on-screen position is itemOffset - viewportStartOffset, matching computeAlarmCollapse's
+        // identical convention (AlarmCollapseGeometry.kt).
+        val y = nonLatestAnchorCenterY(itemOffset = 100, viewportStartOffset = -50, verticalPaddingPx = 20f, anchorDiamPx = 40f)
+        assertEquals(190f, y, 0f)
+    }
+
+    @Test
+    fun nonLatestAnchorCenterY_itemScrolledAboveViewportTop_returnsNegativeY() {
+        // No clamping — an anchor whose item has scrolled above the visible top simply paints off-canvas, same as every other geometry function in this file.
+        val y = nonLatestAnchorCenterY(itemOffset = -200, viewportStartOffset = 0, verticalPaddingPx = 20f, anchorDiamPx = 40f)
+        assertEquals(-160f, y, 0f)
+    }
+
+    @Test
+    fun nonLatestAnchorCenterY_zeroPaddingAndDiameter_equalsItemOffset() {
+        val y = nonLatestAnchorCenterY(itemOffset = 300, viewportStartOffset = 0, verticalPaddingPx = 0f, anchorDiamPx = 0f)
+        assertEquals(300f, y, 0f)
     }
 }

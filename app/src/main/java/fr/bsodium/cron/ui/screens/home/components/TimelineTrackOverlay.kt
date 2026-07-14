@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import android.content.Context
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -12,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -25,6 +27,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import fr.bsodium.cron.ui.theme.Spacing
 
 /** Thickness of the center-line spine — thin, a detail line rather than another track. */
 private val SPINE_WIDTH = 2.dp
@@ -75,10 +78,18 @@ private const val SQUARE_CORNER_FRACTION = 0.3f
  *  draw-phase-only `graphicsLayer` transform, as `MainActivity.kt`'s tab transitions use), since each
  *  row's `onGloballyPositioned` only fires once, at its own placement frame. See docs/color-roles.md
  *  for the full history. The flush-to-screen-edge flash on a new arrival is covered in
- *  [drawSegment]'s KDoc. */
+ *  [drawSegment]'s KDoc.
+ *
+ *  Since Phase 7 (docs/color-roles.md), that per-child `onGloballyPositioned` model only still supplies
+ *  the Latest row's Y (its anchor genuinely needs live measurement — see [nonLatestAnchorCenterY]'s
+ *  KDoc) and every row's X (scroll-invariant, so staleness there is harmless). Every other row's Y comes
+ *  from [listState]'s own atomic `layoutInfo` snapshot instead — the fix for a confirmed live bug where
+ *  a fast fling under load could leave some rows' callbacks a frame behind their siblings', painting a
+ *  frozen, disconnected socket. */
 @Composable
 internal fun TimelineTrackOverlay(
     registry: TimelineTrackRegistry,
+    listState: LazyListState,
     modifier: Modifier = Modifier,
     visible: Boolean = true,
 ) {
@@ -90,7 +101,12 @@ internal fun TimelineTrackOverlay(
     val scratch = remember { android.graphics.Path() }
     var overlayCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val endState = remember { TrackEndState() }
+    val staleness = remember { AnchorStalenessTracker() }
     val context = LocalContext.current
+    val density = LocalDensity.current
+    // Every non-Latest anchor's Row-centered Y depends only on these two constants — see nonLatestAnchorCenterY's KDoc for the derivation. Computed once per composition, not per anchor per frame.
+    val verticalPaddingPx = with(density) { Spacing.md.toPx() }
+    val anchorDiamPx = with(density) { TRACK_WIDTH.toPx() }
 
     Box(
         modifier = modifier
@@ -99,7 +115,15 @@ internal fun TimelineTrackOverlay(
             .drawBehind {
                 // Read directly in the draw phase (not via derivedStateOf) so a position change redraws the same frame with no recomposition round-trip; see computePlacedAnchors.
                 if (visible) {
-                    val placed = computePlacedAnchors(registry, overlayCoordinates)
+                    val placed = computePlacedAnchors(
+                        registry = registry,
+                        overlayCoordinates = overlayCoordinates,
+                        listState = listState,
+                        verticalPaddingPx = verticalPaddingPx,
+                        anchorDiamPx = anchorDiamPx,
+                        staleness = staleness,
+                        context = context,
+                    )
                     drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch, context)
                 }
             },
@@ -115,18 +139,62 @@ private class TrackEndState {
     var ends = TrackEnds(topId = null, bottomId = null)
 }
 
+/** Phase 6 (docs/color-roles.md, scroll-jank "stuck pill" investigation): counts, per anchor id, how
+ *  many consecutive [computePlacedAnchors] calls have passed since [TimelineTrackRegistry.setPosition]
+ *  last actually ran for that id — i.e. since [TimelineTrackRegistry.positions]' entry for it was last
+ *  replaced with a fresh [AnchorPosition] wrapper. Compares the *wrapper* by reference, not the
+ *  [LayoutCoordinates] it holds: Compose may keep handing back the same `LayoutCoordinates` instance
+ *  across layout passes while only mutating its internal position, so a coordinates-reference check
+ *  would say nothing about whether this frame's layout pass actually touched this anchor — the wrapper
+ *  is deliberately rebuilt on every `setPosition` call for exactly this reason (see [AnchorPosition]'s
+ *  KDoc). A count that climbs for one id while its neighbors' reset to 0 on the same call is direct
+ *  evidence that anchor's row stopped receiving layout passes while the rest of the visible list kept
+ *  moving — the "stalled `animateItem` spring" hypothesis, distinct from ordinary whole-list jank
+ *  (where every visible anchor's count would climb together, since the draw call itself is simply
+ *  skipped rather than any one anchor being singled out). */
+private class AnchorStalenessTracker {
+    private val lastSeenWrapper = mutableMapOf<String, AnchorPosition>()
+    private val staleFrameCounts = mutableMapOf<String, Int>()
+
+    fun update(positions: Map<String, AnchorPosition>): Map<String, Int> {
+        lastSeenWrapper.keys.retainAll(positions.keys)
+        staleFrameCounts.keys.retainAll(positions.keys)
+        positions.forEach { (id, wrapper) ->
+            if (lastSeenWrapper[id] !== wrapper) {
+                lastSeenWrapper[id] = wrapper
+                staleFrameCounts[id] = 0
+            } else {
+                staleFrameCounts[id] = (staleFrameCounts[id] ?: 0) + 1
+            }
+        }
+        return staleFrameCounts
+    }
+}
+
+/** How many consecutive [computePlacedAnchors] calls an anchor must go without a fresh
+ *  [TimelineTrackRegistry.setPosition] call before [AnchorStalenessTracker] flags it — high enough to
+ *  skip the routine "only one id updates per call" case (see [AnchorPosition]'s KDoc), low enough to
+ *  catch a stall lasting a meaningful fraction of a scroll gesture. */
+private const val STALE_FRAME_THRESHOLD = 8
+
 /** Reads every currently-registered anchor's live position and returns it. Returns an empty list
  *  while this overlay's own coordinates aren't attached yet (the first frame or two of any mount).
  *
- *  Every position is queried live from the stored [LayoutCoordinates] handle ([AnchorPosition]) at
- *  call time, never cached, so a draw-phase call always reflects the current coordinate system. Uses
- *  [LayoutCoordinates.localPositionOf] to map the anchor's own local center directly into the
- *  overlay's local space in one step — a window-space delta would get double-scaled inside
- *  `MainActivity.kt`'s nav transition. Draws only what's currently registered; a disposed row's
- *  position is not cached or filtered against scroll state. This means a row disposing while still
- *  visually on-screen can flicker — an open issue, see docs/color-roles.md for prior attempts. A fix
- *  should control `LazyColumn`'s own beyond-viewport composition margin directly rather than caching
- *  or second-guessing its disposal decisions from outside.
+ *  X always comes from the live [LayoutCoordinates] handle ([AnchorPosition]) — scroll-invariant
+ *  (every anchor centers in the same fixed-width gutter), so per-frame staleness there is harmless.
+ *  Y prefers [nonLatestAnchorCenterY] sourced from [listState]'s atomic `layoutInfo` snapshot for every
+ *  anchor except the Latest row (see [nonLatestAnchorCenterY]'s KDoc and this file's own top-level KDoc
+ *  for why — Phase 7, docs/color-roles.md), falling back to the live handle's Y when this id isn't in
+ *  this frame's `visibleItemsInfo` at all — a row rendered outside a real `LazyColumn` (isolated
+ *  screenshot tests, `@Preview`s) never populates `visibleItemsInfo`, and must keep resolving position
+ *  exactly as before rather than losing its socket entirely. In production, `TimelineTrackOverlay` is
+ *  always paired with the real `LazyColumn` its rows live in, so this fallback is a compatibility path,
+ *  not the fix's actual safety net.
+ *
+ *  A disposed row's position is not cached or filtered against scroll state beyond that. This means a
+ *  row disposing while still visually on-screen can flicker — an open issue, see docs/color-roles.md
+ *  for prior attempts. A fix should control `LazyColumn`'s own beyond-viewport composition margin
+ *  directly rather than caching or second-guessing its disposal decisions from outside.
  *
  *  Resolving each row's live [LayoutCoordinates] into a plain [Offset] genuinely needs a real layout
  *  tree, so it stays here; the actual inclusion filter is [resolvePlacedAnchors], a pure function
@@ -134,13 +202,43 @@ private class TrackEndState {
 private fun computePlacedAnchors(
     registry: TimelineTrackRegistry,
     overlayCoordinates: LayoutCoordinates?,
+    listState: LazyListState,
+    verticalPaddingPx: Float,
+    anchorDiamPx: Float,
+    staleness: AnchorStalenessTracker,
+    context: Context,
 ): List<PlacedAnchor> {
     val overlay = overlayCoordinates?.takeIf { it.isAttached } ?: return emptyList()
-    val resolvedPositions = registry.positions.mapNotNull { (id, position) ->
-        val coords = position.coordinates.takeIf { it.isAttached } ?: return@mapNotNull null
+    val layoutInfo = listState.layoutInfo
+    val viewportStartOffset = layoutInfo.viewportStartOffset
+    val visibleByKey = layoutInfo.visibleItemsInfo.associateBy { it.key }
+    val detachedIds = mutableListOf<String>()
+    val resolvedPositions = registry.descriptors.mapNotNull { (id, descriptor) ->
+        val position = registry.positions[id] ?: return@mapNotNull null
+        val coords = position.coordinates.takeIf { it.isAttached } ?: run {
+            detachedIds += id
+            return@mapNotNull null
+        }
         val center = Offset(coords.size.width / 2f, coords.size.height / 2f)
-        id to overlay.localPositionOf(coords, center)
+        val liveCenter = overlay.localPositionOf(coords, center)
+        // Prefer layoutInfo (race-free) whenever this id is actually in it; fall back to the live
+        // handle otherwise — a row rendered outside a real LazyColumn (isolated screenshot tests,
+        // Previews) has no visibleItemsInfo entry at all, and must keep working exactly as before.
+        val item = if (descriptor.isLatest) null else visibleByKey[id]
+        val cy = if (item != null) {
+            nonLatestAnchorCenterY(item.offset, viewportStartOffset, verticalPaddingPx, anchorDiamPx)
+        } else {
+            liveCenter.y
+        }
+        id to Offset(liveCenter.x, cy)
     }.toMap()
+    val staleCounts = staleness.update(registry.positions)
+    val stalledIds = staleCounts.filterValues { it >= STALE_FRAME_THRESHOLD }.keys
+    if (detachedIds.isNotEmpty() || stalledIds.isNotEmpty()) {
+        TimelineDebugLog.d(context) {
+            "computePlacedAnchors detachedIds=$detachedIds stalledIds=$stalledIds staleCounts=$staleCounts"
+        }
+    }
     return resolvePlacedAnchors(registry.descriptors, resolvedPositions)
 }
 
@@ -162,7 +260,7 @@ private fun DrawScope.drawTrack(
     val corner = CornerRadius(halfTrack)
     endState.ends = resolveTrackEnds(placed, endState.ends)
     TimelineDebugLog.d(context) {
-        "drawTrack placedIds=${placed.map { it.id }} resolvedTopId=${endState.ends.topId} resolvedBottomId=${endState.ends.bottomId}"
+        "drawTrack placed=${placed.map { "${it.id}@${it.cy}" }} resolvedTopId=${endState.ends.topId} resolvedBottomId=${endState.ends.bottomId}"
     }
 
     drawSegment(

@@ -131,6 +131,7 @@ internal fun HomePlanContent(
         // One continuous painter behind the whole list; can't gap/re-cap while rows glide/fade since it reads each anchor's live position rather than being sliced per row.
         TimelineTrackOverlay(
             registry = trackRegistry,
+            listState = listState,
             visible = timelineSettled,
         )
         LazyColumn(
