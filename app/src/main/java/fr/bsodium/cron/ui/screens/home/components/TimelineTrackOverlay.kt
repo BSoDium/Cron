@@ -80,12 +80,14 @@ private const val SQUARE_CORNER_FRACTION = 0.3f
  *  for the full history. The flush-to-screen-edge flash on a new arrival is covered in
  *  [drawSegment]'s KDoc.
  *
- *  Since Phase 7 (docs/color-roles.md), that per-child `onGloballyPositioned` model only still supplies
- *  the Latest row's Y (its anchor genuinely needs live measurement — see [nonLatestAnchorCenterY]'s
- *  KDoc) and every row's X (scroll-invariant, so staleness there is harmless). Every other row's Y comes
- *  from [listState]'s own atomic `layoutInfo` snapshot instead — the fix for a confirmed live bug where
- *  a fast fling under load could leave some rows' callbacks a frame behind their siblings', painting a
- *  frozen, disconnected socket. */
+ *  That per-child `onGloballyPositioned` model is the *default* Y source for every row, live and
+ *  correct including mid-`animateItem` (see [nonLatestAnchorCenterY]'s KDoc for why it tracks a
+ *  placement spring's real interpolated position, not just its final target) — [listState]'s own atomic
+ *  `layoutInfo` snapshot only takes over for a non-Latest row once its live handle has gone genuinely
+ *  stale (Phase 8, docs/color-roles.md), which is specifically the Round 40 jank scenario (a fast fling
+ *  under load leaving some rows' callbacks a frame behind their siblings', painting a frozen,
+ *  disconnected socket) rather than an actively-animating spring, which keeps the live handle fresh
+ *  every tick. See [resolveAnchorYSource]'s KDoc for the exact decision. */
 @Composable
 internal fun TimelineTrackOverlay(
     registry: TimelineTrackRegistry,
@@ -139,62 +141,100 @@ private class TrackEndState {
     var ends = TrackEnds(topId = null, bottomId = null)
 }
 
-/** Phase 6 (docs/color-roles.md, scroll-jank "stuck pill" investigation): counts, per anchor id, how
- *  many consecutive [computePlacedAnchors] calls have passed since [TimelineTrackRegistry.setPosition]
- *  last actually ran for that id — i.e. since [TimelineTrackRegistry.positions]' entry for it was last
- *  replaced with a fresh [AnchorPosition] wrapper. Compares the *wrapper* by reference, not the
- *  [LayoutCoordinates] it holds: Compose may keep handing back the same `LayoutCoordinates` instance
- *  across layout passes while only mutating its internal position, so a coordinates-reference check
- *  would say nothing about whether this frame's layout pass actually touched this anchor — the wrapper
- *  is deliberately rebuilt on every `setPosition` call for exactly this reason (see [AnchorPosition]'s
- *  KDoc). A count that climbs for one id while its neighbors' reset to 0 on the same call is direct
+/** Tracks, per anchor id, how long it's been since [TimelineTrackRegistry.setPosition] last actually
+ *  ran for that id — i.e. since [TimelineTrackRegistry.positions]' entry for it was last replaced with a
+ *  fresh [AnchorPosition] wrapper. Compares the *wrapper* by reference, not the [LayoutCoordinates] it
+ *  holds: Compose may keep handing back the same `LayoutCoordinates` instance across layout passes while
+ *  only mutating its internal position, so a coordinates-reference check would say nothing about whether
+ *  this frame's layout pass actually touched this anchor — the wrapper is deliberately rebuilt on every
+ *  `setPosition` call for exactly this reason (see [AnchorPosition]'s KDoc).
+ *
+ *  Two independent measurements, kept separate deliberately (Phase 8, docs/color-roles.md) rather than
+ *  unified into one number — they answer different questions:
+ *  - [update]'s returned frame-count map is diagnostic only ([LOG_STALE_FRAME_THRESHOLD]) — "is this
+ *    worth logging as a real stall."
+ *  - [staleMillis] is wall-clock elapsed time, gating [resolveAnchorYSource]'s actual paint-source
+ *    decision ([PAINT_STALE_THRESHOLD_MS]). A draw-call count is the wrong unit for that decision:
+ *    [computePlacedAnchors] runs once per `drawBehind` invocation, which isn't strictly 1:1 with vsync
+ *    frames (especially under the multi-row `animateItem` load Phase 8 targets), and a fixed count
+ *    threshold is refresh-rate-dependent besides (2 calls ≈ 22ms at 90Hz but ≈33ms at 60Hz) — the actual
+ *    danger zone (how long a frozen anchor can go unnoticed) is a duration, not a call count.
+ *
+ *  A count/duration that climbs for one id while its neighbors' resets to 0 on the same call is direct
  *  evidence that anchor's row stopped receiving layout passes while the rest of the visible list kept
- *  moving — the "stalled `animateItem` spring" hypothesis, distinct from ordinary whole-list jank
- *  (where every visible anchor's count would climb together, since the draw call itself is simply
- *  skipped rather than any one anchor being singled out). */
+ *  moving — the Round 40 jank scenario, distinct from ordinary whole-list jank (where every visible
+ *  anchor's count would climb together, since the draw call itself is simply skipped) and distinct from
+ *  an actively-animating `animateItem` spring (which keeps calling `setPosition` every tick, so it never
+ *  reads as stale here — see [nonLatestAnchorCenterY]'s KDoc for why that distinction is the whole point
+ *  of Phase 8). */
 private class AnchorStalenessTracker {
     private val lastSeenWrapper = mutableMapOf<String, AnchorPosition>()
     private val staleFrameCounts = mutableMapOf<String, Int>()
+    private val lastFreshNanos = mutableMapOf<String, Long>()
 
-    fun update(positions: Map<String, AnchorPosition>): Map<String, Int> {
+    fun update(positions: Map<String, AnchorPosition>, nowNanos: Long): Map<String, Int> {
         lastSeenWrapper.keys.retainAll(positions.keys)
         staleFrameCounts.keys.retainAll(positions.keys)
+        lastFreshNanos.keys.retainAll(positions.keys)
         positions.forEach { (id, wrapper) ->
             if (lastSeenWrapper[id] !== wrapper) {
                 lastSeenWrapper[id] = wrapper
                 staleFrameCounts[id] = 0
+                lastFreshNanos[id] = nowNanos
             } else {
                 staleFrameCounts[id] = (staleFrameCounts[id] ?: 0) + 1
             }
         }
         return staleFrameCounts
     }
+
+    /** Wall-clock ms since [id]'s live position last actually updated, as of [nowNanos] — call after
+     *  [update] has run for this same frame. An id [update] has never seen reads as [Long.MAX_VALUE]
+     *  (unconditionally stale), which only happens for an id not yet in `registry.positions` at all —
+     *  [computePlacedAnchors] already excludes those before this is ever consulted. */
+    fun staleMillis(id: String, nowNanos: Long): Long {
+        val lastFresh = lastFreshNanos[id] ?: return Long.MAX_VALUE
+        return (nowNanos - lastFresh) / 1_000_000L
+    }
 }
 
 /** How many consecutive [computePlacedAnchors] calls an anchor must go without a fresh
- *  [TimelineTrackRegistry.setPosition] call before [AnchorStalenessTracker] flags it — high enough to
- *  skip the routine "only one id updates per call" case (see [AnchorPosition]'s KDoc), low enough to
- *  catch a stall lasting a meaningful fraction of a scroll gesture. */
-private const val STALE_FRAME_THRESHOLD = 8
+ *  [TimelineTrackRegistry.setPosition] call before [AnchorStalenessTracker] flags it in the diagnostic
+ *  log — high enough to skip the routine "only one id updates per call" case (see [AnchorPosition]'s
+ *  KDoc), low enough to catch a stall lasting a meaningful fraction of a scroll gesture. Logging only —
+ *  see [PAINT_STALE_THRESHOLD_MS] for the threshold that actually gates which anchors get painted. */
+private const val LOG_STALE_FRAME_THRESHOLD = 8
 
-/** Reads every currently-registered anchor's live position and returns it. Returns an empty list
- *  while this overlay's own coordinates aren't attached yet (the first frame or two of any mount).
+/** How long (wall-clock) a non-Latest anchor's live position can go without updating before
+ *  [resolveAnchorYSource] stops trusting it and falls back to the `layoutInfo`-derived value instead —
+ *  see [AnchorStalenessTracker]'s KDoc for why this must be time-based, not a draw-call count. 40ms is a
+ *  starting point (roughly 2-3 frames at 60-90Hz, well inside a single Round-40-scale freeze) reasoned
+ *  from live capture data, not independently re-verified at this exact value — re-check with the same
+ *  live position-delta logging technique used for Round 40/Phase 7 if a stuck-pill report resurfaces. */
+private const val PAINT_STALE_THRESHOLD_MS = 40L
+
+/** Reads every currently-registered anchor's position and returns it. Returns an empty list while this
+ *  overlay's own coordinates aren't attached yet (the first frame or two of any mount).
  *
- *  X always comes from the live [LayoutCoordinates] handle ([AnchorPosition]) — scroll-invariant
- *  (every anchor centers in the same fixed-width gutter), so per-frame staleness there is harmless.
- *  Y prefers [nonLatestAnchorCenterY] sourced from [listState]'s atomic `layoutInfo` snapshot for every
- *  anchor except the Latest row (see [nonLatestAnchorCenterY]'s KDoc and this file's own top-level KDoc
- *  for why — Phase 7, docs/color-roles.md). The live handle's Y is used as a fallback in exactly one
- *  case: `listState.layoutInfo.visibleItemsInfo` is entirely empty, meaning no real `LazyColumn` backs
- *  this `listState` at all (isolated screenshot tests, `@Preview`s) — those must keep resolving position
- *  exactly as before rather than losing every socket. A non-Latest anchor whose id simply isn't in *this
- *  frame's* `visibleItemsInfo`, while a real `LazyColumn` genuinely has other items visible, is EXCLUDED
- *  instead — a first attempt at this fix fell back to the live handle in that case too, which silently
- *  reintroduced the exact race the fix targets: a large single-frame scroll jump under load can skip a
- *  row clean over one frame's visible range without it ever being disposed, and painting it at its old
- *  live-measured position there is precisely the frozen, disconnected socket this phase exists to kill.
- *  Confirmed live twice — this distinction (empty `visibleItemsInfo` vs. this-id-missing) is required,
- *  not a hardening nice-to-have.
+ *  X always comes from the live [LayoutCoordinates] handle ([AnchorPosition]) — scroll-invariant (every
+ *  anchor centers in the same fixed-width gutter), so per-frame staleness there is harmless. Y's source
+ *  is decided per anchor by [resolveAnchorYSource] (Phase 8, docs/color-roles.md): the live handle by
+ *  default (it correctly reflects `animateItem`'s real interpolated placement — see
+ *  [nonLatestAnchorCenterY]'s KDoc for why), falling back to [nonLatestAnchorCenterY]'s `layoutInfo`
+ *  snapshot only once the live handle has gone genuinely stale (Round 40's jank scenario, not an
+ *  actively-animating spring, which keeps the live handle fresh every tick). The Latest row is a
+ *  deliberate, permanent exception — always live, never falls back — since its anchor aligns to a
+ *  variable-height hero headline that only the live handle measures correctly.
+ *
+ *  A non-Latest anchor that's both stale AND missing from `listState.layoutInfo.visibleItemsInfo` this
+ *  frame is EXCLUDED rather than painted with a guess — unless `visibleItemsInfo` is entirely empty,
+ *  meaning no real `LazyColumn` backs `listState` at all (isolated screenshot tests, `@Preview`s), in
+ *  which case the live handle (even stale) is still the only thing available and is used regardless. A
+ *  first attempt at the Phase 7 fix used the live-handle fallback whenever an id was merely missing
+ *  from `visibleItemsInfo`, not gated on staleness or on `visibleItemsInfo` being empty — that silently
+ *  reintroduced the exact race the fix targeted (a real `LazyColumn` can have a specific id transiently
+ *  absent from one frame's visible range during a big scroll jump without ever disposing it). Confirmed
+ *  live twice across two different bugs now — this distinction is required, not a hardening nice-to-have.
  *
  *  A disposed row's position is not cached or filtered against scroll state beyond that. This means a
  *  row disposing while still visually on-screen can flicker — an open issue, see docs/color-roles.md
@@ -218,15 +258,9 @@ private fun computePlacedAnchors(
     val viewportStartOffset = layoutInfo.viewportStartOffset
     val visibleItems = layoutInfo.visibleItemsInfo
     val visibleByKey = visibleItems.associateBy { it.key }
-    // A real LazyColumn's visibleItemsInfo is never empty once anything's on screen — an isolated
-    // screenshot test/Preview that renders rows without a real LazyColumn behind listState never
-    // populates it at all. That distinction matters: a real LazyColumn genuinely can have a specific
-    // id transiently absent from this exact frame's visible range (a big single-frame scroll jump can
-    // skip clean over a row without it ever being "this frame's visible set") — that case must exclude
-    // the anchor, not fall back to the live handle, or it reintroduces the exact race this fixes (a
-    // fallback that fires mid-fling repaints the same stale, frozen position as before). The live-handle
-    // fallback below is only for the "no real LazyColumn at all" case, where nothing else is available.
     val noRealLazyColumn = visibleItems.isEmpty()
+    val nowNanos = System.nanoTime()
+    val staleCounts = staleness.update(registry.positions, nowNanos)
     val detachedIds = mutableListOf<String>()
     val resolvedPositions = registry.descriptors.mapNotNull { (id, descriptor) ->
         val position = registry.positions[id] ?: return@mapNotNull null
@@ -237,16 +271,22 @@ private fun computePlacedAnchors(
         val center = Offset(coords.size.width / 2f, coords.size.height / 2f)
         val liveCenter = overlay.localPositionOf(coords, center)
         val item = if (descriptor.isLatest) null else visibleByKey[id]
-        val cy = when {
-            descriptor.isLatest -> liveCenter.y
-            item != null -> nonLatestAnchorCenterY(item.offset, viewportStartOffset, verticalPaddingPx, anchorDiamPx)
-            noRealLazyColumn -> liveCenter.y
-            else -> return@mapNotNull null
+        val layoutInfoY = item?.let { nonLatestAnchorCenterY(it.offset, viewportStartOffset, verticalPaddingPx, anchorDiamPx) }
+        val source = resolveAnchorYSource(
+            isLatest = descriptor.isLatest,
+            hasLayoutInfoEntry = item != null,
+            staleMillis = staleness.staleMillis(id, nowNanos),
+            staleThresholdMillis = PAINT_STALE_THRESHOLD_MS,
+            noRealLazyColumn = noRealLazyColumn,
+        )
+        val cy = when (source) {
+            AnchorYSource.Live -> liveCenter.y
+            AnchorYSource.LayoutInfo -> layoutInfoY ?: return@mapNotNull null
+            AnchorYSource.Excluded -> return@mapNotNull null
         }
         id to Offset(liveCenter.x, cy)
     }.toMap()
-    val staleCounts = staleness.update(registry.positions)
-    val stalledIds = staleCounts.filterValues { it >= STALE_FRAME_THRESHOLD }.keys
+    val stalledIds = staleCounts.filterValues { it >= LOG_STALE_FRAME_THRESHOLD }.keys
     if (detachedIds.isNotEmpty() || stalledIds.isNotEmpty()) {
         TimelineDebugLog.d(context) {
             "computePlacedAnchors detachedIds=$detachedIds stalledIds=$stalledIds staleCounts=$staleCounts"

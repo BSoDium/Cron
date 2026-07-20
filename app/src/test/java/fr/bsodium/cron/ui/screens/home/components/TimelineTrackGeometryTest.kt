@@ -445,4 +445,55 @@ class TimelineTrackGeometryTest {
         val y = nonLatestAnchorCenterY(itemOffset = 300, viewportStartOffset = 0, verticalPaddingPx = 0f, anchorDiamPx = 0f)
         assertEquals(300f, y, 0f)
     }
+
+    private fun ySource(
+        isLatest: Boolean = false,
+        hasLayoutInfoEntry: Boolean = true,
+        staleMillis: Long = 0L,
+        staleThresholdMillis: Long = 40L,
+        noRealLazyColumn: Boolean = false,
+    ) = resolveAnchorYSource(isLatest, hasLayoutInfoEntry, staleMillis, staleThresholdMillis, noRealLazyColumn)
+
+    @Test
+    fun resolveAnchorYSource_latest_alwaysLive_evenWhenStaleAndInLayoutInfo() {
+        assertEquals(AnchorYSource.Live, ySource(isLatest = true, staleMillis = 1_000L, hasLayoutInfoEntry = true))
+    }
+
+    @Test
+    fun resolveAnchorYSource_freshLiveEntry_belowThreshold_prefersLive() {
+        assertEquals(AnchorYSource.Live, ySource(staleMillis = 0L, staleThresholdMillis = 40L))
+    }
+
+    @Test
+    fun resolveAnchorYSource_staleLiveEntry_withLayoutInfoEntry_fallsBackToLayoutInfo() {
+        assertEquals(AnchorYSource.LayoutInfo, ySource(staleMillis = 100L, staleThresholdMillis = 40L, hasLayoutInfoEntry = true))
+    }
+
+    @Test
+    fun resolveAnchorYSource_staleLiveEntry_noLayoutInfoEntry_noRealLazyColumn_fallsBackToLive() {
+        // The Preview/screenshot-test safety net — no real LazyColumn is populating visibleItemsInfo at all, so the live handle is all there is.
+        assertEquals(
+            AnchorYSource.Live,
+            ySource(staleMillis = 100L, staleThresholdMillis = 40L, hasLayoutInfoEntry = false, noRealLazyColumn = true),
+        )
+    }
+
+    @Test
+    fun resolveAnchorYSource_staleLiveEntry_noLayoutInfoEntry_realLazyColumn_excluded() {
+        // Must NOT fall back to the live handle here — that's the exact fallback that reintroduced the Round 40 race in Phase 7's first attempt.
+        assertEquals(
+            AnchorYSource.Excluded,
+            ySource(staleMillis = 100L, staleThresholdMillis = 40L, hasLayoutInfoEntry = false, noRealLazyColumn = false),
+        )
+    }
+
+    @Test
+    fun resolveAnchorYSource_exactlyAtThreshold_countsAsStale() {
+        assertEquals(AnchorYSource.LayoutInfo, ySource(staleMillis = 40L, staleThresholdMillis = 40L, hasLayoutInfoEntry = true))
+    }
+
+    @Test
+    fun resolveAnchorYSource_justBelowThreshold_stillLive() {
+        assertEquals(AnchorYSource.Live, ySource(staleMillis = 39L, staleThresholdMillis = 40L, hasLayoutInfoEntry = true))
+    }
 }

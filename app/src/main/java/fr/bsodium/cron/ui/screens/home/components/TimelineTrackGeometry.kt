@@ -21,29 +21,78 @@ internal class SleepPill(val top: Float, val bottom: Float, val roundTop: Boolea
  *  re-derived from scratch each time. */
 internal data class TrackEnds(val topId: String?, val bottomId: String?)
 
-/** A non-Latest row's anchor center Y, computed from its `LazyListItemInfo.offset` (Phase 7,
- *  docs/color-roles.md) instead of a live per-child `onGloballyPositioned` measurement — the source of
- *  a confirmed race during fast scrolling under load, where some rows' callbacks lagged a frame behind
- *  their siblings', leaving the overlay painting a stale, frozen socket. `LazyListState.layoutInfo` is
+/** A non-Latest row's anchor center Y, computed from its `LazyListItemInfo.offset` instead of a live
+ *  per-child `onGloballyPositioned` measurement. **Phase 8 (docs/color-roles.md) update: this is now a
+ *  staleness fallback, not the default source** — [resolveAnchorYSource] decides when it's used.
+ *
+ *  Phase 7 made this the *default* for every non-Latest row, fixing a confirmed race during fast
+ *  scrolling under load (some rows' `onGloballyPositioned` callbacks lagged a frame behind their
+ *  siblings', leaving the overlay painting a stale, frozen socket) — `LazyListState.layoutInfo` is
  *  written once per measure pass as a single atomic snapshot (verified against the actual AndroidX
  *  Compose Foundation source for this project's pinned version — `LazyListState.kt`'s
  *  `applyMeasureResult`), so there is no per-item torn read possible here, unlike the callback model.
+ *  But that made it the default for `animateItem`-driven reflows too — and `LazyListItemInfo.offset` is
+ *  fixed during the *measure* phase (`LazyListMeasuredItem.position()`), strictly before `animateItem`'s
+ *  `placementDelta` is folded into the actual placement call (`LazyListMeasuredItem.place()` computes
+ *  `targetOffset + animation.placementDelta`, verified against the same pinned Compose Foundation
+ *  source) — so this function always returns the *final target* slot, never the currently-interpolated
+ *  one. Using it as the default made every non-Latest anchor's socket snap to its final position
+ *  instantly on every insertion/removal, while the row's own content kept sliding smoothly via
+ *  `placementDelta` — a live-confirmed regression. `onGloballyPositioned` (the live [AnchorPosition]
+ *  mechanism) fires with the true interpolated position on every tick `animateItem`'s spring is active
+ *  (`place()` re-runs and re-reports position each tick), so live is the correct default; this function
+ *  is now reserved for the specific case live has gone stale — see [resolveAnchorYSource].
  *
- *  Derivation: the anchor sits centered (`Alignment.CenterVertically`) in a `Row` padded `top =
- *  verticalPaddingPx` from the item's own top edge (`TimelineNode.kt`). That Row's own height is always
- *  exactly [anchorDiamPx] — never taller — because every non-Latest row's title is `maxLines = 1`
+ *  Derivation (unchanged): the anchor sits centered (`Alignment.CenterVertically`) in a `Row` padded
+ *  `top = verticalPaddingPx` from the item's own top edge (`TimelineNode.kt`). That Row's own height is
+ *  always exactly [anchorDiamPx] — never taller — because every non-Latest row's title is `maxLines = 1`
  *  (`EventNode.kt`, the non-latest branch in `SessionTimeline.kt`) and `footprintDiameter()`
  *  (`TimelineNode.kt`) is a single fixed constant for every anchor shape/kind, so the anchor itself is
  *  always the tallest sibling in that Row regardless of any optional `content` block rendered below it
- *  (a separate Column child, outside the centering Row). The Latest AI-run row is the one deliberate
+ *  (a separate Column child, outside the centering Row). The Latest AI-run row is a separate, deliberate
  *  exception — its anchor aligns to a variable-height hero headline via `alignBy(HeroHeadlineCenter)`,
- *  which genuinely needs live measurement, so it stays on the old [AnchorPosition] mechanism. */
+ *  which genuinely needs live measurement, so it stays on the live mechanism unconditionally. */
 internal fun nonLatestAnchorCenterY(
     itemOffset: Int,
     viewportStartOffset: Int,
     verticalPaddingPx: Float,
     anchorDiamPx: Float,
 ): Float = (itemOffset - viewportStartOffset) + verticalPaddingPx + anchorDiamPx / 2f
+
+/** Which source a non-Latest anchor's Y should be painted from this frame. [Live] (the
+ *  `onGloballyPositioned`-reported position) is the default: it correctly reflects `animateItem`'s
+ *  real interpolated placement, since `LazyListMeasuredItem.place()` re-runs and re-reports position on
+ *  every tick a placement spring is active. [LayoutInfo] is used only when the live position has gone
+ *  genuinely stale — the live callback has stopped firing altogether (Round 40's actual failure mode: a
+ *  large single-frame scroll jump under jank can skip a row's callback for a frame), not merely because
+ *  a spring is mid-flight, which keeps the callback firing every tick and so never reads as stale here.
+ *  [Excluded] means: stale, and there's nothing safe to paint with — a real `LazyColumn` genuinely
+ *  doesn't have this id visible right now (better to skip a frame than guess; see [nonLatestAnchorCenterY]'s
+ *  history for why an earlier, less careful fallback here reintroduced the Round 40 race). */
+internal enum class AnchorYSource { Live, LayoutInfo, Excluded }
+
+/** Pure decision behind [AnchorYSource] — see that enum's KDoc for the reasoning. [staleMillis] must be
+ *  wall-clock elapsed time since the anchor's live position last actually updated, not a draw-call
+ *  count: `computePlacedAnchors` runs once per `drawBehind` invocation, which isn't strictly 1:1 with
+ *  vsync frames, so a call count is only a proxy for elapsed time, not the thing itself — especially
+ *  under the exact multi-row-`animateItem` load this function exists to handle correctly.
+ *  [noRealLazyColumn] mirrors Phase 7's compatibility path: true only when `listState.layoutInfo
+ *  .visibleItemsInfo` is entirely empty (an isolated screenshot test/`@Preview` with no real
+ *  `LazyColumn` behind `listState` at all), in which case falling back to a stale live position is still
+ *  strictly better than painting nothing. */
+internal fun resolveAnchorYSource(
+    isLatest: Boolean,
+    hasLayoutInfoEntry: Boolean,
+    staleMillis: Long,
+    staleThresholdMillis: Long,
+    noRealLazyColumn: Boolean,
+): AnchorYSource = when {
+    isLatest -> AnchorYSource.Live
+    staleMillis < staleThresholdMillis -> AnchorYSource.Live
+    hasLayoutInfoEntry -> AnchorYSource.LayoutInfo
+    noRealLazyColumn -> AnchorYSource.Live
+    else -> AnchorYSource.Excluded
+}
 
 /** The pure filter behind `computePlacedAnchors`: which ids survive the "has both a descriptor AND a
  *  resolved position" requirement, in insertion order of [descriptors]. The caller resolves each
