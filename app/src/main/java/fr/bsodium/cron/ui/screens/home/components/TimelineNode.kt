@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.HorizontalAlignmentLine
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -39,12 +40,15 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp as lerpDp
+import androidx.compose.ui.util.lerp
 import androidx.graphics.shapes.Morph
 import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
+import kotlin.math.roundToInt
 
 internal val NODE_GUTTER = 48.dp
 
@@ -98,6 +102,12 @@ internal val FLUSH_ANCHOR_SIZE = TRACK_WIDTH - CAP_ANCHOR_PADDING * 2
  *  ([ICON_GLYPH_SIZE]) doesn't shrink — it just occupies more of its own smaller disc. */
 internal val INTERIOR_ANCHOR_SIZE = 24.dp
 private val ICON_GLYPH_SIZE = 18.dp
+
+/** The extra vertical padding a Latest row's taller hero content needs, above the resting
+ *  `verticalPadding` every row gets by default — boosted continuously via `latestFraction`
+ *  (Phase 11, docs/color-roles.md) rather than a discrete `if (isLatest)` swap, which used to jump
+ *  in the same frame `isLatest` flipped while the row's outer position was still animating. */
+private val LATEST_VERTICAL_PADDING = Spacing.lg
 
 internal sealed interface TimelineAnchor {
     data object Plain : TimelineAnchor
@@ -205,6 +215,29 @@ internal fun TimelineNode(
         label = "anchor-radius",
     )
 
+    /** 0 when this row has never been (or is no longer) Latest, 1 when it currently is — the single
+     *  value driving both the anchor/title/status `alignBy` blend below and the `verticalPadding`
+     *  boost, so the two always reach their target across the same spec instead of one jumping
+     *  instantly while the other animates (Bug A, Phase 11, docs/color-roles.md). `isLatest` only
+     *  ever flips true→false for a given row identity (`TimelineMapper.kt`), never back, so there's
+     *  no back-and-forth to worry about. */
+    val latestFraction by animateFloatAsState(
+        targetValue = if (anchor is TimelineAnchor.Latest) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "timeline-node-latest-fraction",
+    )
+    /** Caches the last real `HeroHeadlineCenter` value the title's `alignBy` block below saw — a
+     *  plain layout-phase-mutated cell, not snapshot state (mirrors `TimelineTrackOverlay.kt`'s
+     *  `TrackEndState`/`AnchorStalenessTracker`), since it only needs to survive across this
+     *  composable's own layout passes. `measured[HeroHeadlineCenter]` only resolves to a real value
+     *  while the hero headline is actually composed (the title `Crossfade`'s `isLatest == true`
+     *  branch); once demoted and disposed, this keeps the last known value so the blend below
+     *  doesn't discontinuously snap to the title's own half-height the instant `Crossfade` tears the
+     *  hero branch down — by then [latestFraction] should already be near 0, so the residual value
+     *  barely affects the result. */
+    val lastHeroCenterPx = remember(id) { IntArray(1) }
+    val effectiveVerticalPadding = lerpDp(verticalPadding, LATEST_VERTICAL_PADDING, latestFraction)
+
     /** Hoisted above the shape derivation (not down by the Surface below) so a clickable row's
      *  shape itself can react to press, rather than a whole-row scale transform that visually
      *  decouples from this overlay-drawn socket. Harmless to compute even when `onClick` is null —
@@ -277,6 +310,25 @@ internal fun TimelineNode(
         }
     }
 
+    /** Bug B (Phase 11, docs/color-roles.md): [AnchorShape] has no interpolation between variants —
+     *  a cap-losing row's socket used to snap `Circle` → `Pill` in one frame. `crossfadeState` folds
+     *  each recomposition's `(atCap, shape)` to capture the previously-committed shape as an outgoing
+     *  shape to fade from exactly on a genuine `atCap` flip — see [advanceShapeCrossfadeState]'s
+     *  KDoc for why a crossfade, not a geometric morph. `shapeCrossfade` counts 0→1 on that same flip
+     *  (mirrors [latestProgress]'s "replay from scratch on trigger" idiom above), reported into the
+     *  registry alongside the outgoing shape so the overlay can blend the two draws. */
+    val crossfadeStateCell = remember(id) { arrayOfNulls<ShapeCrossfadeState>(1) }
+    val crossfadeState = advanceShapeCrossfadeState(crossfadeStateCell[0], atCap, shape)
+    crossfadeStateCell[0] = crossfadeState
+    val shapeCrossfade = remember(id) { Animatable(1f) }
+    val shapeCrossfadeSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    LaunchedEffect(atCap) {
+        if (crossfadeState.outgoingShape != null) {
+            shapeCrossfade.snapTo(0f)
+            shapeCrossfade.animateTo(1f, shapeCrossfadeSpec)
+        }
+    }
+
     SideEffect {
         registry.setDescriptor(
             id,
@@ -289,6 +341,8 @@ internal fun TimelineNode(
                 asleepAbove = isAsleepAbove,
                 asleepBelow = isAsleepBelow,
                 isLatest = anchor is TimelineAnchor.Latest,
+                outgoingShape = crossfadeState.outgoingShape,
+                shapeCrossfadeFraction = shapeCrossfade.value,
             ),
         )
     }
@@ -299,14 +353,14 @@ internal fun TimelineNode(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = verticalPadding, end = Spacing.md),
+                    .padding(top = effectiveVerticalPadding, end = Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    // The Latest anchor's title can wrap past the anchor's own height, unlike every other row — align to HeroHeadlineCenter rather than the row's whole-height center so it lines up with the headline specifically; alignBy has Compose measure the real value instead of a hand-computed offset.
+                    // Unconditional alignBy — declaring "my own vertical center" is Compose's own fallback behavior for an unprovided named line anyway, so this renders identically to the row's own CenterVertically when the title isn't declaring HeroHeadlineCenter, with no `if (anchor is TimelineAnchor.Latest)` branch needed here (Phase 11, docs/color-roles.md — only the title box below needs to blend, since it's the one declaring/consuming the named line).
                     modifier = Modifier
                         .width(NODE_GUTTER)
-                        .let { if (anchor is TimelineAnchor.Latest) it.alignBy { measured -> measured.measuredHeight / 2 } else it },
+                        .alignBy { measured -> measured.measuredHeight / 2 },
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(
@@ -321,16 +375,22 @@ internal fun TimelineNode(
                 }
                 Spacer(Modifier.width(titleSpacer))
                 Box(
+                    // Blends between the title's own half-height (demoted) and the hero headline's declared center (Latest) via latestFraction, rather than a hard if/else between two alignment strategies — see latestFraction's/lastHeroCenterPx's KDoc above for why (Phase 11, docs/color-roles.md).
                     modifier = Modifier.weight(1f).wrapContentHeight()
-                        .let { if (anchor is TimelineAnchor.Latest) it.alignBy(HeroHeadlineCenter) else it },
+                        .alignBy { measured ->
+                            val declared = measured[HeroHeadlineCenter]
+                            val heroCenterPx = if (declared != AlignmentLine.Unspecified) {
+                                lastHeroCenterPx[0] = declared
+                                declared
+                            } else {
+                                lastHeroCenterPx[0]
+                            }
+                            lerp(measured.measuredHeight / 2f, heroCenterPx.toFloat(), latestFraction).roundToInt()
+                        },
                 ) { title() }
                 if (status != null) {
-                    Box(
-                        // Same HeroHeadlineCenter alignment as the anchor gutter above, so the trailing arrow (the Latest row's only status content while latest) lines up with the headline too, not the row's whole-height center.
-                        modifier = Modifier.let {
-                            if (anchor is TimelineAnchor.Latest) it.alignBy { measured -> measured.measuredHeight / 2 } else it
-                        },
-                    ) { status() }
+                    // Same unconditional alignBy as the anchor gutter above — see that Box's comment.
+                    Box(modifier = Modifier.alignBy { measured -> measured.measuredHeight / 2 }) { status() }
                 }
             }
             // Text in title()/status()/content() always passes an explicit `style`, which bypasses LocalTextStyle entirely — font-padding leading fixes belong on each style itself (CronTypography's timeline roles are built on `tight` directly in Type.kt; ad hoc bodyMedium uses merge TightTextStyle locally, see EventNode.kt/SessionTimeline.kt), not a CompositionLocalProvider here.
@@ -343,7 +403,7 @@ internal fun TimelineNode(
                     ),
                 ) { content() }
             }
-            Spacer(Modifier.height(verticalPadding))
+            Spacer(Modifier.height(effectiveVerticalPadding))
         }
     }
 

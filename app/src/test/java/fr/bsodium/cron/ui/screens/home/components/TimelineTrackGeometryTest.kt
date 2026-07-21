@@ -496,4 +496,43 @@ class TimelineTrackGeometryTest {
     fun resolveAnchorYSource_justBelowThreshold_stillLive() {
         assertEquals(AnchorYSource.Live, ySource(staleMillis = 39L, staleThresholdMillis = 40L, hasLayoutInfoEntry = true))
     }
+
+    // A single shared Pill instance, not a fresh `AnchorShape.Pill()` per assertion: Pill's pressProgress lambda field makes two independently-constructed Pill() instances NOT structurally equal, since default-argument lambdas aren't guaranteed to be the same singleton across call sites.
+    private val pill = AnchorShape.Pill()
+
+    @Test
+    fun advanceShapeCrossfadeState_firstCallEver_noOutgoingShape() {
+        val state = advanceShapeCrossfadeState(previous = null, atCap = true, shape = AnchorShape.Circle)
+        assertNull(state.outgoingShape)
+        assertEquals(true, state.committedAtCap)
+        assertEquals(AnchorShape.Circle, state.committedShape)
+    }
+
+    @Test
+    fun advanceShapeCrossfadeState_atCapFlips_capturesPreviousShapeAsOutgoing() {
+        val settled = advanceShapeCrossfadeState(previous = null, atCap = true, shape = AnchorShape.Circle)
+        val flipped = advanceShapeCrossfadeState(settled, atCap = false, shape = pill)
+        assertEquals(AnchorShape.Circle, flipped.outgoingShape)
+        assertEquals(false, flipped.committedAtCap)
+        assertEquals(pill, flipped.committedShape)
+    }
+
+    @Test
+    fun advanceShapeCrossfadeState_atCapUnchanged_outgoingShapeUntouched_committedShapeUpdates() {
+        val settled = advanceShapeCrossfadeState(previous = null, atCap = true, shape = AnchorShape.Circle)
+        val flipped = advanceShapeCrossfadeState(settled, atCap = false, shape = pill)
+        // Same atCap as `flipped`, but the shape identity itself changed again (e.g. a valence change) — outgoingShape must stay pinned to the shape from the actual atCap flip, not silently reset to the most recent committedShape.
+        val settledAgain = advanceShapeCrossfadeState(flipped, atCap = false, shape = pill)
+        assertEquals(AnchorShape.Circle, settledAgain.outgoingShape)
+        assertEquals(pill, settledAgain.committedShape)
+    }
+
+    @Test
+    fun advanceShapeCrossfadeState_secondAtCapFlip_replacesOutgoingShapeWithMostRecentlyCommitted() {
+        val settled = advanceShapeCrossfadeState(previous = null, atCap = true, shape = AnchorShape.Circle)
+        val flipped = advanceShapeCrossfadeState(settled, atCap = false, shape = pill)
+        val flippedBack = advanceShapeCrossfadeState(flipped, atCap = true, shape = AnchorShape.Circle)
+        assertEquals(pill, flippedBack.outgoingShape)
+        assertEquals(true, flippedBack.committedAtCap)
+    }
 }

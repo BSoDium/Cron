@@ -42,7 +42,14 @@ sealed interface AnchorShape {
  *  `anchor is TimelineAnchor.Latest` check `TimelineNode` itself uses to decide whether this row's
  *  anchor is laid out via `alignBy(HeroHeadlineCenter)` (a variable-height hero headline, genuinely
  *  needs live measurement) rather than plain `Row`-centering (Phase 7, docs/color-roles.md — see
- *  [TimelineTrackOverlay]'s KDoc for why only that one case still needs [AnchorPosition]). */
+ *  [TimelineTrackOverlay]'s KDoc for why only that one case still needs [AnchorPosition]).
+ *
+ *  [outgoingShape]/[shapeCrossfadeFraction] (Phase 11, docs/color-roles.md) cover a shape identity
+ *  change (e.g. a cap-losing row's socket going `Circle` → `Pill`) that [AnchorShape] itself has no
+ *  interpolation for — see [advanceShapeCrossfadeState]. Both default so every existing call site
+ *  (screenshot tests, `EventNode`) is unaffected: [outgoingShape] `null` means "nothing to crossfade,
+ *  draw [shape] alone," and the overlay only reads [shapeCrossfadeFraction] when [outgoingShape] is
+ *  non-null. */
 data class AnchorDescriptor(
     val contentRadiusPx: Float,
     val shape: AnchorShape,
@@ -52,6 +59,8 @@ data class AnchorDescriptor(
     val asleepAbove: Boolean,
     val asleepBelow: Boolean,
     val isLatest: Boolean,
+    val outgoingShape: AnchorShape? = null,
+    val shapeCrossfadeFraction: Float = 1f,
 )
 
 /** Wraps a row's [LayoutCoordinates] handle — deliberately reference-identity-only (no custom

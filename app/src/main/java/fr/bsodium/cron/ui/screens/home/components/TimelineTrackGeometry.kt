@@ -239,3 +239,32 @@ internal fun cappedRoundRect(
         bottomRight = if (roundBottom) corner else zero,
     )
 }
+
+/** Which [AnchorShape] a row's socket should crossfade *from*, and the shape it's currently settled
+ *  on — the pure fold behind Phase 11's Circle→Pill (and any other shape identity change) crossfade
+ *  fix (docs/color-roles.md). [AnchorShape] itself has no interpolation between variants (`Circle` is
+ *  a literal `drawCircle`, not `RoundedPolygon`-backed, so the existing `Morph` machinery — reserved
+ *  for same-vertex-count Material-shape pairs like Circle→Cookie9Sided — doesn't apply; see
+ *  [AnchorShape.Pill]'s own KDoc for why a geometric morph is rejected even for less mismatched pairs
+ *  than Circle/Pill), so a shape identity change needs a crossfade (draw both, blend alpha) instead of
+ *  a true morph. [committedAtCap] is a plain state-carrying field the caller threads back in on the
+ *  next call — mirrors [resolveTrackEnds]'s remembered-state pattern. */
+internal data class ShapeCrossfadeState(
+    val outgoingShape: AnchorShape?,
+    val committedAtCap: Boolean,
+    val committedShape: AnchorShape,
+)
+
+/** Advances [ShapeCrossfadeState] by one recomposition's worth of `(atCap, shape)`. A genuine `atCap`
+ *  flip captures the previously-committed shape as [ShapeCrossfadeState.outgoingShape] so the caller
+ *  can crossfade away from it; anything else (including the very first call for a row, or a call
+ *  where `atCap` hasn't changed) just commits the latest shape with no outgoing shape to fade from. */
+internal fun advanceShapeCrossfadeState(
+    previous: ShapeCrossfadeState?,
+    atCap: Boolean,
+    shape: AnchorShape,
+): ShapeCrossfadeState = when {
+    previous == null -> ShapeCrossfadeState(outgoingShape = null, committedAtCap = atCap, committedShape = shape)
+    atCap != previous.committedAtCap -> ShapeCrossfadeState(outgoingShape = previous.committedShape, committedAtCap = atCap, committedShape = shape)
+    else -> previous.copy(committedShape = shape)
+}

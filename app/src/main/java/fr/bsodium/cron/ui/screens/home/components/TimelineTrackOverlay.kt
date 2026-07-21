@@ -394,27 +394,51 @@ private fun DrawScope.drawSpine(
     }
 }
 
-/** Fills one anchor's socket with its accent. A cap anchor's content radius is already flush
- *  (`== halfTrack - CAP_ANCHOR_PADDING`), so a circular socket fills the track to the same thin rim
- *  everywhere — no cap-only inflation needed. The Latest morph is bounded within the same flush
- *  diameter by [buildMorphPath]'s scale-to-fit, so it nests just as flush without ever overflowing.
- *  An interior [AnchorShape.Pill] is full [TimelineNode]'s `FLUSH_ANCHOR_SIZE` wide (matching a cap
- *  anchor's own width, per spec) but only `2 × contentRadiusPx` tall by default — a plain
- *  `drawRoundRect` capsule whose height grows to meet that width and whose corner radius shrinks
- *  toward [SQUARE_CORNER_FRACTION] of that width as [AnchorShape.Pill.pressProgress] goes 0→1, so an
- *  unpressed/non-clickable Pill (always `pressProgress() == 0`) renders the exact same full capsule
- *  either way. */
+/** Fills one anchor's socket with its accent, crossfading between [AnchorDescriptor.outgoingShape] and
+ *  [AnchorDescriptor.shape] when the descriptor carries an outgoing shape (Phase 11, docs/color-roles.md
+ *  — see [advanceShapeCrossfadeState]'s KDoc for why a shape identity change like Circle→Pill needs a
+ *  crossfade rather than a geometric morph). Both draws reuse [AnchorDescriptor.contentRadiusPx] for
+ *  size — already animated by the same `atCap`-triggered spring that drives the crossfade fraction, so
+ *  the outgoing shape visibly shrinks-while-fading and the incoming one grows-while-fading in step,
+ *  with no extra coupling required. */
 private fun DrawScope.drawSocket(anchor: PlacedAnchor, scratch: android.graphics.Path) {
     val d = anchor.descriptor
-    when (val shape = d.shape) {
-        AnchorShape.Circle -> drawCircle(d.accentColor, radius = d.contentRadiusPx, center = Offset(anchor.cx, anchor.cy))
+    val outgoing = d.outgoingShape
+    if (outgoing != null && d.shapeCrossfadeFraction < 1f) {
+        drawOneSocketShape(outgoing, anchor, scratch, alpha = 1f - d.shapeCrossfadeFraction)
+        drawOneSocketShape(d.shape, anchor, scratch, alpha = d.shapeCrossfadeFraction)
+    } else {
+        drawOneSocketShape(d.shape, anchor, scratch, alpha = 1f)
+    }
+}
+
+/** One shape's worth of [drawSocket] at a given [alpha] — see that function's KDoc. A cap anchor's
+ *  content radius is already flush (`== halfTrack - CAP_ANCHOR_PADDING`), so a circular socket fills
+ *  the track to the same thin rim everywhere — no cap-only inflation needed. The Latest morph is
+ *  bounded within the same flush diameter by [buildMorphPath]'s scale-to-fit, so it nests just as
+ *  flush without ever overflowing. An interior [AnchorShape.Pill] is full [TimelineNode]'s
+ *  `FLUSH_ANCHOR_SIZE` wide (matching a cap anchor's own width, per spec) but only `2 × contentRadiusPx`
+ *  tall by default — a plain `drawRoundRect` capsule whose height grows to meet that width and whose
+ *  corner radius shrinks toward [SQUARE_CORNER_FRACTION] of that width as [AnchorShape.Pill.pressProgress]
+ *  goes 0→1, so an unpressed/non-clickable Pill (always `pressProgress() == 0`) renders the exact same
+ *  full capsule either way. */
+private fun DrawScope.drawOneSocketShape(
+    shape: AnchorShape,
+    anchor: PlacedAnchor,
+    scratch: android.graphics.Path,
+    alpha: Float,
+) {
+    val d = anchor.descriptor
+    val color = d.accentColor.copy(alpha = d.accentColor.alpha * alpha)
+    when (shape) {
+        AnchorShape.Circle -> drawCircle(color, radius = d.contentRadiusPx, center = Offset(anchor.cx, anchor.cy))
         is AnchorShape.Pill -> {
             val pillWidth = FLUSH_ANCHOR_SIZE.toPx()
             val pressed = shape.pressProgress().coerceIn(0f, 1f)
             val pillHeight = lerp(d.contentRadiusPx * 2, pillWidth, pressed)
             val cornerRadius = lerp(pillHeight / 2f, pillWidth * SQUARE_CORNER_FRACTION, pressed)
             drawRoundRect(
-                color = d.accentColor,
+                color = color,
                 topLeft = Offset(anchor.cx - pillWidth / 2f, anchor.cy - pillHeight / 2f),
                 size = Size(pillWidth, pillHeight),
                 cornerRadius = CornerRadius(cornerRadius),
@@ -422,11 +446,11 @@ private fun DrawScope.drawSocket(anchor: PlacedAnchor, scratch: android.graphics
         }
         is AnchorShape.Polygon -> drawPath(
             buildPolygonPath(shape.polygon, anchor.cx, anchor.cy, d.contentRadiusPx * 2, scratch),
-            d.accentColor,
+            color,
         )
         is AnchorShape.MorphShape -> drawPath(
             buildMorphPath(shape.morph, shape.progress(), anchor.cx, anchor.cy, d.contentRadiusPx * 2, scratch),
-            d.accentColor,
+            color,
         )
     }
 }
