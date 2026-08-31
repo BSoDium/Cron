@@ -6,6 +6,13 @@
 > "hot fixes scattered across three files" pattern this plan avoids. Don't cherry-pick pieces —
 > the point is one concept enforced at one chokepoint, not three tuned durations that can drift
 > out of sync.
+>
+> Revision 2 (2026-08-31): fixes five gaps a second, adversarial pass found in revision 1 — a too-
+> generous window on lenient-hardLatest days, a missing re-arm hook on mid-session replan, an
+> inline (not extracted/testable) gate condition, and two real Android-API mistakes (wrong
+> AlarmManager call, wrong receiver) that would have shipped a phantom "next alarm" indicator and
+> risked routing through ring-triggering code. Superseded parts are struck through, not deleted —
+> see each section for what changed and why.
 
 ## The actual root cause, restated
 
@@ -23,34 +30,38 @@ forever. That's the maintenance-nightmare shape being rejected here.
 
 ## The fix: one bounded window, enforced at one chokepoint
 
-A session's **active window** is fixed and known the moment the session bootstraps — it doesn't
-need to be recomputed, guessed at, or kept in sync after the fact:
-
-```
-sessionWindowEnd = (session.date atTime session.plan.hardLatest).toInstant(timezone) + SESSION_WINDOW_GRACE
-```
-
-`hardLatest` is already the point past which nothing about that morning matters — it's the
-existing "never exceed" safety floor (`HardLatestScheduler`). `SESSION_WINDOW_GRACE` (proposed:
-`3.hours`) covers genuine same-morning lingering (dismiss, doze off again for a bit, actually get
-up an hour later) without covering an unrelated afternoon nap. One named constant, one place.
-
-This requires **no new persisted field and no DB migration** — `hardLatest`, `date`, and
-`timezone` are already on `SleepSession`/`DayPlan`; the window end is a pure function of data
-already stored, exactly like the existing `Instruction`-as-JSON-blob precedent for schema-free
-additions.
+A session's **active window** has two bounds, not one, so it's both safe (never closes before a
+real safety-net alarm could still fire) and tight (doesn't stay open for hours after the user is
+demonstrably up):
 
 ```kotlin
 // SessionFsm.kt, alongside the other pure/testable functions
-internal fun sessionWindowEnd(session: SleepSession, grace: Duration = SESSION_WINDOW_GRACE): Instant =
-    session.date.atTime(session.plan.hardLatest).toInstant(TimeZone.of(session.timezone)) + grace
+internal fun sessionWindowEnd(session: SleepSession, now: Instant, grace: Duration = SESSION_WINDOW_GRACE): Instant {
+    val hardLatestCeiling = session.date.atTime(session.plan.hardLatest).toInstant(TimeZone.of(session.timezone)) + grace
+    val lastAwakeAt = session.events.lastOrNull { it.trigger == TriggerType.AlarmDismissed || it.trigger == TriggerType.OutOfBedConfirmed }?.timestamp
+    val postWakeCeiling = lastAwakeAt?.plus(grace)
+    return listOfNotNull(hardLatestCeiling, postWakeCeiling).min()
+}
 
 internal fun isWithinActiveWindow(session: SleepSession, now: Instant): Boolean =
-    now <= sessionWindowEnd(session)
+    now <= sessionWindowEnd(session, now)
 ```
 
-Both pure, both unit-testable without Android — matching this file's existing `transition`/
-`shouldTriggerAi` convention.
+~~`sessionWindowEnd = hardLatest + SESSION_WINDOW_GRACE`, fixed at bootstrap~~ **(revision 1 —
+superseded).** A single fixed anchor at `hardLatest + grace` is too generous whenever `hardLatest`
+sits late in a lenient wake window (a free/weekend day, say 11am): the window would stay open
+until 2pm, so someone who got up at 7am and naps at 1pm would still get misread as "fell back
+asleep." Taking the **earlier** of the two ceilings — the original hard-latest safety bound, and
+`grace` hours after the session's own last confirmed-awake event — closes the window promptly
+once the user is actually up, while still covering the "never got a clean wake signal at all"
+case via the hard-latest ceiling. `SESSION_WINDOW_GRACE` (proposed: `3.hours`) is one named
+constant either way.
+
+This requires **no new persisted field and no DB migration** — every input above (`hardLatest`,
+`date`, `timezone`, `events`) is already on `SleepSession`/`DayPlan`; the window end is a pure
+function of data already stored, exactly like the existing `Instruction`-as-JSON-blob precedent
+for schema-free additions. Both functions above are pure and unit-testable without Android,
+matching this file's existing `transition`/`shouldTriggerAi` convention.
 
 ### What gets gated, and what doesn't
 
@@ -59,9 +70,11 @@ already splits `AI_TRIGGERS`/`THROTTLEABLE_TRIGGERS` — a named `Set<TriggerTyp
 per-branch check:
 
 ```kotlin
-/** Passive, sensor-inferred signals — only meaningful within the session's active window. A
- *  reading of "dark and still" or "walking" outside that window isn't evidence about this
- *  session; it's an unrelated part of the day (a nap, an errand). */
+/** Signals that only matter while the session is still live: sensor inferences about the user's
+ *  physical state (sleep onset, activity, HC stage, out-of-bed), plus a calendar edit whose
+ *  relevance to *this* morning's alarm ends when the morning does. A reading of "dark and still"
+ *  or a changed event, hours after the session's window closed, isn't evidence about this
+ *  session — it's an unrelated part of the day (a nap, an errand, tomorrow's calendar). */
 private val WINDOW_GATED_TRIGGERS = setOf(
     TriggerType.SleepOnset,
     TriggerType.MidSleepActivity,
@@ -79,14 +92,23 @@ session and isn't gated by a window that doesn't exist yet.
 
 ### The chokepoint: `SessionFsm.onEvent`
 
-Add the guard once, right after fetching `current`, before `transition()` runs:
+~~Add the guard once, right after fetching `current`, as an inline condition~~ **(revision 1 —
+superseded).** Extract it as a named pure predicate instead, consistent with this file's own
+`transition`/`shouldTriggerAi` — inlining the condition directly in the suspend `onEvent` body
+would have made it the one piece of new logic in this file that *isn't* independently
+unit-testable, undercutting the exact property this plan leans on to call itself robust:
 
 ```kotlin
-if (current != null &&
-    event.trigger in WINDOW_GATED_TRIGGERS &&
-    !isWithinActiveWindow(current, event.timestamp)
-) {
-    Log.i(TAG, "Session ${current.id} window expired at ${sessionWindowEnd(current)} — dropping stale ${event.trigger}")
+internal fun shouldGateEvent(session: SleepSession, trigger: TriggerType, now: Instant): Boolean =
+    trigger in WINDOW_GATED_TRIGGERS && !isWithinActiveWindow(session, now)
+```
+
+Called from `onEvent`, right after fetching `current` and **after** the existing auto-plan-off
+gate (`SessionFsm.kt:50-55`) — two independent, stacked gates run in that order, auto-plan first:
+
+```kotlin
+if (current != null && shouldGateEvent(current, event.trigger, event.timestamp)) {
+    Log.i(TAG, "Session ${current.id} window expired at ${sessionWindowEnd(current, event.timestamp)} — dropping stale ${event.trigger}")
     return@withContext current.id
 }
 ```
@@ -103,19 +125,31 @@ prevents the bad event from ever reaching the AI turn pipeline at all.
 The chokepoint above stops a nap from *reopening* a session, but a session that receives no
 further events at all (silence all afternoon, no nap, nothing) still sits in `Awake` until
 tomorrow's `EveningPlan` supersedes it — this is #179's "whole-day stuck" symptom's other half,
-and it's independent of naps entirely. Fix it the same way `HardLatestScheduler` already solves
-the analogous "this needs to fire even if the app is killed" problem: an exact alarm, armed once
-at bootstrap, mirroring the existing pattern exactly.
+and it's independent of naps entirely. It needs its own timer, because `onEvent`'s gate only runs
+when *something* arrives — silence produces no event to gate in the first place.
 
-1. New `SessionExpiryScheduler` (`alarm/SessionExpiryScheduler.kt`), same shape as
-   `HardLatestScheduler`: `arm(sessionWindowEnd, sessionDate, sessionId)` /
-   `clear(sessionDate)`, using `AlarmManager.setAlarmClock` and its own request-code namespace.
-2. New `AlarmConstants.KIND_SESSION_EXPIRY`, handled in `AlarmReceiver.handleAlarmFired` the same
-   way `KIND_HARD_LATEST` already is (`AlarmReceiver.kt:69-85`) — `goAsync()` +
-   `Dispatchers.IO`, per this repo's existing BroadcastReceiver convention.
-3. Rather than round-tripping through `onEvent`/`TriggerType` (this isn't something that
-   happened to the user — it's a janitorial "time's up" signal), give it its own specialized
-   entry point mirroring `onSnooze`'s existing precedent of bypassing the general event pipeline:
+1. New `SessionExpiryScheduler` (`alarm/SessionExpiryScheduler.kt`), API shape mirroring
+   `HardLatestScheduler`'s `arm`/`clear`/`isArmed`, but ~~using `AlarmManager.setAlarmClock`~~
+   **(revision 1 — wrong API, superseded)** using `AlarmManager.setExactAndAllowWhileIdle`,
+   exactly like `EveningPlanScheduler` (`EveningPlanScheduler.kt:63-67`). `setAlarmClock` is
+   user-visible by OS design — it's the whole reason `HardLatestScheduler` uses it, since that
+   alarm might genuinely need to ring. This timer must never be user-visible: once the real
+   hard-latest alarm fires and `hardLatestScheduler.clear()`s, an internal cleanup timer left on
+   `setAlarmClock` would become the system's displayed "next alarm" on the lock screen — a phantom
+   alarm time for something the user never set. `setExactAndAllowWhileIdle` is exact and
+   Doze-exempt without any UI surface, and (like `EveningPlanScheduler`) needs no new permission —
+   the manifest's `USE_EXACT_ALARM` already covers it.
+2. ~~New `AlarmConstants.KIND_SESSION_EXPIRY`, handled in `AlarmReceiver.handleAlarmFired`~~
+   **(revision 1 — wrong receiver, superseded)**. `AlarmReceiver.handleAlarmFired` exists to make
+   an alarm *ring* — `AlarmRingingState.markRinging()`, the notification channel, the sound.
+   Routing a silent cleanup check through it risks it actually ringing. Mirror `EveningPlanReceiver`
+   instead (`receiver/EveningPlanReceiver.kt`): a small dedicated `BroadcastReceiver` with its own
+   `ACTION_FIRE`-equivalent action, `goAsync()` + `CoroutineScope(Dispatchers.IO).launch` (same
+   BroadcastReceiver convention as every other receiver in this repo), calling straight into the
+   FSM. No ringing code anywhere near it.
+3. Give it its own specialized `SessionFsm` entry point, mirroring `onSnooze`'s existing precedent
+   of bypassing the general `onEvent` pipeline for a shape that doesn't fit it (this isn't
+   something that happened to the user — it's a janitorial "time's up" signal):
 
    ```kotlin
    /** Fired by [SessionExpiryScheduler]'s exact alarm. A session with no activity since its
@@ -123,14 +157,21 @@ at bootstrap, mirroring the existing pattern exactly.
    suspend fun completeIfExpired(sessionId: String): Boolean = withContext(Dispatchers.IO) {
        val session = repository.findById(sessionId) ?: return@withContext false
        if (session.status == SessionStatus.Complete) return@withContext false
-       if (Clock.System.now() < sessionWindowEnd(session)) return@withContext false
+       val now = Clock.System.now()
+       if (now < sessionWindowEnd(session, now)) return@withContext false
        completeSession(session)
        true
    }
    ```
-4. Arm it at bootstrap alongside `hardLatestScheduler.arm(...)` (`SessionFsm.kt:110-115`); clear
-   it wherever `hardLatestScheduler.clear(...)` already is (`onStatusChange`'s `Complete` branch,
-   `supersedeIfStale`).
+4. Arm it at bootstrap alongside `hardLatestScheduler.arm(...)` (`SessionFsm.kt:110-115`), **and
+   re-arm it wherever `hardLatestScheduler.arm(...)` is called again** — `refreshPlanFromSettings`
+   (`SessionFsm.kt:125-155`) already re-arms `hardLatestScheduler` when a manual replan changes
+   `hardLatest` mid-session, but nothing in revision 1 re-armed the expiry timer at that same spot.
+   Left unfixed, a replan pushing `hardLatest` later would leave a stale, too-early expiry alarm
+   that could force-complete a session still legitimately active under its new schedule. Same fix
+   point, same `if (refreshed.hardLatest != session.plan.hardLatest)` guard already there.
+5. Clear it wherever `hardLatestScheduler.clear(...)` already is (inside the new shared
+   `completeSession`, below).
 
 ## Bonus fix uncovered while designing this: one `completeSession`, not three
 
@@ -160,6 +201,12 @@ Called from: the normal `onEvent`-driven transition to `Complete` (replacing
 the difference between "three call sites that happen to agree today" and "one call site that
 can't drift" — the second is what makes this robust rather than merely correct right now.
 
+Note this also means stopping the foreground service (and its sensors) is itself a second,
+independent line of defense against a late nap once a session is Complete — the physical sensor
+that would emit a stray `SleepOnset` is no longer registered at all. The `onEvent` gate above is
+still necessary, not redundant, for the gap between "window closes" and "the scheduled cleanup
+alarm actually runs" — a race the gate covers immediately and the timer covers eventually.
+
 ## What deliberately does NOT change
 
 - **`ScreenStateMonitor.shouldEmitOnset`** stays exactly as-is. The sensor is a dumb, generic
@@ -175,14 +222,16 @@ can't drift" — the second is what makes this robust rather than merely correct
 
 All new logic is pure and testable without Android, matching this file's existing convention:
 
-- `isWithinActiveWindow`/`sessionWindowEnd`: table-driven — just inside window, just outside,
-  exactly at the boundary.
-- `onEvent`'s new guard: a `WINDOW_GATED_TRIGGERS` member arriving after `sessionWindowEnd` is
-  dropped (status unchanged, no AI turn) — for at least `SleepOnset` and `CalendarChange`.
-- `AlarmDismissed`/`AlarmSnoozed`/`HardLatestFired` still process normally regardless of window —
-  regression guard, since these must never be silently dropped.
-- `completeIfExpired`: no-ops on an already-`Complete` session (idempotency — see below) and on a
-  session still inside its window; completes one that's past it.
+- `sessionWindowEnd`/`isWithinActiveWindow`: table-driven — inside window via the hard-latest
+  ceiling, inside via the post-wake ceiling, outside via each, and the "whichever is earlier"
+  case where the two ceilings disagree (the lenient-hardLatest-day scenario revision 1 missed).
+- `shouldGateEvent`: a `WINDOW_GATED_TRIGGERS` member outside the window gates; the same trigger
+  inside the window doesn't; `AlarmDismissed`/`AlarmSnoozed`/`HardLatestFired` never gate
+  regardless of window — regression guard, since these must never be silently dropped.
+- `completeIfExpired`: no-ops on an already-`Complete` session and on a session still inside its
+  window; completes one that's past it.
+- `refreshPlanFromSettings`: changing `hardLatest` mid-session re-arms `sessionExpiryScheduler`,
+  not just `hardLatestScheduler` — regression guard for the gap this revision fixed.
 
 ## Sequencing note: interaction with #153
 
@@ -204,6 +253,8 @@ while that's still open.
 - #97 (false *early* onset before real bedtime) is a different mechanism and isn't fixed by this
   — it still needs its own `MidSleepActivity`-driven rearm fix. Not a conflict; this plan doesn't
   block it.
-- One new constant (`SESSION_WINDOW_GRACE`), one new gating set, one new scheduler mirroring an
-  existing one, one consolidated completion helper. No sensor changes, no prompt changes required
-  for correctness, no DB migration.
+- One new constant (`SESSION_WINDOW_GRACE`), one new gating set, one new pure gate predicate, one
+  new scheduler mirroring `EveningPlanScheduler` (not `HardLatestScheduler` — deliberately silent,
+  no phantom alarm indicator), one new dedicated receiver mirroring `EveningPlanReceiver`, one
+  consolidated completion helper. No sensor changes, no prompt changes required for correctness,
+  no DB migration, no new permission.
