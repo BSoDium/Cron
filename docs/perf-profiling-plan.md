@@ -3,6 +3,23 @@
 > Agent-ready specification for #188. Read in full before implementing — this is the spec, the
 > implementation happens on a Mac with a physical device or emulator attached (an adb-less cloud
 > session cannot run any of this, only write the code and docs for it).
+>
+> **Confirmed by direct experiment (2026-08-31):** a cloud session can't currently build this
+> project *at all*, independent of the device/adb gap above. This environment's egress policy
+> denies `dl.google.com` outright (`connect_rejected — organization policy`, per the proxy's own
+> status log), and `maven.google.com` — the alias Android's own docs point at — redirects straight
+> back to `dl.google.com`, so there's no reachable path to Google's Maven repository under either
+> name. Real Maven Central (`repo1.maven.org`) and the Gradle wrapper's own distribution host
+> (`services.gradle.org`) are both fine; JDK 21 and 30GB of free disk are present. But this repo's
+> `settings.gradle.kts` scopes the AGP plugin and every `androidx.*`/`com.google.*` dependency to
+> `google()` specifically — so with that host blocked, no Gradle task can even configure, let alone
+> run: not `assembleDebug`, not `testDebugUnitTest`, not the lightweight `checkFileLength`. This
+> isn't a per-tool fix (no CA/proxy workaround applies to a policy denial, and the proxy's own
+> guidance is explicit: don't retry or route around one) — it's this **environment's** network
+> policy, set at environment creation. If cloud-session builds/tests are wanted for this project,
+> the fix is recreating or reconfiguring the environment with a policy that allows Google's Maven
+> host, not anything scriptable from inside a session. See
+> https://code.claude.com/docs/en/claude-code-on-the-web for where that's configured.
 
 ## Problem
 
