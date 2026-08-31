@@ -187,7 +187,7 @@ class SessionTimelineScreenshotTest {
                 // Index 22 is DayHeader "Yesterday" (after the top spacer, "Today" header, and 20 events); scrolling there puts it at the viewport top with "Today" scrolled fully past.
                 LaunchedEffect(Unit) { listState.scrollToItem(index = 22) }
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     LazyColumn(state = listState, modifier = Modifier.padding(horizontal = Spacing.md)) {
                         sessionTimelineItems(
                             timeline = timeline,
@@ -240,7 +240,7 @@ class SessionTimelineScreenshotTest {
                 val listState = rememberLazyListState()
                 val registry = rememberTimelineTrackRegistry()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     LazyColumn(state = listState, modifier = Modifier.padding(horizontal = Spacing.md)) {
                         sessionTimelineItems(
                             timeline = timeline,
@@ -268,8 +268,11 @@ private fun TimelineTestContent(timeline: List<TimelineItem>) {
     val firstAnchorIndex = timeline.indexOfFirst { it !is TimelineItem.DayHeader }
     val lastAnchorIndex = timeline.indexOfLast { it !is TimelineItem.DayHeader }
     val registry = rememberTimelineTrackRegistry()
+    // No real LazyColumn backs this static harness, so listState.layoutInfo is always empty — every
+    // anchor resolves via TimelineTrackOverlay's live-handle fallback, same as before Phase 7.
+    val listState = rememberLazyListState()
     Box {
-        TimelineTrackOverlay(registry = registry)
+        TimelineTrackOverlay(registry = registry, listState = listState)
         Column(modifier = Modifier.padding(horizontal = Spacing.md)) {
             timeline.forEachIndexed { index, item ->
                 val isSegmentTop = index == firstAnchorIndex

@@ -110,33 +110,14 @@ internal fun HomePlanContent(
     val collapseState = remember(collapseSafeTopPx, collapseRangePx, collapseFadePx) {
         derivedStateOf {
             val info = listState.layoutInfo
-            val screenTop = info.visibleItemsInfo.firstOrNull { it.key == "alarm-spacer" }
-                ?.let { it.offset - info.viewportStartOffset }
-            // Keyed off the greeting row's position, not the alarm-spacer's, so occlusion engages as soon as scrolling starts rather than only once the card nears collapse.
-            val greetingTop = info.visibleItemsInfo.firstOrNull { it.key == "greeting" }
-                ?.let { it.offset - info.viewportStartOffset }
-            val gradientAlpha = if (greetingTop == null) {
-                1f
-            } else {
-                ((collapseSafeTopPx - greetingTop).coerceAtLeast(0).toFloat() / collapseFadePx).coerceIn(0f, 1f)
-            }
-            if (screenTop != null) {
-                val distance = (collapseSafeTopPx - screenTop).coerceAtLeast(0).toFloat()
-                AlarmCollapse(
-                    top = maxOf(collapseSafeTopPx, screenTop),
-                    gradientAlpha = gradientAlpha,
-                    fraction = (distance / collapseRangePx).coerceIn(0f, 1f),
-                    distancePx = distance,
-                )
-            } else if (listState.firstVisibleItemIndex <= 1) {
-                // "alarm-spacer" is always index 1 (right after "greeting" at 0) — if we haven't
-                // scrolled past it yet, a missing visibleItemsInfo entry is a stale/transient read,
-                // not a genuine scroll-past. Forcing collapsed here was the discontinuity that got
-                // this state stuck (it also corrupts AlarmCollapseEffects' scrollingDown tracker).
-                AlarmCollapse(top = collapseSafeTopPx, gradientAlpha = gradientAlpha, fraction = 0f, distancePx = 0f)
-            } else {
-                AlarmCollapse(top = collapseSafeTopPx, gradientAlpha = gradientAlpha, fraction = 1f, distancePx = collapseRangePx)
-            }
+            computeAlarmCollapse(
+                visibleItems = info.visibleItemsInfo.map { VisibleItemSnapshot(it.key, it.offset) },
+                viewportStartOffset = info.viewportStartOffset,
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                collapseSafeTopPx = collapseSafeTopPx,
+                collapseRangePx = collapseRangePx,
+                collapseFadePx = collapseFadePx,
+            )
         }
     }
     AlarmCollapseEffects(listState, collapseState, collapseRangePx, uiState.hapticsEnabled)
@@ -150,6 +131,7 @@ internal fun HomePlanContent(
         // One continuous painter behind the whole list; can't gap/re-cap while rows glide/fade since it reads each anchor's live position rather than being sliced per row.
         TimelineTrackOverlay(
             registry = trackRegistry,
+            listState = listState,
             visible = timelineSettled,
         )
         LazyColumn(

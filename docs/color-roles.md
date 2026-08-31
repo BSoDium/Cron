@@ -1131,3 +1131,153 @@ it.
   rate across three separate triggers after this fix, frame-by-frame inspected the entire transition
   burst each time (the same window that showed the stripe unambiguously before the fix) — no
   recurrence in any of them.
+- **Correction (Round 38): that "verified live" claim was wrong** — manual frame-by-frame visual
+  inspection of a screen recording turned out to be the wrong tool for a 1-2 frame, low-contrast
+  glitch; see Round 38 for what actually caught it and why.
+
+Round 38 — a follow-up dev-tooling investment (permanent debug logging + a deterministic repro
+trigger, built specifically because Round 37's screen-recording approach had become too slow and too
+easy to miss a narrow case with) found Round 37's fix still had a gap, and fixed it.
+
+- **The tooling**: `TimelineTrackOverlay` gained a permanent, toggleable verbose-logging path
+  (`TimelineDebugLog`, mirroring the existing `ToolRegistryFactory`/`MockApiPrefs` debug/release
+  variant-pair pattern; toggled from Settings → Developer → "Verbose timeline logging") logging every
+  `drawTrack`/`drawSegment` call's `placedIds`, fresh-claim ids, resolved `topId`/`bottomId`,
+  `roundTop`/`roundBottom`, and `bgTop`/`bgBottom`. A debug-only `TimelineReproReceiver`, registered
+  dynamically via `DebugReceivers.register()` in `CronApplication.onCreate()` (Android's background
+  execution limits block a *manifest-declared* receiver from receiving most implicit broadcasts
+  unless the app is foregrounded at that exact instant — confirmed live via `dumpsys activity
+  broadcasts`, which showed every attempt "skipped by policy at enqueue"; a dynamically-registered
+  receiver tied to the already-running process is exempt), fires the same repository-layer path
+  `HomeViewModel.retryAiPlan()` uses — including `StreamingTurnStore.seedPending`, the call that makes
+  the streaming placeholder appear immediately — via `adb shell am broadcast -a
+  fr.bsodium.cron.debug.TRIGGER_AI_TURN`, deterministically and without a tap.
+- **What the logs showed that eyeballing frames couldn't**: grepping `drawSegment` output for
+  `roundTop=false` at the exact moment a new anchor id first appeared in `drawTrack`'s `placedIds`
+  found it immediately — `top.id=...-2` while `TrackEndState` had already promoted `topId` to
+  `...-3` one draw call earlier, producing `roundTop=false, bgTop=0.0` for that one frame before
+  self-correcting 22ms later. This is a ~30ms, single/double-frame event with no distinctive color (the
+  awake fill blends into the background) — well below what manual video review reliably catches, which
+  is exactly why Round 37's live verification missed it three times in a row.
+- **Root cause: Round 37's claim check required only that an anchor be *placed* (descriptor claims
+  `isSegmentTop` AND a position is registered), not that its position is *currently topmost*.** An
+  anchor can register a position — satisfying `computePlacedAnchors`'s inclusion filter — before
+  `animateItem`'s placement animation has actually carried it above the outgoing anchor: it's
+  "placed" but still visually below the old top for a frame or two. `drawTrack` promoted
+  `endState.lastTopId` to it immediately on that first placed+claiming frame, while
+  `anchors.first()` (sorted by live `cy`, in `drawSegment`) was still the old anchor — one frame
+  where `top.id != topId`, hence `roundTop = false`.
+- **Fix: also require the claiming anchor to be topmost by *current position*, not just placed.**
+  `drawTrack` now computes `topmostByPosition = placed.minByOrNull { it.cy }` and only treats it as a
+  fresh claim if that same anchor's descriptor says `isSegmentTop` (symmetric `maxByOrNull` for the
+  bottom). While the new anchor is placed-but-not-yet-topmost, this correctly yields no fresh claim,
+  so `lastTopId` stays on the outgoing anchor — safe, since that anchor is still `anchors.first()`
+  too, so `top.id == topId` continues to hold and the cap never flushes.
+- **Verified live**: fired the deterministic broadcast trigger against a real, scrolled-to-top,
+  same-day-replan timeline (turns 4 and 5 of an accumulated multi-turn session — the closest match to
+  the original report's conditions this session managed), captured with verbose logging enabled.
+  Confirmed the specific `freshTopClaim=null` window appears (2 draw calls where the new anchor is
+  placed but not yet promoted) with zero `roundTop=false` lines anywhere across the full ~1,500-line
+  capture spanning the entire turn — a stronger verification than frame-by-frame video review, since
+  it directly asserts the invariant rather than inferring it from pixels.
+
+Round 39 — a second, narrower attempt at a mid-animation Roborazzi visual test (the Phase 5 spike from
+the timeline dev-tooling plan), scoped to the Round 37/38 insert-at-top scenario specifically. Tried and
+dropped within the time box; documented here per that plan's explicit keep/drop criterion rather than
+silently abandoned.
+
+- **What's different from Round 32's attempt**: Round 32 (see above) paused `mainClock.autoAdvance`
+  *before* mutating the `LazyColumn`'s backing state, and found that prevented even the first
+  non-animated remeasure from ever running, regardless of `advanceTimeByFrame` sequencing afterward.
+  This attempt never paused the clock at all — it kept the default `autoAdvance = true`, mutated a
+  `MutableState<List<TimelineItem>>` held outside `setContent` (so the test body can write to it
+  directly, the way a real `HomeViewModel.uiState` update would), and used Roborazzi's
+  `SemanticsNodeInteraction.captureRoboGif(composeRule) { ... }`, which registers a
+  `Snapshot.registerApplyObserver` and captures a frame on every Compose snapshot commit while its
+  `block` runs, rather than manually stepping the clock.
+- **This got further than Round 32**: the state-driven remeasure did happen — the recorded `.gif`
+  (`TimelineTrackOverlayVisualTest`, since deleted) contains a genuine before/after pair showing the
+  new row correctly inserted, tracked, and capped, with no overlap or overflow in the settled frame.
+  Round 32's exact wall (remeasure never running at all) is not what happened here.
+- **But it still didn't deliver what Phase 5 needed**: the `.gif` had exactly 2 frames — the initial
+  mount and the fully-settled end state — with no frame in between showing the row still sliding into
+  place. `RoborazziOptions.CompareOptions`'s defaults (`SimpleImageComparator(maxDistance = 0.007F)` +
+  `ThresholdValidator(0F)`, i.e. any detectable pixel difference is kept) rule out capture-side
+  deduplication as the cause. The remaining explanation, not confirmed further given the time-box: the
+  `fastSpatialSpec()` placement spring likely resolves to a small enough number of discrete
+  `withFrameNanos` steps under Robolectric's host-JVM clock model that intermediate positions were
+  never distinct render passes to begin with, rather than being captured-and-discarded.
+- **Dropped, not committed.** Doesn't add coverage beyond the existing static settled-frame Roborazzi
+  tests (`SessionTimelineScreenshotTest`'s `a_settled_demoted_run_and_its_successor_never_visually_overlap`,
+  etc.) or the Phase 3 unit suite (`TimelineTrackGeometryTest`), which is the real regression net for
+  this bug class going forward. If a future attempt wants to pursue this further, the open thread is:
+  confirm (e.g. by logging the `Animatable`'s intermediate values directly, not via screenshot capture)
+  whether the spring is genuinely completing in a handful of steps under test conditions, or whether
+  some other Robolectric-specific clock-coalescing behavior is skipping frames the spring did compute.
+
+Round 40 — a genuinely new symptom, distinct from every prior round: a socket ("pill") rendered at a
+static, frozen position, visually disconnected from the row it belongs to, during a fast fling scroll
+under real device jank. Reported with screenshots (two bare `AnchorShape.Pill` capsules with no icon,
+no row content), reproduced live on demand once the exact recipe was found, root-caused with hard
+position data (not inference), fixed, and the fix verified with the same data — the first round in this
+history where every step used the Phase 1–3 tooling instead of screen recordings.
+
+- **Repro recipe (device-dependent, not always reproducible on demand):** device already lagging/
+  skipping frames (occurs organically under real load, not something `adb input swipe` reliably
+  induces) → from the very top of the timeline, one fast flick *down*, finger released immediately —
+  not a held drag, the point is real scroll inertia, not a synthetic swipe whose distance/duration are
+  fixed up front → let inertia carry the scroll to the bottom on its own.
+- **`adb shell input swipe` could not reproduce it**, across several parameter combinations (large
+  single swipes, short high-velocity flicks, multi-swipe sequences). It's a coarse tool — linear
+  interpolation between two points over a fixed duration, dispatched via a real subprocess with its own
+  latency — with nowhere near the sample fidelity of an actual finger's touch trace, and Android's fling
+  classifier is sensitive to exactly that fidelity. The user reproduced it manually within minutes while
+  `adb logcat` ran continuously in the background; that combination — human does the physical gesture,
+  tooling captures data no eye can read off a video — is what actually cracked this one.
+- **Root cause, found from position values, not just presence.** Extending `TimelineDebugLog`'s
+  `drawTrack` line to log each anchor's `id@cy` (not just `id`) and diffing consecutive frames' values
+  found it directly: across one frame transition (fling under load, ~90% of the list moving ~1338px),
+  five specific anchor ids moved by exactly `0.0px` — their `onGloballyPositioned` callback simply didn't
+  fire that frame while their siblings' did. A later frame showed the mirror image: three *different*
+  ids jumped by ~1894px in a single step once their callback finally caught up, after the rest of the
+  list had already settled. `onGloballyPositioned` is a per-child callback with no cross-item atomicity
+  guarantee; `TimelineTrackRegistry`'s design trusted it was always fully fresh whenever the overlay
+  redrew, and that trust is what broke under a large single-frame scroll delta.
+- **Rejected fix: a "stale-vs-neighbors" heuristic to skip painting a frozen anchor.** Would need a
+  threshold and would misfire on legitimately non-uniform motion (a row still mid-`animateItem`
+  insertion genuinely moves differently from its settled neighbors) — papering over the cause with more
+  machinery rather than removing it.
+- **Actual fix: source position from `LazyListState.layoutInfo.visibleItemsInfo` instead of per-child
+  callbacks** — the same pattern already used in this codebase for the alarm card's collapse geometry
+  (`HomeContent.kt`'s `computeAlarmCollapse`). Verified directly against the resolved AndroidX Compose
+  Foundation source for this project's pinned version (`1.11.0-beta02`): `LazyListState.layoutInfoState`
+  is written exactly once per measure pass as a single atomic snapshot, so no per-item torn read is
+  possible. Every row's anchor Y is now `item.offset - viewportStartOffset + verticalPadding +
+  anchorDiam/2` (`nonLatestAnchorCenterY`, `TimelineTrackGeometry.kt`) — a fixed formula, not a live
+  measurement, verified against the actual row composables: `footprintDiameter()` is a single constant
+  for every anchor shape/kind, and every non-Latest row's title is `maxLines = 1`, so the anchor is
+  always the tallest sibling in its centering `Row` regardless of any optional `content` block below it.
+  The one deliberate exception is the Latest AI-run row, whose anchor aligns to a variable-height hero
+  headline via `alignBy(HeroHeadlineCenter)` — genuinely needs live measurement (a prior hand-computed
+  offset for that row "didn't hold up on-device," per `TimelineNode.kt`'s own KDoc) — so it stays on the
+  old `onGloballyPositioned`/`TimelineTrackRegistry` mechanism. At most one Latest row exists at a time,
+  so this narrows the race's blast radius from N rows to at most one, rather than eliminating it — a
+  scoped narrowing, documented as such rather than presented as a full fix.
+- **First fix attempt had a real gap, caught by re-running the exact same live verification.** The
+  initial version fell back to the old live-measured position whenever an anchor's id wasn't in the
+  current frame's `visibleItemsInfo` — intended only for isolated screenshot tests/`@Preview`s that
+  render rows without a real `LazyColumn` behind them (where `visibleItemsInfo` is always empty). But a
+  large single-frame scroll jump under load can skip a row clean over one frame's visible range without
+  disposing it, so the same fallback fired mid-fling in production too — silently reintroducing the
+  exact stale-position bug the fix targeted. The live re-verification (same position-delta technique)
+  caught this immediately: the same frozen-then-jumping signature, just relocated to different ids.
+  Fixed by gating the fallback on `visibleItemsInfo` being entirely empty (no real `LazyColumn` at all)
+  rather than on this specific id being absent from it — a real `LazyColumn` with a missing id now
+  excludes that anchor from painting for the frame instead of guessing.
+- **Verified live, twice** — first catching the gap above, then confirming zero position anomalies
+  among every non-Latest anchor across 446 frame transitions and several separate flick gestures (the
+  only remaining anomaly across the whole capture was the Latest row, exactly as scoped, and it produced
+  no visible symptom). Also verified via Roborazzi re-recording across every affected suite
+  (`SessionTimelineScreenshotTest`, `TimelineNodeScreenshotTest`, `PillPressMorphScreenshotTest`,
+  `HomeContentScreenshotTest`, `TimelineGalleryScreenshotTest`) — no visual regressions, including in the
+  isolated-rendering tests that exercise the compatibility fallback path.

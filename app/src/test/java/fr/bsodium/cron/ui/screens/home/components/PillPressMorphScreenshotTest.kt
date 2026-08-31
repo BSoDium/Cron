@@ -3,6 +3,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,8 +49,9 @@ class PillPressMorphScreenshotTest {
         composeTestRule.setContent {
             CronTheme {
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box(Modifier.fillMaxSize().background(CronColors.pageBackground)) {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(Spacing.xl)) {
                         PillPressExample(registry = registry, id = "unpressed", pressProgress = 0f)
                         PillPressExample(registry = registry, id = "half-pressed", pressProgress = 0.5f)
@@ -83,6 +85,7 @@ private fun PillPressExample(registry: TimelineTrackRegistry, id: String, pressP
                 isSegmentBottom = false,
                 asleepAbove = false,
                 asleepBelow = false,
+                isLatest = false,
             ),
         )
     }
