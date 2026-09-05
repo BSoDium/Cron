@@ -349,8 +349,15 @@ internal fun AiRunNode(
             }
         },
         // The headline above is now exclusively a time fact or NO_ALARM_LABEL, never heroHeadline, so this can't duplicate it; "Latest · HH:MM" moved into the kicker's kickerSuffix. `.merge(TightTextStyle)` — see EventNode.kt's `content` KDoc for why an explicit style needs this directly rather than an ambient provider.
+        // MarkdownBlock, not plain Text — the model is told the UI renders full Markdown and uses it here; plain Text showed literal asterisks instead (#193).
         content = if (item.isLatest && heroHeadline != null) {
-            { Text(text = heroHeadline, style = MaterialTheme.typography.bodyMedium.merge(TightTextStyle), color = contentColor) }
+            {
+                MarkdownBlock(
+                    text = heroHeadline,
+                    bodyStyle = MaterialTheme.typography.bodyMedium.merge(TightTextStyle).copy(color = contentColor),
+                    serif = false,
+                )
+            }
         } else {
             null
         },
