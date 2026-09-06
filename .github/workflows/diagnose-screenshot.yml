@@ -36,7 +36,8 @@ jobs:
         run: |
           find app/build/outputs/roborazzi -name "*.png" | while read -r f; do
             echo "===BEGIN $f==="
-            base64 -w 0 "$f"
-            echo ""
+            echo "sha256: $(sha256sum "$f" | cut -d' ' -f1)"
+            echo "bytes: $(wc -c < "$f")"
+            base64 -w 76 "$f"
             echo "===END $f==="
           done
