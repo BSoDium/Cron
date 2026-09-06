@@ -111,4 +111,31 @@ class SessionDaoTest {
         assertNull(dao.findById("old"))
         assertEquals("new", dao.findById("new")?.id)
     }
+
+    /** Regression for #153: two writers (e.g. an AI tool's updateInstruction, the FSM's updateStatus)
+     *  that both read the row before either one wrote must not clobber each other once they write --
+     *  each column-scoped UPDATE only ever touches its own column(s), so the write order here doesn't
+     *  matter. The old findById->copy->update(entity) pattern would have had the later write silently
+     *  revert whichever column the earlier write changed, since it overwrites the whole row from its
+     *  own now-stale snapshot. */
+    @Test
+    fun column_scoped_updates_dont_clobber_each_other() = runTest(dispatcher) {
+        dao.insert(entity("s1", "2026-05-22", status = SessionStatus.Monitoring))
+
+        dao.updateInstruction("s1", instructionJson = "{\"kind\":\"new\"}", lastAiCallAt = 1_000L, updatedAt = 1_000L)
+        dao.updateStatus("s1", status = "Awake", updatedAt = 2_000L)
+
+        val row = dao.findById("s1")
+        assertEquals("Awake", row?.status)
+        assertEquals("{\"kind\":\"new\"}", row?.currentInstructionJson)
+        assertEquals(1_000L, row?.lastAiCallAt)
+    }
+
+    @Test
+    fun incrementSnoozeCount_is_a_sql_side_increment_not_a_stale_readback() = runTest(dispatcher) {
+        dao.insert(entity("s1", "2026-05-22"))
+        dao.incrementSnoozeCount("s1", updatedAt = 1_000L)
+        dao.incrementSnoozeCount("s1", updatedAt = 2_000L)
+        assertEquals(2, dao.getSnoozeCount("s1"))
+    }
 }
