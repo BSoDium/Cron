@@ -1,15 +1,15 @@
 name: Diagnose Screenshot (throwaway)
 
-# Manual-only: records a single Roborazzi screenshot test and dumps the resulting PNG as base64
-# into the job log, so an agent session without device/artifact-download access can decode and
-# actually view the rendered output. Not meant to stay in the repo long-term -- remove once done.
+# Records a single Roborazzi screenshot test and dumps the resulting PNG as base64 into the job
+# log, so an agent session without device/artifact-download access can decode and actually view
+# the rendered output. Not meant to stay in the repo long-term -- remove once done verifying #195.
+# pull_request (not workflow_dispatch) because a workflow_dispatch job only becomes API-dispatchable
+# once its file exists on the default branch -- pull_request works from any branch immediately.
 
 on:
-  workflow_dispatch:
-    inputs:
-      test_filter:
-        description: "Fully-qualified test to record, e.g. fr.bsodium.cron.Foo.bar_test"
-        required: true
+  pull_request:
+    types: [synchronize]
+    branches: [main]
 
 jobs:
   record:
@@ -30,7 +30,7 @@ jobs:
         run: echo "GOOGLE_ROUTES_API_KEY=${{ secrets.GOOGLE_ROUTES_API_KEY }}" > local.properties
 
       - name: Record the requested screenshot
-        run: ./gradlew :app:recordRoborazziDebug --tests "${{ inputs.test_filter }}" --stacktrace
+        run: ./gradlew :app:recordRoborazziDebug --tests "fr.bsodium.cron.ui.screens.home.components.SessionTimelineScreenshotTest.hero_headline_renders_markdown_not_literal_asterisks" --stacktrace
 
       - name: Dump captured PNGs as base64
         run: |
