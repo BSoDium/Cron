@@ -38,6 +38,6 @@ jobs:
             echo "===BEGIN $f==="
             echo "sha256: $(sha256sum "$f" | cut -d' ' -f1)"
             echo "bytes: $(wc -c < "$f")"
-            base64 -w 76 "$f"
+            base64 -w 0 "$f" | fold -w 76 | nl -ba -w4 -s' '
             echo "===END $f==="
           done
