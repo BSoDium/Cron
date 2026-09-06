@@ -1,0 +1,42 @@
+name: Diagnose Screenshot (throwaway)
+
+# Manual-only: records a single Roborazzi screenshot test and dumps the resulting PNG as base64
+# into the job log, so an agent session without device/artifact-download access can decode and
+# actually view the rendered output. Not meant to stay in the repo long-term -- remove once done.
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: "Fully-qualified test to record, e.g. fr.bsodium.cron.Foo.bar_test"
+        required: true
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Create local.properties
+        run: echo "GOOGLE_ROUTES_API_KEY=${{ secrets.GOOGLE_ROUTES_API_KEY }}" > local.properties
+
+      - name: Record the requested screenshot
+        run: ./gradlew :app:recordRoborazziDebug --tests "${{ inputs.test_filter }}" --stacktrace
+
+      - name: Dump captured PNGs as base64
+        run: |
+          find app/build/outputs/roborazzi -name "*.png" | while read -r f; do
+            echo "===BEGIN $f==="
+            base64 -w 0 "$f"
+            echo ""
+            echo "===END $f==="
+          done

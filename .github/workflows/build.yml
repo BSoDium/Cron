@@ -52,16 +52,6 @@ jobs:
         name: unit-test-report
         path: app/build/reports/tests/testDebugUnitTest/
 
-    # Roborazzi's captured PNGs aren't committed baselines (see docs/screenshot-testing.md) --
-    # uploading them here is the only way to see rendered output from a CI-only change.
-    - name: Upload Roborazzi screenshots
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: roborazzi-screenshots
-        path: app/build/outputs/roborazzi/
-        if-no-files-found: ignore
-
     - name: Upload build reports
       if: failure()
       uses: actions/upload-artifact@v4
