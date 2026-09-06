@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import fr.bsodium.cron.alarm.AlarmScheduler
 import fr.bsodium.cron.alarm.HardLatestScheduler
+import fr.bsodium.cron.alarm.SessionExpiryScheduler
 import fr.bsodium.cron.session.model.DayPlan
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
@@ -20,7 +21,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -42,6 +46,7 @@ class SessionFsm(
 ) {
     private val alarmScheduler = AlarmScheduler(context)
     private val hardLatestScheduler = HardLatestScheduler(context)
+    private val sessionExpiryScheduler = SessionExpiryScheduler(context)
 
     /**
      * Deliver [event] to the FSM. Returns the session id, or null if no
@@ -61,6 +66,10 @@ class SessionFsm(
             return@withContext null
         }
         var current = repository.findCurrent()
+        if (current != null && shouldGateEvent(current, event.trigger, event.timestamp)) {
+            Log.i(TAG, "Session ${current.id} window expired at ${sessionWindowEnd(current)} — dropping stale ${event.trigger}")
+            return@withContext current.id
+        }
         // A fresh evening plan for a new morning supersedes any session left unfinished from a prior day.
         if (event.trigger == TriggerType.EveningPlan && current != null && supersedeIfStale(current, event)) {
             current = null
@@ -120,6 +129,7 @@ class SessionFsm(
             timezone = tz,
             sessionId = session.id,
         )
+        sessionExpiryScheduler.arm(target = sessionWindowEnd(session), sessionDate = date, sessionId = session.id)
         Log.i(TAG, "Session ${session.id} created for $date, hard-latest=${plan.hardLatest}")
         return session
     }
@@ -157,6 +167,12 @@ class SessionFsm(
                 timezone = TimeZone.of(session.timezone),
                 sessionId = sessionId,
             )
+            // The old expiry alarm was armed against the old hardLatest — left stale, it could force-complete a session still legitimately active under the new schedule.
+            sessionExpiryScheduler.arm(
+                target = sessionWindowEnd(session.copy(plan = refreshed)),
+                sessionDate = session.date,
+                sessionId = sessionId,
+            )
         }
         Log.i(TAG, "Session $sessionId plan refreshed from settings (prep=${refreshed.preparationBufferMinutes}, commute=${refreshed.commuteBufferMinutes})")
     } }
@@ -171,28 +187,53 @@ class SessionFsm(
         val data = eveningPlanEvent.data as? EventData.EveningPlan ?: return false
         val morning = SessionRepository.morningDate(eveningPlanEvent.timestamp, TimeZone.of(data.timezone))
         if (current.date == morning) return false
-        repository.updateStatus(current.id, SessionStatus.Complete)
-        alarmScheduler.cancel(current.date)
-        hardLatestScheduler.clear(current.date)
+        // stopService = false — the new session's evening-plan FGS is already live; stopping it here would kill the very sensors it needs.
+        completeSession(current, stopService = false)
         Log.i(TAG, "Superseded stale session ${current.id} (date=${current.date}) for morning $morning")
         return true
     }
 
-    private fun onStatusChange(session: SleepSession, newStatus: SessionStatus) {
+    private suspend fun onStatusChange(session: SleepSession, newStatus: SessionStatus) {
         when (newStatus) {
             SessionStatus.Awake -> {
                 context.startService(SleepSessionService.rearmIntent(context))
                 Log.i(TAG, "Session ${session.id} → Awake — rearming sleep monitor")
             }
-            SessionStatus.Complete -> {
-                alarmScheduler.cancel(session.date)
-                hardLatestScheduler.clear(session.date)
-                repository.cancelAiTurn(session.id)
-                repository.triggerSleepSessionWrite(session.id)
-                context.startService(SleepSessionService.stopIntent(context))
-                Log.i(TAG, "Session ${session.id} complete — alarms cleared, AI turn cancelled, service stopped")
-            }
+            SessionStatus.Complete -> completeSession(session)
             SessionStatus.Planning, SessionStatus.Monitoring, SessionStatus.ReMonitoring -> {}
+        }
+    }
+
+    /** The one place that knows what "session complete" means, called from every path that can end a
+     *  session (a normal onEvent transition, [supersedeIfStale], [completeIfExpired]) so they can't
+     *  drift out of sync the way [supersedeIfStale] previously had (missing cancelAiTurn/
+     *  triggerSleepSessionWrite/service-stop compared to the normal Complete transition). Stamps the
+     *  status itself rather than relying on the caller, so it's a true single source of truth — a
+     *  redundant same-value write from [onStatusChange]'s caller (which already wrote it) is harmless.
+     *  [stopService] is false only for the supersede case — see its call site. */
+    private suspend fun completeSession(session: SleepSession, stopService: Boolean = true) {
+        repository.updateStatus(session.id, SessionStatus.Complete)
+        alarmScheduler.cancel(session.date)
+        hardLatestScheduler.clear(session.date)
+        sessionExpiryScheduler.clear(session.date)
+        repository.cancelAiTurn(session.id)
+        repository.triggerSleepSessionWrite(session.id)
+        if (stopService) {
+            context.startService(SleepSessionService.stopIntent(context))
+        }
+        Log.i(TAG, "Session ${session.id} complete — alarms cleared, AI turn cancelled${if (stopService) ", service stopped" else ""}")
+    }
+
+    /** Fired by [SessionExpiryScheduler]'s exact alarm. A session with no activity since its active
+     *  window closed is done, whether or not a clean OutOfBedConfirmed ever arrived (#191/#179). */
+    suspend fun completeIfExpired(sessionId: String): Boolean = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val session = repository.findById(sessionId) ?: return@withContext false
+            if (session.status == SessionStatus.Complete) return@withContext false
+            val now = Clock.System.now()
+            if (now < sessionWindowEnd(session)) return@withContext false
+            completeSession(session)
+            true
         }
     }
 
@@ -235,6 +276,24 @@ class SessionFsm(
          *  onEvent/onSnooze/refreshPlanFromSettings across those independently-created instances (#153). */
         private val mutex = Mutex()
 
+        /** How long past either ceiling in [sessionWindowEnd] a session stays live. */
+        private val SESSION_WINDOW_GRACE = 3.hours
+
+        /** Signals that only matter while the session is still live: sensor inferences about the
+         *  user's physical state, plus a calendar edit whose relevance to *this* morning's alarm ends
+         *  when the morning does. A reading of "dark and still" or a changed event, hours after the
+         *  session's window closed, isn't evidence about this session — it's an unrelated part of the
+         *  day (a nap, an errand, tomorrow's calendar). AlarmDismissed/AlarmSnoozed/HardLatestFired are
+         *  direct user actions or the safety net itself firing, so they always bypass this gate. */
+        private val WINDOW_GATED_TRIGGERS = setOf(
+            TriggerType.SleepOnset,
+            TriggerType.MidSleepActivity,
+            TriggerType.HcStageUpdate,
+            TriggerType.OutOfBedConfirmed,
+            TriggerType.WakeWindowOpportunity,
+            TriggerType.CalendarChange,
+        )
+
         private val AI_TRIGGERS = setOf(
             TriggerType.EveningPlan,
             TriggerType.SleepOnset,
@@ -257,6 +316,33 @@ class SessionFsm(
         /** A dismiss from ReMonitoring more than this long after the prior dismiss is the morning
          *  wake, not a rapid re-ring chain — see [transition]'s AlarmDismissed/ReMonitoring case. */
         private val DISMISS_GRACE = 30.minutes
+
+        /**
+         * The instant a session's active window closes — the earlier of two ceilings, so the window
+         * is both safe (never closes before the hard-latest safety net could still fire) and tight
+         * (doesn't stay open for hours after the user is demonstrably up):
+         *  - `hardLatest + grace`: the original safety bound, for a session that never got a clean
+         *    wake signal at all.
+         *  - `lastAwakeAt + grace`: closes promptly once the user is actually up, so a lenient
+         *    hard-latest on a free day (say 11am) doesn't leave the window open until 2pm and misread
+         *    a 1pm nap as "fell back asleep."
+         */
+        internal fun sessionWindowEnd(session: SleepSession, grace: Duration = SESSION_WINDOW_GRACE): Instant {
+            val hardLatestCeiling = session.date.atTime(session.plan.hardLatest).toInstant(TimeZone.of(session.timezone)) + grace
+            val lastAwakeAt = session.events
+                .lastOrNull { it.trigger == TriggerType.AlarmDismissed || it.trigger == TriggerType.OutOfBedConfirmed }
+                ?.timestamp
+            val postWakeCeiling = lastAwakeAt?.plus(grace)
+            return listOfNotNull(hardLatestCeiling, postWakeCeiling).min()
+        }
+
+        internal fun isWithinActiveWindow(session: SleepSession, now: Instant): Boolean =
+            now <= sessionWindowEnd(session)
+
+        /** Whether [trigger] should be dropped as stale rather than reaching [transition] — a
+         *  [WINDOW_GATED_TRIGGERS] member arriving after the session's active window has closed. */
+        internal fun shouldGateEvent(session: SleepSession, trigger: TriggerType, now: Instant): Boolean =
+            trigger in WINDOW_GATED_TRIGGERS && !isWithinActiveWindow(session, now)
 
         /**
          * Pure status transition, unit-testable: given the session's current status and an incoming
