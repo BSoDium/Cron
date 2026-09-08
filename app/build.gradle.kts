@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import java.util.Properties
 
 plugins {
@@ -110,6 +111,16 @@ android {
         unitTests {
             isIncludeAndroidResources = true
         }
+    }
+}
+
+// Failing tests print their full stack trace into the CI log; the HTML report is a download-only artifact.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = TestExceptionFormat.FULL
+        showStackTraces = true
+        showCauses = true
     }
 }
 
