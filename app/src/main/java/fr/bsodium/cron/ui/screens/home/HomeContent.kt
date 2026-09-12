@@ -1,7 +1,8 @@
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 
 package fr.bsodium.cron.ui.screens.home
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.rememberOverscrollEffect
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +51,15 @@ import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
 
 private val ALARM_COLLAPSE_RANGE = 120.dp
+
+/** Roughly 8-10 timeline rows' worth of ahead-of-viewport composition/measurement, kept warm so a
+ *  fast fling doesn't outrun `LazyColumn`'s default one-item-ahead prefetch and force several rows'
+ *  remaining composition cost to land synchronously in one frame. Live-measured on device (see
+ *  #176): without this, a hard fling shows a P50/P90/P95 of 6/9/10ms but a P99 of 93ms — rare,
+ *  severe stalls, not a uniform slowdown. Empirically tuned against that exact capture, not a guess
+ *  — see docs/performance.md for the before/after numbers and the retuning recipe if this screen's
+ *  average row height changes meaningfully. */
+private val TIMELINE_PREFETCH_AHEAD = 600.dp
 
 /** [StickyAlarm]'s fade overlay's opacity cap while the card is actively collapsing — content
  *  scrolling underneath stays faintly visible so the collapse transition itself is watchable. */
@@ -89,7 +100,7 @@ internal fun HomePlanContent(
     onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
     onNavigateToHistory: () -> Unit,
 ) {
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(cacheWindow = LazyLayoutCacheWindow(ahead = TIMELINE_PREFETCH_AHEAD))
     val sharedOverscrollEffect = rememberOverscrollEffect()
     val trackRegistry = rememberTimelineTrackRegistry()
     val density = LocalDensity.current
