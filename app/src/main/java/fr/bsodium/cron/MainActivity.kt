@@ -35,6 +35,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import fr.bsodium.cron.perf.rememberJankMetricsState
+import fr.bsodium.cron.perf.trackJank
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
@@ -134,6 +136,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // System-driven bar styling — dark icons on a light page, light icons on dark.
         enableEdgeToEdge()
+        trackJank(this)
 
         val settings = SettingsRepository(this)
         // Resolve the start destination off the main thread: SecureKeyStore init and the DataStore read both block, so the branded splash stays up until this lands.
@@ -154,6 +157,11 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = backStackEntry?.destination?.route
+                // Tags every JankStats log line with the screen that was on-screen when the frame dropped.
+                val jankMetricsState = rememberJankMetricsState()
+                LaunchedEffect(currentRoute, jankMetricsState) {
+                    jankMetricsState?.putState("Screen", currentRoute ?: "unknown")
+                }
                 val showBottomBar = currentRoute in TAB_ROUTES
                 // Pages with a PageAppBar own the status-bar strip; the top edge-fade would two-tone it against the bar's scrolled surfaceContainer shade, so suppress it there.
                 val hasTopAppBar = currentRoute == ROUTE_HISTORY ||

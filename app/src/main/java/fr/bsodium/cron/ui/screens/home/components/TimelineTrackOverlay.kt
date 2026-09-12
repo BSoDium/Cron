@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import androidx.tracing.trace
 
 /** Thickness of the center-line spine — thin, a detail line rather than another track. */
 private val SPINE_WIDTH = 2.dp
@@ -98,8 +99,10 @@ internal fun TimelineTrackOverlay(
             .drawBehind {
                 // Read directly in the draw phase (not via derivedStateOf) so a position change redraws the same frame with no recomposition round-trip; see computePlacedAnchors.
                 if (visible) {
-                    val placed = computePlacedAnchors(registry, overlayCoordinates)
-                    drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch)
+                    trace("TimelineTrackOverlay.onDraw") {
+                        val placed = computePlacedAnchors(registry, overlayCoordinates)
+                        drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch)
+                    }
                 }
             },
     )

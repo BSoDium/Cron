@@ -4,6 +4,7 @@ package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.tracing.trace
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -165,7 +166,7 @@ internal fun TimelineNode(
     title: @Composable () -> Unit,
     status: (@Composable () -> Unit)? = null,
     content: (@Composable () -> Unit)? = null,
-) {
+) = trace("TimelineNode") {
     /** A cap anchor keeps the flush size; an interior one shrinks. Latest is always a segment top,
      *  so it evaluates true with no special-casing (Google-Maps "first station is bigger"). */
     val atCap = isSegmentTop || isSegmentBottom ||
