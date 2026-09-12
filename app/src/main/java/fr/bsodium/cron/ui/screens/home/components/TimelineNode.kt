@@ -221,14 +221,7 @@ internal fun TimelineNode(
         label = "timeline-node-press-morph",
     )
 
-    /** The Latest morph's progress is hoisted here and exposed to the overlay via the reported
-     *  `AnchorShape.MorphShape` so the socket carve animates in lockstep with the row's arrival.
-     *  Gated below on [isNewlyArrived] (survives navigation, unlike a bare composition check) *and*
-     *  `registry.markEnteredOnce` (a defensive second guard against rapid scroll-churn
-     *  disposing/recomposing this row within the same "new" window) — an unconditional effect here
-     *  would replay this morph on every fresh mount regardless of whether the row is actually new
-     *  data. */
-    val latestMorph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie9Sided) }
+    val isClickable = onClick != null
     /** Unconditional (not short-circuited by the `&&` below) so this composable call happens the
      *  same way on every recomposition regardless of the other flags — Compose's slot table expects
      *  the same sequence of composable calls call-over-call, not one gated behind a boolean that can
@@ -242,39 +235,59 @@ internal fun TimelineNode(
             if (playsArrival) latestProgress.animateTo(1f, arriveSpec) else latestProgress.snapTo(1f)
         }
     }
-    /** A clickable Neutral cap's plain Circle morphs toward this distinct silhouette while
-     *  pressed — Cookie6Sided rather than Latest's own Cookie9Sided so the two "selected" cues stay
-     *  visually distinguishable. At `pressMorphProgress == 0` this renders pixel-identical to a
-     *  plain Circle, so it's safe to use unconditionally for every clickable cap. */
-    val pressCapMorph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie6Sided) }
-    val isClickable = onClick != null
-    /** A clickable interior Pill needs no Morph of its own — its press target is a plain
-     *  `drawRoundRect` whose corner radius and height both animate off `pressMorphProgress`
-     *  directly in `TimelineTrackOverlay.kt`; see [AnchorShape.Pill]'s KDoc for why a Morph-based
-     *  approach here produces a broken "butterfly" mid-press silhouette. */
-    val shape = remember(effectiveAnchor, latestMorph, pressCapMorph, atCap, isClickable) {
-        when (effectiveAnchor) {
-            is TimelineAnchor.Latest -> AnchorShape.MorphShape(latestMorph) { latestProgress.value }
+    /** Both [Morph]s below used to be hoisted unconditionally above this point and referenced from a
+     *  single `remember`-wrapped `shape` derivation — but a [Morph] constructor does real geometric
+     *  work (matching/interpolating vertices between the two polygons), and the overwhelming majority
+     *  of rows are neither Latest nor a clickable cap, so most rows paid for two morphs and used
+     *  neither. Live-measured on-device (see #176): this was ~57% of a row's first-composition cost.
+     *  Building each one inline, only in the branch that reads it, is the same conditional-`remember`
+     *  shape already used elsewhere in this codebase for a plain `remember { expensiveObject }` call
+     *  (not a stateful composable with its own internal `remember`/`produceState` — see
+     *  `sessionTimelineItems`' `rememberRelativeAgo` KDoc in `SessionTimeline.kt` for why *that* one
+     *  can't be gated the same way). `shape` itself no longer needs its own `remember`: without the
+     *  morphs, deriving it is cheap branching/object construction, and [SideEffect] below already
+     *  re-registers it on every successful composition regardless of whether it changed. */
+    val shape = when (effectiveAnchor) {
+        is TimelineAnchor.Latest -> {
+            /** Exposed to the overlay via the reported `AnchorShape.MorphShape` so the socket carve
+             *  animates in lockstep with the row's arrival — [latestProgress] above is gated on
+             *  [isNewlyArrived] (survives navigation, unlike a bare composition check) *and*
+             *  `registry.markEnteredOnce` (a defensive second guard against rapid scroll-churn
+             *  disposing/recomposing this row within the same "new" window). */
+            val latestMorph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie9Sided) }
+            AnchorShape.MorphShape(latestMorph) { latestProgress.value }
+        }
             // A non-cap Icon is already normalized to Neutral valence above, so the Neutral branch is reached by every interior anchor — gated on atCap since a genuinely Neutral CAP anchor must stay a circle, only an interior one becomes a pill.
-            is TimelineAnchor.Icon -> when (effectiveAnchor.valence) {
-                TimelineValence.Positive -> AnchorShape.Polygon(MaterialShapes.Flower)
-                // Triangle's centroid sits below its bounding-box center, so a glyph centered on the bbox reads as sitting too high; Diamond (a square rotated 45°) is symmetric on both axes, so bbox-centering is also visual-centering — still reads sharper/"less positive" than Flower/Circle.
-                TimelineValence.Negative -> AnchorShape.Polygon(MaterialShapes.Diamond)
-                TimelineValence.Neutral -> when {
-                    atCap && isClickable -> AnchorShape.MorphShape(pressCapMorph) { pressMorphProgress }
-                    atCap -> AnchorShape.Circle
-                    isClickable -> AnchorShape.Pill(pressProgress = { pressMorphProgress })
-                    else -> AnchorShape.Pill()
+        is TimelineAnchor.Icon -> when (effectiveAnchor.valence) {
+            TimelineValence.Positive -> AnchorShape.Polygon(MaterialShapes.Flower)
+            // Triangle's centroid sits below its bounding-box center, so a glyph centered on the bbox reads as sitting too high; Diamond (a square rotated 45°) is symmetric on both axes, so bbox-centering is also visual-centering — still reads sharper/"less positive" than Flower/Circle.
+            TimelineValence.Negative -> AnchorShape.Polygon(MaterialShapes.Diamond)
+            TimelineValence.Neutral -> when {
+                atCap && isClickable -> {
+                    /** A clickable Neutral cap's plain Circle morphs toward this distinct silhouette
+                     *  while pressed — Cookie6Sided rather than Latest's own Cookie9Sided so the two
+                     *  "selected" cues stay visually distinguishable. At `pressMorphProgress == 0`
+                     *  this renders pixel-identical to a plain Circle, so it's safe to use for every
+                     *  clickable cap. */
+                    val pressCapMorph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie6Sided) }
+                    AnchorShape.MorphShape(pressCapMorph) { pressMorphProgress }
                 }
-            }
-            TimelineAnchor.Plain -> when {
-                atCap && isClickable -> AnchorShape.MorphShape(pressCapMorph) { pressMorphProgress }
                 atCap -> AnchorShape.Circle
+                // A clickable interior Pill needs no Morph of its own — its press target is a plain `drawRoundRect` whose corner radius and height both animate off `pressMorphProgress` directly in `TimelineTrackOverlay.kt`; see `AnchorShape.Pill`'s KDoc for why a Morph-based approach here produces a broken "butterfly" mid-press silhouette.
                 isClickable -> AnchorShape.Pill(pressProgress = { pressMorphProgress })
                 else -> AnchorShape.Pill()
             }
-            TimelineAnchor.Loader -> AnchorShape.Circle
         }
+        TimelineAnchor.Plain -> when {
+            atCap && isClickable -> {
+                val pressCapMorph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie6Sided) }
+                AnchorShape.MorphShape(pressCapMorph) { pressMorphProgress }
+            }
+            atCap -> AnchorShape.Circle
+            isClickable -> AnchorShape.Pill(pressProgress = { pressMorphProgress })
+            else -> AnchorShape.Pill()
+        }
+        TimelineAnchor.Loader -> AnchorShape.Circle
     }
 
     SideEffect {
