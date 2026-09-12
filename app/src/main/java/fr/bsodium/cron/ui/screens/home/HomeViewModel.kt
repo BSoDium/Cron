@@ -128,11 +128,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         settingsAt > lastAiCallAt && settingsAt > dismissedAt
     }
 
-    private val streamingActiveFlow = combine(
-        sessionFlow.map { it?.id }.distinctUntilChanged(),
-        StreamingTurnStore.active,
-    ) { id, streaming -> id != null && streaming?.sessionId == id }
-
     private val prefsFlow = combine(
         settings.hapticsEnabled,
         settings.autoAlarmsEnabled,
@@ -205,11 +200,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _isRetrying,
         settingsChangedFlow,
         _aiFailure,
-        streamingActiveFlow,
         prefsFlow,
-    ) { retrying, settingsChanged, failure, streaming, prefs ->
+    ) { retrying, settingsChanged, failure, prefs ->
         HomeStatus(
-            isRetrying = retrying || streaming,
+            isRetrying = retrying,
             settingsChanged = settingsChanged,
             failure = failure,
             hapticsEnabled = prefs.hapticsEnabled,
@@ -242,7 +236,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             timeline = timeline.capped.items,
             newlyArrivedIds = timeline.newlyArrivedIds,
             hasMoreHistory = timeline.capped.truncated || moreHistoryAvailable,
-            isRetrying = status.isRetrying,
+            // Sourced from plan itself (not a second StreamingTurnStore.active subscription) so the spinner and the response body can never disagree in one emission (#198).
+            isRetrying = status.isRetrying || plan?.iterations?.lastOrNull()?.thread?.isStreaming == true,
             initialized = true,
             settingsChangedSincePlan = status.settingsChanged && plan != null,
             aiFailure = status.failure,

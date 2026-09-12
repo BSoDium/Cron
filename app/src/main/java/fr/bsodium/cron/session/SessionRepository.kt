@@ -137,20 +137,14 @@ class SessionRepository(private val context: Context) {
         WorkManager.getInstance(context)
             .getWorkInfosForUniqueWorkFlow("${AiTurnWorker.WORK_PREFIX}$sessionId")
 
+    // Each setter below is a targeted single-column DAO query, not findById->copy->update(entity), so a concurrent writer to another column is never clobbered by a stale full-row overwrite (#153).
+
     suspend fun updateStatus(sessionId: String, status: SessionStatus) {
-        val entity = db.sessionDao().findById(sessionId) ?: return
-        db.sessionDao().update(entity.copy(
-            status = status.name,
-            updatedAt = Clock.System.now().toEpochMilliseconds(),
-        ))
+        db.sessionDao().updateStatus(sessionId, status.name, Clock.System.now().toEpochMilliseconds())
     }
 
     suspend fun updatePlan(sessionId: String, plan: DayPlan) {
-        val entity = db.sessionDao().findById(sessionId) ?: return
-        db.sessionDao().update(entity.copy(
-            planJson = SessionJson.encodeToString(plan),
-            updatedAt = Clock.System.now().toEpochMilliseconds(),
-        ))
+        db.sessionDao().updatePlan(sessionId, SessionJson.encodeToString(plan), Clock.System.now().toEpochMilliseconds())
     }
 
     /**
@@ -159,38 +153,28 @@ class SessionRepository(private val context: Context) {
      * first one's tool writes the timestamp. Also clears the "settings changed since plan" reminder.
      */
     suspend fun markAiTriggered(sessionId: String) {
-        val entity = db.sessionDao().findById(sessionId) ?: return
         val now = Clock.System.now().toEpochMilliseconds()
-        db.sessionDao().update(entity.copy(lastAiCallAt = now, updatedAt = now))
+        db.sessionDao().markAiTriggered(sessionId, lastAiCallAt = now, updatedAt = now)
     }
 
     suspend fun updateInstruction(sessionId: String, instruction: Instruction) {
-        val entity = db.sessionDao().findById(sessionId) ?: return
         val now = Clock.System.now().toEpochMilliseconds()
-        db.sessionDao().update(entity.copy(
-            currentInstructionJson = SessionJson.encodeToString(instruction),
+        db.sessionDao().updateInstruction(
+            sessionId,
+            instructionJson = SessionJson.encodeToString(instruction),
             lastAiCallAt = now,
             updatedAt = now,
-        ))
+        )
     }
 
     /** Atomically increments snooze count; returns the new value. */
     suspend fun incrementSnoozeCount(sessionId: String): Int {
-        val entity = db.sessionDao().findById(sessionId) ?: return 0
-        val newCount = entity.snoozeCount + 1
-        db.sessionDao().update(entity.copy(
-            snoozeCount = newCount,
-            updatedAt = Clock.System.now().toEpochMilliseconds(),
-        ))
-        return newCount
+        db.sessionDao().incrementSnoozeCount(sessionId, Clock.System.now().toEpochMilliseconds())
+        return db.sessionDao().getSnoozeCount(sessionId) ?: 0
     }
 
     suspend fun updateCachedFirstEventSig(sessionId: String, sig: String?) {
-        val entity = db.sessionDao().findById(sessionId) ?: return
-        db.sessionDao().update(entity.copy(
-            cachedFirstEventSig = sig,
-            updatedAt = Clock.System.now().toEpochMilliseconds(),
-        ))
+        db.sessionDao().updateCachedFirstEventSig(sessionId, sig, Clock.System.now().toEpochMilliseconds())
     }
 
     /** Deletes every session, its events, and its AI messages. The `ON DELETE CASCADE` declared on

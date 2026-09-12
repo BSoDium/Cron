@@ -21,8 +21,9 @@ local.properties
 *.jks
 *.keystore
 
-# Claude Code local state
-.claude/
+# Claude Code local state — settings.json is shared/committed (see below), everything else stays local
+.claude/*
+!.claude/settings.json
 
 # Gradle toolchain auto-discovery (machine-specific)
 gradle/gradle-daemon-jvm.properties
