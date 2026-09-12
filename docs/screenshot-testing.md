@@ -28,6 +28,37 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
 ./gradlew :app:verifyRoborazziDebug
 ```
 
+## Reviewing a captured screenshot
+
+A screenshot that rendered without crashing is not a screenshot that's correct. CLAUDE.md says so
+explicitly, and `docs/color-roles.md`'s round-by-round history is forty rounds of evidence that
+"it rendered" and "it looks right" are different bars — a holistic glance at the PNG reliably
+misses exactly the defects this project has repeatedly shipped. Check it against this list; if you
+can't say which of these you checked, you haven't reviewed the screenshot, you've looked at it:
+
+- **Alignment** — is every icon/glyph actually centered on its anchor, not just placed inside a
+  `Box` that happens to be centered? Most Material Symbols glyphs aren't symmetrically padded
+  within their own bounding box, so "centered in the layout" and "looks centered" are different
+  facts. Measure, don't eyeball — see `AlignedFirstGlyph.kt` for the pattern this repo settled on
+  after the eyeballed-offset version kept drifting.
+- **Spacing** — does every gap/padding trace to a `Spacing`/`Radius` token, not a value that
+  happened to look right in this one screenshot at this one content length?
+- **Weight** — does this icon's or text's weight match its siblings on the same screen? A weight
+  choice that's fine in isolation reads as inconsistent next to the rest of the screen.
+- **Contrast/tone** — does it hold up in both light and dark? A single-theme screenshot only
+  proves one of the two.
+
+## Known gaps in this workflow
+
+- Robolectric/Layoutlib renders text and vector metrics differently from the real on-device
+  Skia/HarfBuzz stack (see `docs/preview-quirks.md`). A screenshot that looks right here isn't a
+  guarantee it looks right on a real device, particularly for font/icon metrics — treat it as one
+  signal, not the final word, for anything measurement-sensitive.
+- There are no committed baselines yet, so `verifyRoborazziDebug` has nothing to diff a new
+  screenshot against — #147 tracks wiring that into CI. Until it lands, every screenshot is
+  first-look judgment against the list above, not a regression check against a prior approved
+  state.
+
 ## Where PNGs land
 
 All output goes to `app/build/outputs/roborazzi/` (gitignored). The agent workflow is record-on-demand: capture before a change, make the change, compare, read diffs. No committed baselines needed for this workflow.
