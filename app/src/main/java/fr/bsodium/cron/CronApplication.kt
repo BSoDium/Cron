@@ -13,6 +13,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import fr.bsodium.cron.alarm.EveningPlanScheduler
+import fr.bsodium.cron.debug.DebugReceivers
 import fr.bsodium.cron.receiver.AlarmReceiver
 import fr.bsodium.cron.service.SleepSessionService
 import fr.bsodium.cron.worker.HealthConnectPollWorker
@@ -35,6 +36,7 @@ class CronApplication : Application() {
         armEveningPlan()
         enqueueHealthConnectPoll()
         enqueueSessionCleanup()
+        DebugReceivers.register(this)
     }
 
     private fun armEveningPlan() {

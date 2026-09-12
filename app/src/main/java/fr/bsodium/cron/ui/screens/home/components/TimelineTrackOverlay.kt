@@ -1,5 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import android.content.Context
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -10,10 +12,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -25,6 +27,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import fr.bsodium.cron.ui.theme.Spacing
 
 /** Thickness of the center-line spine — thin, a detail line rather than another track. */
 private val SPINE_WIDTH = 2.dp
@@ -75,10 +78,18 @@ private const val SQUARE_CORNER_FRACTION = 0.3f
  *  draw-phase-only `graphicsLayer` transform, as `MainActivity.kt`'s tab transitions use), since each
  *  row's `onGloballyPositioned` only fires once, at its own placement frame. See docs/color-roles.md
  *  for the full history. The flush-to-screen-edge flash on a new arrival is covered in
- *  [drawSegment]'s KDoc. */
+ *  [drawSegment]'s KDoc.
+ *
+ *  Since Phase 7 (docs/color-roles.md), that per-child `onGloballyPositioned` model only still supplies
+ *  the Latest row's Y (its anchor genuinely needs live measurement — see [nonLatestAnchorCenterY]'s
+ *  KDoc) and every row's X (scroll-invariant, so staleness there is harmless). Every other row's Y comes
+ *  from [listState]'s own atomic `layoutInfo` snapshot instead — the fix for a confirmed live bug where
+ *  a fast fling under load could leave some rows' callbacks a frame behind their siblings', painting a
+ *  frozen, disconnected socket. */
 @Composable
 internal fun TimelineTrackOverlay(
     registry: TimelineTrackRegistry,
+    listState: LazyListState,
     modifier: Modifier = Modifier,
     visible: Boolean = true,
 ) {
@@ -90,6 +101,12 @@ internal fun TimelineTrackOverlay(
     val scratch = remember { android.graphics.Path() }
     var overlayCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val endState = remember { TrackEndState() }
+    val staleness = remember { AnchorStalenessTracker() }
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    // Every non-Latest anchor's Row-centered Y depends only on these two constants — see nonLatestAnchorCenterY's KDoc for the derivation. Computed once per composition, not per anchor per frame.
+    val verticalPaddingPx = with(density) { Spacing.md.toPx() }
+    val anchorDiamPx = with(density) { TRACK_WIDTH.toPx() }
 
     Box(
         modifier = modifier
@@ -98,50 +115,144 @@ internal fun TimelineTrackOverlay(
             .drawBehind {
                 // Read directly in the draw phase (not via derivedStateOf) so a position change redraws the same frame with no recomposition round-trip; see computePlacedAnchors.
                 if (visible) {
-                    val placed = computePlacedAnchors(registry, overlayCoordinates)
-                    drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch)
+                    val placed = computePlacedAnchors(
+                        registry = registry,
+                        overlayCoordinates = overlayCoordinates,
+                        listState = listState,
+                        verticalPaddingPx = verticalPaddingPx,
+                        anchorDiamPx = anchorDiamPx,
+                        staleness = staleness,
+                        context = context,
+                    )
+                    drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch, context)
                 }
             },
     )
 }
 
-private class PlacedAnchor(val id: String, val descriptor: AnchorDescriptor, val cx: Float, val cy: Float)
-
 /** Remembers which anchor id last legitimately confirmed the segment's top/bottom cap — a plain
  *  draw-phase-mutated field, not snapshot state, since it only needs to survive across this
  *  composable's own draw calls, never trigger recomposition. See [drawTrack]'s KDoc for why this
- *  replaces a same-frame registry lookup. */
+ *  replaces a same-frame registry lookup. Wraps [TrackEnds] (the pure, testable value) as a mutable
+ *  holder for the draw phase to update in place. */
 private class TrackEndState {
-    var lastTopId: String? = null
-    var lastBottomId: String? = null
+    var ends = TrackEnds(topId = null, bottomId = null)
 }
 
-private class SleepPill(val top: Float, val bottom: Float, val roundTop: Boolean, val roundBottom: Boolean)
+/** Phase 6 (docs/color-roles.md, scroll-jank "stuck pill" investigation): counts, per anchor id, how
+ *  many consecutive [computePlacedAnchors] calls have passed since [TimelineTrackRegistry.setPosition]
+ *  last actually ran for that id — i.e. since [TimelineTrackRegistry.positions]' entry for it was last
+ *  replaced with a fresh [AnchorPosition] wrapper. Compares the *wrapper* by reference, not the
+ *  [LayoutCoordinates] it holds: Compose may keep handing back the same `LayoutCoordinates` instance
+ *  across layout passes while only mutating its internal position, so a coordinates-reference check
+ *  would say nothing about whether this frame's layout pass actually touched this anchor — the wrapper
+ *  is deliberately rebuilt on every `setPosition` call for exactly this reason (see [AnchorPosition]'s
+ *  KDoc). A count that climbs for one id while its neighbors' reset to 0 on the same call is direct
+ *  evidence that anchor's row stopped receiving layout passes while the rest of the visible list kept
+ *  moving — the "stalled `animateItem` spring" hypothesis, distinct from ordinary whole-list jank
+ *  (where every visible anchor's count would climb together, since the draw call itself is simply
+ *  skipped rather than any one anchor being singled out). */
+private class AnchorStalenessTracker {
+    private val lastSeenWrapper = mutableMapOf<String, AnchorPosition>()
+    private val staleFrameCounts = mutableMapOf<String, Int>()
+
+    fun update(positions: Map<String, AnchorPosition>): Map<String, Int> {
+        lastSeenWrapper.keys.retainAll(positions.keys)
+        staleFrameCounts.keys.retainAll(positions.keys)
+        positions.forEach { (id, wrapper) ->
+            if (lastSeenWrapper[id] !== wrapper) {
+                lastSeenWrapper[id] = wrapper
+                staleFrameCounts[id] = 0
+            } else {
+                staleFrameCounts[id] = (staleFrameCounts[id] ?: 0) + 1
+            }
+        }
+        return staleFrameCounts
+    }
+}
+
+/** How many consecutive [computePlacedAnchors] calls an anchor must go without a fresh
+ *  [TimelineTrackRegistry.setPosition] call before [AnchorStalenessTracker] flags it — high enough to
+ *  skip the routine "only one id updates per call" case (see [AnchorPosition]'s KDoc), low enough to
+ *  catch a stall lasting a meaningful fraction of a scroll gesture. */
+private const val STALE_FRAME_THRESHOLD = 8
 
 /** Reads every currently-registered anchor's live position and returns it. Returns an empty list
  *  while this overlay's own coordinates aren't attached yet (the first frame or two of any mount).
  *
- *  Every position is queried live from the stored [LayoutCoordinates] handle ([AnchorPosition]) at
- *  call time, never cached, so a draw-phase call always reflects the current coordinate system. Uses
- *  [LayoutCoordinates.localPositionOf] to map the anchor's own local center directly into the
- *  overlay's local space in one step — a window-space delta would get double-scaled inside
- *  `MainActivity.kt`'s nav transition. Draws only what's currently registered; a disposed row's
- *  position is not cached or filtered against scroll state. This means a row disposing while still
- *  visually on-screen can flicker — an open issue, see docs/color-roles.md for prior attempts. A fix
- *  should control `LazyColumn`'s own beyond-viewport composition margin directly rather than caching
- *  or second-guessing its disposal decisions from outside. */
+ *  X always comes from the live [LayoutCoordinates] handle ([AnchorPosition]) — scroll-invariant
+ *  (every anchor centers in the same fixed-width gutter), so per-frame staleness there is harmless.
+ *  Y prefers [nonLatestAnchorCenterY] sourced from [listState]'s atomic `layoutInfo` snapshot for every
+ *  anchor except the Latest row (see [nonLatestAnchorCenterY]'s KDoc and this file's own top-level KDoc
+ *  for why — Phase 7, docs/color-roles.md). The live handle's Y is used as a fallback in exactly one
+ *  case: `listState.layoutInfo.visibleItemsInfo` is entirely empty, meaning no real `LazyColumn` backs
+ *  this `listState` at all (isolated screenshot tests, `@Preview`s) — those must keep resolving position
+ *  exactly as before rather than losing every socket. A non-Latest anchor whose id simply isn't in *this
+ *  frame's* `visibleItemsInfo`, while a real `LazyColumn` genuinely has other items visible, is EXCLUDED
+ *  instead — a first attempt at this fix fell back to the live handle in that case too, which silently
+ *  reintroduced the exact race the fix targets: a large single-frame scroll jump under load can skip a
+ *  row clean over one frame's visible range without it ever being disposed, and painting it at its old
+ *  live-measured position there is precisely the frozen, disconnected socket this phase exists to kill.
+ *  Confirmed live twice — this distinction (empty `visibleItemsInfo` vs. this-id-missing) is required,
+ *  not a hardening nice-to-have.
+ *
+ *  A disposed row's position is not cached or filtered against scroll state beyond that. This means a
+ *  row disposing while still visually on-screen can flicker — an open issue, see docs/color-roles.md
+ *  for prior attempts. A fix should control `LazyColumn`'s own beyond-viewport composition margin
+ *  directly rather than caching or second-guessing its disposal decisions from outside.
+ *
+ *  Resolving each row's live [LayoutCoordinates] into a plain [Offset] genuinely needs a real layout
+ *  tree, so it stays here; the actual inclusion filter is [resolvePlacedAnchors], a pure function
+ *  unit-tested separately in `TimelineTrackGeometryTest.kt`. */
 private fun computePlacedAnchors(
     registry: TimelineTrackRegistry,
     overlayCoordinates: LayoutCoordinates?,
+    listState: LazyListState,
+    verticalPaddingPx: Float,
+    anchorDiamPx: Float,
+    staleness: AnchorStalenessTracker,
+    context: Context,
 ): List<PlacedAnchor> {
     val overlay = overlayCoordinates?.takeIf { it.isAttached } ?: return emptyList()
-    return registry.descriptors.keys.mapNotNull { id ->
-        val descriptor = registry.descriptors[id] ?: return@mapNotNull null
-        val coords = registry.positions[id]?.coordinates?.takeIf { it.isAttached } ?: return@mapNotNull null
+    val layoutInfo = listState.layoutInfo
+    val viewportStartOffset = layoutInfo.viewportStartOffset
+    val visibleItems = layoutInfo.visibleItemsInfo
+    val visibleByKey = visibleItems.associateBy { it.key }
+    // A real LazyColumn's visibleItemsInfo is never empty once anything's on screen — an isolated
+    // screenshot test/Preview that renders rows without a real LazyColumn behind listState never
+    // populates it at all. That distinction matters: a real LazyColumn genuinely can have a specific
+    // id transiently absent from this exact frame's visible range (a big single-frame scroll jump can
+    // skip clean over a row without it ever being "this frame's visible set") — that case must exclude
+    // the anchor, not fall back to the live handle, or it reintroduces the exact race this fixes (a
+    // fallback that fires mid-fling repaints the same stale, frozen position as before). The live-handle
+    // fallback below is only for the "no real LazyColumn at all" case, where nothing else is available.
+    val noRealLazyColumn = visibleItems.isEmpty()
+    val detachedIds = mutableListOf<String>()
+    val resolvedPositions = registry.descriptors.mapNotNull { (id, descriptor) ->
+        val position = registry.positions[id] ?: return@mapNotNull null
+        val coords = position.coordinates.takeIf { it.isAttached } ?: run {
+            detachedIds += id
+            return@mapNotNull null
+        }
         val center = Offset(coords.size.width / 2f, coords.size.height / 2f)
-        val local = overlay.localPositionOf(coords, center)
-        PlacedAnchor(id, descriptor, local.x, local.y)
+        val liveCenter = overlay.localPositionOf(coords, center)
+        val item = if (descriptor.isLatest) null else visibleByKey[id]
+        val cy = when {
+            descriptor.isLatest -> liveCenter.y
+            item != null -> nonLatestAnchorCenterY(item.offset, viewportStartOffset, verticalPaddingPx, anchorDiamPx)
+            noRealLazyColumn -> liveCenter.y
+            else -> return@mapNotNull null
+        }
+        id to Offset(liveCenter.x, cy)
+    }.toMap()
+    val staleCounts = staleness.update(registry.positions)
+    val stalledIds = staleCounts.filterValues { it >= STALE_FRAME_THRESHOLD }.keys
+    if (detachedIds.isNotEmpty() || stalledIds.isNotEmpty()) {
+        TimelineDebugLog.d(context) {
+            "computePlacedAnchors detachedIds=$detachedIds stalledIds=$stalledIds staleCounts=$staleCounts"
+        }
     }
+    return resolvePlacedAnchors(registry.descriptors, resolvedPositions)
 }
 
 private fun DrawScope.drawTrack(
@@ -152,6 +263,7 @@ private fun DrawScope.drawTrack(
     awakeSpineColor: Color,
     asleepSpineColor: Color,
     scratch: android.graphics.Path,
+    context: Context,
 ) {
     if (placed.isEmpty()) return
 
@@ -159,11 +271,10 @@ private fun DrawScope.drawTrack(
     // Every anchor centers in the same fixed-width gutter; averaging their x's is order-independent and self-corrects if one row's position lands a frame stale.
     val trackCenterX = placed.map { it.cx }.average().toFloat()
     val corner = CornerRadius(halfTrack)
-    // A fresh claim this frame (an anchor that's both placed AND whose descriptor says
-    // isSegmentTop/isSegmentBottom) updates the remembered id; see drawSegment's KDoc for why an
-    // absent claim falls back to the last confirmed id instead of ever flushing to the edge.
-    placed.firstOrNull { it.descriptor.isSegmentTop }?.let { endState.lastTopId = it.id }
-    placed.firstOrNull { it.descriptor.isSegmentBottom }?.let { endState.lastBottomId = it.id }
+    endState.ends = resolveTrackEnds(placed, endState.ends)
+    TimelineDebugLog.d(context) {
+        "drawTrack placed=${placed.map { "${it.id}@${it.cy}" }} resolvedTopId=${endState.ends.topId} resolvedBottomId=${endState.ends.bottomId}"
+    }
 
     drawSegment(
         anchors = placed.sortedBy { it.cy },
@@ -175,30 +286,14 @@ private fun DrawScope.drawTrack(
         awakeSpineColor = awakeSpineColor,
         asleepSpineColor = asleepSpineColor,
         scratch = scratch,
-        topId = endState.lastTopId,
-        bottomId = endState.lastBottomId,
+        ends = endState.ends,
+        context = context,
     )
 }
 
-/** [roundTop]/[roundBottom] — a cap only rounds when the segment's true end is confirmed on-screen;
- *  otherwise the track runs flush to the viewport edge, implying it continues off-screen.
- *
- *  [topId]/[bottomId] are [TrackEndState]'s remembered anchor ids, not a same-frame
- *  `descriptor.isSegmentTop`/`isSegmentBottom` read: a brand-new anchor's descriptor (written by its
- *  own `SideEffect`, pre-layout) and its position (written by `onGloballyPositioned`, post-layout)
- *  can BOTH still be missing for more than one frame after it's prepended — confirmed live (see
- *  docs/color-roles.md Round 37) by logging the registry at the exact frame the track flushed to the
- *  screen edge: neither the outgoing nor incoming anchor's descriptor claimed `isSegmentTop` yet, so
- *  a same-frame registry lookup (Round 36's `anchors.none { isSegmentTop }` fallback) has nothing to
- *  fall back to either. Persisting the last anchor that was *both* placed and descriptor-confirmed
- *  sidesteps the exact inter-callback timing entirely: the outgoing anchor keeps its rounded cap
- *  (it's still the topmost *placed* anchor, so `top.id == topId` still holds) until the incoming one
- *  is fully confirmed, at which point `drawTrack` updates [TrackEndState] and the cap hands off
- *  cleanly. A row genuinely disposed by ordinary scrolling clears the id naturally: once it's gone
- *  from `placed`, `top.id == topId` stops matching (`topId` still names the disposed id, but nothing
- *  in `anchors` does), so the track correctly resumes flushing to the edge instead of a stale claim.
- *  See docs/color-roles.md Round 35/36 for why an `anchors`-only, same-frame fallback was tried
- *  twice and rejected both times. */
+/** Delegates the cap/rounding decision to [segmentCapDecision] (see its KDoc, and
+ *  `TimelineTrackGeometryTest.kt`, for the full Round 37/38 history of why a cap only rounds when
+ *  [ends] confirms that end's anchor, not a same-frame `descriptor.isSegmentTop` read). */
 private fun DrawScope.drawSegment(
     anchors: List<PlacedAnchor>,
     trackCenterX: Float,
@@ -209,18 +304,18 @@ private fun DrawScope.drawSegment(
     awakeSpineColor: Color,
     asleepSpineColor: Color,
     scratch: android.graphics.Path,
-    topId: String?,
-    bottomId: String?,
+    ends: TrackEnds,
+    context: Context,
 ) {
+    val decision = segmentCapDecision(anchors, ends, size.height, halfTrack)
+    val (roundTop, roundBottom, bgTop, bgBottom) = decision
     val top = anchors.first()
     val bottom = anchors.last()
-    val roundTop = top.id == topId
-    val roundBottom = bottom.id == bottomId
-    // Cap edge sits a full halfTrack beyond the terminal anchor's center (not at it) so the anchor nests concentrically inside the cap's rounded corner.
-    val bgTop = if (roundTop) top.cy - halfTrack else 0f
-    val bgBottom = if (roundBottom) bottom.cy + halfTrack else size.height
     val left = trackCenterX - halfTrack
     val right = trackCenterX + halfTrack
+    TimelineDebugLog.d(context) {
+        "drawSegment top.id=${top.id} bottom.id=${bottom.id} roundTop=$roundTop roundBottom=$roundBottom bgTop=$bgTop bgBottom=$bgBottom"
+    }
 
     // Plain fill; the sleep pills drawn after naturally cover their own range, no separate "subtract" geometry needed. See trackColorFor's KDoc for the fill-vs-outline history.
     drawPath(cappedRect(left, bgTop, right, bgBottom, roundTop, roundBottom, corner), awakeColor)
@@ -253,23 +348,9 @@ private fun DrawScope.drawSpine(
     trackCenterX: Float,
     color: Color,
 ) {
-    val gap = SPINE_GAP.toPx()
     val strokeWidth = SPINE_WIDTH.toPx()
-    // Draws the complement of every in-range anchor's gap-range within [top, bottom].
-    var cursor = top
-    anchors
-        .filter { it.cy in top..bottom }
-        .forEach { anchor ->
-            val gapRadius = anchor.descriptor.contentRadiusPx + gap
-            val gapStart = anchor.cy - gapRadius
-            val gapEnd = anchor.cy + gapRadius
-            if (gapStart > cursor) {
-                drawLine(color, Offset(trackCenterX, cursor), Offset(trackCenterX, gapStart), strokeWidth, StrokeCap.Round)
-            }
-            cursor = maxOf(cursor, gapEnd)
-        }
-    if (bottom > cursor) {
-        drawLine(color, Offset(trackCenterX, cursor), Offset(trackCenterX, bottom), strokeWidth, StrokeCap.Round)
+    spineGapRanges(anchors, top, bottom, SPINE_GAP.toPx()).forEach { (start, end) ->
+        drawLine(color, Offset(trackCenterX, start), Offset(trackCenterX, end), strokeWidth, StrokeCap.Round)
     }
 }
 
@@ -310,41 +391,10 @@ private fun DrawScope.drawSocket(anchor: PlacedAnchor, scratch: android.graphics
     }
 }
 
-/** Walks a segment's anchors top→bottom and emits one rounded pill per contiguous asleep run. A run
- *  open above the topmost visible anchor (or still open below the bottom one) extends to [bgTop]/
- *  [bgBottom] and only rounds there if that edge is a real segment cap — so a sleep stretch continues
- *  seamlessly off the visible range instead of capping mid-scroll. */
-private fun buildSleepPills(
-    anchors: List<PlacedAnchor>,
-    bgTop: Float,
-    bgBottom: Float,
-    roundTop: Boolean,
-    roundBottom: Boolean,
-    halfTrack: Float,
-): List<SleepPill> {
-    val pills = mutableListOf<SleepPill>()
-    val startsAsleep = anchors.first().descriptor.asleepAbove
-    var openTop: Float? = if (startsAsleep) bgTop else null
-    var openRounded = if (startsAsleep) roundTop else false
-    for (anchor in anchors) {
-        val above = anchor.descriptor.asleepAbove
-        val below = anchor.descriptor.asleepBelow
-        // Same concentric-cap rule as the background — see drawSegment's comment on cap-edge placement.
-        if (above && !below) {
-            pills += SleepPill(openTop ?: (anchor.cy - halfTrack), anchor.cy + halfTrack, openRounded, roundBottom = true)
-            openTop = null
-        } else if (!above && below) {
-            openTop = anchor.cy - halfTrack
-            openRounded = true
-        }
-    }
-    val trailingOpen = openTop
-    if (anchors.last().descriptor.asleepBelow && trailingOpen != null) {
-        pills += SleepPill(trailingOpen, bgBottom, openRounded, roundBottom)
-    }
-    return pills
-}
-
+/** Wraps [cappedRoundRect] (the pure geometry, unit-tested in `TimelineTrackGeometryTest.kt`) into
+ *  an actual `Path` for painting — `Path()` construction is native-backed on Android and needs
+ *  Robolectric to run in a JVM test, which is why this thin wrapper stays outside the pure
+ *  `TimelineTrackGeometry.kt` file. */
 private fun cappedRect(
     left: Float,
     top: Float,
@@ -353,17 +403,4 @@ private fun cappedRect(
     roundTop: Boolean,
     roundBottom: Boolean,
     corner: CornerRadius,
-): Path {
-    val zero = CornerRadius.Zero
-    return Path().apply {
-        addRoundRect(
-            RoundRect(
-                Rect(left, top, right, bottom),
-                topLeft = if (roundTop) corner else zero,
-                topRight = if (roundTop) corner else zero,
-                bottomLeft = if (roundBottom) corner else zero,
-                bottomRight = if (roundBottom) corner else zero,
-            ),
-        )
-    }
-}
+): Path = Path().apply { addRoundRect(cappedRoundRect(left, top, right, bottom, roundTop, roundBottom, corner)) }

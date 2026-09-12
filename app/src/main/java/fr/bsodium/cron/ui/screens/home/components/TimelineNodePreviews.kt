@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,8 +25,9 @@ import fr.bsodium.cron.ui.theme.Spacing
 private fun TimelineNodeAnchorsPreview() {
     CronTheme {
         val registry = rememberTimelineTrackRegistry()
+        val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
-            TimelineTrackOverlay(registry = registry)
+            TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                 TimelineNode(
                     id = "loader",
@@ -113,8 +115,9 @@ private fun TimelineNodeAnchorsPreview() {
 private fun TimelineNodeWithContentPreview() {
     CronTheme {
         val registry = rememberTimelineTrackRegistry()
+        val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
-            TimelineTrackOverlay(registry = registry)
+            TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                 TimelineNode(
                     id = "planned",

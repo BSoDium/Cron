@@ -288,6 +288,7 @@ internal fun TimelineNode(
                 isSegmentBottom = isSegmentBottom,
                 asleepAbove = isAsleepAbove,
                 asleepBelow = isAsleepBelow,
+                isLatest = anchor is TimelineAnchor.Latest,
             ),
         )
     }
@@ -311,7 +312,7 @@ internal fun TimelineNode(
                     Box(
                         modifier = Modifier
                             .size(anchorDiam)
-                            // Registers the live LayoutCoordinates handle, not a computed Offset — see TimelineTrackOverlay.kt's KDoc for why a cached snapshot can go stale mid-transition; the overlay queries it fresh at draw time.
+                            // Still reported for every row: the overlay only trusts this handle's Y for the Latest row now (Phase 7, docs/color-roles.md — every other row's Y comes from LazyListState.layoutInfo instead), but its X is scroll-invariant (every anchor centers in the same fixed-width gutter) and stays the shared source for trackCenterX, including when no Latest row happens to be visible.
                             .onGloballyPositioned { coords -> registry.setPosition(id, coords) },
                         contentAlignment = Alignment.Center,
                     ) {

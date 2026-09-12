@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import fr.bsodium.cron.debug.HistorySeeder
 import fr.bsodium.cron.debug.MockApiPrefs
 import fr.bsodium.cron.debug.SleepTestPrefs
+import fr.bsodium.cron.debug.TimelineDebugPrefs
 import fr.bsodium.cron.service.SleepSessionService
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
@@ -50,6 +51,8 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
     var mockEnabled by remember { mutableStateOf(prefs.isEnabled) }
     val sleepPrefs = remember { SleepTestPrefs(context) }
     var fastOnset by remember { mutableStateOf(sleepPrefs.fastOnset) }
+    val timelineDebugPrefs = remember { TimelineDebugPrefs(context) }
+    var timelineVerboseLogging by remember { mutableStateOf(timelineDebugPrefs.isVerboseLoggingEnabled) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showSeedDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -71,6 +74,15 @@ fun DeveloperSettingsScreen(onBack: () -> Unit) {
             onCheckedChange = { on ->
                 sleepPrefs.fastOnset = on
                 fastOnset = on
+            },
+        )
+        SwitchRow(
+            title = "Verbose timeline logging",
+            subtitle = "Log per-frame track cap/segment decisions (tag: TimelineTrackOverlay)",
+            checked = timelineVerboseLogging,
+            onCheckedChange = { enabled ->
+                timelineDebugPrefs.isVerboseLoggingEnabled = enabled
+                timelineVerboseLogging = enabled
             },
         )
         Row(
