@@ -14,6 +14,8 @@ import fr.bsodium.cron.service.SleepSessionService
 import fr.bsodium.cron.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -44,8 +46,13 @@ class SessionFsm(
     /**
      * Deliver [event] to the FSM. Returns the session id, or null if no
      * session exists and the event cannot bootstrap one.
+     *
+     * [mutex]-guarded: a fresh [SessionFsm] is constructed per call site (service, receiver, worker,
+     * ViewModel), so this whole read-transition-write body must be serialized through a class-shared
+     * lock, not an instance field, or two near-simultaneous events compute their transition from the
+     * same stale snapshot and the final status becomes ordering-dependent (#153).
      */
-    suspend fun onEvent(event: SessionEvent): String? = withContext(Dispatchers.IO) {
+    suspend fun onEvent(event: SessionEvent): String? = mutex.withLock { withContext(Dispatchers.IO) {
         // Auto-plan off = full stand-down: drop every automatic event, except a manual run (isManual), which stays exempt.
         if (!SettingsRepository(context).autoAlarmsEnabledNow() &&
             (event.data as? EventData.EveningPlan)?.isManual != true
@@ -86,7 +93,7 @@ class SessionFsm(
         }
 
         session.id
-    }
+    } }
 
     private suspend fun bootstrapSession(eveningPlanEvent: SessionEvent): SleepSession? {
         val data = eveningPlanEvent.data as? EventData.EveningPlan ?: return null
@@ -122,7 +129,7 @@ class SessionFsm(
      * changes made after bootstrap (e.g. the user edited their preparation time). Re-arms the
      * hard-latest floor only if it moved. No-ops if nothing plan-affecting changed.
      */
-    suspend fun refreshPlanFromSettings(sessionId: String) = withContext(Dispatchers.IO) {
+    suspend fun refreshPlanFromSettings(sessionId: String) = mutex.withLock { withContext(Dispatchers.IO) {
         val session = repository.findById(sessionId) ?: return@withContext
         val settings = SettingsRepository(context)
         val refreshed = session.plan.copy(
@@ -152,7 +159,7 @@ class SessionFsm(
             )
         }
         Log.i(TAG, "Session $sessionId plan refreshed from settings (prep=${refreshed.preparationBufferMinutes}, commute=${refreshed.commuteBufferMinutes})")
-    }
+    } }
 
     /**
      * If the current session targets a different morning than this evening plan, it never completed
@@ -195,31 +202,38 @@ class SessionFsm(
      * snooze count ≥ 3 bypassed AI and scheduled now + 5 min directly.
      */
     suspend fun onSnooze(sessionId: String, event: SessionEvent): Boolean =
-        withContext(Dispatchers.IO) {
-            repository.appendEvent(sessionId, event)
-            val newCount = repository.incrementSnoozeCount(sessionId)
+        mutex.withLock {
+            withContext(Dispatchers.IO) {
+                repository.appendEvent(sessionId, event)
+                val newCount = repository.incrementSnoozeCount(sessionId)
 
-            if (newCount >= 3) {
-                val session = repository.findById(sessionId) ?: return@withContext false
-                val tz = TimeZone.of(session.timezone)
-                alarmScheduler.schedule(
-                    requested = Clock.System.now() + 5.minutes,
-                    hardLatest = session.plan.hardLatest,
-                    sessionDate = session.date,
-                    timezone = tz,
-                    label = "Wake up",
-                    sessionId = sessionId,
-                )
-                Log.i(TAG, "Snooze count $newCount ≥ 3 — AI bypassed, alarm in 5 min")
-                false
-            } else {
-                repository.triggerAiTurn(sessionId)
-                true
+                if (newCount >= 3) {
+                    val session = repository.findById(sessionId) ?: return@withContext false
+                    val tz = TimeZone.of(session.timezone)
+                    alarmScheduler.schedule(
+                        requested = Clock.System.now() + 5.minutes,
+                        hardLatest = session.plan.hardLatest,
+                        sessionDate = session.date,
+                        timezone = tz,
+                        label = "Wake up",
+                        sessionId = sessionId,
+                    )
+                    Log.i(TAG, "Snooze count $newCount ≥ 3 — AI bypassed, alarm in 5 min")
+                    false
+                } else {
+                    repository.triggerAiTurn(sessionId)
+                    true
+                }
             }
         }
 
     companion object {
         private const val TAG = "SessionFsm"
+
+        /** Companion-scoped, not an instance field — every call site (service, receiver, worker,
+         *  ViewModel) constructs a fresh [SessionFsm], so only a class-shared lock actually serializes
+         *  onEvent/onSnooze/refreshPlanFromSettings across those independently-created instances (#153). */
+        private val mutex = Mutex()
 
         private val AI_TRIGGERS = setOf(
             TriggerType.EveningPlan,
