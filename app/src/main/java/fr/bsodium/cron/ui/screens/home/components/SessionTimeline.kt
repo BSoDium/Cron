@@ -193,6 +193,15 @@ internal fun AiRunNode(
 ) {
     val scheme = MaterialTheme.colorScheme
     val iter = item.iteration
+    /** Whether this row was EVER the Latest row — `remember(item.id)` captures it at first
+     *  composition and never un-sets, since `isLatest` only ever transitions true→false, never the
+     *  reverse. Shared by the title/status slots below: a row that's never been Latest can only ever
+     *  render its demoted content, so it skips `Crossfade` entirely rather than paying for a
+     *  `Transition`/`MutableTransitionState` that will never actually animate. Live-measured on
+     *  device (see #176): the two Crossfades cost ~4.3ms combined on a row's first composition,
+     *  regardless of whether either ever crossfades — the overwhelming majority of rows (any
+     *  historical entry, demoted long before it scrolls into view) never do. */
+    val everLatest = remember(item.id) { item.isLatest }
     val symbol = if (iter.thread.isMocked) MaterialSymbol.Code else runSymbol(iter.kind)
     val atCap = isSegmentTop || isSegmentBottom || (!isAsleepAbove && isAsleepBelow) || (isAsleepAbove && !isAsleepBelow)
     /** `isAsleepAbove || isAsleepBelow`, not `isAsleepAbove` alone: a transition cap gets nested
@@ -252,13 +261,6 @@ internal fun AiRunNode(
         modifier = modifier,
         verticalPadding = if (item.isLatest) Spacing.lg else Spacing.md,
         title = {
-            /** A row that has NEVER been latest only ever shows the single-line demoted branch
-             *  below — reserving hero-sized height on it too (not just a row actually transitioning
-             *  away from latest) forced every historical row into a taller box than its one line
-             *  needed, offsetting it from the anchor. `remember(item.id)` captures whether THIS row
-             *  was latest at its first composition and never un-sets, since `isLatest` only ever
-             *  transitions true→false, never the reverse. */
-            val everLatest = remember(item.id) { item.isLatest }
             /** The demoted (single-line) state is shorter than the hero (kicker + time) state;
              *  without reserving the hero's height here, the Crossfade instantly resizes the Row
              *  and — since the Row centers its children vertically — the whole anchor/title visibly
@@ -270,52 +272,7 @@ internal fun AiRunNode(
                         CronTypography.timelineHeroTimeNew.lineHeight.toDp()
                 }
             }
-            // Fades the hero headline ↔ plain system-message swap instead of cutting instantly, pairing with TimelineNode's animated anchor-radius shrink; heightIn lives on this wrapping Box (not Crossfade, which has no contentAlignment and top-aligns internally) so centering the demoted text belongs here.
-            Box(
-                modifier = if (everLatest) Modifier.heightIn(min = heroMinHeight) else Modifier,
-                contentAlignment = Alignment.CenterStart,
-            ) {
-            Crossfade(
-                targetState = item.isLatest,
-                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                label = "ai-run-hero-demote",
-            ) { isLatest ->
-            if (isLatest) {
-                Column(verticalArrangement = Arrangement.spacedBy(HERO_KICKER_GAP)) {
-                    // Shares the countdown card's `primary` fill so the newest run visually rhymes with it — touches only the neutral page background, so this is a plain on-role pairing, not a nested-container case (docs/color-roles.md).
-                    Text(
-                        text = kickerText.uppercase(Locale.US),
-                        style = CronTypography.timelineHeroKicker,
-                        color = scheme.primary,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    // TimelineNode's anchor and trailing-arrow Boxes align to this exact line via RowScope.alignBy, rather than a hand-computed padding offset that requires guessing the kicker's rendered height.
-                    Box(modifier = Modifier.declareCenterAs(HeroHeadlineCenter)) {
-                    when {
-                        // A streaming turn is seeded before its set_alarm result arrives, so both times are transiently null — showing NO_ALARM_LABEL would flash then immediately replace, reading as a glitch; reserve the line's height with an invisible placeholder instead.
-                        newTime == null && prevTime == null && item.isStreaming ->
-                            Text(text = " ", style = CronTypography.timelineHeroTimeNew, color = Color.Transparent)
-                        // A real change: show it as a PREV › NEW pair, NEW bold italic — the key fact at a glance, not a prose sentence.
-                        newTime != null && prevTime != null && prevTime != newTime -> Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                        ) {
-                            Text(text = prevTime.asClock(), style = CronTypography.timelineHeroTimePrev)
-                            Text(text = "›", style = CronTypography.timelineHeroTimePrev, color = contentColor)
-                            Text(text = newTime.asClock(), style = CronTypography.timelineHeroTimeNew)
-                        }
-                        // No prior time to compare against, or it didn't actually change — the pair would just read as a redundant "7:30 › 7:30".
-                        newTime != null -> Text(text = newTime.asClock(), style = CronTypography.timelineHeroTimeNew)
-                        // No new time at all (cancel/do_nothing) but a prior one exists — the alarm stands as-is, still a time fact, never the AI's prose.
-                        prevTime != null -> Text(text = prevTime.asClock(), style = CronTypography.timelineHeroTimeNew)
-                        // Nothing resolved at all (rare first-run do-nothing) — a static literal, never AI-generated text, so the big slot can never overflow with long prose.
-                        else -> Text(text = NO_ALARM_LABEL, style = CronTypography.timelineHeroTimeNew)
-                    }
-                    }
-                }
-            } else {
+            val demotedTitle: @Composable () -> Unit = {
                 Text(
                     text = iter.systemMessage,
                     style = CronTypography.timelineRowTitle,
@@ -325,19 +282,64 @@ internal fun AiRunNode(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            }
+            if (everLatest) {
+                // Fades the hero headline ↔ plain system-message swap instead of cutting instantly, pairing with TimelineNode's animated anchor-radius shrink; heightIn lives on this wrapping Box (not Crossfade, which has no contentAlignment and top-aligns internally) so centering the demoted text belongs here.
+                Box(
+                    modifier = Modifier.heightIn(min = heroMinHeight),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Crossfade(
+                        targetState = item.isLatest,
+                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                        label = "ai-run-hero-demote",
+                    ) { isLatest ->
+                        if (isLatest) {
+                            Column(verticalArrangement = Arrangement.spacedBy(HERO_KICKER_GAP)) {
+                                // Shares the countdown card's `primary` fill so the newest run visually rhymes with it — touches only the neutral page background, so this is a plain on-role pairing, not a nested-container case (docs/color-roles.md).
+                                Text(
+                                    text = kickerText.uppercase(Locale.US),
+                                    style = CronTypography.timelineHeroKicker,
+                                    color = scheme.primary,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                // TimelineNode's anchor and trailing-arrow Boxes align to this exact line via RowScope.alignBy, rather than a hand-computed padding offset that requires guessing the kicker's rendered height.
+                                Box(modifier = Modifier.declareCenterAs(HeroHeadlineCenter)) {
+                                    when {
+                                        // A streaming turn is seeded before its set_alarm result arrives, so both times are transiently null — showing NO_ALARM_LABEL would flash then immediately replace, reading as a glitch; reserve the line's height with an invisible placeholder instead.
+                                        newTime == null && prevTime == null && item.isStreaming ->
+                                            Text(text = " ", style = CronTypography.timelineHeroTimeNew, color = Color.Transparent)
+                                        // A real change: show it as a PREV › NEW pair, NEW bold italic — the key fact at a glance, not a prose sentence.
+                                        newTime != null && prevTime != null && prevTime != newTime -> Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                                        ) {
+                                            Text(text = prevTime.asClock(), style = CronTypography.timelineHeroTimePrev)
+                                            Text(text = "›", style = CronTypography.timelineHeroTimePrev, color = contentColor)
+                                            Text(text = newTime.asClock(), style = CronTypography.timelineHeroTimeNew)
+                                        }
+                                        // No prior time to compare against, or it didn't actually change — the pair would just read as a redundant "7:30 › 7:30".
+                                        newTime != null -> Text(text = newTime.asClock(), style = CronTypography.timelineHeroTimeNew)
+                                        // No new time at all (cancel/do_nothing) but a prior one exists — the alarm stands as-is, still a time fact, never the AI's prose.
+                                        prevTime != null -> Text(text = prevTime.asClock(), style = CronTypography.timelineHeroTimeNew)
+                                        // Nothing resolved at all (rare first-run do-nothing) — a static literal, never AI-generated text, so the big slot can never overflow with long prose.
+                                        else -> Text(text = NO_ALARM_LABEL, style = CronTypography.timelineHeroTimeNew)
+                                    }
+                                }
+                            }
+                        } else {
+                            demotedTitle()
+                        }
+                    }
+                }
+            } else {
+                // A row that's never been Latest only ever renders this line — see `everLatest`'s KDoc above for why skipping Crossfade entirely here (not just skipping the height reservation) is safe and saves real per-row composition cost.
+                demotedTitle()
             }
         },
         status = {
-            Crossfade(
-                targetState = item.isLatest,
-                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                label = "ai-run-status-demote",
-            ) { isLatest ->
-            if (isLatest) {
-                // status is the row's trailing, vertically-centered slot by construction, so the tap-through arrow belongs here; weight=700 uses Symbol's own wght axis to actually thicken the stroke, not just size the glyph up.
-                Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = 18.dp, weight = 700)
-            } else {
+            val demotedStatus: @Composable () -> Unit = {
                 Text(
                     text = iter.ranAtEpochMs?.let { timelineTimeLabel(it, iter.timeLabel) } ?: iter.timeLabel,
                     style = CronTypography.timelineRowTime,
@@ -346,6 +348,21 @@ internal fun AiRunNode(
                     softWrap = false,
                 )
             }
+            if (everLatest) {
+                Crossfade(
+                    targetState = item.isLatest,
+                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                    label = "ai-run-status-demote",
+                ) { isLatest ->
+                    if (isLatest) {
+                        // status is the row's trailing, vertically-centered slot by construction, so the tap-through arrow belongs here; weight=700 uses Symbol's own wght axis to actually thicken the stroke, not just size the glyph up.
+                        Symbol(symbol = MaterialSymbol.ArrowForward, contentDescription = null, tint = contentColor, size = 18.dp, weight = 700)
+                    } else {
+                        demotedStatus()
+                    }
+                }
+            } else {
+                demotedStatus()
             }
         },
         // The headline above is now exclusively a time fact or NO_ALARM_LABEL, never heroHeadline, so this can't duplicate it; "Latest · HH:MM" moved into the kicker's kickerSuffix. `.merge(TightTextStyle)` — see EventNode.kt's `content` KDoc for why an explicit style needs this directly rather than an ambient provider.
