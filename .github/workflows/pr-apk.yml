@@ -8,7 +8,9 @@ name: PR Preview APK
 
 on:
   pull_request:
-    types: [ready_for_review, synchronize, reopened, closed]
+    # `opened` covers a PR created directly as ready-for-review (not draft-then-converted) --
+    # without it, a PR opened non-draft from the start never gets an APK build at all.
+    types: [opened, ready_for_review, synchronize, reopened, closed]
     branches: [main]
 
 # One run per PR at a time. A merge/close fires the "closed" path in the same

@@ -86,7 +86,7 @@ fun PlanDetailScreen(
                     .nestedScroll(pullConnection)
                     .verticalScroll(scrollState)
                     .padding(horizontal = Spacing.xl)
-                    .padding(bottom = navBarBottom + Spacing.xxxxl),
+                    .padding(bottom = navBarBottom + Spacing.navBarClearance),
             ) {
                 AiThinkingThread(
                     thread = iteration.thread,
