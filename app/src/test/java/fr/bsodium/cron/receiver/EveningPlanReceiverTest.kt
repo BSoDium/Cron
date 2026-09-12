@@ -8,10 +8,12 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.test.core.app.ApplicationProvider
 import fr.bsodium.cron.alarm.AlarmConstants
+import fr.bsodium.cron.service.SleepSessionService
 import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.testutil.awaitCondition
+import fr.bsodium.cron.testutil.awaitNotNull
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -55,8 +57,9 @@ class EveningPlanReceiverTest {
         dispatch()
 
         awaitCondition { nextTriggerPendingIntent() != null }
-        val started = shadowOf(app).nextStartedService
-        assertNotNull(started)
+        // The receiver re-arms *before* starting the service, so the arm landing says nothing about the start.
+        val started = awaitNotNull { shadowOf(app).nextStartedService }
+        assertEquals(SleepSessionService::class.java.name, started.component?.className)
     }
 
     @Test

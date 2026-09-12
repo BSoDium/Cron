@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.alarm
 
-import android.app.KeyguardManager
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
@@ -58,6 +57,22 @@ import java.time.LocalTime
 import java.util.Locale
 import kotlin.math.roundToInt
 
+/**
+ * Window flags that paint the alarm over a locked screen and keep it lit.
+ *
+ * Deliberately excludes `FLAG_DISMISS_KEYGUARD` — like `KeyguardManager.requestDismissKeyguard`, on a
+ * device with a secure lock method it raises the credential prompt on top of the alarm, hiding the
+ * dismiss control (#177). Showing over the keyguard is enough; the user unlocks afterwards if they want to.
+ *
+ * `FLAG_SHOW_WHEN_LOCKED`/`FLAG_TURN_SCREEN_ON` are deprecated in favour of the API 27 setters, but
+ * minSdk is 26 so they remain the only mechanism on API 26.
+ */
+@Suppress("DEPRECATION")
+internal val ALARM_WINDOW_FLAGS =
+    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+
 private val THUMB_SIZE = 52.dp
 private val THUMB_INSET = 6.dp
 private val TRACK_HEIGHT = 64.dp
@@ -67,19 +82,11 @@ class AlarmActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Wake the screen and show above the keyguard
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            getSystemService(KeyguardManager::class.java)
-                .requestDismissKeyguard(this, null)
         }
-        @Suppress("DEPRECATION")
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
-        )
+        window.addFlags(ALARM_WINDOW_FLAGS)
 
         val isLight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) !=
             Configuration.UI_MODE_NIGHT_YES
