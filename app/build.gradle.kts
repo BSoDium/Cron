@@ -154,6 +154,7 @@ dependencies {
     implementation(libs.androidx.graphics.shapes)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.metrics.performance)
     implementation(libs.okhttp)
 
     // Persistence
