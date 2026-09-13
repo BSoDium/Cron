@@ -23,6 +23,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.TopAppBarState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -145,6 +147,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CronTheme {
+              // Bridges Modifier.testTag to a real Android resource id so Macrobenchmark's UiAutomator-driven tests (docs/perf-profiling-plan.md) can find Compose nodes by tag — inert outside instrumented tests.
+              Box(Modifier.semantics { testTagsAsResourceId = true }) {
                 LaunchedEffect(Unit) {
                     if (startDestination.value == null) {
                         startDestination.value = withContext(Dispatchers.IO) {
@@ -312,6 +316,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+              }
             }
         }
     }

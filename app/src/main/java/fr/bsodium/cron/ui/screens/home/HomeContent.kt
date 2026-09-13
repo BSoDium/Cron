@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -155,7 +156,8 @@ internal fun HomePlanContent(
         LazyColumn(
             state = listState,
             overscrollEffect = sharedOverscrollEffect?.withoutVisualEffect(),
-            modifier = Modifier.fillMaxSize(),
+            // Lets Macrobenchmark's UiAutomator-driven HomeTimelineScrollBenchmark find this list by tag (docs/perf-profiling-plan.md) — needs MainActivity.kt's testTagsAsResourceId bridge to resolve to a real Android resource id.
+            modifier = Modifier.fillMaxSize().testTag("home_timeline"),
             contentPadding = PaddingValues(
                 // Matches StickyAlarm's own horizontal inset so the greeting, day headers, and timeline icons line up with the alarm card's left edge.
                 start = Spacing.md,
