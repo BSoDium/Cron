@@ -31,7 +31,15 @@ internal fun AlignedFirstGlyph(
 ) {
     val resolver = LocalFontFamilyResolver.current
     val density = LocalDensity.current
-    val leftBearingPx = remember(text, style, density.density) {
+    // Keyed on the bearing's real inputs, not the whole style — the collapsing card re-styles every frame with a draw-only drawStyle.
+    val leftBearingPx = remember(
+        text,
+        style.fontFamily,
+        style.fontWeight,
+        style.fontStyle,
+        style.fontSize,
+        density.density,
+    ) {
         if (text.isEmpty() || style.fontFamily == null) 0
         else runCatching {
             val typeface = resolver.resolve(
