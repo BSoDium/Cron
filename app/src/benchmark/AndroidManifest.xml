@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Merged only into the benchmark build type (app/build.gradle.kts) — makes the AOT-compiled app
+  attachable by Macrobenchmark's profiler without being debuggable. tools:targetApi silences the
+  manifest merger's minSdk (26) warning; the attribute itself is simply ignored below API 29.
+  See docs/perf-profiling-plan.md.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <profileable
+            android:shell="true"
+            tools:targetApi="29" />
+    </application>
+</manifest>

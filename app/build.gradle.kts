@@ -95,8 +95,26 @@ android {
                 signingConfig = it
             }
         }
+        // AOT-compiled (like release) but debug-signed and installable without release keys, so
+        // :macrobenchmark's HomeTimelineScrollBenchmark measures real, non-JIT-cold frame timing —
+        // see docs/perf-profiling-plan.md. Never shipped; exists purely for CompilationMode.Full()
+        // benchmark runs.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
     }
 
+    // initWith(release) copies build-type properties, not source sets — the benchmark variant still
+    // needs release's own Kotlin sources (the release-side counterparts of the debug-only
+    // MockModeChevron/DeveloperSettingsScreen/AnthropicClientFactory/etc. main/ references).
+    sourceSets {
+        getByName("benchmark") {
+            kotlin.srcDirs("src/release/java")
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
