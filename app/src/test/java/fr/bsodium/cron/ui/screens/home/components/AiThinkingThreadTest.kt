@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.theme.CronTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -72,6 +73,6 @@ class AiThinkingThreadTest {
             composeTestRule.waitForIdle()
         }
 
-        assert(reportedFullHeight > 0) { "expected ExpandReveal to report a positive full height" }
+        assertTrue("expected ExpandReveal to report a positive full height", reportedFullHeight > 0)
     }
 }

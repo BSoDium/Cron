@@ -312,10 +312,9 @@ environment.**
 ## 8. SubcomposeLayout vs. a plain Layout: a per-frame remeasure trap (#14)
 
 `AiThinkingThread`'s expand/collapse (`ThinkingDisclosure`/`ExpandReveal`, `ui/screens/home/components/AiThinkingThread.kt`)
-was janky on the pull-to-reveal gesture. No physical device was available for this investigation (the
-Pixel 7 was locked, fingerprint-required, for the whole window) — so root-causing happened entirely
-against a JVM/Robolectric probe, not a real trace. Worth recording precisely because the diagnosis still
-held up, and because the caveat below is a real gap, not a formality.
+was janky on the pull-to-reveal gesture. The Pixel 7 was locked (fingerprint-required) for the
+root-causing phase, so that part happened entirely against a JVM/Robolectric probe, not a real trace;
+the device came back later in the session for the on-device follow-up below.
 
 **Diagnosis.** `ExpandReveal` used `SubcomposeLayout` to measure its content at full height (to report
 [onFullHeight]) while clipping the visible portion to a per-frame `targetPx()` value. A Compose test
