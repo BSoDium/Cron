@@ -78,6 +78,34 @@ class AiThreadMapperTest {
         assertFalse(tool.isError)
     }
 
+    /**
+     * Documents #202: a settled turn whose single Text block never carries a `SUMMARY:` marker (the
+     * model skipped the directive) falls back to treating that whole block as the answer — including
+     * any hand-computed reasoning prose the model wrote before its decision. This is the mapper's
+     * deliberate, documented fallback ([answerStartOf]'s KDoc) for a legitimate SUMMARY-less turn, so
+     * it isn't changed here; the actual fix for #202 is prompt-side (see [fr.bsodium.cron.ai.SystemPrompts.OVERNIGHT_REPLAN]).
+     * This test exists so a future change to the fallback doesn't accidentally "fix" this case without
+     * someone noticing the trade-off against legitimate no-marker turns.
+     */
+    @Test
+    fun a_settled_turn_with_no_summary_marker_surfaces_the_whole_text_block_as_the_answer() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("replan")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.Text(
+                    "The commute by public transit takes ~42 minutes. Adding 45 minutes preparation " +
+                        "time and a 15-minute travel buffer, the total lead time is ~102 minutes. " +
+                        "Wake time = 04:35 local − 90 min = 03:05 local = 00:05",
+                ),
+            ),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+        assertTrue(thread.process.isEmpty())
+        assertTrue(requireNotNull(thread.response).startsWith("The commute by public transit"))
+    }
+
     @Test
     fun set_alarm_resolves_a_raw_new_alarm_time() {
         val rows = listOf(
