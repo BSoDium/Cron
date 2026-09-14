@@ -47,4 +47,10 @@ class SystemPermissionsTest {
         val intent = SystemPermissions.exactAlarmSettingsIntent(context)
         assertTrue(intent.data.toString().contains(context.packageName))
     }
+
+    @Test
+    fun fullScreenIntentSettingsIntent_targets_this_package() {
+        val intent = SystemPermissions.fullScreenIntentSettingsIntent(context)
+        assertTrue(intent.data.toString().contains(context.packageName))
+    }
 }

@@ -6,16 +6,14 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import fr.bsodium.cron.MainActivity
-import fr.bsodium.cron.R
-import fr.bsodium.cron.ui.screens.alarm.AlarmActivity
 import fr.bsodium.cron.alarm.AlarmConstants
 import fr.bsodium.cron.alarm.AlarmRingingState
+import fr.bsodium.cron.service.AlarmSoundService
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
@@ -28,8 +26,8 @@ import kotlinx.datetime.Clock
 
 /**
  * Fires when a scheduled alarm triggers.
- * Shows a high-priority notification with the default alarm sound,
- * vibration, and dismiss/snooze action buttons.
+ * Routes the FSM events and starts [AlarmSoundService], which owns the actual ringing
+ * notification, sound, and vibration.
  */
 class AlarmReceiver : BroadcastReceiver() {
 
@@ -42,7 +40,11 @@ class AlarmReceiver : BroadcastReceiver() {
         const val EXTRA_LABEL = "extra_label"
         const val EXTRA_SNOOZE_COUNT = "extra_snooze_count"
 
-        const val CHANNEL_ID = "cron_alarm_channel"
+        // v2: a notification channel's sound/vibration can't be changed once created (Android ignores
+        // updates), so the fix for the old channel's sound/vibration doubling AlarmSoundService's own
+        // looping ring needed a new channel id — see ensureNotificationChannel.
+        const val CHANNEL_ID = "cron_alarm_channel_v2"
+        private const val LEGACY_CHANNEL_ID = "cron_alarm_channel"
         val ALARM_VIBRATION_PATTERN = longArrayOf(0, 500, 200, 500, 200, 500)
         const val NOTIFICATION_ID = 9001
 
@@ -86,44 +88,21 @@ class AlarmReceiver : BroadcastReceiver() {
 
         ensureNotificationChannel(context)
 
-        val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
-        // Full-screen intent — opens AlarmActivity on the lock screen
-        val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        // AlarmSoundService builds and posts the ringing notification itself (as its foreground-service
+        // notification) and owns the actual looping sound/vibration — see its KDoc for why a plain
+        // notification can't loop.
+        val soundIntent = Intent(context, AlarmSoundService::class.java).apply {
             putExtra(EXTRA_LABEL, label)
             putExtra(EXTRA_REQUEST_CODE, requestCode)
             putExtra(AlarmConstants.EXTRA_SESSION_ID, sessionId)
             putExtra(EXTRA_SNOOZE_COUNT, intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0))
         }
-        val fullScreenPendingIntent = PendingIntent.getActivity(
-            context, requestCode, fullScreenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_alarm)
-            .setContentTitle("Cron")
-            .setContentText(label)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setSound(alarmSound)
-            .setVibrate(ALARM_VIBRATION_PATTERN)
-            .setAutoCancel(false)
-            .setOngoing(true)
-            .setContentIntent(fullScreenPendingIntent)
-            .setFullScreenIntent(fullScreenPendingIntent, true)
-            .build()
-
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        ContextCompat.startForegroundService(context, soundIntent)
     }
 
     private fun handleDismiss(context: Context) {
         AlarmRingingState.markNotRinging()
+        context.startService(AlarmSoundService.stopIntent(context))
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIFICATION_ID)
 
@@ -153,6 +132,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0)
         val label = intent.getStringExtra(EXTRA_LABEL) ?: "Cron Alarm"
 
+        context.startService(AlarmSoundService.stopIntent(context))
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIFICATION_ID)
 
@@ -210,13 +190,15 @@ class AlarmReceiver : BroadcastReceiver() {
         )
     }
 
+    // AlarmSoundService owns the actual ring (looping MediaPlayer + repeating Vibrator); this channel
+    // deliberately carries no sound/vibration of its own, or every notification post would also fire
+    // the channel's one-shot alert on top of it — audible as a second "ding" on a same-session re-post
+    // (e.g. the AI alarm and hard-latest firing moments apart), not just a negligible first-frame overlap.
     private fun ensureNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
 
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -224,15 +206,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Alarm notifications from Cron"
-                enableVibration(true)
-                vibrationPattern = ALARM_VIBRATION_PATTERN
-                setSound(alarmSound, audioAttributes)
+                enableVibration(false)
+                setSound(null, null)
                 setBypassDnd(true)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
             }
-
-            val notificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
     }
