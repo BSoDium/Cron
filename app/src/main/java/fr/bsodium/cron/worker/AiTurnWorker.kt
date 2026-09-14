@@ -23,7 +23,6 @@ import fr.bsodium.cron.ai.ToolRegistryFactory
 import fr.bsodium.cron.ai.TurnIndexResolver
 import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.wire.ThinkingConfig
-import fr.bsodium.cron.ai.wire.ToolChoice
 import fr.bsodium.cron.ai.tools.CancelAlarmTool
 import fr.bsodium.cron.ai.tools.DoNothingTool
 import fr.bsodium.cron.ai.tools.EstimateCommuteMultiModeTool
@@ -116,10 +115,14 @@ class AiTurnWorker(
         val mockTools = ToolRegistryFactory.mockOrNull(useMock)
         val tools = mockTools ?: buildToolRegistry(session, apiKey ?: "", allowedRsvp)
         val client = AnthropicClientFactory.create(useMock, apiKeyProvider = { apiKey })
-        // Anthropic requires max_tokens > thinking budget, so widen the ceiling on evening_plan turns.
-        val thinking = if (isEveningPlan) ThinkingConfig(budgetTokens = THINKING_BUDGET) else null
-        val maxTokens = if (isEveningPlan) THINKING_BUDGET + 2048 else 2048
-        val toolChoice = if (thinking == null) ToolChoice.Any else null
+        // Every turn now thinks — even a terse replan needs somewhere to put deliberation that
+        // isn't the visible text channel (see docs/replan-answer-leak.md). Anthropic requires
+        // max_tokens > thinking budget, so the ceiling always tracks whichever budget applies, and
+        // forbids a forced tool_choice alongside thinking, so tool_choice is auto (TurnRunner's
+        // default) for every turn now, not just evening plans.
+        val thinkingBudget = if (isEveningPlan) THINKING_BUDGET else REPLAN_THINKING_BUDGET
+        val thinking = ThinkingConfig(budgetTokens = thinkingBudget)
+        val maxTokens = thinkingBudget + 2048
         val runner = TurnRunner(
             client = client,
             aiMessageDao = db.aiMessageDao(),
@@ -127,7 +130,6 @@ class AiTurnWorker(
             systemPrompt = systemPrompt,
             tools = tools,
             maxTokens = maxTokens,
-            toolChoice = toolChoice,
             thinking = thinking,
             isMocked = mockTools != null,
             // Billed per round-trip so a turn that fails partway still counts against the daily cap.
@@ -262,6 +264,8 @@ class AiTurnWorker(
 
         /** Total across the turn; with interleaved thinking it's spread over a fresh think after each tool result. Kept modest so reasoning stays on the anchor decision, not mechanical recompute. */
         private const val THINKING_BUDGET = 2_560
+        /** Replans are terse by design (Haiku, sensor-driven) — a smaller budget than the evening plan's. */
+        private const val REPLAN_THINKING_BUDGET = 1_024
         private const val MAX_RETRY_ATTEMPTS = 5
     }
 }

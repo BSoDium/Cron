@@ -78,6 +78,59 @@ class AiThreadMapperTest {
         assertFalse(tool.isError)
     }
 
+    /**
+     * Documents #202: a settled turn whose single Text block never carries a `SUMMARY:` marker (the
+     * model skipped the directive) falls back to treating that whole block as the answer — including
+     * any hand-computed reasoning prose the model wrote before its decision. This is the mapper's
+     * deliberate, documented fallback ([answerStartOf]'s KDoc) for a legitimate SUMMARY-less turn, so
+     * it isn't changed here; the actual fix for #202 is prompt-side (see [fr.bsodium.cron.ai.SystemPrompts.OVERNIGHT_REPLAN]).
+     * This test exists so a future change to the fallback doesn't accidentally "fix" this case without
+     * someone noticing the trade-off against legitimate no-marker turns.
+     */
+    @Test
+    fun a_settled_turn_with_no_summary_marker_surfaces_the_whole_text_block_as_the_answer() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("replan")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.Text(
+                    "The commute by public transit takes ~42 minutes. Adding 45 minutes preparation " +
+                        "time and a 15-minute travel buffer, the total lead time is ~102 minutes. " +
+                        "Wake time = 04:35 local − 90 min = 03:05 local = 00:05",
+                ),
+            ),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+        assertTrue(thread.process.isEmpty())
+        assertTrue(requireNotNull(thread.response).startsWith("The commute by public transit"))
+    }
+
+    /**
+     * Live-reproduced follow-up to #202: the model DID emit a `SUMMARY:` marker this time, but
+     * shared its block with a STATUS: line and narration written ahead of it instead of leading
+     * with it — [answerStartOf] only excludes earlier *blocks*, so without truncating within the
+     * SUMMARY-bearing block itself, that narration would leak into the displayed answer.
+     */
+    @Test
+    fun narration_sharing_a_block_with_summary_is_dropped_not_surfaced() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("replan")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.Text(
+                    "STATUS: Confirming first anchor\n\n" +
+                        "The calendar shows no morning anchor. The earliest timed event is drinks " +
+                        "at 18:30, well into the evening.\n\n" +
+                        "SUMMARY: Current alarm remains optimal; no morning anchor exists.",
+                ),
+            ),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+        assertEquals("Current alarm remains optimal; no morning anchor exists.", thread.response)
+    }
+
     @Test
     fun set_alarm_resolves_a_raw_new_alarm_time() {
         val rows = listOf(

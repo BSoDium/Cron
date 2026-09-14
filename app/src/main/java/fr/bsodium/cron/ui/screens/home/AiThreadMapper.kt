@@ -147,9 +147,15 @@ object AiThreadMapper {
             }
         }
 
+        // answerStart is a block index — it doesn't guarantee SUMMARY: leads that block's own text
+        // (the model can write narration before it in the same block despite being asked not to);
+        // truncate the first (SUMMARY-bearing) block to that line onward so leaked narration never
+        // reaches the displayed answer, mirroring how DeepSeek-style <think> parsing strips content
+        // mechanically rather than trusting the model's formatting discipline.
         val response = blocks.drop(answerStart)
             .filterIsInstance<ContentBlock.Text>()
-            .joinToString(separator = "\n\n") { it.text }
+            .mapIndexed { index, block -> if (index == 0) block.text.substringFromSummaryLine() else block.text }
+            .joinToString(separator = "\n\n")
             .let(::stripDirectives)
             .let(::stripLeadingRule)
             .takeIf { it.isNotBlank() }
@@ -276,6 +282,15 @@ internal fun answerStartOf(blocks: List<ContentBlock>, isStreaming: Boolean): In
 /** True if any line of this text is a `SUMMARY:` directive — the model's "answer starts here" marker. */
 private fun String.hasSummaryLine(): Boolean =
     lineSequence().any { SUMMARY_LINE.matchEntire(it.trim()) != null }
+
+/** Drops any lines before this text's first `SUMMARY:` line — defensive truncation for a model that
+ *  wrote narration ahead of it in the same block instead of leading with it as asked. No-op if there
+ *  is no SUMMARY: line here (the caller only applies this to a block [hasSummaryLine] found). */
+private fun String.substringFromSummaryLine(): String {
+    val lines = lines()
+    val summaryIndex = lines.indexOfFirst { SUMMARY_LINE.matchEntire(it.trim()) != null }
+    return if (summaryIndex >= 0) lines.drop(summaryIndex).joinToString("\n") else this
+}
 
 /** True if [line] is a strict prefix of a directive keyword still being typed (e.g. "STATU", "SUMMAR"),
  *  before its colon completes — so we can hold it back from display while streaming. Strips a leading
