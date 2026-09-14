@@ -13,11 +13,15 @@ import kotlinx.datetime.LocalDate
  *   [HARD_LATEST_REQUEST_CODE_BASE] + epochDay.
  * - **Evening plan alarm**: daily trigger that starts a sleep session.
  *   Request code is the constant [EVENING_PLAN_REQUEST_CODE].
+ * - **Session expiry alarm**: silent janitorial timer that closes a session with no further activity
+ *   past its active window (see `SessionFsm.sessionWindowEnd`). Request code is
+ *   [SESSION_EXPIRY_REQUEST_CODE_BASE] + epochDay.
  */
 object AlarmConstants {
     const val AI_REQUEST_CODE_BASE = 100_000
     const val HARD_LATEST_REQUEST_CODE_BASE = 200_000
     const val EVENING_PLAN_REQUEST_CODE = 300_001
+    const val SESSION_EXPIRY_REQUEST_CODE_BASE = 400_000
 
     const val EXTRA_KIND = "fr.bsodium.cron.alarm.KIND"
     const val EXTRA_LABEL = "fr.bsodium.cron.alarm.LABEL"
@@ -29,4 +33,5 @@ object AlarmConstants {
 
     fun aiRequestCode(date: LocalDate): Int = AI_REQUEST_CODE_BASE + date.toEpochDays()
     fun hardLatestRequestCode(date: LocalDate): Int = HARD_LATEST_REQUEST_CODE_BASE + date.toEpochDays()
+    fun sessionExpiryRequestCode(date: LocalDate): Int = SESSION_EXPIRY_REQUEST_CODE_BASE + date.toEpochDays()
 }

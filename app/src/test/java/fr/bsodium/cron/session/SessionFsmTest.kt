@@ -6,6 +6,7 @@ import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.testutil.Fixtures
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -173,5 +174,68 @@ class SessionFsmTest {
         assertTrue(
             SessionFsm.shouldTriggerAi(TriggerType.MidSleepActivity, SessionStatus.Monitoring, null, now),
         )
+    }
+
+    /** hardLatest=10:00 Europe/Paris on 2026-05-22 is 2026-05-22T08:00:00Z (CEST, UTC+2); + the 3h
+     *  grace, its hard-latest ceiling is 11:00Z. Shared by the sessionWindowEnd/shouldGateEvent tests below. */
+    private val hardLatestSession = Fixtures.session(plan = Fixtures.dayPlan(hardLatest = LocalTime(10, 0)))
+
+    private fun withWakeEvent(at: Instant) = hardLatestSession.copy(
+        events = listOf(SessionEvent(trigger = TriggerType.OutOfBedConfirmed, timestamp = at, data = EventData.OutOfBedConfirmed(evidence = listOf("test")))),
+    )
+
+    @Test
+    fun within_window_via_hard_latest_ceiling_with_no_wake_event() {
+        assertTrue(SessionFsm.isWithinActiveWindow(hardLatestSession, now = Fixtures.at("2026-05-22T10:00:00Z")))
+    }
+
+    @Test
+    fun outside_window_via_hard_latest_ceiling_with_no_wake_event() {
+        assertFalse(SessionFsm.isWithinActiveWindow(hardLatestSession, now = Fixtures.at("2026-05-22T12:00:00Z")))
+    }
+
+    /** The post-wake ceiling (05:00Z wake + 3h grace = 08:00Z) binds here since it's earlier than the
+     *  11:00Z hard-latest ceiling -- confirms sessionWindowEnd takes whichever ceiling is earlier. */
+    @Test
+    fun within_window_via_the_earlier_post_wake_ceiling() {
+        val session = withWakeEvent(Fixtures.at("2026-05-22T05:00:00Z"))
+        assertTrue(SessionFsm.isWithinActiveWindow(session, now = Fixtures.at("2026-05-22T07:00:00Z")))
+    }
+
+    /** The lenient-hardLatest-day scenario the plan's revision 1 missed: the user woke at 05:00Z (post-
+     *  wake ceiling 08:00Z) but hardLatest doesn't close until 11:00Z -- without taking the earlier
+     *  ceiling, a 09:00Z nap would be misread as still within the original session's window. */
+    @Test
+    fun outside_window_via_the_earlier_post_wake_ceiling_despite_a_later_hard_latest() {
+        val session = withWakeEvent(Fixtures.at("2026-05-22T05:00:00Z"))
+        assertFalse(SessionFsm.isWithinActiveWindow(session, now = Fixtures.at("2026-05-22T09:00:00Z")))
+    }
+
+    /** Here the hard-latest ceiling (11:00Z) is the earlier/binding one despite a wake event, since
+     *  that wake happened late (10:30Z, pushing its own ceiling to 13:30Z) -- either ceiling can bind. */
+    @Test
+    fun outside_window_via_the_earlier_hard_latest_ceiling_despite_a_later_wake_event() {
+        val session = withWakeEvent(Fixtures.at("2026-05-22T10:30:00Z"))
+        assertFalse(SessionFsm.isWithinActiveWindow(session, now = Fixtures.at("2026-05-22T11:30:00Z")))
+    }
+
+    @Test
+    fun window_gated_trigger_outside_window_is_gated() {
+        assertTrue(SessionFsm.shouldGateEvent(hardLatestSession, TriggerType.SleepOnset, now = Fixtures.at("2026-05-22T12:00:00Z")))
+    }
+
+    @Test
+    fun window_gated_trigger_inside_window_is_not_gated() {
+        assertFalse(SessionFsm.shouldGateEvent(hardLatestSession, TriggerType.SleepOnset, now = Fixtures.at("2026-05-22T10:00:00Z")))
+    }
+
+    /** AlarmDismissed/AlarmSnoozed/HardLatestFired are direct user actions or the safety net itself
+     *  firing -- they must never be silently dropped, window or no window. */
+    @Test
+    fun direct_action_triggers_never_gate_regardless_of_window() {
+        val outsideWindow = Fixtures.at("2026-05-22T12:00:00Z")
+        assertFalse(SessionFsm.shouldGateEvent(hardLatestSession, TriggerType.AlarmDismissed, outsideWindow))
+        assertFalse(SessionFsm.shouldGateEvent(hardLatestSession, TriggerType.AlarmSnoozed, outsideWindow))
+        assertFalse(SessionFsm.shouldGateEvent(hardLatestSession, TriggerType.HardLatestFired, outsideWindow))
     }
 }

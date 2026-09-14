@@ -143,6 +143,11 @@
             android:name=".receiver.EveningPlanReceiver"
             android:exported="false" />
 
+        <!-- Silent janitorial timer that closes a session past its active window -->
+        <receiver
+            android:name=".receiver.SessionExpiryReceiver"
+            android:exported="false" />
+
         <!-- Long-running foreground service hosting overnight sensor monitors -->
         <service
             android:name=".service.SleepSessionService"
