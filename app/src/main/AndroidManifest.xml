@@ -95,18 +95,31 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Full-screen lock-screen alarm UI -->
+        <!-- Full-screen lock-screen alarm UI. singleTask: a second launch (direct start plus the
+             notification's own full-screen intent, or the AI/hard-latest alarms firing moments apart)
+             must route to onNewIntent on the existing instance, not stack a duplicate — see the class KDoc. -->
         <activity
             android:name=".ui.screens.alarm.AlarmActivity"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:excludeFromRecents="true"
+            android:launchMode="singleTask"
             android:exported="false" />
 
         <!-- Alarm notification receiver -->
         <receiver
             android:name=".receiver.AlarmReceiver"
             android:exported="false" />
+
+        <!-- Owns the looping ring (sound + vibration) until dismissed or snoozed -->
+        <service
+            android:name=".service.AlarmSoundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="looping alarm ring until dismissed or snoozed" />
+        </service>
 
         <!-- Re-schedule alarms on boot -->
         <receiver

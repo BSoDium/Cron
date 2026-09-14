@@ -77,7 +77,17 @@ private val THUMB_SIZE = 52.dp
 private val THUMB_INSET = 6.dp
 private val TRACK_HEIGHT = 64.dp
 
+/**
+ * `singleTask` + [onNewIntent] (rather than a fresh instance per launch) because this activity can
+ * legitimately receive a second launch intent moments after the first: the app's two-alarm model can
+ * fire the AI alarm and the hard-latest safety alarm ~100ms apart (live-observed, #214) — both target
+ * this same activity, and without this they'd stack duplicate instances.
+ */
 class AlarmActivity : ComponentActivity() {
+
+    private var alarmLabel by mutableStateOf("Cron Alarm")
+    private var alarmRequestCode by mutableStateOf(0)
+    private var alarmSnoozeCount by mutableStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,14 +105,12 @@ class AlarmActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = isLight
         }
 
-        val label = intent.getStringExtra(AlarmReceiver.EXTRA_LABEL) ?: "Cron Alarm"
-        val requestCode = intent.getIntExtra(AlarmReceiver.EXTRA_REQUEST_CODE, 0)
-        val snoozeCount = intent.getIntExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, 0)
+        applyIntent(intent)
 
         setContent {
             CronTheme {
                 AlarmScreen(
-                    label = label,
+                    label = alarmLabel,
                     onDismiss = {
                         sendBroadcast(Intent(this@AlarmActivity, AlarmReceiver::class.java).apply {
                             action = AlarmReceiver.ACTION_DISMISS
@@ -112,15 +120,27 @@ class AlarmActivity : ComponentActivity() {
                     onSnooze = {
                         sendBroadcast(Intent(this@AlarmActivity, AlarmReceiver::class.java).apply {
                             action = AlarmReceiver.ACTION_SNOOZE
-                            putExtra(AlarmReceiver.EXTRA_REQUEST_CODE, requestCode)
-                            putExtra(AlarmReceiver.EXTRA_LABEL, label)
-                            putExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, snoozeCount)
+                            putExtra(AlarmReceiver.EXTRA_REQUEST_CODE, alarmRequestCode)
+                            putExtra(AlarmReceiver.EXTRA_LABEL, alarmLabel)
+                            putExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, alarmSnoozeCount)
                         })
                         finish()
                     },
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyIntent(intent)
+    }
+
+    private fun applyIntent(intent: Intent) {
+        alarmLabel = intent.getStringExtra(AlarmReceiver.EXTRA_LABEL) ?: "Cron Alarm"
+        alarmRequestCode = intent.getIntExtra(AlarmReceiver.EXTRA_REQUEST_CODE, 0)
+        alarmSnoozeCount = intent.getIntExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, 0)
     }
 }
 

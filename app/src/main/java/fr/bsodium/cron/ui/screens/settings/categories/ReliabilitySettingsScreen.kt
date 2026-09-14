@@ -37,6 +37,7 @@ fun ReliabilitySettingsScreen(
     var bgLocation by remember { mutableStateOf(SystemPermissions.hasBackgroundLocation(context)) }
     var battery by remember { mutableStateOf(SystemPermissions.isIgnoringBatteryOptimizations(context)) }
     var exactAlarms by remember { mutableStateOf(SystemPermissions.canScheduleExactAlarms(context)) }
+    var fullScreenIntent by remember { mutableStateOf(SystemPermissions.canUseFullScreenIntent(context)) }
     var hcConnected by remember { mutableStateOf(false) }
     var hcWriteConnected by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -51,6 +52,7 @@ fun ReliabilitySettingsScreen(
     val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         battery = SystemPermissions.isIgnoringBatteryOptimizations(context)
         exactAlarms = SystemPermissions.canScheduleExactAlarms(context)
+        fullScreenIntent = SystemPermissions.canUseFullScreenIntent(context)
     }
     val hcLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -83,6 +85,14 @@ fun ReliabilitySettingsScreen(
             actionLabel = "Allow",
             enabled = true,
             onClick = { settingsLauncher.launch(SystemPermissions.exactAlarmSettingsIntent(context)) },
+        )
+        ActionRow(
+            title = "Full-screen alarm notifications",
+            subtitle = "Show the alarm over the lock screen the instant it fires, not just a banner",
+            done = fullScreenIntent,
+            actionLabel = "Allow",
+            enabled = true,
+            onClick = { settingsLauncher.launch(SystemPermissions.fullScreenIntentSettingsIntent(context)) },
         )
         ActionRow(
             title = "Health Connect",
