@@ -14,9 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -30,21 +28,23 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
 
-/** A genuine touch-driven interaction test would need to fight fling/settle timing for a fairly
- *  small visual payoff — this instead registers the exact same [AnchorShape.Pill] TimelineNode.kt
- *  builds, at fixed `pressProgress` values, directly against [TimelineTrackRegistry] (the same
- *  registry the real Composable writes into via `SideEffect`), so the rendered geometry is provably
- *  the real production shape at each program point rather than a mid-gesture guess. */
+/** Phase 11 (docs/color-roles.md) — verifies `TimelineTrackOverlay.drawSocket`'s Circle↔Pill crossfade
+ *  blend at fixed fractions, mirroring `PillPressMorphScreenshotTest.kt`'s technique: register a fixed
+ *  [AnchorDescriptor] directly against [TimelineTrackRegistry] rather than driving a real
+ *  `animateFloatAsState`/`Animatable`, so the rendered geometry is deterministic and independent of
+ *  spring timing — this only proves the blend logic itself is correct at a known fraction, not that the
+ *  full transition feels synchronized in real time (that needs a live device, see docs/color-roles.md
+ *  Round 40's own note on why this bug class specifically evades static-frame verification). */
 @Suppress("DEPRECATION")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(RobolectricTestRunner::class)
-class PillPressMorphScreenshotTest {
+class ShapeCrossfadeScreenshotTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
 
     @Test
-    fun pill_press_morph_unpressed_and_pressed_render_a_rounded_square() {
+    fun circle_to_pill_crossfade_at_zero_half_and_full_progress() {
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent {
             CronTheme {
@@ -53,9 +53,9 @@ class PillPressMorphScreenshotTest {
                 Box(Modifier.fillMaxSize().background(CronColors.pageBackground)) {
                     TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(Spacing.xl)) {
-                        PillPressExample(registry = registry, id = "unpressed", pressProgress = 0f)
-                        PillPressExample(registry = registry, id = "half-pressed", pressProgress = 0.5f)
-                        PillPressExample(registry = registry, id = "fully-pressed", pressProgress = 1f)
+                        ShapeCrossfadeExample(registry = registry, id = "start", fraction = 0f)
+                        ShapeCrossfadeExample(registry = registry, id = "mid", fraction = 0.5f)
+                        ShapeCrossfadeExample(registry = registry, id = "end", fraction = 1f)
                     }
                 }
             }
@@ -66,7 +66,7 @@ class PillPressMorphScreenshotTest {
 }
 
 @Composable
-private fun PillPressExample(registry: TimelineTrackRegistry, id: String, pressProgress: Float) {
+private fun ShapeCrossfadeExample(registry: TimelineTrackRegistry, id: String, fraction: Float) {
     val density = LocalDensity.current
     val accentColor = MaterialTheme.colorScheme.secondary
     Box(
@@ -79,7 +79,9 @@ private fun PillPressExample(registry: TimelineTrackRegistry, id: String, pressP
             id,
             AnchorDescriptor(
                 contentRadiusPx = with(density) { INTERIOR_ANCHOR_SIZE.toPx() / 2f },
-                shape = AnchorShape.Pill(pressProgress = { pressProgress }),
+                shape = AnchorShape.Pill(),
+                outgoingShape = AnchorShape.Circle,
+                shapeCrossfadeFraction = fraction,
                 accentColor = accentColor,
                 isSegmentTop = false,
                 isSegmentBottom = false,

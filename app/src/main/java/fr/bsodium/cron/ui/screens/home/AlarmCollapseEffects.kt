@@ -73,14 +73,14 @@ internal fun AlarmCollapseEffects(
                 delay(SETTLE_DEBOUNCE_MS)
                 if (listState.isScrollInProgress) return@collect
                 val c = collapseRef.value.value
-                // Only nudge a scroll that came to REST between the two stable states — a momentum fling that already reached a stable end is left untouched.
-                if (c.fraction <= 0.001f || c.fraction >= 0.999f) return@collect
+                val target = resolveSnapTarget(c.fraction, scrollingDown.value, listState.canScrollForward)
+                if (target == SnapTarget.NoSnap) return@collect
                 try {
-                    if (scrollingDown.value && listState.canScrollForward) {
+                    if (target == SnapTarget.ScrollByThenMaybeTop) {
                         listState.animateScrollBy(range.value - c.distancePx, ALARM_SNAP_SPEC)
                         // Hit the content bottom before fully collapsing → expand to the very top instead of stalling.
                         val rest = collapseRef.value.value
-                        if (rest.fraction > 0.001f && rest.fraction < 0.999f) {
+                        if (resolveSnapTarget(rest.fraction, scrollingDown.value, listState.canScrollForward) != SnapTarget.NoSnap) {
                             listState.animateScrollToItem(0)
                         }
                     } else {

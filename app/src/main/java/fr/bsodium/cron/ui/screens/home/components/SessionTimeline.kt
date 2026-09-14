@@ -226,26 +226,13 @@ internal fun AiRunNode(
         )
     }
     val contentColor = scheme.onSurfaceVariant
-    // The alarm time this run resolved to is the "key fact" headline; a cancel/do_nothing turn has no new time, so it falls back to the standing prevTime, then a static label — never the AI's own prose (see the title `when` below), which stays confined to the content slot instead.
-    val newTime = iter.thread.newAlarmTime.takeIf { item.isLatest }
-    val prevTime = iter.previousAlarmTime.takeIf { item.isLatest }
     /** While streaming, `thread.summary` is still-growing live token text (fine for the "thinking"
      *  pill elsewhere) — never bound into this `maxLines=2` ellipsis headline, or it visibly jitters
      *  and truncates mid-sentence as tokens arrive. Same gate `AiThreadMapper` applies to `answer`;
-     *  while streaming this falls back to the stable, non-moving systemMessage kicker below. */
+     *  while streaming this falls back to the stable, non-moving systemMessage kicker below. Not
+     *  part of the Phase 10 closure fix below — this is read at `TimelineNode`'s `content` param,
+     *  outside the title `Crossfade`, so it always sees this recomposition's real `item.isLatest`. */
     val heroHeadline = iter.thread.summary?.takeIf { item.isLatest && !item.isStreaming && it.isNotBlank() }
-    /** Base plans can be many hours old (the evening plan vs. a replan minutes ago read very
-     *  differently) so they get a relative "X ago"; replans are usually close together, where an
-     *  exact clock time is more useful for correlating with nearby rows. */
-    val kickerSuffix = if (item.isLatest) {
-        when (iter.kind) {
-            RunKind.ScheduledBase, RunKind.ManualBase -> iter.ranAtEpochMs?.let { "· ${rememberRelativeAgo(it)}" }
-            is RunKind.Replan -> "· at ${iter.timeLabel}"
-        }
-    } else {
-        null
-    }
-    val kickerText = listOfNotNull(iter.systemMessage, kickerSuffix).joinToString(" ")
     val density = LocalDensity.current
 
     TimelineNode(
@@ -259,7 +246,8 @@ internal fun AiRunNode(
         isNewlyArrived = isNewlyArrived,
         onClick = onClick,
         modifier = modifier,
-        verticalPadding = if (item.isLatest) Spacing.lg else Spacing.md,
+        // TimelineNode boosts this internally via latestFraction now (Phase 11, docs/color-roles.md) — always pass the resting value.
+        verticalPadding = Spacing.md,
         title = {
             val demotedTitle: @Composable () -> Unit = {
                 Text(
@@ -294,6 +282,15 @@ internal fun AiRunNode(
                         label = "ai-run-hero-demote",
                     ) { isLatest ->
                         if (isLatest) {
+                            // Computed here from this branch's own (smart-cast true) `isLatest`, not the outer `item.isLatest` — Crossfade still composes this branch for one extra frame while fading it OUT during a demotion, by which point `item.isLatest` has already flipped false; reading the outer value here made that fade-out frame render with newTime/prevTime/kickerText all nulled out, flashing the NO_ALARM_LABEL fallback below (Phase 10, docs/color-roles.md).
+                            val newTime = iter.thread.newAlarmTime
+                            val prevTime = iter.previousAlarmTime
+                            // Base plans can be many hours old (the evening plan vs. a replan minutes ago read very differently) so they get a relative "X ago"; replans are usually close together, where an exact clock time is more useful for correlating with nearby rows.
+                            val kickerSuffix = when (iter.kind) {
+                                RunKind.ScheduledBase, RunKind.ManualBase -> iter.ranAtEpochMs?.let { "· ${rememberRelativeAgo(it)}" }
+                                is RunKind.Replan -> "· at ${iter.timeLabel}"
+                            }
+                            val kickerText = listOfNotNull(iter.systemMessage, kickerSuffix).joinToString(" ")
                             Column(verticalArrangement = Arrangement.spacedBy(HERO_KICKER_GAP)) {
                                 // Shares the countdown card's `primary` fill so the newest run visually rhymes with it — touches only the neutral page background, so this is a plain on-role pairing, not a nested-container case (docs/color-roles.md).
                                 Text(

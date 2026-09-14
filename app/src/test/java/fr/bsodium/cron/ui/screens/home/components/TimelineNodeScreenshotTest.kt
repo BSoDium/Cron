@@ -3,6 +3,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,8 +51,9 @@ class TimelineNodeScreenshotTest {
             CronTheme {
                 val dim = MaterialTheme.colorScheme.onSurfaceVariant
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         TimelineNode(
                             id = "loader",
@@ -169,8 +171,9 @@ class TimelineNodeScreenshotTest {
             CronTheme {
                 val dim = MaterialTheme.colorScheme.onSurfaceVariant
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         // isSegmentTop = true with a track below (not a lone node) — the Latest anchor must not overflow past the top rounded cap here.
                         TimelineNode(
@@ -211,8 +214,9 @@ class TimelineNodeScreenshotTest {
             CronTheme {
                 val dim = MaterialTheme.colorScheme.onSurfaceVariant
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         TimelineNode(
                             id = "planned",
@@ -285,8 +289,9 @@ class TimelineNodeScreenshotTest {
             CronTheme {
                 val dim = MaterialTheme.colorScheme.onSurfaceVariant
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         // True top terminus — rounded cap, fully awake below.
                         TimelineNode(
@@ -377,8 +382,9 @@ class TimelineNodeScreenshotTest {
                 val asleep = MaterialTheme.colorScheme.tertiaryContainer
                 val onAsleep = MaterialTheme.colorScheme.onTertiaryContainer
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         // A Body-accent icon (tertiaryContainer, matching TimelineAccent.Body) sitting on an asleep track segment — without proper nesting it has zero contrast and disappears into the track.
                         TimelineNode(
@@ -449,8 +455,9 @@ class TimelineNodeScreenshotTest {
         composeTestRule.setContent {
             CronTheme {
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         AiRunNode(
                             item = latestAiRun(
@@ -480,8 +487,9 @@ class TimelineNodeScreenshotTest {
         composeTestRule.setContent {
             CronTheme {
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         AiRunNode(
                             item = latestAiRun(
@@ -510,8 +518,9 @@ class TimelineNodeScreenshotTest {
         composeTestRule.setContent {
             CronTheme {
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         AiRunNode(
                             item = latestAiRun(
@@ -547,9 +556,10 @@ class TimelineNodeScreenshotTest {
         composeTestRule.setContent {
             CronTheme {
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 var isLatest by remember { mutableStateOf(true) }
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         AiRunNode(
                             item = latestAiRun(
@@ -579,8 +589,9 @@ class TimelineNodeScreenshotTest {
         composeTestRule.setContent {
             CronTheme {
                 val registry = rememberTimelineTrackRegistry()
+                val listState = rememberLazyListState()
                 Box {
-                    TimelineTrackOverlay(registry = registry)
+                    TimelineTrackOverlay(registry = registry, listState = listState)
                     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                         AiRunNode(
                             item = latestAiRun(

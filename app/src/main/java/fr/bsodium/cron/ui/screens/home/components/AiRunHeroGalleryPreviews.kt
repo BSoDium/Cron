@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,8 +29,9 @@ import kotlinx.datetime.LocalTime
 internal fun AiRunHeroGalleryPreview() {
     CronTheme {
         val registry = rememberTimelineTrackRegistry()
+        val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
-            TimelineTrackOverlay(registry = registry)
+            TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                 GallerySectionLabel("Latest hero states")
                 AiRunNode(

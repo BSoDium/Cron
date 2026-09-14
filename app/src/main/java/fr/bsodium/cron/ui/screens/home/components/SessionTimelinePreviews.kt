@@ -2,6 +2,7 @@ package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -191,8 +192,9 @@ private fun SessionTimelinePreview() {
     val lastAnchorIndex = timeline.indexOfLast { it !is TimelineItem.DayHeader }
     CronTheme {
         val registry = rememberTimelineTrackRegistry()
+        val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
-            TimelineTrackOverlay(registry = registry)
+            TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
                 timeline.forEachIndexed { index, item ->
                     val isSegmentTop = index == firstAnchorIndex
@@ -235,8 +237,9 @@ private fun AiRunNodeHeroDemotePreview() {
     CronTheme {
         var isLatest by remember { mutableStateOf(true) }
         val registry = rememberTimelineTrackRegistry()
+        val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground).clickable { isLatest = !isLatest }) {
-            TimelineTrackOverlay(registry = registry)
+            TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
                 AiRunNode(
                     item = TimelineItem.AiRun(

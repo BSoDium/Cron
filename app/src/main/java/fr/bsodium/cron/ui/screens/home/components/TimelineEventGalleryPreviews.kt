@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,9 +56,10 @@ internal fun EventInteriorGalleryPreview() {
 @Composable
 internal fun EventGalleryTrackBlock(sectionLabel: String, isAsleep: Boolean, atCap: Boolean) {
     val registry = rememberTimelineTrackRegistry()
+    val listState = rememberLazyListState()
     GallerySectionLabel(sectionLabel)
     Box {
-        TimelineTrackOverlay(registry = registry)
+        TimelineTrackOverlay(registry = registry, listState = listState)
         Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
             TriggerType.entries.forEach { trigger ->
                 EventNode(
