@@ -261,17 +261,6 @@ internal fun AiRunNode(
         modifier = modifier,
         verticalPadding = if (item.isLatest) Spacing.lg else Spacing.md,
         title = {
-            /** The demoted (single-line) state is shorter than the hero (kicker + time) state;
-             *  without reserving the hero's height here, the Crossfade instantly resizes the Row
-             *  and — since the Row centers its children vertically — the whole anchor/title visibly
-             *  re-centers the moment a run gets superseded. Only applies to a row that could ever
-             *  actually be in the hero state. */
-            val heroMinHeight = remember(density) {
-                with(density) {
-                    CronTypography.timelineHeroKicker.lineHeight.toDp() + HERO_KICKER_GAP +
-                        CronTypography.timelineHeroTimeNew.lineHeight.toDp()
-                }
-            }
             val demotedTitle: @Composable () -> Unit = {
                 Text(
                     text = iter.systemMessage,
@@ -283,6 +272,17 @@ internal fun AiRunNode(
                 )
             }
             if (everLatest) {
+                /** The demoted (single-line) state is shorter than the hero (kicker + time) state;
+                 *  without reserving the hero's height here, the Crossfade instantly resizes the Row
+                 *  and — since the Row centers its children vertically — the whole anchor/title
+                 *  visibly re-centers the moment a run gets superseded. Computed only in this branch:
+                 *  a row that's never been Latest never needs it (see `everLatest`'s own KDoc). */
+                val heroMinHeight = remember(density) {
+                    with(density) {
+                        CronTypography.timelineHeroKicker.lineHeight.toDp() + HERO_KICKER_GAP +
+                            CronTypography.timelineHeroTimeNew.lineHeight.toDp()
+                    }
+                }
                 // Fades the hero headline ↔ plain system-message swap instead of cutting instantly, pairing with TimelineNode's animated anchor-radius shrink; heightIn lives on this wrapping Box (not Crossfade, which has no contentAlignment and top-aligns internally) so centering the demoted text belongs here.
                 Box(
                     modifier = Modifier.heightIn(min = heroMinHeight),
