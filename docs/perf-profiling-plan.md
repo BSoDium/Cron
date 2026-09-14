@@ -155,7 +155,9 @@ class HomeTimelineScrollBenchmark {
         startupMode = StartupMode.WARM,
         setupBlock = { startActivityAndWait() },
     ) {
-        val timeline = device.findObject(By.res(packageName, "home_timeline"))
+        // NOT By.res(packageName, "home_timeline") — see docs/performance.md "Compose + UiAutomator's
+        // By.res() trap" for why that overload silently never matches a Compose testTag.
+        val timeline = device.findObject(By.res("home_timeline"))
         timeline.setGestureMargin(device.displayWidth / 5)
         timeline.fling(Direction.DOWN)
         device.waitForIdle()
@@ -222,6 +224,14 @@ module if the two end up sequenced separately.
 
 ## Part 3 — root-causing a confirmed jank (stretch, only once Part 1 or 2 finds something real)
 
+**Already done once, and already removed again** — see docs/performance.md "The debug-build trap" for
+the full story. `TimelineTrackOverlay.onDraw` and `TimelineNode`'s composition body were both wrapped in
+`trace()` exactly as sketched below, used to root-cause #176's original jank report, and then correctly
+stripped once the fixes they pointed at landed (temporary diagnostic instrumentation, not permanent
+infra — `JankStats`, from Part 2, is the permanent signal). If a future jank investigation needs this
+again, re-add it the same way and strip it again before committing the fix — don't assume it's still
+there, and don't leave it in past the investigation that needed it.
+
 Frame timing tells you a frame was slow; it doesn't say which composable cost the time. Wrap the specific
 suspects `docs/performance.md` and #176 already name in trace sections:
 
@@ -246,13 +256,17 @@ hypothesis needs to go from a guess to a decision.
 
 ## Suggested landing order
 
-1. JankStats (Part 2) — smallest diff, immediate always-on signal.
+1. JankStats (Part 2) — smallest diff, immediate always-on signal. **Done** (PR #189).
 2. `testTagsAsResourceId` + the two test tags (§1.3) — trivial, unlocks everything else, safe to land alone.
+   **Done**, `home_timeline` only — `thinking_thread_expand` (step 4 below) not yet added.
 3. `:macrobenchmark` module + `HomeTimelineScrollBenchmark` (§1.1–1.5) — proves the loop end-to-end on one
-   screen before spending time on the other two benchmark tests.
-4. `ThinkingThreadExpandBenchmark` + `ColdStartBenchmark` — same pattern, second and third screens.
+   screen before spending time on the other two benchmark tests. **Done and proven working end-to-end**
+   against a real device — see docs/performance.md for the actual numbers and the non-destructive manual
+   `adb` run procedure (never `connectedBenchmarkAndroidTest` against a real device — see that doc).
+4. `ThinkingThreadExpandBenchmark` + `ColdStartBenchmark` — same pattern, second and third screens. Not yet
+   started.
 5. Trace-section root-causing (Part 3) — only once a benchmark from step 3/4 actually shows a real budget
-   overrun worth explaining.
+   overrun worth explaining. Already done once for #176 (and correctly removed again) — see Part 3 above.
 
 ## Open questions to settle during implementation, not now
 

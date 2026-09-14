@@ -13,11 +13,10 @@ import org.junit.Test
 private const val PACKAGE_NAME = "fr.bsodium.cron"
 private const val ITERATIONS = 10
 
-// MainActivity resolves its start destination asynchronously (a DataStore read + SecureKeyStore
-// check on Dispatchers.IO) before the home timeline composes at all — startActivityAndWait()
-// returns once the window draws, not once that resolution lands, so a bare findObject() can race
-// it. 20s: a live run timed out at 10s on the very first CompilationMode.Full() launch, which pays
-// real cold-disk/cold-cache cost on top of the async resolution above, once.
+/** How long to wait for `home_timeline` to appear after launch. Generous — a live run timed out at
+ *  10s on the very first `CompilationMode.Full()` iteration, which pays real cold-disk/cold-JIT
+ *  cost on top of `MainActivity`'s own async start-destination resolution. See docs/performance.md
+ *  "The debug-build trap" for the full story. */
 private const val FIND_TIMEOUT_MS = 20_000L
 
 /**
@@ -40,10 +39,7 @@ class HomeTimelineScrollBenchmark {
         startupMode = StartupMode.WARM,
         setupBlock = { startActivityAndWait() },
     ) {
-        // testTagsAsResourceId sets AccessibilityNodeInfo's resource-id to the bare testTag string
-        // ("home_timeline"), not a namespaced "package:id/name" — By.res(pkg, id) builds and matches
-        // against that namespaced form and never finds it. The single-arg overload matches the raw
-        // resource-id string directly, which is what Compose actually sets.
+        // Single-arg By.res(): see docs/performance.md "Compose + UiAutomator's By.res() trap".
         val tag = By.res("home_timeline")
         check(device.wait(Until.hasObject(tag), FIND_TIMEOUT_MS)) {
             "home_timeline never appeared — is onboarding complete and an Anthropic key set on this device?"
