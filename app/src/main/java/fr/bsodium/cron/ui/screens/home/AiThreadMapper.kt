@@ -278,13 +278,18 @@ private fun String.hasSummaryLine(): Boolean =
     lineSequence().any { SUMMARY_LINE.matchEntire(it.trim()) != null }
 
 /** True if [line] is a strict prefix of a directive keyword still being typed (e.g. "STATU", "SUMMAR"),
- *  before its colon completes — so we can hold it back from display while streaming. */
-private fun isPartialDirectivePrefix(line: String): Boolean =
-    line.isNotEmpty() && DIRECTIVE_TOKENS.any { it.startsWith(line, ignoreCase = true) && line.length < it.length }
+ *  before its colon completes — so we can hold it back from display while streaming. Strips a leading
+ *  emphasis run first (`**STATUS`, `_SUMMAR`) since the model sometimes bolds the keyword itself, which
+ *  [STATUS_LINE]/[SUMMARY_LINE] tolerate once complete but which isn't yet a literal token prefix mid-type. */
+private fun isPartialDirectivePrefix(line: String): Boolean {
+    val stripped = line.trimStart('*', '_')
+    return stripped.isNotEmpty() && DIRECTIVE_TOKENS.any { it.startsWith(stripped, ignoreCase = true) && stripped.length < it.length }
+}
 
 private val DIRECTIVE_TOKENS = listOf("STATUS:", "SUMMARY:")
 
 // Hoisted so they compile once, not on every build() call.
 private val LEADING_RULE = Regex("([-*_])\\1{2,}")
-private val STATUS_LINE = Regex("(?i)^STATUS:\\s*(.*)$")
-private val SUMMARY_LINE = Regex("(?i)^SUMMARY:\\s*(.*)$")
+// Tolerates the model bolding the keyword itself (`**STATUS:**`) — otherwise the match silently fails and the raw directive line leaks into the displayed text (#193).
+private val STATUS_LINE = Regex("(?i)^[*_]{0,2}STATUS[*_]{0,2}:[*_]{0,2}\\s*(.*)$")
+private val SUMMARY_LINE = Regex("(?i)^[*_]{0,2}SUMMARY[*_]{0,2}:[*_]{0,2}\\s*(.*)$")

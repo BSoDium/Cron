@@ -241,6 +241,52 @@ class AiThreadMapperTest {
         assertEquals("some narration", narration.text)
     }
 
+    /** Regression for #193: the model sometimes bolds the directive keyword itself
+     *  (`**SUMMARY:**` rather than `SUMMARY:`). Before the fix this failed to match at all, so the
+     *  raw, unstripped line — asterisks and all — leaked straight into the displayed summary/response. */
+    @Test
+    fun bolded_summary_directive_is_still_parsed_and_stripped() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("plan it")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.ToolUse(id = "t1", name = "set_alarm", input = SessionJson.parseToJsonElement("{}")),
+                ContentBlock.Text("**SUMMARY:** Calendar changed; first anchor is now Train IR 1633 at 13:43."),
+            ),
+            row(0, "user", ContentBlock.ToolResult(tool_use_id = "t1", content = "{\"alarm_time\":\"2026-05-22T13:20:00Z\"}", is_error = false)),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+
+        assertEquals("Calendar changed; first anchor is now Train IR 1633 at 13:43.", thread.summary)
+        assertFalse(thread.summary.orEmpty().contains("*"))
+        assertFalse(thread.summary.orEmpty().contains("SUMMARY"))
+    }
+
+    /** Same failure mode, `STATUS:` side — a bolded status line sharing a text block with real
+     *  narration must be stripped out, leaving only the narration. Settled (not streaming) so the
+     *  line is always "committable" and this isn't testing the streaming-tail hold-back behavior
+     *  covered elsewhere. */
+    @Test
+    fun bolded_status_directive_is_stripped_from_narration() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("plan it")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.Thinking(thinking = "Considering."),
+                ContentBlock.Text("**STATUS:** Reading your calendar\nSome real narration here."),
+                ContentBlock.ToolUse(id = "t1", name = "read_calendar", input = SessionJson.parseToJsonElement("{}")),
+                ContentBlock.Text("SUMMARY: Done\n\nAll set."),
+            ),
+            row(0, "user", ContentBlock.ToolResult(tool_use_id = "t1", content = "{}", is_error = false)),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+
+        val narration = thread.process.filterIsInstance<ProcessItem.Narration>().single()
+        assertEquals("Some real narration here.", narration.text)
+    }
+
     @Test
     fun answer_start_anchors_on_the_summary_marker() {
         val narrating = listOf(

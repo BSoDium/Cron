@@ -204,6 +204,34 @@ class SessionTimelineScreenshotTest {
         composeTestRule.onRoot().captureRoboImage()
     }
 
+    /** Regression for #193: the hero headline (`thread.summary`) is model-authored text and the
+     *  system prompt promises it full Markdown — this must actually render as Markdown (bold time
+     *  visibly bold), not literal asterisks via a plain Text. */
+    @Test
+    fun hero_headline_renders_markdown_not_literal_asterisks() {
+        composeTestRule.mainClock.autoAdvance = false
+        val timeline = listOf(
+            TimelineItem.AiRun(
+                timestamp = Instant.fromEpochMilliseconds(0L),
+                iteration = fixedIteration(
+                    turn = 0,
+                    kind = RunKind.Replan(TriggerType.CalendarChange),
+                    summary = "Calendar changed — replanned to **13:20**, first anchor is now Train IR 1633.",
+                    newAlarmTime = LocalTime(13, 20),
+                    previousAlarmTime = LocalTime(9, 30),
+                ),
+                sessionId = "s1",
+                isStreaming = false,
+                isLatest = true,
+            ),
+        )
+        composeTestRule.setContent {
+            CronTheme { TimelineTestContent(timeline) }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
     /** `suppressEntranceAnimation = true` mirrors the settled end-state a demoted row and its
      *  successor reach once both have finished reflowing (also what a Home→Settings→back round trip
      *  renders immediately) via the real `sessionTimelineItems` — capturing that resting frame
