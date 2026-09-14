@@ -74,7 +74,8 @@ android {
 
     signingConfigs {
         create("release") {
-            val keyStorePath = System.getenv("RELEASE_KEYSTORE_PATH") ?: localProps.getProperty("STORE_FILE")
+            val keyStorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+                ?: localProps.getProperty("STORE_FILE")?.takeIf { it.isNotBlank() }
             if (keyStorePath != null) {
                 storeFile = file(keyStorePath)
                 storePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: localProps.getProperty("STORE_PASSWORD")
@@ -92,6 +93,13 @@ android {
                 "proguard-rules.pro"
             )
             signingConfigs.findByName("release")?.let {
+                signingConfig = it
+            }
+        }
+        // Sign debug builds with the release key when available so dev and release APKs share a
+        // cert and install as an update instead of losing data — see docs/signing.md.
+        getByName("debug") {
+            signingConfigs.getByName("release").takeIf { it.storeFile != null }?.let {
                 signingConfig = it
             }
         }
