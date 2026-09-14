@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.receiver.AlarmReceiver
-import fr.bsodium.cron.service.AlarmSoundService
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.ExpressiveFontFamily
 import fr.bsodium.cron.ui.theme.Radius
@@ -80,9 +79,9 @@ private val TRACK_HEIGHT = 64.dp
 
 /**
  * `singleTask` + [onNewIntent] (rather than a fresh instance per launch) because this activity can
- * legitimately receive a second launch intent moments after the first: [AlarmSoundService] launches
- * it directly now (#214), and the app's two-alarm model can fire the AI alarm and the hard-latest
- * safety alarm ~100ms apart (live-observed) — both target this same activity.
+ * legitimately receive a second launch intent moments after the first: the app's two-alarm model can
+ * fire the AI alarm and the hard-latest safety alarm ~100ms apart (live-observed, #214) — both target
+ * this same activity, and without this they'd stack duplicate instances.
  */
 class AlarmActivity : ComponentActivity() {
 
@@ -142,7 +141,6 @@ class AlarmActivity : ComponentActivity() {
         alarmLabel = intent.getStringExtra(AlarmReceiver.EXTRA_LABEL) ?: "Cron Alarm"
         alarmRequestCode = intent.getIntExtra(AlarmReceiver.EXTRA_REQUEST_CODE, 0)
         alarmSnoozeCount = intent.getIntExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, 0)
-        startService(AlarmSoundService.activityShownIntent(this, alarmRequestCode))
     }
 }
 

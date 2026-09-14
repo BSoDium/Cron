@@ -34,36 +34,23 @@ class AlarmSoundService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
-    private var currentLabel: String = "Cron Alarm"
-    private var currentRequestCode: Int = 0
-    private var currentSessionId: String? = null
-    private var currentSnoozeCount: Int = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                stopRinging()
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            ACTION_ACTIVITY_SHOWN -> {
-                suppressFullScreenFallback(intent.getIntExtra(AlarmReceiver.EXTRA_REQUEST_CODE, -1))
-                return START_NOT_STICKY
-            }
+        if (intent?.action == ACTION_STOP) {
+            stopRinging()
+            stopSelf()
+            return START_NOT_STICKY
         }
 
-        currentLabel = intent?.getStringExtra(AlarmReceiver.EXTRA_LABEL) ?: "Cron Alarm"
-        currentRequestCode = intent?.getIntExtra(AlarmReceiver.EXTRA_REQUEST_CODE, 0) ?: 0
-        currentSessionId = intent?.getStringExtra(AlarmConstants.EXTRA_SESSION_ID)
-        currentSnoozeCount = intent?.getIntExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, 0) ?: 0
+        val label = intent?.getStringExtra(AlarmReceiver.EXTRA_LABEL) ?: "Cron Alarm"
+        val requestCode = intent?.getIntExtra(AlarmReceiver.EXTRA_REQUEST_CODE, 0) ?: 0
+        val sessionId = intent?.getStringExtra(AlarmConstants.EXTRA_SESSION_ID)
+        val snoozeCount = intent?.getIntExtra(AlarmReceiver.EXTRA_SNOOZE_COUNT, 0) ?: 0
 
         releasePlaybackResources() // defensive: release a stale player if a second ALARM_FIRED overlaps this one
-        startForegroundRinging(
-            buildRingingNotification(currentLabel, currentRequestCode, currentSessionId, currentSnoozeCount, includeFullScreenIntent = true),
-        )
-        launchAlarmActivityDirectly()
+        startForegroundRinging(buildRingingNotification(label, requestCode, sessionId, snoozeCount))
         startLoopingSound()
         startContinuousVibration()
 
@@ -73,33 +60,6 @@ class AlarmSoundService : Service() {
     override fun onDestroy() {
         stopRinging()
         super.onDestroy()
-    }
-
-    /**
-     * The notification's `setFullScreenIntent` isn't a reliable way to get [AlarmActivity] on screen
-     * promptly: live testing (#214) caught Android's systemui itself firing that `PendingIntent` up to
-     * ~10s after the alarm rang — holding it as a heads-up peek first — and playing its own alert tone
-     * at that moment, audibly doubling this service's already-looping ring. A foreground service with
-     * an alarm-category notification gets its own Background-Activity-Launch exemption, so launching
-     * directly sidesteps that delay. The full-screen intent stays as a fallback for the rare case this
-     * direct launch is itself blocked — see [suppressFullScreenFallback] for how that fallback gets
-     * turned off once we know it wasn't needed.
-     */
-    private fun launchAlarmActivityDirectly() {
-        runCatching {
-            startActivity(buildAlarmActivityIntent(currentLabel, currentRequestCode, currentSessionId, currentSnoozeCount))
-        }.onFailure { Log.w(TAG, "Direct AlarmActivity launch failed; relying on the notification's full-screen intent", it) }
-    }
-
-    /** [AlarmActivity] calls this back the moment it's actually created, confirming the direct launch
-     *  worked — only then is it safe to drop the full-screen-intent fallback, since a blocked direct
-     *  launch fails silently (no exception) rather than throwing. Ignores a stale signal from a ring
-     *  this service has since moved on from (e.g. the AI alarm superseded by hard-latest moments later). */
-    private fun suppressFullScreenFallback(requestCode: Int) {
-        if (requestCode != currentRequestCode) return
-        startForegroundRinging(
-            buildRingingNotification(currentLabel, currentRequestCode, currentSessionId, currentSnoozeCount, includeFullScreenIntent = false),
-        )
     }
 
     private fun startForegroundRinging(notification: Notification) {
@@ -171,16 +131,22 @@ class AlarmSoundService : Service() {
         requestCode: Int,
         sessionId: String?,
         snoozeCount: Int,
-        includeFullScreenIntent: Boolean,
     ): Notification {
         val fullScreenPendingIntent = PendingIntent.getActivity(
             this, requestCode, buildAlarmActivityIntent(label, requestCode, sessionId, snoozeCount),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        // Android 13+ lets a user swipe away a foreground service's notification regardless of
+        // setOngoing(true) (there's a system-level "stop" affordance for exactly this) — without a
+        // deleteIntent, that swipe left the ring orphaned: notification gone, sound/vibration still
+        // going (live-reported). Treat it the same as the in-app dismiss gesture.
+        val deletePendingIntent = PendingIntent.getBroadcast(
+            this, requestCode, Intent(this, AlarmReceiver::class.java).apply { action = AlarmReceiver.ACTION_DISMISS },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
-        // No .setSound()/.setVibrate() here — on this app's minSdk (26+) a channel-based notification
-        // always sources those from the channel, and the channel only ever plays them once. The
-        // looping MediaPlayer/Vibrator above are the real ring; see the class KDoc.
+        // Sound/vibration come from the looping MediaPlayer/Vibrator above, not this notification — see the class KDoc.
+        // setFullScreenIntent's known ~10s-delayed double-ring issue: see docs/alarm-full-screen-intent.md and #214.
         return NotificationCompat.Builder(this, AlarmReceiver.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle("Cron")
@@ -191,22 +157,16 @@ class AlarmSoundService : Service() {
             .setAutoCancel(false)
             .setOngoing(true)
             .setContentIntent(fullScreenPendingIntent)
-            .apply { if (includeFullScreenIntent) setFullScreenIntent(fullScreenPendingIntent, true) }
+            .setDeleteIntent(deletePendingIntent)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
             .build()
     }
 
     companion object {
         private const val TAG = "AlarmSoundService"
         const val ACTION_STOP = "fr.bsodium.cron.ALARM_SOUND_STOP"
-        const val ACTION_ACTIVITY_SHOWN = "fr.bsodium.cron.ALARM_ACTIVITY_SHOWN"
 
         fun stopIntent(context: Context): Intent =
             Intent(context, AlarmSoundService::class.java).apply { action = ACTION_STOP }
-
-        fun activityShownIntent(context: Context, requestCode: Int): Intent =
-            Intent(context, AlarmSoundService::class.java).apply {
-                action = ACTION_ACTIVITY_SHOWN
-                putExtra(AlarmReceiver.EXTRA_REQUEST_CODE, requestCode)
-            }
     }
 }
