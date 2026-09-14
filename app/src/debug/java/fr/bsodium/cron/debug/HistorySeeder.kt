@@ -168,9 +168,13 @@ object HistorySeeder {
 
     /** One beat in a day's script — either an AI turn (assigned the next turnIndex in order) or a
      *  plain session event. [dayOffset] is relative to the session's own morning date: -1 is the prior
-     *  evening, 0 is the morning itself. Ordering matters: a turn's inferred [fr.bsodium.cron.ui.screens.home.RunKind]
-     *  comes from whichever event precedes it in time (`AiPlanMapper.buildPlan`), so an event meant to
-     *  motivate a replan must be listed before that replan's turn. */
+     *  evening, 0 is the morning itself. Any beat after ~20:00 belongs to the prior evening — use -1,
+     *  not 0, or it sorts after the next session's own evening plan and
+     *  [fr.bsodium.cron.session.model.detectedSleepWindow] sees an out-of-bed timestamp before sleep
+     *  onset and returns null. Ordering matters: a turn's
+     *  inferred [fr.bsodium.cron.ui.screens.home.RunKind] comes from whichever event precedes it in
+     *  time (`AiPlanMapper.buildPlan`), so an event meant to motivate a replan must be listed before
+     *  that replan's turn. */
     private sealed interface Beat {
         data class Turn(
             val dayOffset: Int,
@@ -218,7 +222,7 @@ object HistorySeeder {
                     body = "Set a 07:30 alarm — commute is about 25 minutes and I added standard prep time.",
                     action = TurnAction.SetAlarm(time(7, 30)),
                 ),
-                Beat.Event(0, time(23, 40), TriggerType.SleepOnset, EventData.SleepOnset(screenOffSince = Instant.DISTANT_PAST, rearm = false)),
+                Beat.Event(-1, time(23, 40), TriggerType.SleepOnset, EventData.SleepOnset(screenOffSince = Instant.DISTANT_PAST, rearm = false)),
                 Beat.Event(
                     0, time(3, 20), TriggerType.MidSleepActivity,
                     EventData.MidSleepActivity(activityType = ActivityType.Still, screenOn = false, durationSeconds = 45),
@@ -247,10 +251,10 @@ object HistorySeeder {
                     body = "Set a 06:45 alarm for tomorrow's 07:30 departure — factored in a 30 minute commute.",
                     action = TurnAction.SetAlarm(time(6, 45)),
                 ),
-                Beat.Event(0, time(23, 10), TriggerType.SleepOnset, EventData.SleepOnset(screenOffSince = Instant.DISTANT_PAST, rearm = false)),
-                Beat.Event(0, time(23, 50), TriggerType.CalendarChange, EventData.CalendarChange(changeType = "event_moved", eventId = "evt-1", affectsFirstEvent = true)),
+                Beat.Event(-1, time(23, 10), TriggerType.SleepOnset, EventData.SleepOnset(screenOffSince = Instant.DISTANT_PAST, rearm = false)),
+                Beat.Event(-1, time(23, 50), TriggerType.CalendarChange, EventData.CalendarChange(changeType = "event_moved", eventId = "evt-1", affectsFirstEvent = true)),
                 Beat.Turn(
-                    dayOffset = 0, time = time(23, 51),
+                    dayOffset = -1, time = time(23, 51),
                     thinking = "Your first meeting just moved earlier — recalculating the wake window against the new time.",
                     summary = "Moved your alarm to 06:15",
                     body = "Your train now leaves earlier, so I moved the alarm up by 30 minutes to keep the same buffer.",
@@ -321,7 +325,7 @@ object HistorySeeder {
                     body = "Set a 07:15 alarm — light commute, so I kept prep time standard.",
                     action = TurnAction.SetAlarm(time(7, 15)),
                 ),
-                Beat.Event(0, time(23, 20), TriggerType.SleepOnset, EventData.SleepOnset(screenOffSince = Instant.DISTANT_PAST, rearm = false)),
+                Beat.Event(-1, time(23, 20), TriggerType.SleepOnset, EventData.SleepOnset(screenOffSince = Instant.DISTANT_PAST, rearm = false)),
                 Beat.Event(
                     0, time(7, 0), TriggerType.WakeWindowOpportunity,
                     EventData.WakeWindowOpportunity(currentStage = SleepStage.Light, windowStart = time(7, 0), windowEnd = time(7, 30)),
