@@ -40,8 +40,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LookaheadScope
-import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -265,7 +265,11 @@ internal fun ThinkingDisclosure(
 
 /** Measures [content] at full height, reports that via [onFullHeight], and clips it top-anchored to
  *  [targetPx] pixels (capped at full) — so a pull maps 1:1 to revealed pixels. [peeking] adds a soft
- *  bottom edge while partially open. */
+ *  bottom edge while partially open.
+ *
+ *  A plain [Layout], not [androidx.compose.ui.layout.SubcomposeLayout] — see docs/performance.md §8
+ *  (#14): content here never varies by incoming constraints, so subcomposing it bought nothing and
+ *  cost measurably more per frame during a pull/spring than a normal measured child does. */
 @Composable
 private fun ExpandReveal(
     targetPx: () -> Float,
@@ -273,12 +277,13 @@ private fun ExpandReveal(
     onFullHeight: (Int) -> Unit,
     content: @Composable () -> Unit,
 ) {
-    SubcomposeLayout(
+    Layout(
+        content = content,
         modifier = Modifier
             .clipToBounds()
             .then(if (peeking) Modifier.fadeBottom(PEEK_FADE_HEIGHT) else Modifier),
-    ) { constraints ->
-        val placeable = subcompose(Unit, content).first().measure(constraints.copy(minHeight = 0))
+    ) { measurables, constraints ->
+        val placeable = measurables.first().measure(constraints.copy(minHeight = 0))
         onFullHeight(placeable.height)
         val h = targetPx().coerceIn(0f, placeable.height.toFloat()).roundToInt()
         layout(placeable.width, h) { placeable.place(0, 0) }
