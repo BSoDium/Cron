@@ -114,6 +114,10 @@ android {
     }
 }
 
+composeCompiler {
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose_stability.conf"))
+}
+
 // Failing tests print their full stack trace into the CI log; the HTML report is a download-only artifact.
 tasks.withType<Test>().configureEach {
     testLogging {
