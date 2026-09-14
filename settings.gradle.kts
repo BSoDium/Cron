@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Cron"
 include(":app")
+include(":macrobenchmark")
