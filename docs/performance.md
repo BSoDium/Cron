@@ -340,9 +340,25 @@ layout nodes so the expensive one's own measure lambda never reads the per-frame
 Not pursued here — meaningfully more structural complexity for a gain that's unverifiable without a
 device to measure the delta against.
 
-**Open gap.** The relative win (subcompose overhead removed, sub-linear rather than linear content-size
-scaling) is real and reproducible on the JVM, and directly matches this doc's own §3 guidance that
-`SubcomposeLayout` measure-time composition is real composition cost. But it has not been confirmed
-on-device — the actual frame-time delta during a live pull gesture is still unverified. Re-run the
-original manual repro (pull open a long thread's timeline) on the Pixel 7 once it's unlocked, ideally
-with a Perfetto capture, before calling #14 fully closed.
+**On-device follow-up.** Once the Pixel 7 unlocked, ran a controlled A/B on the real device: same
+`expand`/`collapse` tap on the same turn's detail screen (3 process items — `read_calendar`, one
+narration line, `compute_commute`), `dumpsys gfxinfo <pkg> reset` immediately before each cycle,
+`dumpsys gfxinfo <pkg>` immediately after, non-destructive `adb install -r -d` swap between the old
+`SubcomposeLayout` build and the fixed `Layout` build (verified via unchanged `firstInstallTime` each
+time), 4–5 trials per build. Result: **the aggregate frame-jank numbers overlapped heavily between the
+two builds** — janky-frame % and p90/p95/p99 render times both swung more trial-to-trial *within* a
+single build than the two builds differed from each other on average. No device-level win was
+detectable at this content size.
+
+That's not a contradiction of the JVM finding, just a scale mismatch: the JVM probe isolated
+`ExpandReveal`'s own measure-lambda cost specifically, where the subcompose-vs-Layout delta is real and
+repeatable (§ above). `dumpsys gfxinfo` instead measures the *entire* frame — ripple draw, status bar,
+GPU compositing, everything — and with only three short process items, this composable's slice of that
+total is apparently too small to clear the noise floor of ~150-frame samples. The fix is still correct
+(subcomposition genuinely bought nothing here, and costs measurably more to call), but its device-level
+payoff has only been shown to matter in proportion to content size, not confirmed as user-visible at
+typical (short) thread lengths. **Untested**: whether the gap opens up on a long, many-tool-call thread
+(where the JVM probe's 16x-content run showed the clearest relative win) — re-run this same A/B against
+a turn with 20+ process items, ideally with a Perfetto trace isolating `ExpandReveal`'s own frame slice
+rather than the whole app's frame time, before assuming this closes #14 for the janky-on-a-long-thread
+case specifically.
