@@ -1,5 +1,8 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -40,5 +43,35 @@ class AiThinkingThreadTest {
         composeTestRule.onNodeWithContentDescription("Expand").assertExists()
         composeTestRule.onNodeWithContentDescription("Expand").performClick()
         composeTestRule.onNodeWithContentDescription("Collapse").assertExists()
+    }
+
+    @Test
+    fun pull_reveal_tracks_expandPx_across_a_long_thread() {
+        var px by mutableFloatStateOf(0f)
+        val longThread = thread.copy(
+            process = List(30) { i -> ProcessItem.Narration("Step $i: " + "word ".repeat(15)) },
+        )
+        var reportedFullHeight = 0
+        composeTestRule.setContent {
+            CronTheme {
+                AiThinkingThread(
+                    thread = longThread,
+                    expanded = false,
+                    expandPx = { px },
+                    onFullHeight = { reportedFullHeight = it },
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // A drag that steps through many frames on a long process list is exactly #14's repro —
+        // this must settle without crashing, and the full height must still be reported so
+        // HomeScreen's drag threshold has a real target to pull toward.
+        repeat(40) { frame ->
+            px = (frame + 1) * 20f
+            composeTestRule.waitForIdle()
+        }
+
+        assert(reportedFullHeight > 0) { "expected ExpandReveal to report a positive full height" }
     }
 }
