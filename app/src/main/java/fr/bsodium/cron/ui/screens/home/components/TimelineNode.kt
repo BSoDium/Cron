@@ -132,6 +132,17 @@ private fun TimelineAnchor.footprintDiameter(): Dp = FLUSH_ANCHOR_SIZE + CAP_ANC
  *  Same two-size rule for all four anchor types — no per-type exception. */
 private fun contentDiameterFor(atCap: Boolean): Dp = if (atCap) FLUSH_ANCHOR_SIZE else INTERIOR_ANCHOR_SIZE
 
+/** A clickable cap anchor's plain Circle morphing toward Cookie6Sided while pressed — Cookie6Sided
+ *  rather than Latest's own Cookie9Sided so the two "selected" cues stay visually distinguishable.
+ *  At `pressMorphProgress == 0` this renders pixel-identical to a plain Circle, so it's safe for
+ *  every clickable cap regardless of anchor type — shared by both the [TimelineAnchor.Icon] Neutral
+ *  branch and [TimelineAnchor.Plain] below, which otherwise built the same [Morph] twice. */
+@Composable
+private fun rememberPressCapShape(pressMorphProgress: Float): AnchorShape.MorphShape {
+    val pressCapMorph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie6Sided) }
+    return AnchorShape.MorphShape(pressCapMorph) { pressMorphProgress }
+}
+
 /** The accent color the overlay fills this anchor's socket with — the visible disc for
  *  [TimelineAnchor.Plain]/[TimelineAnchor.Icon]; the same color [TimelineAnchor.Loader]/
  *  [TimelineAnchor.Latest] self-paint their content in on top of, so there's no seam. Every branch
@@ -263,15 +274,7 @@ internal fun TimelineNode(
             // Triangle's centroid sits below its bounding-box center, so a glyph centered on the bbox reads as sitting too high; Diamond (a square rotated 45°) is symmetric on both axes, so bbox-centering is also visual-centering — still reads sharper/"less positive" than Flower/Circle.
             TimelineValence.Negative -> AnchorShape.Polygon(MaterialShapes.Diamond)
             TimelineValence.Neutral -> when {
-                atCap && isClickable -> {
-                    /** A clickable Neutral cap's plain Circle morphs toward this distinct silhouette
-                     *  while pressed — Cookie6Sided rather than Latest's own Cookie9Sided so the two
-                     *  "selected" cues stay visually distinguishable. At `pressMorphProgress == 0`
-                     *  this renders pixel-identical to a plain Circle, so it's safe to use for every
-                     *  clickable cap. */
-                    val pressCapMorph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie6Sided) }
-                    AnchorShape.MorphShape(pressCapMorph) { pressMorphProgress }
-                }
+                atCap && isClickable -> rememberPressCapShape(pressMorphProgress)
                 atCap -> AnchorShape.Circle
                 // A clickable interior Pill needs no Morph of its own — its press target is a plain `drawRoundRect` whose corner radius and height both animate off `pressMorphProgress` directly in `TimelineTrackOverlay.kt`; see `AnchorShape.Pill`'s KDoc for why a Morph-based approach here produces a broken "butterfly" mid-press silhouette.
                 isClickable -> AnchorShape.Pill(pressProgress = { pressMorphProgress })
@@ -279,10 +282,7 @@ internal fun TimelineNode(
             }
         }
         TimelineAnchor.Plain -> when {
-            atCap && isClickable -> {
-                val pressCapMorph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie6Sided) }
-                AnchorShape.MorphShape(pressCapMorph) { pressMorphProgress }
-            }
+            atCap && isClickable -> rememberPressCapShape(pressMorphProgress)
             atCap -> AnchorShape.Circle
             isClickable -> AnchorShape.Pill(pressProgress = { pressMorphProgress })
             else -> AnchorShape.Pill()
