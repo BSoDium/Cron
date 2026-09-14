@@ -95,8 +95,21 @@ android {
                 signingConfig = it
             }
         }
+        // AOT-compiled, debug-signed, never shipped — see docs/performance.md "The debug-build trap".
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
     }
 
+    // initWith() copies build-type properties, not source sets — see docs/performance.md.
+    sourceSets {
+        getByName("benchmark") {
+            kotlin.srcDirs("src/release/java")
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -112,6 +125,10 @@ android {
             isIncludeAndroidResources = true
         }
     }
+}
+
+composeCompiler {
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose_stability.conf"))
 }
 
 // Failing tests print their full stack trace into the CI log; the HTML report is a download-only artifact.
@@ -154,6 +171,7 @@ dependencies {
     implementation(libs.androidx.graphics.shapes)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.metrics.performance)
     implementation(libs.okhttp)
 
     // Persistence
