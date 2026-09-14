@@ -16,8 +16,9 @@ private const val ITERATIONS = 10
 // MainActivity resolves its start destination asynchronously (a DataStore read + SecureKeyStore
 // check on Dispatchers.IO) before the home timeline composes at all — startActivityAndWait()
 // returns once the window draws, not once that resolution lands, so a bare findObject() can race
-// it. Generous since CompilationMode.Full()'s first iteration is also paying real disk/JIT cost.
-private const val FIND_TIMEOUT_MS = 10_000L
+// it. 20s: a live run timed out at 10s on the very first CompilationMode.Full() launch, which pays
+// real cold-disk/cold-cache cost on top of the async resolution above, once.
+private const val FIND_TIMEOUT_MS = 20_000L
 
 /**
  * Repeatable, scriptable replacement for the live-device Perfetto sessions used to root-cause the
@@ -39,7 +40,11 @@ class HomeTimelineScrollBenchmark {
         startupMode = StartupMode.WARM,
         setupBlock = { startActivityAndWait() },
     ) {
-        val tag = By.res(packageName, "home_timeline")
+        // testTagsAsResourceId sets AccessibilityNodeInfo's resource-id to the bare testTag string
+        // ("home_timeline"), not a namespaced "package:id/name" — By.res(pkg, id) builds and matches
+        // against that namespaced form and never finds it. The single-arg overload matches the raw
+        // resource-id string directly, which is what Compose actually sets.
+        val tag = By.res("home_timeline")
         check(device.wait(Until.hasObject(tag), FIND_TIMEOUT_MS)) {
             "home_timeline never appeared — is onboarding complete and an Anthropic key set on this device?"
         }
