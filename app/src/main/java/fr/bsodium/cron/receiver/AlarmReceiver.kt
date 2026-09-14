@@ -11,11 +11,11 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import fr.bsodium.cron.MainActivity
-import fr.bsodium.cron.R
-import fr.bsodium.cron.ui.screens.alarm.AlarmActivity
 import fr.bsodium.cron.alarm.AlarmConstants
 import fr.bsodium.cron.alarm.AlarmRingingState
+import fr.bsodium.cron.service.AlarmSoundService
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
@@ -28,8 +28,8 @@ import kotlinx.datetime.Clock
 
 /**
  * Fires when a scheduled alarm triggers.
- * Shows a high-priority notification with the default alarm sound,
- * vibration, and dismiss/snooze action buttons.
+ * Routes the FSM events and starts [AlarmSoundService], which owns the actual ringing
+ * notification, sound, and vibration.
  */
 class AlarmReceiver : BroadcastReceiver() {
 
@@ -86,44 +86,21 @@ class AlarmReceiver : BroadcastReceiver() {
 
         ensureNotificationChannel(context)
 
-        val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
-        // Full-screen intent — opens AlarmActivity on the lock screen
-        val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        // AlarmSoundService builds and posts the ringing notification itself (as its foreground-service
+        // notification) and owns the actual looping sound/vibration — see its KDoc for why a plain
+        // notification can't loop.
+        val soundIntent = Intent(context, AlarmSoundService::class.java).apply {
             putExtra(EXTRA_LABEL, label)
             putExtra(EXTRA_REQUEST_CODE, requestCode)
             putExtra(AlarmConstants.EXTRA_SESSION_ID, sessionId)
             putExtra(EXTRA_SNOOZE_COUNT, intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0))
         }
-        val fullScreenPendingIntent = PendingIntent.getActivity(
-            context, requestCode, fullScreenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_alarm)
-            .setContentTitle("Cron")
-            .setContentText(label)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setSound(alarmSound)
-            .setVibrate(ALARM_VIBRATION_PATTERN)
-            .setAutoCancel(false)
-            .setOngoing(true)
-            .setContentIntent(fullScreenPendingIntent)
-            .setFullScreenIntent(fullScreenPendingIntent, true)
-            .build()
-
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        ContextCompat.startForegroundService(context, soundIntent)
     }
 
     private fun handleDismiss(context: Context) {
         AlarmRingingState.markNotRinging()
+        context.startService(AlarmSoundService.stopIntent(context))
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIFICATION_ID)
 
@@ -153,6 +130,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0)
         val label = intent.getStringExtra(EXTRA_LABEL) ?: "Cron Alarm"
 
+        context.startService(AlarmSoundService.stopIntent(context))
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIFICATION_ID)
 

@@ -108,6 +108,16 @@
             android:name=".receiver.AlarmReceiver"
             android:exported="false" />
 
+        <!-- Owns the looping ring (sound + vibration) until dismissed or snoozed -->
+        <service
+            android:name=".service.AlarmSoundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="looping alarm ring until dismissed or snoozed" />
+        </service>
+
         <!-- Re-schedule alarms on boot -->
         <receiver
             android:name=".receiver.BootReceiver"
