@@ -142,10 +142,33 @@ private object VariedFontFile {
     }
 }
 
-/** Bakes `wght`/`GRAD`/`opsz` into a real [Typeface] variant, cached per [VariationKey], instead of a
- *  live per-Paint `fontVariationSettings` string. A per-Paint override isn't guaranteed to resolve
- *  identically on [Paint.getTextBounds]'s measurement path and [android.graphics.Canvas.drawText]'s
- *  render path on every OEM/API level — for a compound glyph (e.g. a bell-plus-slash icon like
+/** Built once per process per [VariationKey], not once per call site: [rememberVariedTypeface] runs
+ *  from every timeline row's [Symbol], and `Typeface.Builder(...).build()` is a real native call, not
+ *  a cheap allocation — a per-composable `remember(key)` alone doesn't share the build across rows
+ *  that resolve the identical key, since `remember` caches per slot-table position, not globally.
+ *  Live-measured on-device (see #176): this was ~10% of a timeline row's first-composition cost
+ *  before this cache existed. Same "process-level cache keyed by X" idiom `docs/performance.md` §6
+ *  already prescribes for this class of problem. Plain (unsynchronized) map, not `VariedFontFile`'s
+ *  `@Volatile`/`synchronized` pair: Compose composition for these call sites runs on the main thread
+ *  only (see `TurnThreadCache`'s KDoc for the same reasoning), unlike `VariedFontFile.get`, which is
+ *  reachable from arbitrary file-I/O callers. */
+private object VariedTypefaceCache {
+    private val cache = HashMap<VariationKey, Typeface>()
+
+    fun get(context: Context, key: VariationKey): Typeface? = cache[key] ?: runCatching {
+        Typeface.Builder(VariedFontFile.get(context))
+            .setFontVariationSettings("'wght' ${key.weight},'GRAD' ${key.grade},'opsz' ${key.opticalSize}")
+            .build()
+    }
+        .onFailure { e -> Log.w("MaterialSymbols", "variation axis bake failed for $key — falling back to unvaried typeface", e) }
+        .getOrNull()
+        ?.also { cache[key] = it }
+}
+
+/** Bakes `wght`/`GRAD`/`opsz` into a real [Typeface] variant instead of a live per-Paint
+ *  `fontVariationSettings` string. A per-Paint override isn't guaranteed to resolve identically on
+ *  [Paint.getTextBounds]'s measurement path and [android.graphics.Canvas.drawText]'s render path on
+ *  every OEM/API level — for a compound glyph (e.g. a bell-plus-slash icon like
  *  [MaterialSymbol.AlarmOff]) where those axes reshape one part relative to another, that divergence
  *  shows up as a visible centering offset; a simple convex glyph's silhouette barely changes shape
  *  across the axes, so the same divergence stays invisible (see docs/color-roles.md Round 12). Baking
@@ -157,15 +180,7 @@ private object VariedFontFile {
 private fun rememberVariedTypeface(fallback: Typeface?, weight: Int, grade: Int, opticalSize: Float): Typeface? {
     val context = LocalContext.current
     val key = VariationKey(weight, grade, opticalSize)
-    return remember(key) {
-        runCatching {
-            Typeface.Builder(VariedFontFile.get(context))
-                .setFontVariationSettings("'wght' $weight,'GRAD' $grade,'opsz' $opticalSize")
-                .build()
-        }
-            .onFailure { e -> Log.w("MaterialSymbols", "variation axis bake failed for $key — falling back to unvaried typeface", e) }
-            .getOrNull()
-    } ?: fallback
+    return remember(key) { VariedTypefaceCache.get(context, key) } ?: fallback
 }
 
 /**
