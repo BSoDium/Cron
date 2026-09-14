@@ -10,8 +10,9 @@ on:
   pull_request:
     # `opened` covers a PR created directly as ready-for-review (not draft-then-converted) --
     # without it, a PR opened non-draft from the start never gets an APK build at all.
+    # No `branches` filter — a stacked PR (base = another feature branch, not main) should still
+    # build a preview APK (#210).
     types: [opened, ready_for_review, synchronize, reopened, closed]
-    branches: [main]
 
 # One run per PR at a time. A merge/close fires the "closed" path in the same
 # concurrency group, cancelling any in-progress build before cleanup starts.
