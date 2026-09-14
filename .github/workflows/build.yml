@@ -4,8 +4,9 @@ on:
   push:
     branches: [ main ]
   pull_request:
+    # No `branches` filter — a stacked PR (base = another feature branch, not main) still needs
+    # real CI, not just whatever repo-wide checks run regardless of base (#210).
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ main ]
 
 jobs:
   build:
