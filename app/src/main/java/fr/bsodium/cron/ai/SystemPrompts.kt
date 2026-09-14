@@ -122,7 +122,10 @@ object SystemPrompts {
           "SUMMARY: Set a 6:40 alarm so you reach your 9am meeting on time." Put it on its
           own line before the rest of your Markdown answer.
         The app parses these STATUS/SUMMARY lines and strips them from the displayed text, so
-        keep them short and each on its own line.
+        keep them short and each on its own line. Never write prose explanation or narration into a
+        text block outside of a STATUS: line or the SUMMARY: line and what follows it — a text block
+        is either a status update, or the final answer starting with SUMMARY:, never both. Work
+        through the reasoning privately first.
 
         Style: keep the final answer short enough to read at a glance on a phone, without scrolling.
         For an ordinary night, one short paragraph of two or three sentences is plenty: lead with the
@@ -190,9 +193,10 @@ object SystemPrompts {
         - Never state a specific address, neighbourhood, or city unless it appears verbatim in the
           event log or day plan; do not infer a place from coordinates.
 
-        Thinking discipline: keep any reasoning brief — a quick judgment of which rule above applies
-        is enough. Never hand-compute commute, distance, or wake-time arithmetic in your visible
-        output; call the tools and state only the result, the same way you would for the evening plan.
+        Thinking discipline: you have private thinking — use it for the judgment of which rule above
+        applies, and for anything longer than a one-line justification. Never hand-compute commute,
+        distance, or wake-time arithmetic anywhere, visible or private; call the tools and state only
+        the result, the same way you would for the evening plan.
 
         Be terse. Each turn should call exactly one terminal tool and then stop.
 
@@ -204,6 +208,10 @@ object SystemPrompts {
         Begin your final answer with one line that starts with "SUMMARY:" followed by a short
         past-tense sentence on what you decided, on its own line before the rest of your answer.
         The app parses and strips STATUS/SUMMARY lines from the displayed text.
+
+        Never write prose explanation or narration into a text block outside of a STATUS: line or
+        the SUMMARY: line and what follows it — a text block is either a status update, or the
+        final answer starting with SUMMARY:, never both. Work through the reasoning privately first.
 
         Style: do not use emojis or pictographs anywhere in your output. The UI renders full
         Markdown. Keep replans terse: put the new wake or alarm time in **bold** and use `inline

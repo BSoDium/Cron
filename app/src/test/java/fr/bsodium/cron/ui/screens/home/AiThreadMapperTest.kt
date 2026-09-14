@@ -106,6 +106,31 @@ class AiThreadMapperTest {
         assertTrue(requireNotNull(thread.response).startsWith("The commute by public transit"))
     }
 
+    /**
+     * Live-reproduced follow-up to #202: the model DID emit a `SUMMARY:` marker this time, but
+     * shared its block with a STATUS: line and narration written ahead of it instead of leading
+     * with it — [answerStartOf] only excludes earlier *blocks*, so without truncating within the
+     * SUMMARY-bearing block itself, that narration would leak into the displayed answer.
+     */
+    @Test
+    fun narration_sharing_a_block_with_summary_is_dropped_not_surfaced() {
+        val rows = listOf(
+            row(0, "user", ContentBlock.Text("replan")),
+            row(
+                0,
+                "assistant",
+                ContentBlock.Text(
+                    "STATUS: Confirming first anchor\n\n" +
+                        "The calendar shows no morning anchor. The earliest timed event is drinks " +
+                        "at 18:30, well into the evening.\n\n" +
+                        "SUMMARY: Current alarm remains optimal; no morning anchor exists.",
+                ),
+            ),
+        )
+        val thread = requireNotNull(AiThreadMapper.build(rows))
+        assertEquals("Current alarm remains optimal; no morning anchor exists.", thread.response)
+    }
+
     @Test
     fun set_alarm_resolves_a_raw_new_alarm_time() {
         val rows = listOf(
