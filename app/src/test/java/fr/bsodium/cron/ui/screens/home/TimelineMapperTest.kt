@@ -4,10 +4,13 @@ import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -239,5 +242,96 @@ class TimelineMapperTest {
         val second = buildTimeline(listOf(session))
         assertEquals(first, second)
         assertEquals(first.map { it.id }, second.map { it.id })
+    }
+
+    /** [buildSessionItems] is [buildTimeline]'s extracted per-session step (#187/#229) — its output for
+     *  one session must be exactly what buildTimeline used to produce for that session, modulo the
+     *  cross-session sort/isLatest-marking/day-headers/dedupe [buildTimeline] still does on top. */
+    @Test
+    fun buildSessionItems_matches_what_buildTimeline_used_to_produce_for_one_session() {
+        val session = TimelineSession(
+            sessionId = "s1",
+            iterations = listOf(
+                AiIterationUi(
+                    turnIndex = 0,
+                    timeLabel = "07:45",
+                    kind = RunKind.ScheduledBase,
+                    thread = AiThreadUi(turnIndex = 0, summary = null, process = emptyList(), response = null),
+                    ranAtEpochMs = 1_000L,
+                ),
+            ),
+            events = listOf(
+                SessionEvent(timestamp = Instant.fromEpochMilliseconds(500L), trigger = TriggerType.AlarmDismissed, data = EventData.Empty),
+            ),
+            streamingTurnIndex = null,
+        )
+        val viaBuildSessionItems = buildSessionItems(session).toSet()
+        val viaBuildTimeline = buildTimeline(listOf(session))
+            .filterNot { it is TimelineItem.DayHeader }
+            .map { if (it is TimelineItem.AiRun) it.copy(isLatest = false) else it }
+            .toSet()
+        assertEquals(viaBuildTimeline, viaBuildSessionItems)
+    }
+
+    @Test
+    fun buildSessionItems_filters_unshown_triggers_and_the_evening_plan_event() {
+        val session = TimelineSession(
+            sessionId = "s1",
+            iterations = emptyList(),
+            events = listOf(
+                SessionEvent(timestamp = Instant.fromEpochMilliseconds(0), trigger = TriggerType.EveningPlan, data = EventData.Empty),
+                SessionEvent(timestamp = Instant.fromEpochMilliseconds(1), trigger = TriggerType.AlarmDismissed, data = EventData.Empty),
+            ),
+            streamingTurnIndex = null,
+        )
+        val items = buildSessionItems(session)
+        assertEquals(1, items.size)
+        assertEquals(TriggerType.AlarmDismissed, (items.single() as TimelineItem.Event).trigger)
+    }
+
+    @Test
+    fun historyDaySeparator_returns_null_at_the_leading_or_trailing_edge() {
+        val item = event(0, TriggerType.AlarmDismissed)
+        assertEquals(null, historyDaySeparator(before = null, after = item))
+        assertEquals(null, historyDaySeparator(before = item, after = null))
+    }
+
+    @Test
+    fun historyDaySeparator_returns_null_when_before_and_after_share_a_date() {
+        val tz = TimeZone.currentSystemDefault()
+        val today = Clock.System.now().toLocalDateTime(tz).date
+        val day = today.minus(3, DateTimeUnit.DAY)
+        val before = event((day.atStartOfDayIn(tz) + 20.hours).toEpochMilliseconds(), TriggerType.AlarmDismissed)
+        val after = event((day.atStartOfDayIn(tz) + 6.hours).toEpochMilliseconds(), TriggerType.AlarmDismissed)
+        assertEquals(null, historyDaySeparator(before, after))
+    }
+
+    /** The core case: an ordinary date change in the middle of history gets its own header, dated to
+     *  [after] (the earlier item — the historical feed reads oldest-after-newest-before, same convention
+     *  as [insertDayHeaders]). */
+    @Test
+    fun historyDaySeparator_emits_a_header_on_a_real_date_change_not_today() {
+        val tz = TimeZone.currentSystemDefault()
+        val today = Clock.System.now().toLocalDateTime(tz).date
+        val newerDay = today.minus(2, DateTimeUnit.DAY)
+        val olderDay = today.minus(3, DateTimeUnit.DAY)
+        val before = event((newerDay.atStartOfDayIn(tz) + 6.hours).toEpochMilliseconds(), TriggerType.AlarmDismissed)
+        val after = event((olderDay.atStartOfDayIn(tz) + 20.hours).toEpochMilliseconds(), TriggerType.AlarmDismissed)
+        val separator = historyDaySeparator(before, after)
+        assertEquals(olderDay, separator?.date)
+    }
+
+    /** Mirrors [insertDayHeaders]'s own today-suppression rule: the user already knows it's today. Only
+     *  [after]'s date gates suppression (the header, if emitted, is always dated to [after]) — this test
+     *  deliberately gives [before] a different, non-today date so the same-date branch can't also be
+     *  the reason nothing is emitted. */
+    @Test
+    fun historyDaySeparator_suppresses_the_header_when_after_is_today() {
+        val tz = TimeZone.currentSystemDefault()
+        val today = Clock.System.now().toLocalDateTime(tz).date
+        val tomorrow = today.plus(1, DateTimeUnit.DAY)
+        val before = event((tomorrow.atStartOfDayIn(tz) + 6.hours).toEpochMilliseconds(), TriggerType.AlarmDismissed)
+        val after = event((today.atStartOfDayIn(tz) + 20.hours).toEpochMilliseconds(), TriggerType.AlarmDismissed)
+        assertEquals(null, historyDaySeparator(before, after))
     }
 }
