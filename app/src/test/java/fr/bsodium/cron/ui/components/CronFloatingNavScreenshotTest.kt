@@ -33,11 +33,11 @@ class CronFloatingNavScreenshotTest {
     }
 
     @Test
-    fun history_tab_selected_no_fab() {
+    fun settings_tab_selected_no_fab() {
         composeTestRule.setContent {
             CronTheme {
                 CronFloatingNav(
-                    currentRoute = "history",
+                    currentRoute = "settings/root",
                     onNavigate = {},
                     fabAction = null,
                 )

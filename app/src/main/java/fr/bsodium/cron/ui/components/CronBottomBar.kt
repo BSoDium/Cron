@@ -67,7 +67,7 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 
 /**
- * Floating bottom action bar: a pill housing the three tab icons on the left, with the primary
+ * Floating bottom action bar: a pill housing the tab icons on the left, with the primary
  * action FAB on the right. The pill centers when the FAB is absent and shifts left when it appears.
  *
  * In debug builds the FAB becomes a split button (main action + chevron mode-selector) via the
