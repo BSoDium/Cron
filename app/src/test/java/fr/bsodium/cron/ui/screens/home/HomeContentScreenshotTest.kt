@@ -3,8 +3,11 @@ package fr.bsodium.cron.ui.screens.home
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
+import androidx.paging.PagingData
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.github.takahirom.roborazzi.captureRoboImage
 import fr.bsodium.cron.ui.theme.CronTheme
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,7 +43,7 @@ class HomeContentScreenshotTest {
                         initialized = true,
                         dateLabel = "Friday, 3 Jul",
                         aiPlan = AiPlanUi(iterations = iterations),
-                        timeline = buildTimeline(
+                        liveTimeline = buildTimeline(
                             listOf(
                                 TimelineSession(
                                     sessionId = "s1",
@@ -57,7 +60,7 @@ class HomeContentScreenshotTest {
                     onNotifEnable = {},
                     onAutoAlarmsChange = {},
                     onOpenAiRun = { _, _ -> },
-                    onNavigateToHistory = {},
+                    historyItems = flowOf(PagingData.empty<TimelineItem>()).collectAsLazyPagingItems(),
                 )
             }
         }

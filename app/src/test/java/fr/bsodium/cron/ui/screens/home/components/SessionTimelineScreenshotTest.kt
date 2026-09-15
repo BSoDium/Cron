@@ -13,6 +13,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.paging.LoadState
+import androidx.paging.LoadStates
+import androidx.paging.PagingData
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.github.takahirom.roborazzi.captureRoboImage
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
@@ -23,14 +28,18 @@ import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.screens.home.timelineAsleepStates
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import org.junit.Rule
 import org.junit.Test
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.hours
 
 private fun fixedIteration(
     turn: Int,
@@ -184,17 +193,17 @@ class SessionTimelineScreenshotTest {
             CronTheme {
                 val listState = rememberLazyListState()
                 val registry = rememberTimelineTrackRegistry()
+                val historyItems = emptyHistoryItems()
                 // Index 22 is DayHeader "Yesterday" (after the top spacer, "Today" header, and 20 events); scrolling there puts it at the viewport top with "Today" scrolled fully past.
                 LaunchedEffect(Unit) { listState.scrollToItem(index = 22) }
                 Box {
                     TimelineTrackOverlay(registry = registry, listState = listState)
                     LazyColumn(state = listState, modifier = Modifier.padding(horizontal = Spacing.md)) {
                         sessionTimelineItems(
-                            timeline = timeline,
-                            hasMore = false,
+                            liveTimeline = timeline,
+                            historyItems = historyItems,
                             registry = registry,
                             onOpenAiRun = { _, _ -> },
-                            onNavigateToHistory = {},
                         )
                     }
                 }
@@ -267,16 +276,118 @@ class SessionTimelineScreenshotTest {
             CronTheme {
                 val listState = rememberLazyListState()
                 val registry = rememberTimelineTrackRegistry()
+                val historyItems = emptyHistoryItems()
                 Box {
                     TimelineTrackOverlay(registry = registry, listState = listState)
                     LazyColumn(state = listState, modifier = Modifier.padding(horizontal = Spacing.md)) {
                         sessionTimelineItems(
-                            timeline = timeline,
-                            hasMore = false,
+                            liveTimeline = timeline,
+                            historyItems = historyItems,
                             registry = registry,
                             suppressEntranceAnimation = true,
                             onOpenAiRun = { _, _ -> },
-                            onNavigateToHistory = {},
+                        )
+                    }
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    /** [androidx.paging.LoadState.Loading] on the history feed's append edge — the replacement for the
+     *  old "View full history" dead-end button (#187/#231). */
+    @Test
+    fun append_loading_row_renders_while_more_history_is_loading() {
+        composeTestRule.mainClock.autoAdvance = false
+        val live = listOf(
+            TimelineItem.Event(timestamp = Instant.fromEpochMilliseconds(0L), trigger = TriggerType.AlarmDismissed, label = "Alarm dismissed", detail = null),
+        )
+        composeTestRule.setContent {
+            CronTheme {
+                val listState = rememberLazyListState()
+                val registry = rememberTimelineTrackRegistry()
+                val historyItems = pagedHistoryItems(emptyList(), appendState = LoadState.Loading)
+                Box {
+                    TimelineTrackOverlay(registry = registry, listState = listState)
+                    LazyColumn(state = listState, modifier = Modifier.padding(horizontal = Spacing.md)) {
+                        sessionTimelineItems(
+                            liveTimeline = live,
+                            historyItems = historyItems,
+                            registry = registry,
+                            onOpenAiRun = { _, _ -> },
+                        )
+                    }
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    /** [androidx.paging.LoadState.Error] on the history feed's append edge, with its retry affordance. */
+    @Test
+    fun append_error_row_renders_with_a_retry_affordance() {
+        composeTestRule.mainClock.autoAdvance = false
+        val live = listOf(
+            TimelineItem.Event(timestamp = Instant.fromEpochMilliseconds(0L), trigger = TriggerType.AlarmDismissed, label = "Alarm dismissed", detail = null),
+        )
+        composeTestRule.setContent {
+            CronTheme {
+                val listState = rememberLazyListState()
+                val registry = rememberTimelineTrackRegistry()
+                val historyItems = pagedHistoryItems(emptyList(), appendState = LoadState.Error(RuntimeException("boom")))
+                Box {
+                    TimelineTrackOverlay(registry = registry, listState = listState)
+                    LazyColumn(state = listState, modifier = Modifier.padding(horizontal = Spacing.md)) {
+                        sessionTimelineItems(
+                            liveTimeline = live,
+                            historyItems = historyItems,
+                            registry = registry,
+                            onOpenAiRun = { _, _ -> },
+                        )
+                    }
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    /** The live-session→history boundary is the one day-header case `TimelineRepository`'s own
+     *  `insertSeparators` deliberately never emits (see `historyDaySeparator`'s KDoc) — `seamDayHeader`
+     *  owns it here instead. This pins that it renders exactly once between a live item and the first
+     *  historical item on a different (non-today) date, not zero times and not twice. */
+    @Test
+    fun seam_day_header_renders_once_between_live_and_history_on_a_date_change() {
+        composeTestRule.mainClock.autoAdvance = false
+        val live = listOf(
+            TimelineItem.Event(
+                timestamp = LocalDate(2026, 7, 3).atStartOfDayIn(TimeZone.currentSystemDefault()) + 6.hours,
+                trigger = TriggerType.AlarmDismissed,
+                label = "Alarm dismissed",
+                detail = null,
+            ),
+        )
+        val historicalFirst = TimelineItem.Event(
+            timestamp = LocalDate(2026, 7, 2).atStartOfDayIn(TimeZone.currentSystemDefault()) + 20.hours,
+            trigger = TriggerType.SleepOnset,
+            label = "You fell asleep",
+            detail = null,
+        )
+        composeTestRule.setContent {
+            CronTheme {
+                val listState = rememberLazyListState()
+                val registry = rememberTimelineTrackRegistry()
+                val historyItems = pagedHistoryItems(listOf(historicalFirst), appendState = LoadState.NotLoading(endOfPaginationReached = true))
+                Box {
+                    TimelineTrackOverlay(registry = registry, listState = listState)
+                    LazyColumn(state = listState, modifier = Modifier.padding(horizontal = Spacing.md)) {
+                        sessionTimelineItems(
+                            liveTimeline = live,
+                            historyItems = historyItems,
+                            registry = registry,
+                            onOpenAiRun = { _, _ -> },
                         )
                     }
                 }
@@ -286,6 +397,28 @@ class SessionTimelineScreenshotTest {
         composeTestRule.onRoot().captureRoboImage()
     }
 }
+
+/** An always-empty, never-loading paged history feed — these tests are about the live timeline's own
+ *  rendering, not pagination, so `sessionTimelineItems`' paged tail contributes nothing here. */
+@Composable
+private fun emptyHistoryItems(): LazyPagingItems<TimelineItem> =
+    pagedHistoryItems(emptyList(), appendState = LoadState.NotLoading(endOfPaginationReached = true))
+
+/** A static (non-loading, unless [appendState] says otherwise) paged history feed carrying exactly
+ *  [items] — for exercising `sessionTimelineItems`' paged tail (the append-loading/error rows, the
+ *  live/history seam header) without a real Pager/Room round trip. */
+@Composable
+private fun pagedHistoryItems(items: List<TimelineItem>, appendState: LoadState): LazyPagingItems<TimelineItem> =
+    flowOf(
+        PagingData.from(
+            items,
+            LoadStates(
+                refresh = LoadState.NotLoading(endOfPaginationReached = false),
+                prepend = LoadState.NotLoading(endOfPaginationReached = true),
+                append = appendState,
+            ),
+        ),
+    ).collectAsLazyPagingItems()
 
 /** Mirrors `sessionTimelineItems`' per-row flag derivation (single continuous segment, list-ends-only
  *  caps) without the real LazyColumn — a golden-screenshot harness needs deterministic content, not

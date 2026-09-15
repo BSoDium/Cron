@@ -70,27 +70,6 @@ private val SHOWN_TRIGGERS = setOf(
     TriggerType.WakeWindowOpportunity,
 )
 
-/** Result of [capTimeline]: the display-bound slice of a timeline, plus whether anything was cut off. */
-data class CappedTimeline(val items: List<TimelineItem>, val truncated: Boolean)
-
-private const val TIMELINE_ITEM_CAP = 24
-
-/** Bounds a (already latest-first) timeline to [cap] content items — the home screen renders this, not
- *  the raw merged list, since an unbounded number of sessions/iterations otherwise makes it laggy to
- *  compose. [DayHeader]s ride along for free and a trailing dangling one is dropped, so the cut never
- *  leaves an empty day heading as the last visible row. */
-fun capTimeline(items: List<TimelineItem>, cap: Int = TIMELINE_ITEM_CAP): CappedTimeline {
-    val result = mutableListOf<TimelineItem>()
-    var contentCount = 0
-    for (item in items) {
-        if (item !is TimelineItem.DayHeader && contentCount >= cap) break
-        result += item
-        if (item !is TimelineItem.DayHeader) contentCount++
-    }
-    while (result.lastOrNull() is TimelineItem.DayHeader) result.removeAt(result.lastIndex)
-    val totalContent = items.count { it !is TimelineItem.DayHeader }
-    return CappedTimeline(items = result, truncated = totalContent > cap)
-}
 
 /** Diffs [currentIds] against [previousIds] to find ids genuinely new since the last check —
  *  the basis for the timeline's entrance-animation gating (Round 32). [previousIds] is `null`
@@ -186,6 +165,24 @@ internal fun historyDaySeparator(before: TimelineItem?, after: TimelineItem?): T
     if (beforeDate == afterDate) return null
     val today = Clock.System.now().toLocalDateTime(tz).date
     return if (afterDate != today) TimelineItem.DayHeader(date = afterDate, timestamp = afterDate.atStartOfDayIn(tz)) else null
+}
+
+/** The one boundary [historyDaySeparator] deliberately doesn't cover — see its own KDoc. Compares the
+ *  live timeline's own last (oldest) item's date against the paged history feed's first (newest) loaded
+ *  item's date, applying the same skip-today rule. When [liveTimeline] is empty (no current plan yet,
+ *  but history worth showing — see `HomeScreen.kt`'s `HomePhase` derivation), [firstHistoryItem] is
+ *  effectively the whole rendered list's own leading item, so it's checked the same way
+ *  [insertDayHeaders] would check any list's first item — against today only, not a sibling date.
+ *  Called once, by `sessionTimelineItems`, not from inside the paging pipeline — it needs both sides of
+ *  the seam in scope, which only the UI layer ever has both of at once. */
+internal fun seamDayHeader(liveTimeline: List<TimelineItem>, firstHistoryItem: TimelineItem?): TimelineItem.DayHeader? {
+    if (firstHistoryItem == null) return null
+    val tz = TimeZone.currentSystemDefault()
+    val firstDate = firstHistoryItem.timestamp.toLocalDateTime(tz).date
+    val lastDate = liveTimeline.lastOrNull()?.timestamp?.toLocalDateTime(tz)?.date
+    if (lastDate == firstDate) return null
+    val today = Clock.System.now().toLocalDateTime(tz).date
+    return if (firstDate != today) TimelineItem.DayHeader(date = firstDate, timestamp = firstDate.atStartOfDayIn(tz)) else null
 }
 
 /** Threads a [TimelineItem.DayHeader] in front of the first item of each local day — except today's:

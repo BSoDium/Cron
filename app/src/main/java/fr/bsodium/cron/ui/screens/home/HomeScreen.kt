@@ -45,6 +45,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
 import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.SessionStatus
@@ -88,9 +90,9 @@ fun HomeScreen(
     fabRegistry: FabRegistry,
     onNavigateToSettings: () -> Unit,
     onNavigateToScheduleSettings: () -> Unit = onNavigateToSettings,
-    onNavigateToHistory: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val historyItems = viewModel.historyFlow.collectAsLazyPagingItems()
     // At most one iteration streams at a time (the latest); typewriter-reveal that sub-thread and splice it back so the rest of the plan renders settled.
     val streamingThread = uiState.aiPlan?.iterations?.lastOrNull { it.thread.isStreaming }?.thread
     val revealed = rememberRevealedThread(streamingThread)
@@ -175,7 +177,7 @@ fun HomeScreen(
             onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
             onAlarmTimeClick = onAlarmTimeClick,
             onOpenAiRun = { iteration, session -> detailKey = PlanDetailKey(iteration, session) },
-            onNavigateToHistory = onNavigateToHistory,
+            historyItems = historyItems,
             onNavigateToSettings = onNavigateToSettings,
             onNavigateToScheduleSettings = onNavigateToScheduleSettings,
             viewModel = viewModel,
@@ -224,7 +226,7 @@ private fun HomeRootContent(
     onAutoAlarmsChange: (Boolean) -> Unit,
     onAlarmTimeClick: (() -> Unit)?,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
-    onNavigateToHistory: () -> Unit,
+    historyItems: LazyPagingItems<TimelineItem>,
     onNavigateToSettings: () -> Unit,
     onNavigateToScheduleSettings: () -> Unit,
     viewModel: HomeViewModel,
@@ -239,7 +241,7 @@ private fun HomeRootContent(
             displayPlan != null -> HomePhase.Plan
             lastPlan != null && uiState.isRetrying -> HomePhase.Plan
             // No current plan, but there's history worth showing — show it instead of a blank splash that hides data that's still there.
-            uiState.timeline.isNotEmpty() -> HomePhase.Plan
+            uiState.liveTimeline.isNotEmpty() || historyItems.itemCount > 0 -> HomePhase.Plan
             else -> HomePhase.Idle
         }
         Crossfade(
@@ -270,7 +272,7 @@ private fun HomeRootContent(
                     onAutoAlarmsChange = onAutoAlarmsChange,
                     onAlarmTimeClick = onAlarmTimeClick,
                     onOpenAiRun = onOpenAiRun,
-                    onNavigateToHistory = onNavigateToHistory,
+                    historyItems = historyItems,
                 )
             }
         }

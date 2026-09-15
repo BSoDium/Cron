@@ -39,6 +39,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import androidx.paging.PagingData
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
@@ -50,6 +53,7 @@ import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
+import kotlinx.coroutines.flow.flowOf
 
 private val ALARM_COLLAPSE_RANGE = 120.dp
 
@@ -99,7 +103,7 @@ internal fun HomePlanContent(
     onAutoAlarmsChange: (Boolean) -> Unit,
     onAlarmTimeClick: (() -> Unit)? = null,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
-    onNavigateToHistory: () -> Unit,
+    historyItems: LazyPagingItems<TimelineItem>,
 ) {
     val listState = rememberLazyListState(cacheWindow = LazyLayoutCacheWindow(ahead = TIMELINE_PREFETCH_AHEAD))
     val sharedOverscrollEffect = rememberOverscrollEffect()
@@ -175,13 +179,12 @@ internal fun HomePlanContent(
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.xxl))
             }
             sessionTimelineItems(
-                timeline = uiState.timeline,
-                hasMore = uiState.hasMoreHistory,
+                liveTimeline = uiState.liveTimeline,
+                historyItems = historyItems,
                 registry = trackRegistry,
                 newlyArrivedIds = uiState.newlyArrivedIds,
                 suppressEntranceAnimation = !timelineSettled,
                 onOpenAiRun = onOpenAiRun,
-                onNavigateToHistory = onNavigateToHistory,
             )
             if (!hasNotificationPermission) {
                 item(key = "notif-permission") {
@@ -260,7 +263,7 @@ private fun HomePlanContentPreview() {
                         previewIteration(1, RunKind.Replan(TriggerType.CalendarChange), "Moved to **07:15**."),
                     ),
                 ),
-                timeline = buildTimeline(
+                liveTimeline = buildTimeline(
                     listOf(
                         TimelineSession(
                             sessionId = "preview",
@@ -280,7 +283,7 @@ private fun HomePlanContentPreview() {
             onNotifEnable = {},
             onAutoAlarmsChange = {},
             onOpenAiRun = { _, _ -> },
-            onNavigateToHistory = {},
+            historyItems = flowOf(PagingData.empty<TimelineItem>()).collectAsLazyPagingItems(),
         )
     }
 }

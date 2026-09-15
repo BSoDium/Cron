@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,14 +30,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.TimelineItem
+import fr.bsodium.cron.ui.screens.home.seamDayHeader
 import fr.bsodium.cron.ui.screens.home.timelineAsleepStates
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
-import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 import fr.bsodium.cron.ui.theme.TightTextStyle
@@ -51,72 +54,131 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 internal fun LazyListScope.sessionTimelineItems(
-    timeline: List<TimelineItem>,
-    hasMore: Boolean,
+    liveTimeline: List<TimelineItem>,
+    historyItems: LazyPagingItems<TimelineItem>,
     registry: TimelineTrackRegistry,
     newlyArrivedIds: Set<String> = emptySet(),
     // Forces every row's animateItem specs to null while the timeline's own composition is still settling after a fresh mount (see HomeContent.kt's rememberTimelineSettled), so cold-start/navigation never replays an entrance animation for unchanged data.
     suppressEntranceAnimation: Boolean = false,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
-    onNavigateToHistory: () -> Unit,
 ) {
-    val asleepStates = timelineAsleepStates(timeline)
+    // Non-load-triggering: unlike historyItems[index] below, reading the snapshot doesn't ask Paging for
+    // more. Never actually null with enablePlaceholders=false (TimelineRepository.historyFlow), but
+    // LazyPagingItems' type stays nullable regardless, since it's shared with the placeholders-on case.
+    val historySnapshot = historyItems.itemSnapshotList.filterNotNull()
+    // insertSeparators (TimelineRepository.historyFlow) can't own this one boundary itself — it never sees the live timeline, only the paged stream — so it's computed once, here, where both sides are in scope.
+    val seam = seamDayHeader(liveTimeline, historySnapshot.firstOrNull())
+    val combined: List<TimelineItem> = liveTimeline + listOfNotNull(seam) + historySnapshot
+    val asleepStates = timelineAsleepStates(combined)
     // A DayHeader is purely decorative (never a track anchor) — the true segment/cap boundary is the first/last REAL row, skipping headers, not the raw list ends.
-    val firstAnchorIndex = timeline.indexOfFirst { it !is TimelineItem.DayHeader }
-    val lastAnchorIndex = timeline.indexOfLast { it !is TimelineItem.DayHeader }
+    val firstAnchorIndex = combined.indexOfFirst { it !is TimelineItem.DayHeader }
+    val lastAnchorIndex = combined.indexOfLast { it !is TimelineItem.DayHeader }
 
     item(key = "timeline-top-spacer") {
         Spacer(Modifier.height(Spacing.xxxl))
     }
 
-    timeline.forEachIndexed { index, item ->
-        when (item) {
-            // A plain in-flow row; every header renders identically today (see DayHeaderRow's KDoc) and shares the same animateItem choreography as the AiRun/Event rows below it.
-            is TimelineItem.DayHeader -> item(key = item.id, contentType = TimelineItem.DayHeader::class) {
-                DayHeaderRow(item = item, modifier = gatedAnimateItem(suppressEntranceAnimation))
-            }
-            is TimelineItem.AiRun -> item(key = item.id, contentType = TimelineItem.AiRun::class) {
-                AiRunNode(
-                    item = item,
-                    registry = registry,
-                    isSegmentTop = index == firstAnchorIndex,
-                    isSegmentBottom = index == lastAnchorIndex,
-                    isAsleepAbove = asleepStates[index],
-                    isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-                    isNewlyArrived = item.id in newlyArrivedIds,
-                    onClick = { onOpenAiRun(item.iteration, item.sessionId) },
-                    // zIndex ahead of animateItem: normal paint order would draw a newly-arrived latest row under the still-demoting previous latest row while its placement slide is in flight; painting the incoming hero on top removes that overlap source.
-                    modifier = Modifier
-                        .zIndex(if (item.isLatest) 1f else 0f)
-                        .then(gatedAnimateItem(suppressEntranceAnimation)),
-                )
-            }
-            is TimelineItem.Event -> item(key = item.id, contentType = TimelineItem.Event::class) {
-                EventNode(
-                    item = item,
-                    registry = registry,
-                    isSegmentTop = index == firstAnchorIndex,
-                    isSegmentBottom = index == lastAnchorIndex,
-                    isAsleepAbove = asleepStates[index],
-                    isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-                    modifier = gatedAnimateItem(suppressEntranceAnimation),
-                )
-            }
+    liveTimeline.forEachIndexed { index, item ->
+        item(key = item.id, contentType = item::class) {
+            TimelineRowContent(
+                item = item,
+                index = index,
+                asleepStates = asleepStates,
+                firstAnchorIndex = firstAnchorIndex,
+                lastAnchorIndex = lastAnchorIndex,
+                registry = registry,
+                newlyArrivedIds = newlyArrivedIds,
+                suppressEntranceAnimation = suppressEntranceAnimation,
+                onOpenAiRun = onOpenAiRun,
+            )
         }
     }
 
-    if (hasMore) {
-        item(key = "view-history") {
-            FilledTonalButton(
-                onClick = onNavigateToHistory,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = Spacing.lg),
-                shape = Radius.full,
-            ) {
-                Text("View full history")
-            }
+    seam?.let { header ->
+        item(key = header.id, contentType = TimelineItem.DayHeader::class) {
+            TimelineRowContent(
+                item = header,
+                index = liveTimeline.size,
+                asleepStates = asleepStates,
+                firstAnchorIndex = firstAnchorIndex,
+                lastAnchorIndex = lastAnchorIndex,
+                registry = registry,
+                newlyArrivedIds = newlyArrivedIds,
+                suppressEntranceAnimation = suppressEntranceAnimation,
+                onOpenAiRun = onOpenAiRun,
+            )
         }
+    }
+
+    val historyOffset = liveTimeline.size + (if (seam != null) 1 else 0)
+    items(
+        count = historyItems.itemCount,
+        key = historyItems.itemKey { it.id },
+        contentType = historyItems.itemContentType { it::class },
+    ) { pagedIndex ->
+        // The one place historyItems is indexed for real — this accessor is what tells Paging to fetch the next page as the user scrolls near the end; historySnapshot above never does. Never actually null with enablePlaceholders=false, but the accessor's own type stays nullable regardless — see historySnapshot's comment above.
+        val item = historyItems[pagedIndex] ?: return@items
+        TimelineRowContent(
+            item = item,
+            index = historyOffset + pagedIndex,
+            asleepStates = asleepStates,
+            firstAnchorIndex = firstAnchorIndex,
+            lastAnchorIndex = lastAnchorIndex,
+            registry = registry,
+            newlyArrivedIds = newlyArrivedIds,
+            suppressEntranceAnimation = suppressEntranceAnimation,
+            onOpenAiRun = onOpenAiRun,
+        )
+    }
+
+    when (historyItems.loadState.append) {
+        is LoadState.Loading -> item(key = "append-loading") { AppendLoadingRow() }
+        is LoadState.Error -> item(key = "append-error") { AppendErrorRow(onRetry = historyItems::retry) }
+        is LoadState.NotLoading -> Unit
+    }
+}
+
+/** One row's actual rendering, shared by [sessionTimelineItems]'s live-item loop and its paged
+ *  `items(...)` block — [index] is always this row's position in the full combined (live + seam +
+ *  history) list, so segment-cap/asleep-state lookups stay correct regardless of which loop called it. */
+@Composable
+private fun LazyItemScope.TimelineRowContent(
+    item: TimelineItem,
+    index: Int,
+    asleepStates: List<Boolean>,
+    firstAnchorIndex: Int,
+    lastAnchorIndex: Int,
+    registry: TimelineTrackRegistry,
+    newlyArrivedIds: Set<String>,
+    suppressEntranceAnimation: Boolean,
+    onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
+) {
+    when (item) {
+        // Every header renders identically today (see DayHeaderRow's KDoc) and shares the same animateItem choreography as the AiRun/Event rows below it.
+        is TimelineItem.DayHeader -> DayHeaderRow(item = item, modifier = gatedAnimateItem(suppressEntranceAnimation))
+        is TimelineItem.AiRun -> AiRunNode(
+            item = item,
+            registry = registry,
+            isSegmentTop = index == firstAnchorIndex,
+            isSegmentBottom = index == lastAnchorIndex,
+            isAsleepAbove = asleepStates[index],
+            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+            isNewlyArrived = item.id in newlyArrivedIds,
+            onClick = { onOpenAiRun(item.iteration, item.sessionId) },
+            // zIndex ahead of animateItem: normal paint order would draw a newly-arrived latest row under the still-demoting previous latest row while its placement slide is in flight; painting the incoming hero on top removes that overlap source.
+            modifier = Modifier
+                .zIndex(if (item.isLatest) 1f else 0f)
+                .then(gatedAnimateItem(suppressEntranceAnimation)),
+        )
+        is TimelineItem.Event -> EventNode(
+            item = item,
+            registry = registry,
+            isSegmentTop = index == firstAnchorIndex,
+            isSegmentBottom = index == lastAnchorIndex,
+            isAsleepAbove = asleepStates[index],
+            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+            modifier = gatedAnimateItem(suppressEntranceAnimation),
+        )
     }
 }
 
