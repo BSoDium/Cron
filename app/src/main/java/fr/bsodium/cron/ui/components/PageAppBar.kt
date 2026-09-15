@@ -63,7 +63,7 @@ fun PageAppBar(
                 },
                 softWrap = false,
                 maxLines = 1,
-                overflow = TextOverflow.Visible,
+                overflow = TextOverflow.Ellipsis,
             )
         },
         modifier = modifier,
