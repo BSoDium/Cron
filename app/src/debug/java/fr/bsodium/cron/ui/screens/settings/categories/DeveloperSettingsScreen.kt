@@ -334,6 +334,22 @@ private fun FsmEventInjector(
                     data = EventData.Empty,
                 ))
             }
+            // Real SessionFsm.onSnooze path (#154) -- "Alarm Snoozed" above never touches escalation.
+            InjectButton("Snooze (escalation)", scope) {
+                val session = repo.findCurrent()
+                if (session == null) {
+                    null
+                } else {
+                    val event = SessionEvent(
+                        trigger = TriggerType.AlarmSnoozed,
+                        timestamp = Clock.System.now(),
+                        data = EventData.AlarmInteraction(snoozeDurationMinutes = 10, snoozeCount = session.snoozeCount + 1),
+                    )
+                    val aiTriggered = SessionFsm(context, repo).onSnooze(session, event)
+                    val newCount = repo.findById(session.id)?.snoozeCount
+                    "aiTriggered=$aiTriggered, snoozeCount=$newCount"
+                }
+            }
             InjectButton("Out Of Bed", scope) {
                 inject(SessionEvent(
                     trigger = TriggerType.OutOfBedConfirmed,

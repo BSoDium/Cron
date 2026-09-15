@@ -152,7 +152,7 @@ class AlarmReceiver : BroadcastReceiver() {
                             snoozeCount = session.snoozeCount + 1,
                         ),
                     )
-                    fsm.onSnooze(session.id, event)
+                    fsm.onSnooze(session, event)
                 } else {
                     // No session — fall back to a plain 10-min snooze.
                     scheduleSimpleSnooze(context, requestCode, label)
