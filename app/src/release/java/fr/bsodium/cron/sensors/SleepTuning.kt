@@ -2,6 +2,7 @@ package fr.bsodium.cron.sensors
 
 import android.content.Context
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -18,4 +19,7 @@ object SleepTuning {
 
     @Suppress("UNUSED_PARAMETER")
     fun sustainedMovementThreshold(context: Context): Duration = 10.minutes
+
+    @Suppress("UNUSED_PARAMETER")
+    fun staleLocationThreshold(context: Context): Duration = 4.hours
 }
