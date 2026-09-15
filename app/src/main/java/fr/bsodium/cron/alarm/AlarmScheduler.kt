@@ -46,6 +46,7 @@ class AlarmScheduler(private val context: Context) {
      * @param timezone the session's IANA timezone
      * @param label notification label
      * @param sessionId session this alarm belongs to (passed back via extras)
+     * @param pinToSessionDate see [clamp]
      */
     fun schedule(
         requested: Instant,
@@ -54,8 +55,9 @@ class AlarmScheduler(private val context: Context) {
         timezone: TimeZone,
         label: String,
         sessionId: String,
+        pinToSessionDate: Boolean = true,
     ): ClampedSchedule {
-        val plan = clamp(requested, Clock.System.now(), hardLatest, sessionDate, timezone)
+        val plan = clamp(requested, Clock.System.now(), hardLatest, sessionDate, timezone, pinToSessionDate)
 
         val pi = requireNotNull(aiPendingIntent(sessionDate, label, sessionId, create = true)) {
             "AI alarm PendingIntent is non-null when create = true"
@@ -116,13 +118,23 @@ class AlarmScheduler(private val context: Context) {
         val MIN_LEAD: kotlin.time.Duration = kotlin.time.Duration.parse("60s")
 
         /**
-         * Pure clamp: the **session owns the alarm date**, the model only chooses the time-of-day.
-         * The requested instant's local time-of-day is pinned onto [sessionDate], then bounded to
-         * `[now + MIN_LEAD, hardLatest@sessionDate]`. Pinning means a model that emits the wrong date
-         * (e.g. today instead of tomorrow's morning) can't arm the alarm on the wrong day.
+         * Pure clamp, bounding the result to `[now + MIN_LEAD, hardLatest@sessionDate]` either way.
          *
-         * - If the pinned time is in the past or too close to [now], it slides up to `now + MIN_LEAD`.
-         *   This is NOT considered a hard-latest clamp.
+         * [pinToSessionDate] (default `true`) governs how [requested]'s date is treated:
+         * - `true` — the **session owns the alarm date**, [requested] contributes only its local
+         *   time-of-day, re-pinned onto [sessionDate]. This is for AI-suggested times: a model that
+         *   emits the wrong date (e.g. today instead of tomorrow's morning) can't arm the alarm on the
+         *   wrong day.
+         * - `false` — [requested] is used as-is, date included. For a caller-computed, already-correct
+         *   near-term instant (e.g. "5 minutes from now"), *not* an AI suggestion needing date
+         *   correction (#219): pinning that onto [sessionDate] silently relocates it by a full day
+         *   whenever [sessionDate] has drifted from today — e.g. a session bootstrapped after
+         *   [fr.bsodium.cron.session.SessionRepository.morningDate]'s 4am cutover, or a stale session
+         *   left un-superseded across a day boundary — arming an escalation alarm ~24h out instead of
+         *   minutes out, confirmed live.
+         *
+         * - If the (possibly re-pinned) time is in the past or too close to [now], it slides up to
+         *   `now + MIN_LEAD`. This is NOT considered a hard-latest clamp.
          * - If it exceeds the hard latest, it slides down to the hard latest and
          *   [ClampedSchedule.clampedToHardLatest] becomes true.
          * - `maxOf(lower, upper)` guards the degenerate case where `now` is already past the hard
@@ -134,8 +146,13 @@ class AlarmScheduler(private val context: Context) {
             hardLatest: LocalTime,
             sessionDate: LocalDate,
             timezone: TimeZone,
+            pinToSessionDate: Boolean = true,
         ): ClampedSchedule {
-            val onDate = requested.toLocalDateTime(timezone).time.atDate(sessionDate).toInstant(timezone)
+            val onDate = if (pinToSessionDate) {
+                requested.toLocalDateTime(timezone).time.atDate(sessionDate).toInstant(timezone)
+            } else {
+                requested
+            }
             val lower = now + MIN_LEAD
             val upper = hardLatest.atDate(sessionDate).toInstant(timezone)
             val actual = onDate.coerceIn(lower, maxOf(lower, upper))

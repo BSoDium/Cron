@@ -1,9 +1,11 @@
 package fr.bsodium.cron.alarm
 
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,5 +107,31 @@ class AlarmSchedulerClampTest {
         val result = AlarmScheduler.clamp(requested, now, hardLatest, date, tz)
         assertEquals(now + AlarmScheduler.MIN_LEAD, result.actualInstant)
         assertFalse(result.clampedToHardLatest)
+    }
+
+    @Test
+    fun unpinned_request_on_a_stale_session_date_keeps_its_own_date() {
+        // #219: session.date drifted a day stale (e.g. a debug bootstrap past the 4am cutover, or a
+        // session left un-superseded across midnight). A near-term "5 minutes from now" request must
+        // fire honestly near `now`, not get relocated onto the stale date.
+        val staleDate = date.plus(1, DateTimeUnit.DAY)
+        val now = Instant.parse("2026-05-22T09:16:00Z") // 11:16 Paris
+        val requested = now + 5.minutes
+        val result = AlarmScheduler.clamp(requested, now, hardLatest, staleDate, tz, pinToSessionDate = false)
+        assertEquals(requested, result.actualInstant)
+        assertFalse(result.clampedToHardLatest)
+    }
+
+    @Test
+    fun pinned_request_on_a_stale_session_date_still_relocates_by_default() {
+        // Same inputs as above, but pinToSessionDate defaults to true -- documents the bug #219 found:
+        // without the opt-out, the near-term request gets re-pinned onto the stale (tomorrow) date and
+        // clamped down to that day's hard latest, landing ~24h out instead of minutes out.
+        val staleDate = date.plus(1, DateTimeUnit.DAY)
+        val now = Instant.parse("2026-05-22T09:16:00Z") // 11:16 Paris
+        val requested = now + 5.minutes
+        val result = AlarmScheduler.clamp(requested, now, hardLatest, staleDate, tz)
+        assertEquals(hardLatestInstant.plus(1, DateTimeUnit.DAY, tz), result.actualInstant)
+        assertTrue(result.clampedToHardLatest)
     }
 }

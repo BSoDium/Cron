@@ -266,6 +266,8 @@ class SessionFsm(
                         timezone = TimeZone.of(session.timezone),
                         label = "Wake up",
                         sessionId = sessionId,
+                        // Already a correctly-dated instant, not an AI date to correct -- see AlarmScheduler.clamp (#219).
+                        pinToSessionDate = false,
                     )
                     Log.i(TAG, "Snooze count $newCount ≥ 3 — AI bypassed, alarm in 5 min")
                     false
