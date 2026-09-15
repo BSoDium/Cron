@@ -44,9 +44,12 @@ class SessionFsmSnoozeTest {
         data = EventData.AlarmInteraction(snoozeDurationMinutes = 10, snoozeCount = count),
     )
 
-    /** A double-delivered snooze broadcast or rapid double-slide both incrementing from the same
-     *  stale read used to lose an increment before the DAO-level atomic UPDATE landed with #153's PR
-     *  (7bc8df3) — never regression-locked at the time. Both must land here. */
+    /** `onSnooze`'s whole body runs inside the companion-scoped mutex, so two near-simultaneous
+     *  snoozes from independent FSM instances (a double-delivered broadcast, a rapid double-slide)
+     *  serialize rather than race — this locks in that both still land once serialized, the same
+     *  guarantee #153 already regression-locked for `onEvent`, now also covered for `onSnooze`. The
+     *  DAO's own atomicity (the read-then-write #154 originally reported) is covered separately below,
+     *  since the mutex here would mask a regression in that layer entirely. */
     @Test
     fun concurrent_snoozes_from_independent_fsm_instances_both_land() = runBlocking {
         val plan = Fixtures.dayPlan()
@@ -64,6 +67,22 @@ class SessionFsmSnoozeTest {
         assertEquals(2, repository.findById(session.id)?.snoozeCount)
     }
 
+    /** #154's actual claim — `SessionDao.incrementSnoozeCount` is a single atomic `UPDATE`, not a
+     *  read-then-write — tested against the repository directly, bypassing `SessionFsm`'s mutex
+     *  entirely; that mutex would otherwise serialize the two calls and mask a regression here. */
+    @Test
+    fun concurrent_increments_at_the_repository_level_dont_lose_updates() = runBlocking {
+        val plan = Fixtures.dayPlan()
+        val session = repository.createSession(plan, Fixtures.DATE, "Europe/Paris")
+
+        listOf(
+            async(Dispatchers.Default) { repository.incrementSnoozeCount(session.id) },
+            async(Dispatchers.Default) { repository.incrementSnoozeCount(session.id) },
+        ).awaitAll()
+
+        assertEquals(2, repository.findById(session.id)?.snoozeCount)
+    }
+
     /** The third snooze crosses the ≥3 threshold: AI is bypassed and a fallback alarm is armed
      *  directly, using the session object the caller already had (#154) rather than re-fetching it. */
     @Test
@@ -74,9 +93,12 @@ class SessionFsmSnoozeTest {
         val fsm = SessionFsm(app, repository)
 
         assertTrue(fsm.onSnooze(session, snoozeEvent(Fixtures.T0, 1)))
-        assertTrue(fsm.onSnooze(session, snoozeEvent(Fixtures.T0 + 1.seconds, 2)))
-        assertFalse(fsm.onSnooze(session, snoozeEvent(Fixtures.T0 + 2.seconds, 3)))
+        assertFalse(AlarmScheduler(app).isArmed(session.date))
 
+        assertTrue(fsm.onSnooze(session, snoozeEvent(Fixtures.T0 + 1.seconds, 2)))
+        assertFalse(AlarmScheduler(app).isArmed(session.date))
+
+        assertFalse(fsm.onSnooze(session, snoozeEvent(Fixtures.T0 + 2.seconds, 3)))
         assertTrue(AlarmScheduler(app).isArmed(session.date))
     }
 }
