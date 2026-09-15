@@ -1,5 +1,6 @@
 package fr.bsodium.cron.session.db
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -66,6 +67,11 @@ interface SessionDao {
 
     @Query("SELECT * FROM sessions ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
     suspend fun findPaginated(limit: Int, offset: Int): List<SessionEntity>
+
+    // Backs Home's paged history feed (#187) -- excludeSessionId keeps the live/current session out of
+    // the historical Pager entirely, so it never double-renders alongside the reactive live-session path.
+    @Query("SELECT * FROM sessions WHERE (:excludeSessionId IS NULL OR id != :excludeSessionId) ORDER BY createdAt DESC")
+    fun historyPagingSource(excludeSessionId: String?): PagingSource<Int, SessionEntity>
 
     @Query("DELETE FROM sessions")
     suspend fun deleteAll(): Int
