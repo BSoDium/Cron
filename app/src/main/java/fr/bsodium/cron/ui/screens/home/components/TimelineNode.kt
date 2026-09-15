@@ -180,6 +180,8 @@ internal fun TimelineNode(
     isAsleepBelow: Boolean,
     // Whether this row is genuinely new since the ViewModel's last emission — gates the Latest anchor's Circle→Cookie9Sided arrival morph, alongside registry.markEnteredOnce (a defensive second guard: isNewlyArrived alone doesn't rule out a row disposing/recomposing via rapid scroll churn within the same "new" window).
     isNewlyArrived: Boolean = false,
+    // Drives latestFraction (the hero padding/alignment blend) — deliberately separate from anchor's own Loader-vs-Latest shape choice: SessionTimeline.kt's title Crossfade already goes hero-style off item.isLatest alone, the instant a run becomes the newest one, well before it stops streaming (anchor stays Loader — a spinner — until then). Defaulting to `anchor is TimelineAnchor.Latest` keeps every other caller (EventNode, previews) exactly as before; only AiRunNode passes item.isLatest explicitly. See docs/color-roles.md Round 41 for the live-measured lag this fixes.
+    isHeroPositioned: Boolean = anchor is TimelineAnchor.Latest,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     verticalPadding: Dp = Spacing.md,
@@ -233,7 +235,7 @@ internal fun TimelineNode(
      *  ever flips true→false for a given row identity (`TimelineMapper.kt`), never back, so there's
      *  no back-and-forth to worry about. */
     val latestFraction by animateFloatAsState(
-        targetValue = if (anchor is TimelineAnchor.Latest) 1f else 0f,
+        targetValue = if (isHeroPositioned) 1f else 0f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "timeline-node-latest-fraction",
     )
@@ -353,7 +355,8 @@ internal fun TimelineNode(
                 isSegmentBottom = isSegmentBottom,
                 asleepAbove = isAsleepAbove,
                 asleepBelow = isAsleepBelow,
-                isLatest = anchor is TimelineAnchor.Latest,
+                // Tracks isHeroPositioned, not anchor's own shape: the overlay's live-vs-layoutInfo position choice (TimelineTrackOverlay.kt) needs to know when this row's height genuinely starts varying, which now happens as soon as the hero padding/alignment blend kicks in — same signal latestFraction uses above.
+                isLatest = isHeroPositioned,
                 outgoingShape = crossfadeState.outgoingShape,
                 shapeCrossfadeFraction = shapeCrossfade.value,
             ),

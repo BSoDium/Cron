@@ -1281,3 +1281,77 @@ history where every step used the Phase 1–3 tooling instead of screen recordin
   (`SessionTimelineScreenshotTest`, `TimelineNodeScreenshotTest`, `PillPressMorphScreenshotTest`,
   `HomeContentScreenshotTest`, `TimelineGalleryScreenshotTest`) — no visual regressions, including in the
   isolated-rendering tests that exercise the compatibility fallback path.
+
+Round 41 — a fresh insertion at the top of the timeline (a replan landing) visibly "double-exposed" for
+several frames: the outgoing (just-demoted) Latest row and the incoming new Latest row both rendered,
+overlapping, in the same slot — read live as the anchor icon looking briefly taller/blurred, reported as
+"the pill gets taller for a couple seconds."
+
+- **Root cause, caught on screen recording, not inferred.** `adb shell screenrecord` + `ffmpeg -vf fps=30`
+  frame extraction around a real (non-mocked-instant) replan showed the outgoing row still fully opaque
+  and mid-`animateItem` placement slide (top slot → next slot down) at the exact same moment the new row
+  materializes in that same top slot with its own `fadeInSpec` ramping 0→1. `SessionTimeline.kt` already
+  gave the incoming row `zIndex(1f)` over the outgoing row's `zIndex(0f)` specifically to prevent this —
+  but zIndex only fixes *draw order*; it doesn't stop the alpha blend. While the incoming row's opacity is
+  still ramping, the fully-opaque outgoing row shows straight through it — a genuine double-exposure, not
+  a mis-ordered paint.
+- **Rejected fix: slide the incoming row in from above via `graphicsLayer { translationY }`, gated on the
+  same `playsArrival`/`latestProgress` state already driving its icon's Circle→Cookie9Sided morph.**
+  Tried first since it reuses existing state with zero new tracking. Re-verified with the same
+  screenrecord+frame-extraction technique: didn't fix it. `TRACK_WIDTH` (40dp) is a small fraction of the
+  actual vertical gap between the two rows' overlapping content, so the offset cleared far too little of
+  the collision zone to matter. Reverted rather than tuned into a bigger, less-principled magic number.
+- **Actual fix: snap the demoted row's own placement instead of animating it, for exactly the one
+  recomposition where its `isLatest` first flips true→false.** `isLatest` only ever transitions that
+  direction once per row identity (already an established invariant — see `TimelineNode.kt`'s
+  `latestFraction` KDoc), so this is a one-shot, self-clearing gate: a `remember`ed `wasLatest` flag
+  compared against the current frame's `item.isLatest` in `SessionTimeline.kt`'s `TimelineRowContent`,
+  feeding `justDemoted` into `gatedAnimateItem`'s `suppress` param (nulling its `placementSpec` for that
+  one frame only). The demoted row jumps directly to its new slot the same frame the new row appears, so
+  there's no window where both rows occupy overlapping space — eliminates the double-exposure by
+  construction rather than trying to outrun it with faster/offset motion. The row's own fade/shape-morph
+  settling (already in flight from prior rounds) is untouched; only its *position* snaps.
+- **Verified live** via the same `screenrecord` → `ffmpeg -vf fps=30` → frame-by-frame inspection
+  technique that caught the bug: zero overlapping frames across the full transition window, both
+  immediately after the tap and through the icon's own arrival morph settling. Full local gate
+  (`assembleDebug`/`testDebugUnitTest`/`lintDebug`/`checkFileLength`) green, no Roborazzi diffs (the
+  change only affects one in-flight animation frame, not any settled state the existing suites capture).
+
+Round 42 — a second, distinct symptom on the exact same arrival transition Round 41 fixed: once the
+double-exposure was gone, a smaller residual jump remained — the anchor icon visibly sliding into
+alignment against the hero headline text a few hundred ms *after* the text itself had already settled,
+reported as "the icon looks off-center, like it's stretched into a pill" with a specific screenshot
+pinpointing the exact frame.
+
+- **Root cause, found from real numbers, not inference.** A temporary `Log.d` inside
+  `TimelineNode.kt`'s `alignBy` block (removed after diagnosis) traced the actual per-frame values:
+  `AiRunNode`'s anchor renders `TimelineAnchor.Loader` (a spinner) whenever `item.isStreaming`, regardless
+  of `item.isLatest` — but the *title*'s hero `Crossfade` (`SessionTimeline.kt`) keys off `item.isLatest`
+  alone, with no `isStreaming` gate. A run becomes the newest one (and its title switches to the big
+  hero headline) well before it stops streaming. `latestFraction` — the single value blending both the
+  anchor's position *and* the title's alignment, deliberately unified in Phase 11 so the two "reach their
+  target across the same spec instead of one jumping instantly while the other animates" — was targeting
+  `anchor is TimelineAnchor.Latest`, i.e. `!isStreaming`, not `item.isLatest`. So for the whole streaming
+  window the title already renders hero-sized (`declared` alignment-line value constant and correct,
+  confirmed via the log), while the anchor sits at its demoted self-centered position — then, once
+  streaming ends and the anchor's shape finally morphs Loader→Cookie9Sided, `latestFraction` *only then*
+  starts animating 0→1, visibly sliding the icon up into place against text that already stopped moving
+  seconds earlier. Phase 11's own unification assumed both signals shared one trigger; they didn't.
+- **Fix: split "which shape does the anchor render" from "should the anchor use hero
+  padding/alignment."** `TimelineNode` gains `isHeroPositioned: Boolean = anchor is TimelineAnchor.Latest`
+  (default preserves every other caller — `EventNode`, the `@Preview`s — exactly as before) and
+  `latestFraction`'s target switches to it. `AiRunNode` passes `isHeroPositioned = item.isLatest`
+  explicitly — the same condition the title `Crossfade` already used — so both now move on the same
+  trigger, restoring Phase 11's actual intent. The registry's `AnchorDescriptor.isLatest` (which decides
+  the overlay's live-vs-`layoutInfo` position source, `TimelineTrackOverlay.kt`) also switches to
+  `isHeroPositioned`, since the row's height genuinely starts varying as soon as hero padding applies, not
+  only once the shape itself becomes the Latest morph. The anchor's *shape* (Loader spinner vs. the
+  Cookie9Sided morph) stays exactly as gated before — this only decouples position from it.
+- **Verified with hard numbers, not a re-look.** The same temporary log, left in through the fix, showed
+  `isHeroPositioned=true, latestFraction=1.0, result=83` (the correct hero-aligned pixel value) from the
+  very first frame a genuinely new run appears — constant through the entire streaming window and
+  unchanged across the later Loader→Latest shape morph. Confirms the icon is now hero-positioned
+  immediately, with the shape morph a purely cosmetic change with zero positional side effect. Full local
+  gate green, Roborazzi re-recorded for `TimelineNodeScreenshotTest`/`SessionTimelineScreenshotTest` with
+  no diffs (every existing suite exercises only settled `isLatest`/`isStreaming` combinations, where
+  `isHeroPositioned` and the old `anchor is TimelineAnchor.Latest` check already agreed).
