@@ -1281,3 +1281,38 @@ history where every step used the Phase 1–3 tooling instead of screen recordin
   (`SessionTimelineScreenshotTest`, `TimelineNodeScreenshotTest`, `PillPressMorphScreenshotTest`,
   `HomeContentScreenshotTest`, `TimelineGalleryScreenshotTest`) — no visual regressions, including in the
   isolated-rendering tests that exercise the compatibility fallback path.
+
+Round 41 — a fresh insertion at the top of the timeline (a replan landing) visibly "double-exposed" for
+several frames: the outgoing (just-demoted) Latest row and the incoming new Latest row both rendered,
+overlapping, in the same slot — read live as the anchor icon looking briefly taller/blurred, reported as
+"the pill gets taller for a couple seconds."
+
+- **Root cause, caught on screen recording, not inferred.** `adb shell screenrecord` + `ffmpeg -vf fps=30`
+  frame extraction around a real (non-mocked-instant) replan showed the outgoing row still fully opaque
+  and mid-`animateItem` placement slide (top slot → next slot down) at the exact same moment the new row
+  materializes in that same top slot with its own `fadeInSpec` ramping 0→1. `SessionTimeline.kt` already
+  gave the incoming row `zIndex(1f)` over the outgoing row's `zIndex(0f)` specifically to prevent this —
+  but zIndex only fixes *draw order*; it doesn't stop the alpha blend. While the incoming row's opacity is
+  still ramping, the fully-opaque outgoing row shows straight through it — a genuine double-exposure, not
+  a mis-ordered paint.
+- **Rejected fix: slide the incoming row in from above via `graphicsLayer { translationY }`, gated on the
+  same `playsArrival`/`latestProgress` state already driving its icon's Circle→Cookie9Sided morph.**
+  Tried first since it reuses existing state with zero new tracking. Re-verified with the same
+  screenrecord+frame-extraction technique: didn't fix it. `TRACK_WIDTH` (40dp) is a small fraction of the
+  actual vertical gap between the two rows' overlapping content, so the offset cleared far too little of
+  the collision zone to matter. Reverted rather than tuned into a bigger, less-principled magic number.
+- **Actual fix: snap the demoted row's own placement instead of animating it, for exactly the one
+  recomposition where its `isLatest` first flips true→false.** `isLatest` only ever transitions that
+  direction once per row identity (already an established invariant — see `TimelineNode.kt`'s
+  `latestFraction` KDoc), so this is a one-shot, self-clearing gate: a `remember`ed `wasLatest` flag
+  compared against the current frame's `item.isLatest` in `SessionTimeline.kt`'s `TimelineRowContent`,
+  feeding `justDemoted` into `gatedAnimateItem`'s `suppress` param (nulling its `placementSpec` for that
+  one frame only). The demoted row jumps directly to its new slot the same frame the new row appears, so
+  there's no window where both rows occupy overlapping space — eliminates the double-exposure by
+  construction rather than trying to outrun it with faster/offset motion. The row's own fade/shape-morph
+  settling (already in flight from prior rounds) is untouched; only its *position* snaps.
+- **Verified live** via the same `screenrecord` → `ffmpeg -vf fps=30` → frame-by-frame inspection
+  technique that caught the bug: zero overlapping frames across the full transition window, both
+  immediately after the tap and through the icon's own arrival morph settling. Full local gate
+  (`assembleDebug`/`testDebugUnitTest`/`lintDebug`/`checkFileLength`) green, no Roborazzi diffs (the
+  change only affects one in-flight animation frame, not any settled state the existing suites capture).

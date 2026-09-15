@@ -21,8 +21,11 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -158,20 +161,26 @@ private fun LazyItemScope.TimelineRowContent(
     when (item) {
         // Every header renders identically today (see DayHeaderRow's KDoc) and shares the same animateItem choreography as the AiRun/Event rows below it.
         is TimelineItem.DayHeader -> DayHeaderRow(item = item, modifier = gatedAnimateItem(suppressEntranceAnimation))
-        is TimelineItem.AiRun -> AiRunNode(
-            item = item,
-            registry = registry,
-            isSegmentTop = index == firstAnchorIndex,
-            isSegmentBottom = index == lastAnchorIndex,
-            isAsleepAbove = asleepStates[index],
-            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-            isNewlyArrived = item.id in newlyArrivedIds,
-            onClick = { onOpenAiRun(item.iteration, item.sessionId) },
-            // zIndex ahead of animateItem: normal paint order would draw a newly-arrived latest row under the still-demoting previous latest row while its placement slide is in flight; painting the incoming hero on top removes that overlap source.
-            modifier = Modifier
-                .zIndex(if (item.isLatest) 1f else 0f)
-                .then(gatedAnimateItem(suppressEntranceAnimation)),
-        )
+        is TimelineItem.AiRun -> {
+            // True for exactly the one recomposition where this row's own isLatest first flips true→false — it never flips back (see TimelineNode.kt's latestFraction KDoc), so this fires at most once per row identity. Snaps this row's own placement instead of animating it: the row a fresh insertion demotes starts its slide from the exact slot the new Latest row arrives into, so an animated placementSpec here has the demoted row still visually overlapping the incoming row's opaque fade-in for several frames (a real double-exposure, confirmed via on-device screen recording) — see docs/color-roles.md Round 41.
+            val wasLatest = remember(item.id) { mutableStateOf(item.isLatest) }
+            val justDemoted = wasLatest.value && !item.isLatest
+            SideEffect { wasLatest.value = item.isLatest }
+            AiRunNode(
+                item = item,
+                registry = registry,
+                isSegmentTop = index == firstAnchorIndex,
+                isSegmentBottom = index == lastAnchorIndex,
+                isAsleepAbove = asleepStates[index],
+                isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+                isNewlyArrived = item.id in newlyArrivedIds,
+                onClick = { onOpenAiRun(item.iteration, item.sessionId) },
+                // zIndex still guards the tail end of the transition (e.g. a demoted row's own fade/shape settling) even with the placement snap above.
+                modifier = Modifier
+                    .zIndex(if (item.isLatest) 1f else 0f)
+                    .then(gatedAnimateItem(suppressEntranceAnimation || justDemoted)),
+            )
+        }
         is TimelineItem.Event -> EventNode(
             item = item,
             registry = registry,
