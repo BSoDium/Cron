@@ -30,7 +30,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
@@ -60,7 +59,6 @@ internal fun NavPill(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             NavSlot(currentRoute, ROUTE_HOME, MaterialSymbol.Alarm, "Home", onNavigate)
-            NavSlot(currentRoute, ROUTE_HISTORY, MaterialSymbol.History, "History", onNavigate)
             NavSlot(currentRoute, SETTINGS_ROOT, MaterialSymbol.Settings, "Settings", onNavigate)
         }
     }

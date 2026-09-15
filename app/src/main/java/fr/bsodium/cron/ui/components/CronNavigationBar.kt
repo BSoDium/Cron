@@ -10,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ROUTE_HISTORY
 import fr.bsodium.cron.ROUTE_HOME
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronColors
@@ -26,7 +25,6 @@ private data class NavDestination(
 
 private val DESTINATIONS = listOf(
     NavDestination(ROUTE_HOME, MaterialSymbol.Alarm, "Home"),
-    NavDestination(ROUTE_HISTORY, MaterialSymbol.History, "History"),
     NavDestination(SETTINGS_ROOT, MaterialSymbol.Settings, "Settings"),
 )
 

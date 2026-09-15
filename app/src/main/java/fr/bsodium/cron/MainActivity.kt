@@ -59,8 +59,6 @@ import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.PrimaryActionFab
 import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.components.rememberFabChevron
-import fr.bsodium.cron.ui.screens.history.HistoryScreen
-import fr.bsodium.cron.ui.screens.history.HistoryViewModel
 import fr.bsodium.cron.ui.screens.home.HomeScreen
 import fr.bsodium.cron.ui.screens.home.HomeViewModel
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
@@ -82,9 +80,8 @@ private const val ROUTE_ONBOARDING = "onboarding"
 
 /** Tab destinations, shared with [CronBottomBar] so a route rename can't silently un-highlight a tab. */
 const val ROUTE_HOME = "home"
-const val ROUTE_HISTORY = "history"
 
-private val TAB_ROUTES = setOf(ROUTE_HOME, ROUTE_HISTORY, SETTINGS_ROOT)
+private val TAB_ROUTES = setOf(ROUTE_HOME, SETTINGS_ROOT)
 
 private val forwardTween = tween<Float>(durationMillis = FORWARD_MS, easing = EaseInOutCubic)
 
@@ -168,8 +165,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val showBottomBar = currentRoute in TAB_ROUTES
                 // Pages with a PageAppBar own the status-bar strip; the top edge-fade would two-tone it against the bar's scrolled surfaceContainer shade, so suppress it there.
-                val hasTopAppBar = currentRoute == ROUTE_HISTORY ||
-                    currentRoute?.startsWith("settings") == true
+                val hasTopAppBar = currentRoute?.startsWith("settings") == true
                 // Home owns its own top-of-screen occlusion via StickyAlarm's collapse-driven fade (HomeContent.kt) — layering this generic scrim on top produced a visible "double gradient" while scrolling.
                 val showTopScrim = !hasTopAppBar && currentRoute != ROUTE_HOME
                 val fabRegistry = remember { FabRegistry() }
@@ -290,15 +286,6 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate(SETTINGS_SCHEDULE)
                                         },
                                     )
-                                }
-                                composable(
-                                    route = ROUTE_HISTORY,
-                                    enterTransition = tabEnter,
-                                    exitTransition = tabExit,
-                                    popEnterTransition = tabEnter,
-                                    popExitTransition = tabExit,
-                                ) {
-                                    HistoryScreen(viewModel = viewModel<HistoryViewModel>())
                                 }
                                 settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                             }

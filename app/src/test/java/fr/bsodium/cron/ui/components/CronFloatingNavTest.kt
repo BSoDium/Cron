@@ -30,8 +30,8 @@ class CronFloatingNavTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("History").performClick()
-        assertEquals(listOf("history"), navigated)
+        composeTestRule.onNodeWithContentDescription("Settings").performClick()
+        assertEquals(listOf("settings/root"), navigated)
     }
 
     @Test
@@ -43,6 +43,6 @@ class CronFloatingNavTest {
         }
 
         composeTestRule.onNodeWithContentDescription("Home").assertIsNotEnabled()
-        composeTestRule.onNodeWithContentDescription("History").assertIsEnabled()
+        composeTestRule.onNodeWithContentDescription("Settings").assertIsEnabled()
     }
 }
