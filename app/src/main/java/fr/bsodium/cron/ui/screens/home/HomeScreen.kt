@@ -68,7 +68,10 @@ import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 
-private data class PlanDetailKey(val turnIndex: Int, val sessionId: String)
+/** Holds the full [AiIterationUi] the user tapped, not just its (turnIndex, sessionId) — the latter
+ *  can't be looked back up from [HomeUiState.aiPlan], which is scoped to the latest session only, so a
+ *  tap on any older session's node found nothing and opened a blank [PlanDetailScreen] (#184). */
+private data class PlanDetailKey(val iteration: AiIterationUi, val sessionId: String)
 
 private const val EMPTY_STATE_DATE_LABEL = "No alarm is set"
 
@@ -171,7 +174,7 @@ fun HomeScreen(
             onNotifEnable = onNotifEnable,
             onAutoAlarmsChange = viewModel::setAutoAlarmsEnabled,
             onAlarmTimeClick = onAlarmTimeClick,
-            onOpenAiRun = { turn, session -> detailKey = PlanDetailKey(turn, session) },
+            onOpenAiRun = { iteration, session -> detailKey = PlanDetailKey(iteration, session) },
             onNavigateToHistory = onNavigateToHistory,
             onNavigateToSettings = onNavigateToSettings,
             onNavigateToScheduleSettings = onNavigateToScheduleSettings,
@@ -198,7 +201,7 @@ fun HomeScreen(
                     onBack = { detailKey = null },
                 ) { animatedBack ->
                     PlanDetailScreen(
-                        iteration = uiState.aiPlan?.iterations?.find { it.turnIndex == key.turnIndex },
+                        iteration = key.iteration,
                         hapticsEnabled = uiState.hapticsEnabled,
                         onBack = animatedBack,
                     )
@@ -220,7 +223,7 @@ private fun HomeRootContent(
     onNotifEnable: () -> Unit,
     onAutoAlarmsChange: (Boolean) -> Unit,
     onAlarmTimeClick: (() -> Unit)?,
-    onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
+    onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToScheduleSettings: () -> Unit,

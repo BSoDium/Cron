@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.screens.home.timelineAsleepStates
@@ -56,7 +57,7 @@ internal fun LazyListScope.sessionTimelineItems(
     newlyArrivedIds: Set<String> = emptySet(),
     // Forces every row's animateItem specs to null while the timeline's own composition is still settling after a fresh mount (see HomeContent.kt's rememberTimelineSettled), so cold-start/navigation never replays an entrance animation for unchanged data.
     suppressEntranceAnimation: Boolean = false,
-    onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
+    onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
     onNavigateToHistory: () -> Unit,
 ) {
     val asleepStates = timelineAsleepStates(timeline)
@@ -83,7 +84,7 @@ internal fun LazyListScope.sessionTimelineItems(
                     isAsleepAbove = asleepStates[index],
                     isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
                     isNewlyArrived = item.id in newlyArrivedIds,
-                    onClick = { onOpenAiRun(item.iteration.turnIndex, item.sessionId) },
+                    onClick = { onOpenAiRun(item.iteration, item.sessionId) },
                     // zIndex ahead of animateItem: normal paint order would draw a newly-arrived latest row under the still-demoting previous latest row while its placement slide is in flight; painting the incoming hero on top removes that overlap source.
                     modifier = Modifier
                         .zIndex(if (item.isLatest) 1f else 0f)
