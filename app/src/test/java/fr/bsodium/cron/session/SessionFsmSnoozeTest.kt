@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import fr.bsodium.cron.alarm.AlarmScheduler
+import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SessionStatus
@@ -100,5 +101,23 @@ class SessionFsmSnoozeTest {
 
         assertFalse(fsm.onSnooze(session, snoozeEvent(Fixtures.T0 + 2.seconds, 3)))
         assertTrue(AlarmScheduler(app).isArmed(session.date))
+    }
+
+    /** #219: the ≥3 branch arms a real alarm but previously never wrote the matching [fr.bsodium.cron
+     *  .session.model.Instruction], leaving Home's wake-time card showing "no alarm" over a real one. */
+    @Test
+    fun snooze_reaching_threshold_updates_the_displayed_instruction() = runBlocking {
+        val plan = Fixtures.dayPlan()
+        val session = repository.createSession(plan, Fixtures.DATE, "Europe/Paris")
+        repository.updateStatus(session.id, SessionStatus.Monitoring)
+        val fsm = SessionFsm(app, repository)
+
+        fsm.onSnooze(session, snoozeEvent(Fixtures.T0, 1))
+        fsm.onSnooze(session, snoozeEvent(Fixtures.T0 + 1.seconds, 2))
+        fsm.onSnooze(session, snoozeEvent(Fixtures.T0 + 2.seconds, 3))
+
+        val instruction = repository.findById(session.id)?.currentInstruction
+        assertEquals(ActionType.SetAlarm, instruction?.action)
+        assertTrue(instruction?.alarmTime != null)
     }
 }
