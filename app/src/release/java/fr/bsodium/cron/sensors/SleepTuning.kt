@@ -15,4 +15,7 @@ object SleepTuning {
 
     @Suppress("UNUSED_PARAMETER")
     fun outOfBedConfirmThreshold(context: Context): Duration = 90.seconds
+
+    @Suppress("UNUSED_PARAMETER")
+    fun sustainedMovementThreshold(context: Context): Duration = 10.minutes
 }

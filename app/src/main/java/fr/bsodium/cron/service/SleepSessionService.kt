@@ -98,7 +98,13 @@ class SleepSessionService : Service() {
             ).also { it.start() }
         }
         if (activityRecognitionMonitor == null) {
-            activityRecognitionMonitor = ActivityRecognitionMonitor(applicationContext, fsmSink, serviceScope).also { it.start() }
+            activityRecognitionMonitor = ActivityRecognitionMonitor(
+                applicationContext,
+                fsmSink,
+                serviceScope,
+                sustainedMovementThreshold = SleepTuning.sustainedMovementThreshold(applicationContext),
+                onSustainedMovement = { screenStateMonitor?.rearm() },
+            ).also { it.start() }
         }
 
         // Only rearm explicitly on a fresh construction — start() already seeds onset detection from the current screen state, and rearm() would just redundantly reset the same latch.

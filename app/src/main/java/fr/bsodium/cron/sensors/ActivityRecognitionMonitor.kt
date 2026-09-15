@@ -22,9 +22,13 @@ import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Wraps Google Play Services Activity Recognition Transition API.
@@ -35,7 +39,8 @@ import kotlinx.datetime.Clock
  *
  *  - STILL → contributes to sleep onset detection (handled in
  *    [ScreenStateMonitor]; we emit a snapshot signal)
- *  - WALKING / RUNNING → emit MidSleepActivity events
+ *  - WALKING / RUNNING → emit MidSleepActivity events, and — if uninterrupted by a STILL for
+ *    [sustainedMovementThreshold] — invoke [onSustainedMovement] (#97)
  *
  * Requires ACTIVITY_RECOGNITION runtime permission.
  */
@@ -43,6 +48,8 @@ class ActivityRecognitionMonitor(
     private val context: Context,
     private val sink: SensorEventSink,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val sustainedMovementThreshold: Duration = 10.minutes,
+    private val onSustainedMovement: () -> Unit = {},
 ) {
 
     private val receiver = object : BroadcastReceiver() {
@@ -58,9 +65,16 @@ class ActivityRecognitionMonitor(
 
     private var pendingIntent: PendingIntent? = null
     private var sleepOnsetDetected = false
+    private var continuousMovementSince: Instant? = null
+    private var pendingSustainedMovement: Job? = null
 
     fun onSleepOnset() { sleepOnsetDetected = true }
-    fun onWake()       { sleepOnsetDetected = false }
+
+    fun onWake() {
+        sleepOnsetDetected = false
+        pendingSustainedMovement?.cancel()
+        continuousMovementSince = null
+    }
 
     @SuppressLint("WrongConstant") // ContextCompat.RECEIVER_NOT_EXPORTED is the correct compat value for API < 33
     fun start(): Boolean {
@@ -106,6 +120,8 @@ class ActivityRecognitionMonitor(
         runCatching { context.unregisterReceiver(receiver) }
             .onFailure { Log.w(TAG, "unregisterReceiver failed", it) }
         pendingIntent = null
+        pendingSustainedMovement?.cancel()
+        continuousMovementSince = null
         Log.i(TAG, "ActivityRecognitionMonitor stopped")
     }
 
@@ -116,6 +132,12 @@ class ActivityRecognitionMonitor(
             DetectedActivity.WALKING -> ActivityType.Walking
             DetectedActivity.RUNNING -> ActivityType.Running
             else -> return // only STILL/WALKING/RUNNING are subscribed to; other Play Services codes can't arrive
+        }
+        if (type == ActivityType.Still) {
+            pendingSustainedMovement?.cancel()
+            continuousMovementSince = null
+        } else {
+            scheduleSustainedMovementCheck()
         }
         scope.launch {
             sink.emit(
@@ -129,6 +151,26 @@ class ActivityRecognitionMonitor(
                     ),
                 )
             )
+        }
+    }
+
+    /** A false [TriggerType.SleepOnset] from pocket detection (screen off + dark, but the phone is
+     *  actually in a moving pocket) leaves [ScreenStateMonitor]'s onset latch stuck, so a genuine
+     *  onset once the user truly stops moving never fires (#97). Uninterrupted WALKING/RUNNING for
+     *  [sustainedMovementThreshold] is strong enough evidence of "not asleep" to call
+     *  [onSustainedMovement] ([ScreenStateMonitor.rearm]) directly, rather than waiting on the AI to
+     *  infer it from the advisory MidSleepActivity events alone. A STILL enter in between cancels the
+     *  pending check — only an unbroken streak counts as sustained. */
+    private fun scheduleSustainedMovementCheck() {
+        if (continuousMovementSince != null) return // already tracking an unbroken streak
+        val since = Clock.System.now()
+        continuousMovementSince = since
+        pendingSustainedMovement = scope.launch {
+            kotlinx.coroutines.delay(sustainedMovementThreshold)
+            if (isSustainedMovement(since, Clock.System.now(), sustainedMovementThreshold)) {
+                Log.i(TAG, "Sustained movement for $sustainedMovementThreshold — rearming onset detection")
+                onSustainedMovement()
+            }
         }
     }
 
@@ -159,5 +201,9 @@ class ActivityRecognitionMonitor(
         private const val TAG = "ActivityRecogMonitor"
         private const val ACTION_TRANSITIONS = "fr.bsodium.cron.ACTIVITY_TRANSITIONS"
         private const val REQUEST_CODE = 410001
+
+        /** Pure sustained-movement decision — unit-testable. */
+        internal fun isSustainedMovement(since: Instant, now: Instant, threshold: Duration): Boolean =
+            now - since >= threshold
     }
 }
