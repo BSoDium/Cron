@@ -57,21 +57,15 @@ interface SessionDao {
     suspend fun findCurrent(): SessionEntity?
 
     // Backs HomeViewModel's carry-over-alarm-time patch (#230) -- a single-row read, deliberately not
-    // reusing findPaginated's limit/offset shape for what's always exactly one row.
+    // reusing historyPagingSource's limit/offset-style shape for what's always exactly one row.
     @Query("SELECT * FROM sessions WHERE (:excludeSessionId IS NULL OR id != :excludeSessionId) ORDER BY createdAt DESC LIMIT 1")
     suspend fun findMostRecentExcluding(excludeSessionId: String?): SessionEntity?
 
     @Query("SELECT * FROM sessions ORDER BY createdAt DESC LIMIT 1")
     fun observeLatest(): Flow<SessionEntity?>
 
-    @Query("SELECT * FROM sessions ORDER BY createdAt DESC")
-    fun observeAll(): Flow<List<SessionEntity>>
-
     @Query("DELETE FROM sessions WHERE createdAt < :olderThanMillis")
     suspend fun deleteOlderThan(olderThanMillis: Long): Int
-
-    @Query("SELECT * FROM sessions ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
-    suspend fun findPaginated(limit: Int, offset: Int): List<SessionEntity>
 
     // Backs Home's paged history feed (#187) -- excludeSessionId keeps the live/current session out of
     // the historical Pager entirely, so it never double-renders alongside the reactive live-session path.
