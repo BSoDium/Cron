@@ -56,10 +56,12 @@ interface SessionDao {
     @Query("SELECT * FROM sessions WHERE status != 'Complete' ORDER BY createdAt DESC LIMIT 1")
     suspend fun findCurrent(): SessionEntity?
 
-    // Backs HomeViewModel's carry-over-alarm-time patch (#230) -- a single-row read, deliberately not
-    // reusing historyPagingSource's limit/offset-style shape for what's always exactly one row.
-    @Query("SELECT * FROM sessions WHERE (:excludeSessionId IS NULL OR id != :excludeSessionId) ORDER BY createdAt DESC LIMIT 1")
-    suspend fun findMostRecentExcluding(excludeSessionId: String?): SessionEntity?
+    /** Backs [fr.bsodium.cron.ui.screens.home.TimelineRepository.mostRecentOlderAlarmTime]'s
+     *  carry-over-alarm-time patch (#230) — the caller walks these, most-recent-first, until one
+     *  actually resolved an alarm (a single most-recent row isn't enough: that one session alone might
+     *  never have resolved one — cancelled, auto-alarms off, an errored turn). */
+    @Query("SELECT * FROM sessions WHERE (:excludeSessionId IS NULL OR id != :excludeSessionId) ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun findRecentExcluding(excludeSessionId: String?, limit: Int): List<SessionEntity>
 
     @Query("SELECT * FROM sessions ORDER BY createdAt DESC LIMIT 1")
     fun observeLatest(): Flow<SessionEntity?>
@@ -67,8 +69,9 @@ interface SessionDao {
     @Query("DELETE FROM sessions WHERE createdAt < :olderThanMillis")
     suspend fun deleteOlderThan(olderThanMillis: Long): Int
 
-    // Backs Home's paged history feed (#187) -- excludeSessionId keeps the live/current session out of
-    // the historical Pager entirely, so it never double-renders alongside the reactive live-session path.
+    /** Backs Home's paged history feed (#187) — `excludeSessionId` keeps the live/current session out
+     *  of the historical Pager entirely, so it never double-renders alongside the reactive live-session
+     *  path. */
     @Query("SELECT * FROM sessions WHERE (:excludeSessionId IS NULL OR id != :excludeSessionId) ORDER BY createdAt DESC")
     fun historyPagingSource(excludeSessionId: String?): PagingSource<Int, SessionEntity>
 
