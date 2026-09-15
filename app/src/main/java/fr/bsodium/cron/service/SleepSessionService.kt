@@ -27,14 +27,19 @@ import fr.bsodium.cron.sensors.SleepTuning
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.LocationSource
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.session.model.latestEveningPlanLocation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.Instant
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 
 /**
  * Long-running foreground service that hosts dynamically-registered
@@ -58,6 +63,9 @@ class SleepSessionService : Service() {
     private val fsmSink: SensorEventSink = object : SensorEventSink {
         override suspend fun emit(event: SessionEvent) {
             DebugSensorEventSink.emit(event)
+            if (event.trigger == TriggerType.SleepOnset) {
+                refreshLocationIfStale()
+            }
             try {
                 SessionFsm(applicationContext, SessionRepository(applicationContext)).onEvent(event)
             } catch (t: Throwable) {
@@ -72,6 +80,34 @@ class SleepSessionService : Service() {
         }
     }
 
+    /**
+     * Overnight replans read [fr.bsodium.cron.session.model.SleepSession.latestEveningPlanLocation],
+     * which stays pinned to wherever the user was at the ~8-10pm evening plan. If they end up sleeping
+     * somewhere else, every replan for the rest of the night uses a stale commute origin (#223). A
+     * genuine sleep onset is the natural moment to refresh it: appended directly (not through
+     * [SessionFsm.onEvent]) so this silently updates the location without also firing its own AI turn
+     * — the [TriggerType.SleepOnset] event right behind it is what should trigger the replan, once,
+     * reading the now-fresh location.
+     */
+    private suspend fun refreshLocationIfStale() {
+        val repo = SessionRepository(applicationContext)
+        val session = repo.findCurrent() ?: return
+        val current = session.latestEveningPlanLocation() ?: return
+        val threshold = SleepTuning.staleLocationThreshold(applicationContext)
+        if (!isLocationStale(current.capturedAt, Clock.System.now(), threshold)) return
+        val fresh = LocationProvider(applicationContext).acquireForEveningPlan()
+        if (fresh.source == LocationSource.Unavailable) return
+        repo.appendEvent(
+            session.id,
+            SessionEvent(
+                trigger = TriggerType.EveningPlan,
+                timestamp = Clock.System.now(),
+                data = EventData.EveningPlan(timezone = session.timezone, location = fresh, isManual = false),
+            ),
+        )
+        Log.i(TAG, "Refreshed stale location for session ${session.id} (source=${fresh.source})")
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -82,8 +118,10 @@ class SleepSessionService : Service() {
         val isRearm = intent?.action == ACTION_REARM
         val eveningPlan = intent?.action == ACTION_EVENING_PLAN
         ensureNotificationChannel()
-        // Location-typed FGS keeps the fetch "in use" on foreground permission alone; a sticky restart (null intent) only resumes monitoring, never re-fires the plan.
-        startForegroundService(includeLocation = eveningPlan)
+        // Location-typed for the whole session lifetime, not just the evening-plan moment: a genuine
+        // sleep onset can trigger a stale-location refresh (#223) hours into monitoring, and that fetch
+        // needs the same "in use" FGS exemption the evening plan's own fetch relies on.
+        startForegroundService(includeLocation = true)
 
         // A REARM after the service was killed and restarted fresh finds screenStateMonitor null — treat that the same as a normal start (build the monitors) before rearming, so REARM never silently no-ops.
         val freshlyConstructed = screenStateMonitor == null
@@ -232,6 +270,16 @@ class SleepSessionService : Service() {
         const val ACTION_EVENING_PLAN = "fr.bsodium.cron.SLEEP_SESSION_EVENING_PLAN"
         const val EXTRA_TIMEZONE = "timezone"
         private const val TAG = "SleepSessionService"
+
+        /** How old the evening-plan location can get before a genuine sleep onset refreshes it (#223). */
+        private val STALE_LOCATION_THRESHOLD = 4.hours
+
+        /** Pure staleness decision — unit-testable. */
+        internal fun isLocationStale(
+            capturedAt: Instant,
+            now: Instant,
+            threshold: Duration = STALE_LOCATION_THRESHOLD,
+        ): Boolean = now - capturedAt >= threshold
 
         fun startIntent(context: Context): Intent =
             Intent(context, SleepSessionService::class.java)
