@@ -318,6 +318,8 @@ internal fun AiRunNode(
         isAsleepAbove = isAsleepAbove,
         isAsleepBelow = isAsleepBelow,
         isNewlyArrived = isNewlyArrived,
+        // Matches the title Crossfade's own targetState below (item.isLatest, not anchor is TimelineAnchor.Latest) — see TimelineNode.kt's isHeroPositioned KDoc for the lag this fixes: the anchor's Loader shape can still be showing (isStreaming) while this row is already the newest one, but the hero padding/alignment blend shouldn't wait for streaming to end just because the shape does.
+        isHeroPositioned = item.isLatest,
         onClick = onClick,
         modifier = modifier,
         // TimelineNode boosts this internally via latestFraction now (Phase 11, docs/color-roles.md) — always pass the resting value.
