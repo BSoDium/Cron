@@ -130,9 +130,7 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
     val items = mutableListOf<TimelineItem>()
     sessions.forEach { items += buildSessionItems(it) }
 
-    // Each session's own items are already sorted (buildSessionItems), but sessions themselves aren't
-    // guaranteed to arrive in order here (unlike the paging pipeline's own createdAt-DESC query) -- keep
-    // this global sort so buildTimeline stays correct regardless of caller-supplied session order.
+    // Sessions aren't guaranteed to arrive pre-sorted here (unlike the paging pipeline's own query), so this global sort still runs even though each session's own items already are (buildSessionItems).
     items.sortByDescending { it.timestamp }
 
     var latestFound = false

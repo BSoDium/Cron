@@ -37,6 +37,7 @@ import androidx.paging.compose.itemKey
 import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.TimelineItem
+import fr.bsodium.cron.ui.screens.home.TimelineRepository
 import fr.bsodium.cron.ui.screens.home.seamDayHeader
 import fr.bsodium.cron.ui.screens.home.timelineAsleepStates
 import fr.bsodium.cron.ui.theme.CronColors
@@ -62,9 +63,10 @@ internal fun LazyListScope.sessionTimelineItems(
     suppressEntranceAnimation: Boolean = false,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
 ) {
-    // Non-load-triggering: unlike historyItems[index] below, reading the snapshot doesn't ask Paging for
-    // more. Never actually null with enablePlaceholders=false (TimelineRepository.historyFlow), but
-    // LazyPagingItems' type stays nullable regardless, since it's shared with the placeholders-on case.
+    /** Non-load-triggering: unlike `historyItems[index]` below, reading the snapshot doesn't ask
+     *  Paging for more. Never actually null with `enablePlaceholders = false`
+     *  ([TimelineRepository.historyFlow]), but [LazyPagingItems]' type stays nullable regardless,
+     *  since it's shared with the placeholders-on case. */
     val historySnapshot = historyItems.itemSnapshotList.filterNotNull()
     // insertSeparators (TimelineRepository.historyFlow) can't own this one boundary itself — it never sees the live timeline, only the paged stream — so it's computed once, here, where both sides are in scope.
     val seam = seamDayHeader(liveTimeline, historySnapshot.firstOrNull())

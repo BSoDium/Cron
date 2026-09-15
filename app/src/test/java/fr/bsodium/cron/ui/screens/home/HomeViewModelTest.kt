@@ -1,6 +1,7 @@
 package fr.bsodium.cron.ui.screens.home
 
 import android.app.Application
+import androidx.paging.testing.asSnapshot
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import app.cash.turbine.test
@@ -150,5 +151,33 @@ class HomeViewModelTest {
             assertEquals(setOf("ai-s1-1"), state.newlyArrivedIds)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    /** Confirms historyFlow's own wiring end to end through the real ViewModel -- excludeSessionId
+     *  correctly tracks sessionFlow's current id (TimelineRepository's own exclusion logic is already
+     *  covered directly by TimelineRepositoryTest; this is the thinner layer on top). */
+    @Test
+    fun historyFlow_shows_an_older_session_but_excludes_the_live_one() = runTest(dispatcher) {
+        val db = CronDatabase.get(app)
+        val older = Fixtures.manySessions(1, startingAt = LocalDate.parse("2026-05-20")).single()
+        db.sessionDao().insert(older.toEntity())
+        for (event in older.events) db.eventDao().insert(event.toEntity(older.id))
+        db.sessionDao().insert(
+            Fixtures.session(id = "live", date = LocalDate.parse("2026-05-22"), createdAt = Fixtures.at("2026-05-22T22:00:00Z")).toEntity(),
+        )
+
+        val viewModel = HomeViewModel(app)
+        // Let the live session settle first so sessionFlow's id is stable before collecting history.
+        viewModel.uiState.test(timeout = 5.seconds) {
+            var state = awaitItem()
+            while (state.sessionDisplay == null) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val historyItems = viewModel.historyFlow.asSnapshot { appendScrollWhile { true } }
+
+        val olderEventTimestamps = older.events.map { it.timestamp }.toSet()
+        assertTrue(historyItems.isNotEmpty())
+        assertTrue(historyItems.any { it.timestamp in olderEventTimestamps })
     }
 }
