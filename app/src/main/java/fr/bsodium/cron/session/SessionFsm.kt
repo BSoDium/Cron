@@ -5,8 +5,10 @@ import android.util.Log
 import fr.bsodium.cron.alarm.AlarmScheduler
 import fr.bsodium.cron.alarm.HardLatestScheduler
 import fr.bsodium.cron.alarm.SessionExpiryScheduler
+import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.DayPlan
 import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.SleepSession
@@ -23,6 +25,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -259,13 +262,25 @@ class SessionFsm(
                 val newCount = repository.incrementSnoozeCount(sessionId)
 
                 if (newCount >= 3) {
-                    alarmScheduler.schedule(
+                    val timezone = TimeZone.of(session.timezone)
+                    val plan = alarmScheduler.schedule(
                         requested = Clock.System.now() + 5.minutes,
                         hardLatest = session.plan.hardLatest,
                         sessionDate = session.date,
-                        timezone = TimeZone.of(session.timezone),
+                        timezone = timezone,
                         label = "Wake up",
                         sessionId = sessionId,
+                    )
+                    // #219: the armed alarm and Instruction.alarmTime (what Home reads) are separate
+                    // data sources -- write one here or the UI keeps showing "no alarm" over a real one.
+                    repository.updateInstruction(
+                        sessionId,
+                        Instruction(
+                            action = ActionType.SetAlarm,
+                            alarmTime = plan.actualInstant.toLocalDateTime(timezone).time,
+                            reason = "Snooze count $newCount ≥ 3 — AI bypassed, fallback alarm armed",
+                            issuedAt = Clock.System.now(),
+                        ),
                     )
                     Log.i(TAG, "Snooze count $newCount ≥ 3 — AI bypassed, alarm in 5 min")
                     false
