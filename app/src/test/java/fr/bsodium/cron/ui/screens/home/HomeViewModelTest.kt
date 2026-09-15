@@ -141,12 +141,12 @@ class HomeViewModelTest {
 
         HomeViewModel(app).uiState.test(timeout = 5.seconds) {
             var state = awaitItem()
-            while (state.timeline.none { it.id == "ai-s1-0" }) state = awaitItem()
+            while (state.liveTimeline.none { it.id == "ai-s1-0" }) state = awaitItem()
             // The very first real emission of a cold-started ViewModel must never mark anything as newly-arrived, even though "ai-s1-0" is appearing on screen for the first time — there is no reference point yet.
             assertTrue(state.newlyArrivedIds.isEmpty())
 
             db.aiMessageDao().insert(aiTurnRow(sessionId = "s1", turn = 1, createdAt = 2_000L, text = "SUMMARY: second\n\nSecond answer."))
-            while (state.timeline.none { it.id == "ai-s1-1" }) state = awaitItem()
+            while (state.liveTimeline.none { it.id == "ai-s1-1" }) state = awaitItem()
             assertEquals(setOf("ai-s1-1"), state.newlyArrivedIds)
             cancelAndIgnoreRemainingEvents()
         }

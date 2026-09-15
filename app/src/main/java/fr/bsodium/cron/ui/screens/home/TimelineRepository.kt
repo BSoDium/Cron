@@ -11,6 +11,7 @@ import fr.bsodium.cron.session.db.SessionEntity
 import fr.bsodium.cron.session.db.toModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.LocalTime
 
 private const val TAG = "TimelineRepository"
 
@@ -69,28 +70,17 @@ class TimelineRepository(private val db: CronDatabase) {
         )
     }
 
-    // TODO(#230): superseded by historyFlow above -- kept only until HomeViewModel migrates off its
-    // single fixed-offset-0 call site, so this PR's build stays green without touching the ViewModel yet.
-    suspend fun loadHistory(excludeSessionId: String?, limit: Int, offset: Int): HistoryPage {
-        val fetched = db.sessionDao().findPaginated(limit = limit + 1, offset = offset)
-            .filter { it.id != excludeSessionId }
-        val hasMore = fetched.size > limit
-        val sessions = fetched.take(limit)
-        val result = sessions.map { session ->
-            val events = runCatching { db.eventDao().findBySession(session.id).map { it.toModel() } }
-                .onFailure { Log.w(TAG, "Failed to load events for session ${session.id}", it) }
-                .getOrDefault(emptyList())
-            val aiRows = db.aiMessageDao().findBySession(session.id)
-            val plan = AiPlanMapper.buildPlan(aiRows, streaming = null, events = events)
-            TimelineSession(
-                sessionId = session.id,
-                iterations = plan?.iterations.orEmpty(),
-                events = events,
-                streamingTurnIndex = null,
-            )
-        }
-        return HistoryPage(sessions = result, hasMore = hasMore)
+    /** The most recent OLDER session's own last resolved alarm time, for [HomeViewModel]'s
+     *  carry-over-into-turn-0 patch — a fresh session's own turn 0 never has an intra-session previous
+     *  time to compare against. A single-row read + the same per-session [AiPlanMapper.buildPlan]
+     *  derivation [sessionToTimelineItems] already does, not a second data path. */
+    suspend fun mostRecentOlderAlarmTime(excludeSessionId: String?): LocalTime? {
+        val session = db.sessionDao().findMostRecentExcluding(excludeSessionId) ?: return null
+        val events = runCatching { db.eventDao().findBySession(session.id).map { it.toModel() } }
+            .onFailure { Log.w(TAG, "Failed to load events for session ${session.id}", it) }
+            .getOrDefault(emptyList())
+        val aiRows = db.aiMessageDao().findBySession(session.id)
+        val plan = AiPlanMapper.buildPlan(aiRows, streaming = null, events = events)
+        return plan?.iterations?.lastOrNull { it.thread.newAlarmTime != null }?.thread?.newAlarmTime
     }
 }
-
-data class HistoryPage(val sessions: List<TimelineSession>, val hasMore: Boolean)
