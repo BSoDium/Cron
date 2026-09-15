@@ -98,7 +98,7 @@ internal fun HomePlanContent(
     onNotifEnable: () -> Unit,
     onAutoAlarmsChange: (Boolean) -> Unit,
     onAlarmTimeClick: (() -> Unit)? = null,
-    onOpenAiRun: (turnIndex: Int, sessionId: String) -> Unit,
+    onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
     onNavigateToHistory: () -> Unit,
 ) {
     val listState = rememberLazyListState(cacheWindow = LazyLayoutCacheWindow(ahead = TIMELINE_PREFETCH_AHEAD))
