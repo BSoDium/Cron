@@ -10,13 +10,14 @@ data class HomeUiState(
     val dateLabel: String = "",
 
     val aiPlan: AiPlanUi? = null,
-    val timeline: List<TimelineItem> = emptyList(),
+    /** Only the current/live session's own items — the settled past is Paging-backed
+     *  ([HomeViewModel.historyFlow]), collected separately by the UI, not folded into this state (#187). */
+    val liveTimeline: List<TimelineItem> = emptyList(),
     /** [TimelineItem.id]s that are genuinely new since the last emission of this flow's lifetime —
      *  the entrance-animation gate (Round 32). Empty on the very first emission (cold start) and on
      *  any emission that's identical to the previous one (e.g. a Home→Settings→back round trip with
      *  no underlying data change) — see [diffNewlyArrivedIds]. */
     val newlyArrivedIds: Set<String> = emptySet(),
-    val hasMoreHistory: Boolean = false,
     val isRetrying: Boolean = false,
     /** False until the backing flows have produced their first value — gates the onboarding so it
      *  doesn't flash over an existing plan during the cold-start load. */

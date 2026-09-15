@@ -4,6 +4,8 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import androidx.work.WorkInfo
 import fr.bsodium.cron.CronApplication
 import fr.bsodium.cron.ai.StreamingTurnStore
@@ -18,7 +20,6 @@ import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.db.toModel
 import fr.bsodium.cron.service.SleepSessionService
 import fr.bsodium.cron.session.model.ActionType
-import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.Instruction
 import fr.bsodium.cron.session.model.SessionEvent
@@ -27,6 +28,7 @@ import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.worker.AiTurnWorker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,10 +48,9 @@ import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 
-/** `timelineFlow`'s emitted value (Round 32) — the display-bound [capped] timeline plus which ids in
- *  it are genuinely new since the previous emission. A local pairing, not a field on [CappedTimeline]
- *  itself, which stays purely about truncation and is used standalone elsewhere. */
-private data class TimelineFlowResult(val capped: CappedTimeline, val newlyArrivedIds: Set<String>)
+/** `timelineFlow`'s emitted value (Round 32) — the live timeline plus which ids in it are genuinely
+ *  new since the previous emission. */
+private data class TimelineFlowResult(val items: List<TimelineItem>, val newlyArrivedIds: Set<String>)
 
 /** Stateful wrapper around [diffNewlyArrivedIds] — the one piece of mutable bookkeeping the diff
  *  itself doesn't need to carry. Held as a [HomeViewModel] field specifically because it must survive
@@ -116,9 +117,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else db.eventDao().observeBySession(id).map { rows -> rows.map { it.toModel() } }.flowOn(Dispatchers.Default)
         }
 
-    private val _historicalSessions = MutableStateFlow<List<TimelineSession>>(emptyList())
-    private val _moreHistoryAvailable = MutableStateFlow(false)
     private val _dismissedSettingsAt = MutableStateFlow(0L)
+
+    /** The settled past, Paging-backed (#187/#230) — collected by the UI via `collectAsLazyPagingItems()`,
+     *  deliberately NOT folded into [uiState]: `PagingData` isn't a plain equatable value the rest of
+     *  [HomeUiState] is built from, and Compose's own Paging integration expects to own the
+     *  `Flow<PagingData<T>>` collection itself. `flatMapLatest` keyed on the live session's id tears
+     *  down and rebuilds the Pager whenever that id changes (a fresh session bootstraps, or there's no
+     *  session at all) — this is also what replaces the old manual "reload on session-complete" trigger,
+     *  since Room's own PagingSource invalidation already reacts to any change to the `sessions` table
+     *  in between. */
+    val historyFlow: Flow<PagingData<TimelineItem>> = sessionFlow
+        .map { it?.id }
+        .distinctUntilChanged()
+        .flatMapLatest { currentId -> timelineRepo.historyFlow(excludeSessionId = currentId) }
+        .cachedIn(viewModelScope)
+
+    /** The most recent OLDER session's own last resolved alarm time, for [timelineFlow]'s
+     *  carry-over-into-turn-0 patch below — a fresh session's own turn 0 never has an intra-session
+     *  previous time to compare against. A single-row DB read per session-id change, not reactive to
+     *  history itself changing — the carried-over value is fixed at bootstrap time, same as before. */
+    private val mostRecentOlderAlarmTimeFlow = sessionFlow
+        .map { it?.id }
+        .distinctUntilChanged()
+        .map { currentId -> timelineRepo.mostRecentOlderAlarmTime(excludeSessionId = currentId) }
+        .flowOn(Dispatchers.IO)
 
     private val settingsChangedFlow = combine(
         sessionFlow.map { it?.lastAiCallAt ?: 0L },
@@ -152,20 +175,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         aiPlanFlow,
         currentEventsFlow,
         StreamingTurnStore.active,
-        _historicalSessions,
-    ) { sessionId, plan, events, streaming, history ->
-        val dedupedHistory = if (sessionId != null && plan != null) {
-            history.filter { it.sessionId != sessionId }
-        } else {
-            history
-        }
-        /** A fresh session's own turn 0 never has an intra-session previous time to compare
-         *  against, so carry over the most recent older session's own last resolved alarm time —
-         *  `dedupedHistory` is guaranteed most-recent-session-first (`SessionDao.findPaginated`
-         *  orders by `createdAt DESC`), so the first match is the right one. */
-        val carryOverPrev: LocalTime? = dedupedHistory.firstNotNullOfOrNull { session ->
-            session.iterations.lastOrNull { it.thread.newAlarmTime != null }?.thread?.newAlarmTime
-        }
+        mostRecentOlderAlarmTimeFlow,
+    ) { sessionId, plan, events, streaming, carryOverPrev ->
         val currentSession = if (sessionId != null && plan != null) {
             val patchedIterations = if (carryOverPrev != null && plan.iterations.isNotEmpty()) {
                 val first = plan.iterations.first()
@@ -186,14 +197,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             null
         }
-        val allSessions = listOfNotNull(currentSession) + dedupedHistory
-        val rawItems = buildTimeline(allSessions)
-        /** Diffed on the uncapped id set, before `capTimeline` truncates: a genuinely new item is
-         *  always sorted near the front and effectively never truncated away, and comparing against
-         *  the previous *uncapped* set means an old item that scrolls back into the cap window
-         *  purely because the cap boundary shifted is correctly not misreported as new. */
+        val rawItems = buildTimeline(listOfNotNull(currentSession))
         val newlyArrived = newlyArrivedIdTracker.diff(rawItems.mapTo(mutableSetOf()) { it.id })
-        TimelineFlowResult(capped = capTimeline(rawItems), newlyArrivedIds = newlyArrived)
+        TimelineFlowResult(items = rawItems, newlyArrivedIds = newlyArrived)
     }.flowOn(Dispatchers.Default)
 
     private val statusFlow = combine(
@@ -224,8 +230,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         aiPlanFlow,
         timelineFlow,
         statusFlow,
-        _moreHistoryAvailable,
-    ) { display, plan, timeline, status, moreHistoryAvailable ->
+    ) { display, plan, timeline, status ->
         HomeUiState(
             sessionDisplay = display.session,
             greetingPrefix = greetingPrefix(),
@@ -233,9 +238,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             dateLabel = formatDateLabel(display.session, status.autoAlarmsEnabled),
 
             aiPlan = plan,
-            timeline = timeline.capped.items,
+            liveTimeline = timeline.items,
             newlyArrivedIds = timeline.newlyArrivedIds,
-            hasMoreHistory = timeline.capped.truncated || moreHistoryAvailable,
             // Sourced from plan itself (not a second StreamingTurnStore.active subscription) so the spinner and the response body can never disagree in one emission (#198).
             isRetrying = status.isRetrying || plan?.iterations?.lastOrNull()?.thread?.isStreaming == true,
             initialized = true,
@@ -246,19 +250,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             eveningTriggerTime = status.eveningTriggerTime,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
-
-    private fun loadRecentHistory() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentId = db.sessionDao().findCurrent()?.id
-            val page = timelineRepo.loadHistory(
-                excludeSessionId = currentId,
-                limit = HISTORY_LOAD_SIZE,
-                offset = 0,
-            )
-            _historicalSessions.value = page.sessions
-            _moreHistoryAvailable.value = page.hasMore
-        }
-    }
 
     /** Hide the "settings changed" reminder until the next plan-affecting change. */
     fun dismissSettingsReminder() {
@@ -293,17 +284,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        loadRecentHistory()
-
-        viewModelScope.launch {
-            sessionFlow
-                .map { it?.status }
-                .distinctUntilChanged()
-                .collect { status ->
-                    if (status == SessionStatus.Complete.name) loadRecentHistory()
-                }
-        }
-
         // Drive the "working" flag and failure banner off the real WorkManager turn, not a fixed delay: a tap sets isRetrying true optimistically, cleared on terminal state, surfacing a FAILED turn's output-data failure reason.
         viewModelScope.launch {
             sessionFlow.map { it?.id }.distinctUntilChanged()
@@ -464,6 +444,4 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         const val TAG = "HomeViewModel"
     }
 }
-
-private const val HISTORY_LOAD_SIZE = 10
 

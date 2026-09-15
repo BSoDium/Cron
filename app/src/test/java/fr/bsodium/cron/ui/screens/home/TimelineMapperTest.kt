@@ -20,15 +20,6 @@ import kotlin.time.Duration.Companion.hours
 
 class TimelineMapperTest {
 
-    private fun events(count: Int): List<TimelineItem> = (0 until count).map { i ->
-        TimelineItem.Event(
-            timestamp = Instant.fromEpochMilliseconds(i.toLong()),
-            trigger = TriggerType.AlarmDismissed,
-            label = "Event $i",
-            detail = null,
-        )
-    }
-
     private fun dayHeader(date: LocalDate) = TimelineItem.DayHeader(
         date = date,
         timestamp = Instant.fromEpochMilliseconds(0),
@@ -53,45 +44,6 @@ class TimelineMapperTest {
         isStreaming = false,
         isLatest = false,
     )
-
-    @Test
-    fun under_cap_is_untouched_and_not_truncated() {
-        val result = capTimeline(events(10), cap = 24)
-        assertEquals(10, result.items.size)
-        assertFalse(result.truncated)
-    }
-
-    @Test
-    fun exactly_at_cap_is_not_truncated() {
-        val result = capTimeline(events(24), cap = 24)
-        assertEquals(24, result.items.size)
-        assertFalse(result.truncated)
-    }
-
-    @Test
-    fun over_cap_keeps_the_leading_slice_and_flags_truncated() {
-        val items = events(30)
-        val result = capTimeline(items, cap = 24)
-        assertEquals(24, result.items.size)
-        assertTrue(result.truncated)
-        assertEquals(items.take(24), result.items)
-    }
-
-    @Test
-    fun headers_do_not_count_toward_the_cap() {
-        val items = listOf(dayHeader(LocalDate(2026, 7, 1))) + events(24)
-        val result = capTimeline(items, cap = 24)
-        assertEquals(24, result.items.count { it !is TimelineItem.DayHeader })
-        assertFalse(result.truncated)
-    }
-
-    @Test
-    fun a_trailing_dangling_header_is_dropped() {
-        val items = events(5) + dayHeader(LocalDate(2026, 7, 1))
-        val result = capTimeline(items, cap = 24)
-        assertEquals(5, result.items.size)
-        assertTrue(result.items.none { it is TimelineItem.DayHeader })
-    }
 
     /** DayHeader is purely a sticky decoration — it's still inserted structurally into the list at
      *  every local-day boundary so `stickyHeader` has something to pin, but it must stay invisible

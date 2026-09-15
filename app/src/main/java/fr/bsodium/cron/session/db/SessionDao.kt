@@ -56,6 +56,11 @@ interface SessionDao {
     @Query("SELECT * FROM sessions WHERE status != 'Complete' ORDER BY createdAt DESC LIMIT 1")
     suspend fun findCurrent(): SessionEntity?
 
+    // Backs HomeViewModel's carry-over-alarm-time patch (#230) -- a single-row read, deliberately not
+    // reusing findPaginated's limit/offset shape for what's always exactly one row.
+    @Query("SELECT * FROM sessions WHERE (:excludeSessionId IS NULL OR id != :excludeSessionId) ORDER BY createdAt DESC LIMIT 1")
+    suspend fun findMostRecentExcluding(excludeSessionId: String?): SessionEntity?
+
     @Query("SELECT * FROM sessions ORDER BY createdAt DESC LIMIT 1")
     fun observeLatest(): Flow<SessionEntity?>
 
