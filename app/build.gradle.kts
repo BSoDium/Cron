@@ -103,10 +103,14 @@ android {
                 signingConfig = it
             }
         }
-        // AOT-compiled, debug-signed, never shipped — see docs/performance.md "The debug-build trap".
+        // AOT-compiled, never shipped — see docs/performance.md "The debug-build trap". Mirrors the
+        // `debug` build type's own signing choice just above (docs/signing.md), not a hardcoded plain
+        // debug keystore — otherwise this drifts out of sync with whatever cert debug/release builds
+        // actually carry and fails to install as an update over them (signature mismatch).
         create("benchmark") {
             initWith(getByName("release"))
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
+                ?: signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             isDebuggable = false
         }
