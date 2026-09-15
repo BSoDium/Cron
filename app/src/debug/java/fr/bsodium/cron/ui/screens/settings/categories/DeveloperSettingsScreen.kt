@@ -334,6 +334,25 @@ private fun FsmEventInjector(
                     data = EventData.Empty,
                 ))
             }
+            // Goes through the real SessionFsm.onSnooze path (#154), not onEvent -- "Alarm Snoozed"
+            // above only records the trigger and never touches escalation. Tap 3x: the first two
+            // report aiTriggered=true; the third flips to false and arms a fallback alarm ~5 min out
+            // (visible on Home's "you'll wake up at" card) instead of calling AI.
+            InjectButton("Snooze (escalation)", scope) {
+                val session = repo.findCurrent()
+                if (session == null) {
+                    null
+                } else {
+                    val event = SessionEvent(
+                        trigger = TriggerType.AlarmSnoozed,
+                        timestamp = Clock.System.now(),
+                        data = EventData.AlarmInteraction(snoozeDurationMinutes = 10, snoozeCount = session.snoozeCount + 1),
+                    )
+                    val aiTriggered = SessionFsm(context, repo).onSnooze(session, event)
+                    val newCount = repo.findById(session.id)?.snoozeCount
+                    "aiTriggered=$aiTriggered, snoozeCount=$newCount"
+                }
+            }
             InjectButton("Out Of Bed", scope) {
                 inject(SessionEvent(
                     trigger = TriggerType.OutOfBedConfirmed,
