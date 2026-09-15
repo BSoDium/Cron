@@ -58,9 +58,11 @@ class SessionFsm(
      * same stale snapshot and the final status becomes ordering-dependent (#153).
      */
     suspend fun onEvent(event: SessionEvent): String? = mutex.withLock { withContext(Dispatchers.IO) {
-        // Auto-plan off = full stand-down: drop every automatic event, except a manual run (isManual), which stays exempt.
-        if (!SettingsRepository(context).autoAlarmsEnabledNow() &&
-            (event.data as? EventData.EveningPlan)?.isManual != true
+        if (shouldDropForAutoPlanOff(
+                trigger = event.trigger,
+                isManualEveningPlan = (event.data as? EventData.EveningPlan)?.isManual == true,
+                autoPlanEnabled = SettingsRepository(context).autoAlarmsEnabledNow(),
+            )
         ) {
             Log.d(TAG, "Auto-plan disabled — ignoring ${event.trigger}")
             return@withContext null
@@ -241,21 +243,27 @@ class SessionFsm(
      * Handle an alarm snooze, called from AlarmReceiver and bypassing the main
      * onEvent path. Returns true if AI was triggered for a replan, false if
      * snooze count ≥ 3 bypassed AI and scheduled now + 5 min directly.
+     *
+     * Takes the caller's already-fetched [session], not just its id (#154): the ≥3 branch needs
+     * [SleepSession.timezone]/[SleepSession.plan]/[SleepSession.date] to arm the fallback alarm, and
+     * re-fetching those by id here raced the session being deleted between the caller's read and this
+     * one — a rare loss silently returned `false` having scheduled nothing, with the ringing
+     * notification already cancelled and no alarm re-armed. None of those fields change between the
+     * caller's read and this call, so there's nothing to gain from reading them twice.
      */
-    suspend fun onSnooze(sessionId: String, event: SessionEvent): Boolean =
+    suspend fun onSnooze(session: SleepSession, event: SessionEvent): Boolean =
         mutex.withLock {
             withContext(Dispatchers.IO) {
+                val sessionId = session.id
                 repository.appendEvent(sessionId, event)
                 val newCount = repository.incrementSnoozeCount(sessionId)
 
                 if (newCount >= 3) {
-                    val session = repository.findById(sessionId) ?: return@withContext false
-                    val tz = TimeZone.of(session.timezone)
                     alarmScheduler.schedule(
                         requested = Clock.System.now() + 5.minutes,
                         hardLatest = session.plan.hardLatest,
                         sessionDate = session.date,
-                        timezone = tz,
+                        timezone = TimeZone.of(session.timezone),
                         label = "Wake up",
                         sessionId = sessionId,
                     )
@@ -279,12 +287,21 @@ class SessionFsm(
         /** How long past either ceiling in [sessionWindowEnd] a session stays live. */
         private val SESSION_WINDOW_GRACE = 3.hours
 
+        /** Direct user actions or the safety net itself firing. Every gate in this class — window
+         *  expiry ([shouldGateEvent]) and auto-plan-off ([shouldDropForAutoPlanOff]) — must let these
+         *  through regardless of the app's automation state: dropping a dismiss/snooze/hard-latest-fire
+         *  leaves the session stuck `Monitoring` forever with none of the `Complete`-path cleanup run. */
+        private val SAFETY_TRIGGERS = setOf(
+            TriggerType.AlarmDismissed,
+            TriggerType.AlarmSnoozed,
+            TriggerType.HardLatestFired,
+        )
+
         /** Signals that only matter while the session is still live: sensor inferences about the
          *  user's physical state, plus a calendar edit whose relevance to *this* morning's alarm ends
          *  when the morning does. A reading of "dark and still" or a changed event, hours after the
          *  session's window closed, isn't evidence about this session — it's an unrelated part of the
-         *  day (a nap, an errand, tomorrow's calendar). AlarmDismissed/AlarmSnoozed/HardLatestFired are
-         *  direct user actions or the safety net itself firing, so they always bypass this gate. */
+         *  day (a nap, an errand, tomorrow's calendar). [SAFETY_TRIGGERS] always bypass this gate. */
         private val WINDOW_GATED_TRIGGERS = setOf(
             TriggerType.SleepOnset,
             TriggerType.MidSleepActivity,
@@ -343,6 +360,15 @@ class SessionFsm(
          *  [WINDOW_GATED_TRIGGERS] member arriving after the session's active window has closed. */
         internal fun shouldGateEvent(session: SleepSession, trigger: TriggerType, now: Instant): Boolean =
             trigger in WINDOW_GATED_TRIGGERS && !isWithinActiveWindow(session, now)
+
+        /** Whether an event reaching [onEvent] should be dropped outright because auto-plan is off —
+         *  every automatic trigger is, except a [SAFETY_TRIGGERS] member (#156) or a manually-triggered
+         *  evening plan. */
+        internal fun shouldDropForAutoPlanOff(
+            trigger: TriggerType,
+            isManualEveningPlan: Boolean,
+            autoPlanEnabled: Boolean,
+        ): Boolean = !autoPlanEnabled && trigger !in SAFETY_TRIGGERS && !isManualEveningPlan
 
         /**
          * Pure status transition, unit-testable: given the session's current status and an incoming

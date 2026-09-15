@@ -238,4 +238,47 @@ class SessionFsmTest {
         assertFalse(SessionFsm.shouldGateEvent(hardLatestSession, TriggerType.AlarmSnoozed, outsideWindow))
         assertFalse(SessionFsm.shouldGateEvent(hardLatestSession, TriggerType.HardLatestFired, outsideWindow))
     }
+
+    @Test
+    fun auto_plan_off_drops_an_ordinary_automatic_trigger() {
+        assertTrue(
+            SessionFsm.shouldDropForAutoPlanOff(TriggerType.SleepOnset, isManualEveningPlan = false, autoPlanEnabled = false),
+        )
+    }
+
+    /** #156: a dropped dismiss/snooze/hard-latest-fire would leave the session stuck `Monitoring`
+     *  forever, since none of the `Complete`-path cleanup those triggers drive would ever run. */
+    @Test
+    fun auto_plan_off_still_admits_safety_triggers() {
+        assertFalse(
+            SessionFsm.shouldDropForAutoPlanOff(TriggerType.AlarmDismissed, isManualEveningPlan = false, autoPlanEnabled = false),
+        )
+        assertFalse(
+            SessionFsm.shouldDropForAutoPlanOff(TriggerType.AlarmSnoozed, isManualEveningPlan = false, autoPlanEnabled = false),
+        )
+        assertFalse(
+            SessionFsm.shouldDropForAutoPlanOff(TriggerType.HardLatestFired, isManualEveningPlan = false, autoPlanEnabled = false),
+        )
+    }
+
+    @Test
+    fun auto_plan_off_still_admits_a_manually_triggered_evening_plan() {
+        assertFalse(
+            SessionFsm.shouldDropForAutoPlanOff(TriggerType.EveningPlan, isManualEveningPlan = true, autoPlanEnabled = false),
+        )
+    }
+
+    @Test
+    fun auto_plan_off_still_drops_a_non_manual_evening_plan() {
+        assertTrue(
+            SessionFsm.shouldDropForAutoPlanOff(TriggerType.EveningPlan, isManualEveningPlan = false, autoPlanEnabled = false),
+        )
+    }
+
+    @Test
+    fun auto_plan_on_never_drops_anything() {
+        assertFalse(
+            SessionFsm.shouldDropForAutoPlanOff(TriggerType.SleepOnset, isManualEveningPlan = false, autoPlanEnabled = true),
+        )
+    }
 }
