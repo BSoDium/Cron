@@ -19,4 +19,7 @@ object SleepTuning {
 
     fun outOfBedConfirmThreshold(context: Context): Duration =
         if (SleepTestPrefs(context).fastOnset) 5.seconds else 90.seconds
+
+    fun sustainedMovementThreshold(context: Context): Duration =
+        if (SleepTestPrefs(context).fastOnset) 5.seconds else 10.minutes
 }
