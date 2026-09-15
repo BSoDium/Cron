@@ -104,37 +104,56 @@ fun capTimeline(items: List<TimelineItem>, cap: Int = TIMELINE_ITEM_CAP): Capped
 fun diffNewlyArrivedIds(currentIds: Set<String>, previousIds: Set<String>?): Set<String> =
     if (previousIds == null) emptySet() else currentIds - previousIds
 
-fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
+/** One session's own [TimelineItem.AiRun]/[TimelineItem.Event] rows, sorted latest-first, `isLatest`
+ *  always false (only [buildTimeline]'s own single-session-list call site — the live session — ever
+ *  promotes a row to Latest). Extracted so the paged historical feed
+ *  (`TimelineRepository.sessionToTimelineItems`) can reuse the exact same per-session mapping
+ *  [buildTimeline] uses for the live session, one session at a time, without needing every other loaded
+ *  session in memory — the sort happens *inside* this function, not by a caller, because the paging
+ *  pipeline concatenates sessions without ever re-sorting the combined stream (unlike [buildTimeline]
+ *  below, which still does one global sort across every session it's handed). Safe to map + sort
+ *  independently per session, with no cross-session sort required afterward, because sessions are
+ *  non-overlapping absolute-time windows: a session's own oldest item (its evening-plan run) is always
+ *  later in absolute time than the next-older session's newest item (that session's own morning
+ *  wake-up) — even though the two routinely share a calendar date, which is exactly what
+ *  [historyDaySeparator]'s KDoc walks through. */
+internal fun buildSessionItems(session: TimelineSession): List<TimelineItem> {
     val items = mutableListOf<TimelineItem>()
 
-    for (session in sessions) {
-        val aiTurnTimestamps = session.iterations.mapNotNull { it.ranAtEpochMs }.toSet()
-
-        for (iter in session.iterations) {
-            val ts = iter.ranAtEpochMs?.let { Instant.fromEpochMilliseconds(it) } ?: continue
-            items += TimelineItem.AiRun(
-                timestamp = ts,
-                iteration = iter,
-                sessionId = session.sessionId,
-                isStreaming = iter.turnIndex == session.streamingTurnIndex,
-                isLatest = false,
-            )
-        }
-
-        for (event in session.events) {
-            if (event.trigger !in SHOWN_TRIGGERS) continue
-            if (event.trigger == TriggerType.EveningPlan) continue
-            val detail = eventDetail(event.trigger, event.data)
-            items += TimelineItem.Event(
-                timestamp = event.timestamp,
-                trigger = event.trigger,
-                label = eventLabel(event.trigger),
-                detail = detail?.text,
-                detailEmphasis = detail?.emphasis,
-            )
-        }
+    for (iter in session.iterations) {
+        val ts = iter.ranAtEpochMs?.let { Instant.fromEpochMilliseconds(it) } ?: continue
+        items += TimelineItem.AiRun(
+            timestamp = ts,
+            iteration = iter,
+            sessionId = session.sessionId,
+            isStreaming = iter.turnIndex == session.streamingTurnIndex,
+            isLatest = false,
+        )
     }
 
+    for (event in session.events) {
+        if (event.trigger !in SHOWN_TRIGGERS) continue
+        if (event.trigger == TriggerType.EveningPlan) continue
+        val detail = eventDetail(event.trigger, event.data)
+        items += TimelineItem.Event(
+            timestamp = event.timestamp,
+            trigger = event.trigger,
+            label = eventLabel(event.trigger),
+            detail = detail?.text,
+            detailEmphasis = detail?.emphasis,
+        )
+    }
+
+    return items.sortedByDescending { it.timestamp }
+}
+
+fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
+    val items = mutableListOf<TimelineItem>()
+    sessions.forEach { items += buildSessionItems(it) }
+
+    // Each session's own items are already sorted (buildSessionItems), but sessions themselves aren't
+    // guaranteed to arrive in order here (unlike the paging pipeline's own createdAt-DESC query) -- keep
+    // this global sort so buildTimeline stays correct regardless of caller-supplied session order.
     items.sortByDescending { it.timestamp }
 
     var latestFound = false
@@ -149,6 +168,24 @@ fun buildTimeline(sessions: List<TimelineSession>): List<TimelineItem> {
 
     // Defensive: a data-layer race can occasionally surface the same underlying event twice; the LazyColumn key must be unique regardless, so collapse duplicates here rather than let a rare data race crash the UI.
     return insertDayHeaders(withLatest).distinctBy { it.id }
+}
+
+/** [TimelineRepository.historyFlow]'s `insertSeparators` generator for the paged historical feed —
+ *  mirrors [insertDayHeaders]'s per-boundary rule (skip today) in Paging's stateless pairwise shape.
+ *  Deliberately returns `null` for the leading case (`before == null`): the historical feed never renders
+ *  its own leading day header — that boundary is the live-session→history SEAM, and only
+ *  `SessionTimeline.kt`'s `seamDayHeader` (which has both sides of it in scope) owns it, to avoid
+ *  double-counting whenever the live session's last item and history's first item share a calendar date
+ *  — which happens on essentially every ordinary night, since a session's own evening-plan item and the
+ *  next-older session's morning wake-up item routinely fall on the same [LocalDate]. */
+internal fun historyDaySeparator(before: TimelineItem?, after: TimelineItem?): TimelineItem.DayHeader? {
+    if (before == null || after == null) return null
+    val tz = TimeZone.currentSystemDefault()
+    val beforeDate = before.timestamp.toLocalDateTime(tz).date
+    val afterDate = after.timestamp.toLocalDateTime(tz).date
+    if (beforeDate == afterDate) return null
+    val today = Clock.System.now().toLocalDateTime(tz).date
+    return if (afterDate != today) TimelineItem.DayHeader(date = afterDate, timestamp = afterDate.atStartOfDayIn(tz)) else null
 }
 
 /** Threads a [TimelineItem.DayHeader] in front of the first item of each local day — except today's:

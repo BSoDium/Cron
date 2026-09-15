@@ -12,9 +12,14 @@ import fr.bsodium.cron.session.model.SignalConfidence
 import fr.bsodium.cron.session.model.SleepSession
 import fr.bsodium.cron.session.model.SleepStage
 import fr.bsodium.cron.session.model.TriggerType
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.minus
+import kotlin.time.Duration.Companion.hours
 
 /** Deterministic sample-data builders shared across the unit + Robolectric tests. */
 object Fixtures {
@@ -96,4 +101,35 @@ object Fixtures {
         createdAt = createdAt,
         updatedAt = updatedAt,
     )
+
+    /** [count] sessions, each on its own consecutive calendar date ending at [startingAt] (index 0 is
+     *  the most recent), each carrying a same-day SleepOnset/OutOfBedConfirmed event pair. Enough to
+     *  exercise real pagination deterministically -- multiple Pager pages, one day-header boundary
+     *  between every pair of adjacent sessions -- without HistorySeeder's DB-write-based narrative
+     *  realism (callers insert these via SessionDao/EventDao themselves). Built against
+     *  [TimeZone.currentSystemDefault] -- the same zone `historyDaySeparator`/`insertDayHeaders` use to
+     *  derive a "local date" -- not a fixed zone, so "same calendar date" here actually means the same
+     *  thing production code will compute it to mean, regardless of the test machine's own zone. Both
+     *  events sit well inside one local day (20h/22h past local midnight) so neither ever wraps into the
+     *  next date, and [startingAt]'s default (2026-05-22 minus [count]) keeps every seeded date safely
+     *  away from the real "today" a today-suppression check runs against. */
+    fun manySessions(count: Int, startingAt: LocalDate = DATE): List<SleepSession> {
+        val tz = TimeZone.currentSystemDefault()
+        return (0 until count).map { i ->
+            val date = startingAt.minus(i, DateTimeUnit.DAY)
+            val onset = date.atStartOfDayIn(tz) + 20.hours
+            val wake = date.atStartOfDayIn(tz) + 22.hours
+            session(
+                id = "history-session-$i",
+                date = date,
+                status = SessionStatus.Complete,
+                createdAt = onset,
+                updatedAt = wake,
+                events = listOf(
+                    SessionEvent(trigger = TriggerType.SleepOnset, timestamp = onset, data = EventData.Empty),
+                    SessionEvent(trigger = TriggerType.OutOfBedConfirmed, timestamp = wake, data = EventData.Empty),
+                ),
+            )
+        }
+    }
 }
