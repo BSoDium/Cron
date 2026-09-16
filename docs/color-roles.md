@@ -1394,3 +1394,38 @@ live report) — visible on any row, any icon, well after everything had settled
   that reproduced reliably (3 for 3) before the fix. Full local gate green;
   `TimelineTrackGeometryTest.kt` gained direct coverage for both sides of the new gate (stale-but-at-rest
   stays Live; stale-while-scrolling still falls back, preserving Round 40's own protection).
+
+Round 44 — a fourth, purely visual symptom in `SessionTimeline.kt`'s own title `Crossfade` (no
+`TimelineTrackOverlay` involvement at all): when a row demoted from hero to plain, the demoted "Test
+plan" text sat noticeably higher than its final resting position for the whole fade, then snapped down
+to center the instant the fade finished — no animation on the snap itself, just a hard jump.
+
+- **Root cause, found by reading `Crossfade`'s actual source** (`androidx.compose.animation.Crossfade`,
+  not guessed at): its `Transition<T>.Crossfade` overload renders every currently-fading state
+  simultaneously inside one internal `Box(modifier)`, each wrapped only in a bare
+  `Box(Modifier.graphicsLayer { alpha = ... })` — no `contentAlignment` anywhere in that chain, so every
+  branch top-aligns by default, and the union `Box`'s own height is the max of whichever branches are
+  still present. This call site wrapped the whole `Crossfade` in an outer
+  `Box(Modifier.heightIn(min = heroMinHeight), contentAlignment = Alignment.CenterStart)`, expecting that
+  outer alignment to center the demoted branch — but the outer `Box` only gets to align *Crossfade's own
+  union box as a whole*; it has no say in how each branch sits *inside* that union box. While the hero
+  branch (two lines, ≈`heroMinHeight` tall) was still fading out, the union box was exactly
+  `heroMinHeight` tall and the shorter demoted branch (one line), top-aligned within it, rendered near the
+  top — not centered. The instant the hero branch left `currentlyVisible` at fade-end, the union box
+  collapsed to the demoted branch's own short natural height, and *then* the outer wrapper's
+  `CenterStart` re-centered that now-tiny box within `heroMinHeight` — the visible snap. Confirmed by
+  screen-recording a live replan and reading frames straddling the fade: the demoted text sat at the same
+  wrong (too-high) position across the whole fade-out, with the hero content's kicker/time lines visibly
+  ghosting through both above *and* below it — proof both branches were genuinely co-present and
+  independently top-aligned, not one single continuously-repositioning element.
+- **Fix: force every branch to `heroMinHeight`, centered, instead of relying on an outer wrapper.**
+  Moved the `Modifier.height(heroMinHeight)` + `Alignment.CenterStart` `Box` *inside* `Crossfade`'s own
+  content lambda, so it wraps each branch individually rather than the whole `Crossfade` once. Now both
+  branches always measure to exactly `heroMinHeight` — the union box never grows or shrinks as branches
+  come and go, so there's nothing for an outer wrapper to re-center after the fact. The now-redundant
+  outer `Box`/`heightIn` wrapper was removed entirely.
+- **Verified live**: rebuilt, reinstalled in place (`firstInstallTime` unchanged), screen-recorded a
+  replan, and read frames spanning the entire hero→demoted fade. The demoted title sits at its final
+  resting position from the very first fading frame, with the hero content's kicker/time lines fading out
+  symmetrically above and below it — no jump at any point in the sequence. `./gradlew
+  :app:compileDebugKotlin` clean (one now-unused `heightIn` import removed).

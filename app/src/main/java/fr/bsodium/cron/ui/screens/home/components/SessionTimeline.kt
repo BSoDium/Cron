@@ -12,7 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
@@ -347,16 +346,16 @@ internal fun AiRunNode(
                             CronTypography.timelineHeroTimeNew.lineHeight.toDp()
                     }
                 }
-                // Fades the hero headline ↔ plain system-message swap instead of cutting instantly, pairing with TimelineNode's animated anchor-radius shrink; heightIn lives on this wrapping Box (not Crossfade, which has no contentAlignment and top-aligns internally) so centering the demoted text belongs here.
-                Box(
-                    modifier = Modifier.heightIn(min = heroMinHeight),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    Crossfade(
-                        targetState = item.isLatest,
-                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                        label = "ai-run-hero-demote",
-                    ) { isLatest ->
+                // Crossfade's own internal Box top-aligns both branches and only shrinks to the demoted branch's shorter natural height once the hero branch is fully faded out and removed — so reserving heroMinHeight on an outer wrapper alone left the demoted title sitting near the top for the whole fade, then snapping down to center the instant the hero branch dropped out. Forcing every branch to heroMinHeight itself, centered, keeps the title's position continuous across that drop.
+                Crossfade(
+                    targetState = item.isLatest,
+                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                    label = "ai-run-hero-demote",
+                ) { isLatest ->
+                    Box(
+                        modifier = Modifier.height(heroMinHeight),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
                         if (isLatest) {
                             // Computed here from this branch's own (smart-cast true) `isLatest`, not the outer `item.isLatest` — Crossfade still composes this branch for one extra frame while fading it OUT during a demotion, by which point `item.isLatest` has already flipped false; reading the outer value here made that fade-out frame render with newTime/prevTime/kickerText all nulled out, flashing the NO_ALARM_LABEL fallback below (Phase 10, docs/color-roles.md).
                             val newTime = iter.thread.newAlarmTime
