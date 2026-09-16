@@ -176,7 +176,12 @@ class MainActivity : ComponentActivity() {
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
                 val useCompactNav = compactNavPref
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-                val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) { TopAppBarState(0f, 0f, 1f) }
+                // Mirrors rememberTopAppBarState()'s own defaults, NOT (0f, 0f, 1f): an
+                // initialHeightOffsetLimit of 0f (rather than -Float.MAX_VALUE) left the collapsed
+                // small title permanently invisible — see docs/compose-gotchas.md.
+                val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) {
+                    TopAppBarState(-Float.MAX_VALUE, 0f, 0f)
+                }
                 val navigate: (String) -> Unit = { route ->
                     navController.navigate(route) {
                         popUpTo(ROUTE_HOME) {
