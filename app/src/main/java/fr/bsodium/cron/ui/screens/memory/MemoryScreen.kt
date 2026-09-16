@@ -24,6 +24,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,11 +38,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.memory.MemoryEntry
+import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.screens.memory.components.MemoryComposer
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Clock
 
@@ -53,7 +58,13 @@ import kotlinx.datetime.Clock
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun MemoryScreen(viewModel: MemoryViewModel, modifier: Modifier = Modifier) {
+fun MemoryScreen(
+    viewModel: MemoryViewModel,
+    fabRegistry: FabRegistry,
+    useCompactNav: Boolean,
+    modifier: Modifier = Modifier,
+    onComposerExpandedChange: (Boolean) -> Unit = {},
+) {
     val entries by viewModel.entries.collectAsState()
     val isMutating by viewModel.isMutating.collectAsState()
     MemoryContent(
@@ -61,6 +72,9 @@ fun MemoryScreen(viewModel: MemoryViewModel, modifier: Modifier = Modifier) {
         isMutating = isMutating,
         onSend = viewModel::sendInstruction,
         onDelete = viewModel::deleteEntry,
+        fabRegistry = fabRegistry,
+        useCompactNav = useCompactNav,
+        onComposerExpandedChange = onComposerExpandedChange,
         modifier = modifier,
     )
 }
@@ -72,6 +86,9 @@ internal fun MemoryContent(
     isMutating: Boolean,
     onSend: (String) -> Unit,
     onDelete: (Long) -> Unit,
+    fabRegistry: FabRegistry? = null,
+    useCompactNav: Boolean = false,
+    onComposerExpandedChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
@@ -85,6 +102,27 @@ internal fun MemoryContent(
         label = "memory-composer-bottom-padding",
     )
     val composerBottomPadding = composerBottomPaddingRaw.coerceAtLeast(0.dp)
+
+    // Compact nav: the collapsed trigger lives in CronFloatingNav's own row instead of floating
+    // here (same pill-shifts-left mechanism Home's FAB already uses) — publish/withdraw a
+    // FabAction as the composer opens and closes, mirroring HomeScreen's own fabRegistry usage.
+    val fabOwner = remember { Any() }
+    DisposableEffect(fabRegistry) {
+        onDispose { fabRegistry?.clear(fabOwner) }
+    }
+    LaunchedEffect(composerExpanded) {
+        onComposerExpandedChange(composerExpanded)
+    }
+    LaunchedEffect(composerExpanded, useCompactNav, fabRegistry) {
+        if (useCompactNav && !composerExpanded) {
+            fabRegistry?.set(
+                fabOwner,
+                FabAction(onClick = { composerExpanded = true }, icon = MaterialSymbol.AutoAwesome, label = "Remember"),
+            )
+        } else {
+            fabRegistry?.clear(fabOwner)
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
@@ -161,6 +199,7 @@ internal fun MemoryContent(
             enabled = !isMutating,
             expanded = composerExpanded,
             onExpandedChange = { composerExpanded = it },
+            showFab = !useCompactNav,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .imePadding()

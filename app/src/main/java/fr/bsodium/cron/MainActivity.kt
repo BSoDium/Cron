@@ -108,20 +108,27 @@ internal val tabExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> Ex
 }
 
 /**
- * Lets a screen publish its primary action to the [CronFloatingNav] FAB while
- * the screen is mounted. The FAB clears when the screen calls [clear] from its
- * onDispose hook, so other tabs don't inherit a stale action.
+ * Lets a screen publish its primary action to the [CronFloatingNav] FAB while the screen is
+ * mounted. The FAB clears when the screen calls [clear] from its onDispose hook, so other tabs
+ * don't inherit a stale action. [set]/[clear] take an `owner` token (each caller's own
+ * `remember { Any() }`) so an outgoing screen's onDispose — which can fire *after* the incoming
+ * screen has already mounted and published its own action, since NavHost keeps both composed for
+ * the duration of the tab transition — can't clear an action it no longer owns.
  */
 class FabRegistry {
     var action by mutableStateOf<FabAction?>(null)
         private set
+    private var owner: Any? = null
 
-    fun set(action: FabAction?) {
+    fun set(owner: Any, action: FabAction?) {
+        this.owner = owner
         this.action = action
     }
 
-    fun clear() {
-        action = null
+    fun clear(owner: Any) {
+        if (this.owner !== owner) return
+        this.owner = null
+        this.action = null
     }
 }
 
@@ -166,7 +173,6 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(currentRoute, jankMetricsState) {
                     jankMetricsState?.putState("Screen", currentRoute ?: "unknown")
                 }
-                val showBottomBar = currentRoute in TAB_ROUTES
                 // Pages with a PageAppBar own the status-bar strip; the top edge-fade would two-tone it against the bar's scrolled surfaceContainer shade, so suppress it there.
                 val hasTopAppBar = currentRoute?.startsWith("settings") == true
                 // Home owns its own top-of-screen occlusion via StickyAlarm's collapse-driven fade (HomeContent.kt) — layering this generic scrim on top produced a visible "double gradient" while scrolling.
@@ -175,6 +181,12 @@ class MainActivity : ComponentActivity() {
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
                 val useCompactNav = compactNavPref
+                // Memory's composer takes over the full bottom width while expanded in compact
+                // mode (same as CronFloatingNav's row would otherwise occupy) — hide the row
+                // underneath so the nav pill doesn't render on top of it.
+                var memoryComposerExpanded by rememberSaveable { mutableStateOf(false) }
+                val showBottomBar = currentRoute in TAB_ROUTES &&
+                    !(currentRoute == ROUTE_MEMORY && useCompactNav && memoryComposerExpanded)
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
                 // Mirrors rememberTopAppBarState()'s own defaults, NOT (0f, 0f, 1f): an
                 // initialHeightOffsetLimit of 0f (rather than -Float.MAX_VALUE) left the collapsed
@@ -302,7 +314,12 @@ class MainActivity : ComponentActivity() {
                                     popEnterTransition = tabEnter,
                                     popExitTransition = tabExit,
                                 ) {
-                                    MemoryScreen(viewModel = viewModel<MemoryViewModel>())
+                                    MemoryScreen(
+                                        viewModel = viewModel<MemoryViewModel>(),
+                                        fabRegistry = fabRegistry,
+                                        useCompactNav = useCompactNav,
+                                        onComposerExpandedChange = { memoryComposerExpanded = it },
+                                    )
                                 }
                                 settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                             }

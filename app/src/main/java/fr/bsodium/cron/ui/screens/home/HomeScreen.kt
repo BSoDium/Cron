@@ -109,12 +109,14 @@ fun HomeScreen(
     val fabLabel = if (isFirstRun) "Start planning" else "Re-plan"
     val fabSplitLabel = if (isFirstRun) "Run plan" else "Re-plan"
     val fabIcon = if (isFirstRun) MaterialSymbol.RocketLaunch else MaterialSymbol.Update
+    val fabOwner = remember { Any() }
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, splitLabel = fabSplitLabel, icon = fabIcon))
-        onDispose { fabRegistry.clear() }
+        fabRegistry.set(fabOwner, FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, splitLabel = fabSplitLabel, icon = fabIcon))
+        onDispose { fabRegistry.clear(fabOwner) }
     }
     LaunchedEffect(uiState.isRetrying, fabLabel, fabSplitLabel, fabIcon, fabRegistry) {
         fabRegistry.set(
+            fabOwner,
             FabAction(
                 onClick = viewModel::retryAiPlan,
                 working = uiState.isRetrying,

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -62,7 +63,10 @@ private val SEND_ICON_SIZE = 20.dp
  *  fixed delay — see CLAUDE.md's rule against `delay()`-as-completion-signal).
  *  Built on [BasicTextField] rather than [androidx.compose.material3.TextField] so the pill's own
  *  padding is the only padding in play — Material's TextField bakes in its own ~16dp content inset
- *  on top of whatever the caller adds, pushing the placeholder far past the pill's left edge. */
+ *  on top of whatever the caller adds, pushing the placeholder far past the pill's left edge.
+ *  [showFab] is false in compact-nav mode: there, the collapsed trigger lives in [fr.bsodium.cron.ui.components.CronFloatingNav]'s
+ *  own row instead (shares the pill-shifts-left mechanism Home's FAB already uses), and this
+ *  composable renders only its expanded, full-width state. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun MemoryComposer(
@@ -72,6 +76,7 @@ internal fun MemoryComposer(
     enabled: Boolean,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    showFab: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -173,12 +178,12 @@ internal fun MemoryComposer(
                     }
                 }
             }
-        } else {
+        } else if (showFab) {
             Box(
                 modifier = Modifier
                     .padding(end = Spacing.md)
                     .size(FAB_SIZE)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(Radius.lg))
                     .background(scheme.primary)
                     .clickable {
                         haptics.confirm()
@@ -193,6 +198,8 @@ internal fun MemoryComposer(
                     size = FAB_ICON_SIZE,
                 )
             }
+        } else {
+            Box(modifier = Modifier.size(0.dp))
         }
     }
 }
@@ -201,7 +208,7 @@ internal fun MemoryComposer(
 @Composable
 private fun MemoryComposerCollapsedPreview() {
     CronTheme {
-        MemoryComposer(value = "", onValueChange = {}, onSend = {}, enabled = true, expanded = false, onExpandedChange = {})
+        MemoryComposer(value = "", onValueChange = {}, onSend = {}, enabled = true, expanded = false, onExpandedChange = {}, showFab = true)
     }
 }
 
@@ -210,7 +217,7 @@ private fun MemoryComposerCollapsedPreview() {
 private fun MemoryComposerExpandedPreview() {
     var value by remember { mutableStateOf("wake me earlier on Fridays") }
     CronTheme {
-        MemoryComposer(value = value, onValueChange = { value = it }, onSend = {}, enabled = true, expanded = true, onExpandedChange = {})
+        MemoryComposer(value = value, onValueChange = { value = it }, onSend = {}, enabled = true, expanded = true, onExpandedChange = {}, showFab = true)
     }
 }
 
@@ -225,6 +232,7 @@ private fun MemoryComposerPendingPreview() {
             enabled = false,
             expanded = true,
             onExpandedChange = {},
+            showFab = true,
         )
     }
 }
