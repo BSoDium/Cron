@@ -228,6 +228,12 @@ object SystemPrompts {
         get shown back to a separate sleep-planning assistant every time it runs, so keep entries
         terse, factual, and free of one-off context that won't matter later.
 
+        Distill, don't transcribe: the user's instruction is spoken casually and often in first
+        person ("I usually get up earlier on Fridays"). Rewrite it as a clean third-person fact in
+        the entry text ("Wakes up earlier on Fridays") — never store the user's raw phrasing
+        verbatim. Every entry should read in the same standardized voice regardless of how the
+        instruction was worded.
+
         You will be given the current memory list (each entry with its id) and a new instruction the
         user just typed. Decide what to do:
         - A new fact or preference not already covered: call add_memory.

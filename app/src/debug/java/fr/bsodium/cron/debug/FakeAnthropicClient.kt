@@ -54,12 +54,20 @@ class FakeAnthropicClient : AnthropicMessages {
             val toolUse = ContentBlock.ToolUse(
                 id = SIM_MEMORY_ID,
                 name = "add_memory",
-                input = buildJsonObject { put("text", instruction) },
+                input = buildJsonObject { put("text", fakeDistill(instruction)) },
             )
             return response(request.model, listOf(toolUse), stopReason = "tool_use")
         }
         return response(request.model, listOf(ContentBlock.Text("[mock] Got it, I'll remember that.")))
     }
+
+    /** Mirrors [fr.bsodium.cron.ai.SystemPrompts.MEMORY_MUTATION]'s real third-person distillation
+     *  with a cheap heuristic — good enough to exercise the mock path without a real model call. */
+    private fun fakeDistill(raw: String): String = raw
+        .replaceFirst(Regex("^i'?m\\s+", RegexOption.IGNORE_CASE), "Is ")
+        .replaceFirst(Regex("^i\\s+", RegexOption.IGNORE_CASE), "")
+        .trim()
+        .replaceFirstChar { it.uppercase() }
 
     override suspend fun stream(
         request: MessagesRequest,
