@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
@@ -56,9 +58,15 @@ private val TIMESTAMP_COLUMN_WIDTH = 88.dp
 private val DELETE_ICON_SIZE = 22.dp
 private val CARD_GAP = Spacing.xs
 private val ICON_EDGE_PADDING = Spacing.lg
+private val SPINNER_SIZE = 20.dp
+private val SPINNER_STROKE = 2.dp
 
 /** One memory entry, swipe-left-to-delete (Gmail-style) — never edited in place, only ever removed
- *  directly or superseded by the assistant via the composer above. */
+ *  directly or superseded by the assistant via the composer above. While [MemoryEntry.pending] is
+ *  true (the assistant's mutation turn hasn't finalized this row yet — see
+ *  `MemoryRepository.addPending`), it renders as a spinner placeholder in the same shape and
+ *  position instead of the entry's not-yet-real text, so the row flips to real content in place
+ *  rather than a separate placeholder being swapped for a second, real one. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: Modifier = Modifier) {
@@ -142,40 +150,60 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                 }
             },
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(Radius.lg))
-                    .background(CronColors.elementSurface)
-                    .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = entry.text,
-                        style = CronTypography.timelineRowTitle,
-                        color = MaterialTheme.colorScheme.onSurface,
+            val rowShape = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radius.lg))
+                .background(CronColors.elementSurface)
+                .padding(horizontal = Spacing.lg, vertical = Spacing.md)
+            if (entry.pending) {
+                Row(
+                    modifier = rowShape,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(SPINNER_SIZE),
+                        strokeWidth = SPINNER_STROKE,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    entry.category?.let { category ->
+                    Text(
+                        text = "Updating memory…",
+                        style = CronTypography.timelineRowTitle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Row(
+                    modifier = rowShape,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = category,
-                            style = MaterialTheme.typography.labelSmall,
+                            text = entry.text,
+                            style = CronTypography.timelineRowTitle,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        entry.category?.let { category ->
+                            Text(
+                                text = category,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = Spacing.xxs),
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier.width(TIMESTAMP_COLUMN_WIDTH),
+                        contentAlignment = Alignment.TopEnd,
+                    ) {
+                        Text(
+                            text = rememberRelativeAgo(entry.createdAt.toEpochMilliseconds()),
+                            style = CronTypography.timelineRowTime,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = Spacing.xxs),
+                            textAlign = TextAlign.End,
                         )
                     }
-                }
-                Box(
-                    modifier = Modifier.width(TIMESTAMP_COLUMN_WIDTH),
-                    contentAlignment = Alignment.TopEnd,
-                ) {
-                    Text(
-                        text = rememberRelativeAgo(entry.createdAt.toEpochMilliseconds()),
-                        style = CronTypography.timelineRowTime,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.End,
-                    )
                 }
             }
         }
@@ -223,6 +251,10 @@ private fun MemoryEntryRowPreview() {
             )
             MemoryEntryRow(
                 entry = MemoryEntry(id = 2, text = "Commutes by bike", category = null, createdAt = now, updatedAt = now),
+                onDelete = {},
+            )
+            MemoryEntryRow(
+                entry = MemoryEntry(id = 3, text = "", category = null, createdAt = now, updatedAt = now, pending = true),
                 onDelete = {},
             )
         }

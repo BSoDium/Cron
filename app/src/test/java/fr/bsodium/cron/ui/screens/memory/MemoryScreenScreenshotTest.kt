@@ -64,9 +64,10 @@ class MemoryScreenScreenshotTest {
 
     @Test
     fun mutating_shows_pending_row_and_disables_composer() {
+        val entriesWithPending = sampleEntries + MemoryEntry(id = 3, text = "", category = null, createdAt = now, updatedAt = now, pending = true)
         composeTestRule.setContent {
             CronTheme {
-                MemoryContent(entries = sampleEntries, isMutating = true, onSend = {}, onDelete = {})
+                MemoryContent(entries = entriesWithPending, isMutating = true, onSend = {}, onDelete = {})
             }
         }
         composeTestRule.onRoot().captureRoboImage()

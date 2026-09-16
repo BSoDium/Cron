@@ -36,7 +36,6 @@ import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.screens.memory.components.MemoryComposerFab
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
-import fr.bsodium.cron.ui.screens.memory.components.MemoryPendingRow
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
@@ -118,6 +117,9 @@ internal fun MemoryContent(
             contentWindowInsets = WindowInsets(0),
             topBar = { PageAppBar(title = "Memory", scrollBehavior = scrollBehavior) },
         ) { inner ->
+            // isMutating can flip true a beat before the pending row it corresponds to lands in
+            // entries (sendInstruction sets it eagerly; the row only appears once the suspend insert
+            // completes) -- keep the guard so that gap doesn't flash the empty state.
             if (entries.isEmpty() && !isMutating) {
                 Text(
                     text = "No memories yet. Tell Cron something to remember.",
@@ -144,11 +146,6 @@ internal fun MemoryContent(
                 ) {
                     items(entries, key = { it.id }) { entry ->
                         MemoryEntryRow(entry = entry, onDelete = { onDelete(entry.id) })
-                    }
-                    // Entries sort oldest-first, so the pending placeholder belongs at the end —
-                    // exactly where a newly-added entry will actually land once the turn resolves.
-                    if (isMutating) {
-                        item(key = "pending") { MemoryPendingRow() }
                     }
                 }
             }
@@ -209,7 +206,10 @@ private fun MemoryContentMutatingPreview() {
     val now = Clock.System.now()
     CronTheme {
         MemoryContent(
-            entries = listOf(MemoryEntry(id = 1, text = "Commutes by bike", category = null, createdAt = now, updatedAt = now)),
+            entries = listOf(
+                MemoryEntry(id = 1, text = "Commutes by bike", category = null, createdAt = now, updatedAt = now),
+                MemoryEntry(id = 2, text = "", category = null, createdAt = now, updatedAt = now, pending = true),
+            ),
             isMutating = true,
             onSend = {},
             onDelete = {},
