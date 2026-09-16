@@ -1,22 +1,26 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -72,9 +76,16 @@ private val FONT_STEP = 1.sp
 // spacing stays proportional instead of cramping at the smaller end.
 private const val LINE_HEIGHT_RATIO = 26f / 18f
 private const val SEND_VISIBLE_MIN_LENGTH = 2
-private val SEND_BUTTON_SIZE = 64.dp
-private val SEND_ICON_SIZE = 28.dp
+private val SEND_BUTTON_HEIGHT = 64.dp
+private val SEND_BUTTON_BOTTOM_PADDING = Spacing.xl
+private val SEND_ICON_SIZE = 24.dp
+private const val SEND_LABEL = "Remember this"
 private val EDGE_FADE_HEIGHT = 40.dp
+private val TOP_EDGE_FADE_HEIGHT = 96.dp
+// How much of the fade band stays fully erased before ramping to opaque — a plain linear gradient
+// is still half-visible at its midpoint, which read as too weak once content needs to disappear
+// behind the status bar or the send button rather than just softly trail off.
+private const val STRONG_FADE_HOLD = 0.55f
 private const val PLACEHOLDER = "Tell Cron something to remember"
 
 /** [MemoryComposerFab]'s expanded destination: the entire screen becomes the input, dimming to
@@ -123,12 +134,24 @@ internal fun MemoryFullScreenComposer(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
-        exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+        enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
+        exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()),
         modifier = modifier,
         label = "memory-fullscreen-composer",
     ) {
         val sendVisible = enabled && value.trim().length >= SEND_VISIBLE_MIN_LENGTH
+        // Grows to clear the send button's own footprint once it's visible, so content fades away
+        // as it scrolls behind the button instead of just at the literal bottom of the screen —
+        // and shrinks back to a plain edge fade when the button isn't there to hide behind.
+        val bottomFadeHeight by animateDpAsState(
+            targetValue = if (sendVisible) {
+                SEND_BUTTON_BOTTOM_PADDING + SEND_BUTTON_HEIGHT + EDGE_FADE_HEIGHT
+            } else {
+                EDGE_FADE_HEIGHT
+            },
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+            label = "memory-bottom-fade-height",
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -158,7 +181,7 @@ internal fun MemoryFullScreenComposer(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(scrollState)
-                        .fadingScrollEdges(scrollState),
+                        .fadingEdges(topHeight = TOP_EDGE_FADE_HEIGHT, bottomHeight = bottomFadeHeight),
                 ) {
                     Box(
                         modifier = Modifier
@@ -192,28 +215,37 @@ internal fun MemoryFullScreenComposer(
 
             AnimatedVisibility(
                 visible = sendVisible,
-                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
-                exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
                     .imePadding()
-                    .padding(bottom = Spacing.xxxl),
+                    .padding(horizontal = Spacing.xxl, vertical = SEND_BUTTON_BOTTOM_PADDING),
                 label = "memory-send-visibility",
             ) {
-                Box(
+                Row(
                     modifier = Modifier
-                        .size(SEND_BUTTON_SIZE)
+                        .fillMaxWidth()
+                        .height(SEND_BUTTON_HEIGHT)
                         .clip(Radius.full)
                         .background(scheme.primary)
                         .clickable(enabled = sendVisible) {
                             haptics.confirm()
                             onSend()
                         },
-                    contentAlignment = Alignment.Center,
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Text(
+                        text = SEND_LABEL,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = scheme.onPrimary,
+                    )
+                    Spacer(Modifier.width(Spacing.sm))
                     Symbol(
                         symbol = MaterialSymbol.ArrowForward,
-                        contentDescription = "Send",
+                        contentDescription = null,
                         tint = scheme.onPrimary,
                         size = SEND_ICON_SIZE,
                     )
@@ -252,29 +284,45 @@ private fun fittingFontSize(
     return candidate.coerceAtLeast(MIN_FONT_SIZE.value).sp
 }
 
-/** Fades the top and/or bottom [height] of scrollable content to transparent, gated on whether
- *  [scrollState] actually has more to reveal that way — same offscreen-layer + [BlendMode.DstIn]
- *  technique as [fr.bsodium.cron.ui.screens.home.components.fadeBottom], generalized to both edges
- *  and driven by real scroll position instead of an animated collapse-affordance strength. Only
- *  costs the extra composite layer while this box is actually scrollable; a short instruction that
- *  fits on screen never pays for it since both edge checks are false. */
-private fun Modifier.fadingScrollEdges(scrollState: ScrollState, height: Dp = EDGE_FADE_HEIGHT): Modifier = this
+/** Fades the top and bottom of scrollable content to transparent — same offscreen-layer +
+ *  [BlendMode.DstIn] technique as [fr.bsodium.cron.ui.screens.home.components.fadeBottom],
+ *  generalized to both edges. Each band holds fully erased for [STRONG_FADE_HOLD] of its height
+ *  before ramping to opaque — stronger than a plain linear gradient, which is still half-visible at
+ *  its own midpoint — so content is essentially gone by the time it reaches the status bar (top) or
+ *  the send button (bottom), not just dimmed.
+ *
+ *  Deliberately unconditional rather than gated on [ScrollState.canScrollBackward]/
+ *  [ScrollState.canScrollForward]: the status bar and the send button sit on top of this content
+ *  regardless of scroll position — e.g. typing pins the caret (and so the scroll offset) at the very
+ *  end, where `canScrollForward` is always false, which would silently skip exactly the fade this is
+ *  for. A short instruction that never reaches either band pays nothing extra either way, since
+ *  there's no content there for [BlendMode.DstIn] to erase. */
+private fun Modifier.fadingEdges(topHeight: Dp, bottomHeight: Dp): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
-        val edgePx = height.toPx()
-        if (scrollState.canScrollBackward) {
-            drawRect(
-                brush = Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black), startY = 0f, endY = edgePx),
-                blendMode = BlendMode.DstIn,
-            )
-        }
-        if (scrollState.canScrollForward) {
-            drawRect(
-                brush = Brush.verticalGradient(colors = listOf(Color.Black, Color.Transparent), startY = size.height - edgePx, endY = size.height),
-                blendMode = BlendMode.DstIn,
-            )
-        }
+        val topPx = topHeight.toPx()
+        drawRect(
+            brush = Brush.verticalGradient(
+                0f to Color.Transparent,
+                STRONG_FADE_HOLD to Color.Transparent,
+                1f to Color.Black,
+                startY = 0f,
+                endY = topPx,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+        val bottomPx = bottomHeight.toPx()
+        drawRect(
+            brush = Brush.verticalGradient(
+                0f to Color.Black,
+                (1f - STRONG_FADE_HOLD) to Color.Transparent,
+                1f to Color.Transparent,
+                startY = size.height - bottomPx,
+                endY = size.height,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
     }
 
 @Preview(showBackground = true, name = "Memory full-screen composer — empty")
