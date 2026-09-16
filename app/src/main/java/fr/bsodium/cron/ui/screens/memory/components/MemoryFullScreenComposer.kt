@@ -1,7 +1,7 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -9,17 +9,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
@@ -84,8 +82,12 @@ private val SEND_ICON_SIZE = 32.dp
 // typographic voice instead of a thin default-weight glyph next to bold-ish text.
 private const val SEND_ICON_WEIGHT = 500
 private const val SEND_LABEL = "Remember this"
+private val CANCEL_ICON_SIZE = 24.dp
 private val EDGE_FADE_HEIGHT = 40.dp
 private val TOP_EDGE_FADE_HEIGHT = 96.dp
+// The bottom row (cancel + send) occupies this much regardless of whether the send pill itself is
+// showing yet — cancel is always there — so the fade only ever needs this one fixed height.
+private val BOTTOM_EDGE_FADE_HEIGHT = SEND_BUTTON_BOTTOM_PADDING + SEND_BUTTON_HEIGHT + EDGE_FADE_HEIGHT
 // How much of the fade band stays fully erased before ramping to opaque — a plain linear gradient
 // is still half-visible at its midpoint, which read as too weak once content needs to disappear
 // behind the status bar or the send button rather than just softly trail off.
@@ -99,11 +101,12 @@ private const val PLACEHOLDER = "Tell Cron something to remember"
  *  to fit as it grows past one line (manual step-down measurement, not [BasicTextField] autoSize —
  *  that overload only exists on the read-only `BasicText`, not the editable field). Shrinking stops
  *  at [MIN_FONT_SIZE]: past that, an unbounded dump of text scrolls instead of continuing to shrink
- *  into illegibility, vertically centred until it's long enough to need that scroll. A rounded send
- *  button fades in once a few characters land. Every transition here is a plain crossfade — no
- *  shape-morph, no slide — per explicit design direction: bold and modern, not showy; finer motion
- *  polish is deferred. */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+ *  into illegibility, vertically centred until it's long enough to need that scroll. A cancel button
+ *  sits beside the send pill (which itself fades in once a few characters land) so backing out is
+ *  always explicit — closing this way clears [value] rather than leaving a stale draft for next
+ *  time. Every transition here is a plain crossfade — no shape-morph, no slide — per explicit design
+ *  direction: bold and modern, not showy; finer motion polish is deferred. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MemoryFullScreenComposer(
     visible: Boolean,
@@ -118,23 +121,23 @@ internal fun MemoryFullScreenComposer(
     val haptics = rememberCronHaptics()
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    val imeVisible = WindowInsets.isImeVisible
-    var hasShownKeyboard by remember { mutableStateOf(false) }
+    val cancel = {
+        onValueChange("")
+        keyboardController?.hide()
+        onDismiss()
+    }
 
     LaunchedEffect(visible) {
         if (visible) {
             focusRequester.requestFocus()
             keyboardController?.show()
-        } else {
-            hasShownKeyboard = false
         }
     }
-    LaunchedEffect(imeVisible) {
-        when {
-            imeVisible -> hasShownKeyboard = true
-            hasShownKeyboard && visible -> onDismiss()
-        }
-    }
+    // Only an explicit Cancel/Send/system-back closes this screen — dismissing the keyboard (e.g.
+    // swiping it down to review the full page) must NOT close it. An earlier version watched
+    // WindowInsets.isImeVisible and auto-dismissed on every keyboard hide, which closed the whole
+    // composer the instant the keyboard so much as flickered — confirmed live, not theoretical.
+    BackHandler(enabled = visible, onBack = cancel)
 
     AnimatedVisibility(
         visible = visible,
@@ -144,18 +147,6 @@ internal fun MemoryFullScreenComposer(
         label = "memory-fullscreen-composer",
     ) {
         val sendVisible = enabled && value.trim().length >= SEND_VISIBLE_MIN_LENGTH
-        // Grows to clear the send button's own footprint once it's visible, so content fades away
-        // as it scrolls behind the button instead of just at the literal bottom of the screen —
-        // and shrinks back to a plain edge fade when the button isn't there to hide behind.
-        val bottomFadeHeight by animateDpAsState(
-            targetValue = if (sendVisible) {
-                SEND_BUTTON_BOTTOM_PADDING + SEND_BUTTON_HEIGHT + EDGE_FADE_HEIGHT
-            } else {
-                EDGE_FADE_HEIGHT
-            },
-            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-            label = "memory-bottom-fade-height",
-        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -185,7 +176,7 @@ internal fun MemoryFullScreenComposer(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(scrollState)
-                        .fadingEdges(topHeight = TOP_EDGE_FADE_HEIGHT, bottomHeight = bottomFadeHeight),
+                        .fadingEdges(topHeight = TOP_EDGE_FADE_HEIGHT, bottomHeight = BOTTOM_EDGE_FADE_HEIGHT),
                 ) {
                     Box(
                         modifier = Modifier
@@ -217,44 +208,69 @@ internal fun MemoryFullScreenComposer(
                 }
             }
 
-            AnimatedVisibility(
-                visible = sendVisible,
-                enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
-                exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()),
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .imePadding()
                     .padding(horizontal = Spacing.xxl, vertical = SEND_BUTTON_BOTTOM_PADDING),
-                label = "memory-send-visibility",
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                val sendLabelStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium)
-                Row(
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(SEND_BUTTON_HEIGHT)
+                        .size(SEND_BUTTON_HEIGHT)
                         .clip(Radius.full)
-                        .background(scheme.primary)
-                        .clickable(enabled = sendVisible) {
-                            haptics.confirm()
-                            onSend()
+                        .background(scheme.surfaceContainerHigh)
+                        .clickable {
+                            haptics.reject()
+                            cancel()
                         },
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = SEND_LABEL,
-                        style = sendLabelStyle,
-                        color = scheme.onPrimary,
-                    )
-                    Spacer(Modifier.width(Spacing.sm))
                     Symbol(
-                        symbol = MaterialSymbol.ArrowForward,
-                        contentDescription = null,
-                        tint = scheme.onPrimary,
-                        size = SEND_ICON_SIZE,
-                        weight = SEND_ICON_WEIGHT,
+                        symbol = MaterialSymbol.Close,
+                        contentDescription = "Cancel",
+                        tint = scheme.onSurface,
+                        size = CANCEL_ICON_SIZE,
                     )
+                }
+
+                AnimatedVisibility(
+                    visible = sendVisible,
+                    modifier = Modifier.weight(1f),
+                    enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
+                    exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()),
+                    label = "memory-send-visibility",
+                ) {
+                    val sendLabelStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(SEND_BUTTON_HEIGHT)
+                            .clip(Radius.full)
+                            .background(scheme.primary)
+                            .clickable(enabled = sendVisible) {
+                                haptics.confirm()
+                                onSend()
+                            },
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = SEND_LABEL,
+                            style = sendLabelStyle,
+                            color = scheme.onPrimary,
+                        )
+                        Spacer(Modifier.width(Spacing.sm))
+                        Symbol(
+                            symbol = MaterialSymbol.ArrowForward,
+                            contentDescription = null,
+                            tint = scheme.onPrimary,
+                            size = SEND_ICON_SIZE,
+                            weight = SEND_ICON_WEIGHT,
+                        )
+                    }
                 }
             }
         }

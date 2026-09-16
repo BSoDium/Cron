@@ -12,17 +12,25 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,6 +45,7 @@ import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlin.math.abs
 import kotlin.math.max
@@ -44,7 +53,7 @@ import kotlin.math.roundToInt
 
 private val TIMESTAMP_COLUMN_WIDTH = 88.dp
 private val DELETE_ICON_SIZE = 22.dp
-private val CARD_GAP = Spacing.xs
+private val CARD_GAP = Spacing.sm
 private val ICON_EDGE_PADDING = Spacing.lg
 
 /** One memory entry, swipe-left-to-delete (Gmail-style) — never edited in place, only ever removed
@@ -53,13 +62,18 @@ private val ICON_EDGE_PADDING = Spacing.lg
 @Composable
 internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     val dismissState = rememberSwipeToDismissBoxState()
-    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.testTag("memory-entry-${entry.id}")) {
         SwipeToDismissBox(
             state = dismissState,
             enableDismissFromStartToEnd = false,
-            onDismiss = { direction -> if (direction == SwipeToDismissBoxValue.EndToStart) onDelete() },
+            // A completed swipe only asks for confirmation — deleting is irreversible and this is
+            // the one action in Memory that isn't routed through the assistant, so there's no
+            // second chance to notice a mistake later. Declining resets the row rather than leaving
+            // it dismissed, since the swipe gesture itself never actually deletes anything.
+            onDismiss = { direction -> if (direction == SwipeToDismissBoxValue.EndToStart) showDeleteConfirm = true },
             backgroundContent = {
                 // The card grows from the row's own revealed edge from the very start of the swipe
                 // (its width always equals the reveal), so it reads as a separate card immediately
@@ -70,9 +84,14 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                 // swipe pinned near the edge), then once the card is wide enough that the centred
                 // position is farther from the edge than that fixed distance, it switches to
                 // tracking the centre as the card keeps growing. Gmail does the same thing.
-                val offsetPx = runCatching { dismissState.requireOffset() }.getOrDefault(0f)
-                val revealPx = abs(offsetPx)
-                val cardWidth = with(density) { revealPx.toDp() }
+                //
+                // The reveal is read fresh inside drawWithContent/offset{} — the DRAW/layout phase
+                // — rather than once in this composable's body. dismissState.requireOffset() changes
+                // every frame during a fling or the snap-back animation; a composition-time read
+                // updates the card's size on its own, slower recomposition-and-remeasure cadence,
+                // which visibly lagged behind the row's own layout-phase-deferred offset and let the
+                // (still-wide, stale) card overlap the row mid-animation — confirmed live, not
+                // theoretical. Layout/draw-phase reads track the same offset every frame with no lag.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -82,16 +101,15 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                     Box(
                         modifier = Modifier
                             .padding(end = CARD_GAP)
-                            .width(cardWidth)
+                            .fillMaxWidth()
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(Radius.xl))
-                            .background(MaterialTheme.colorScheme.error),
+                            .background(MaterialTheme.colorScheme.error)
+                            .drawWithContent {
+                                val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f))
+                                clipRect(left = size.width - revealPx) { this@drawWithContent.drawContent() }
+                            },
                     ) {
-                        val iconHalfPx = with(density) { (DELETE_ICON_SIZE / 2).toPx() }
-                        val fixedOffsetFromEdgePx = with(density) { (ICON_EDGE_PADDING + DELETE_ICON_SIZE / 2).toPx() }
-                        val centeredOffsetFromEdgePx = revealPx / 2f
-                        val offsetFromEdgePx = max(fixedOffsetFromEdgePx, centeredOffsetFromEdgePx)
-                        val iconCenterXPx = revealPx - offsetFromEdgePx
                         Symbol(
                             symbol = MaterialSymbol.Delete,
                             contentDescription = "Delete",
@@ -99,7 +117,14 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                             size = DELETE_ICON_SIZE,
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .offset { IntOffset((iconCenterXPx - iconHalfPx).roundToInt(), 0) },
+                                .offset {
+                                    val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f))
+                                    val iconHalfPx = (DELETE_ICON_SIZE / 2).toPx()
+                                    val fixedOffsetFromEdgePx = (ICON_EDGE_PADDING + DELETE_ICON_SIZE / 2).toPx()
+                                    val offsetFromEdgePx = max(fixedOffsetFromEdgePx, revealPx / 2f)
+                                    val iconCenterXPx = revealPx - offsetFromEdgePx
+                                    IntOffset((iconCenterXPx - iconHalfPx).roundToInt(), 0)
+                                },
                         )
                     }
                 }
@@ -142,6 +167,29 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                 }
             }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteConfirm = false
+                scope.launch { dismissState.reset() }
+            },
+            title = { Text("Delete this memory?") },
+            text = { Text(entry.text) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    scope.launch { dismissState.reset() }
+                }) { Text("Cancel") }
+            },
+        )
     }
 }
 

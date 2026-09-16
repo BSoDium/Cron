@@ -167,6 +167,8 @@ data class FabAction(
     val splitLabel: String = label,
     /** Idle icon — overrides the default [MaterialSymbol.Update]. */
     val icon: MaterialSymbol = MaterialSymbol.Update,
+    /** Whether [icon] renders filled or outlined. Defaults to filled, matching Home's rocket. */
+    val filled: Boolean = true,
 )
 
 /**
@@ -251,7 +253,7 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                 symbol = if (isWorking) MaterialSymbol.Stop else idleIcon,
                                 contentDescription = null,
                                 modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
-                                fill = 1f,
+                                fill = if (isWorking || action.filled) 1f else 0f,
                             )
                             Column {
                                 Text(
@@ -375,7 +377,7 @@ internal fun PrimaryActionFab(action: FabAction?) {
                         symbol = if (isWorking) MaterialSymbol.Stop else idleIcon,
                         contentDescription = null,
                         modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
-                        fill = 1f,
+                        fill = if (isWorking || action.filled) 1f else 0f,
                     )
                     Text(
                         text = if (isWorking) "Stop" else idleLabel,

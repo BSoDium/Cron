@@ -102,7 +102,7 @@ internal fun MemoryContent(
         if (useCompactNav && !composerExpanded) {
             fabRegistry?.set(
                 fabOwner,
-                FabAction(onClick = { composerExpanded = true }, icon = MaterialSymbol.HistoryEdu, label = "Remember"),
+                FabAction(onClick = { composerExpanded = true }, icon = MaterialSymbol.HistoryEdu, label = "Remember", filled = false),
             )
         } else {
             fabRegistry?.clear(fabOwner)
