@@ -29,8 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -53,7 +52,7 @@ import kotlin.math.roundToInt
 
 private val TIMESTAMP_COLUMN_WIDTH = 88.dp
 private val DELETE_ICON_SIZE = 22.dp
-private val CARD_GAP = Spacing.sm
+private val CARD_GAP = Spacing.xs
 private val ICON_EDGE_PADDING = Spacing.lg
 
 /** One memory entry, swipe-left-to-delete (Gmail-style) — never edited in place, only ever removed
@@ -75,12 +74,13 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
             // it dismissed, since the swipe gesture itself never actually deletes anything.
             onDismiss = { direction -> if (direction == SwipeToDismissBoxValue.EndToStart) showDeleteConfirm = true },
             backgroundContent = {
-                // The card box is always the row's full width (never .width(revealPx)) and only its
-                // DRAWING is clipped to the reveal — sizing it to the reveal directly reintroduces the
-                // frame-lag overlap this was built to avoid, since layout only remeasures on its own,
-                // slower cadence. Both the icon offset below and the fill drawn here are anchored to
-                // the box's right edge for that reason, not to a width that no longer tracks the reveal.
-                val errorColor = MaterialTheme.colorScheme.error
+                // The card is sized to exactly the reveal amount (matches the row's own edge, no
+                // clipping needed) — but that size must be read inside Modifier.layout{}, the LAYOUT
+                // phase, not the composable body (composition phase). A composition-time read of
+                // dismissState.requireOffset() only updates this card on its own, slower
+                // recomposition-and-remeasure cadence, which visibly lagged a frame behind the row's
+                // own layout-phase-deferred offset during a fast fling or snap-back and let the
+                // (still-wide, stale) card overlap the settling row — confirmed live, not theoretical.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -90,19 +90,14 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                     Box(
                         modifier = Modifier
                             .padding(end = CARD_GAP)
-                            .fillMaxWidth()
                             .fillMaxHeight()
+                            .layout { measurable, constraints ->
+                                val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f)).roundToInt()
+                                val placeable = measurable.measure(constraints.copy(minWidth = 0, maxWidth = revealPx))
+                                layout(revealPx, placeable.height) { placeable.placeRelative(0, 0) }
+                            }
                             .clip(RoundedCornerShape(Radius.xl))
-                            .drawWithContent {
-                                val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f))
-                                // Fill painted in here rather than via Modifier.background(), which
-                                // draws unconditionally before drawWithContent runs and would defeat
-                                // this clip — the card would always render at full width.
-                                clipRect(left = size.width - revealPx) {
-                                    drawRect(errorColor)
-                                    this@drawWithContent.drawContent()
-                                }
-                            },
+                            .background(MaterialTheme.colorScheme.error),
                     ) {
                         Symbol(
                             symbol = MaterialSymbol.Delete,
@@ -110,13 +105,14 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                             tint = MaterialTheme.colorScheme.onError,
                             size = DELETE_ICON_SIZE,
                             modifier = Modifier
-                                .align(Alignment.CenterEnd)
+                                .align(Alignment.CenterStart)
                                 .offset {
                                     val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f))
                                     val iconHalfPx = (DELETE_ICON_SIZE / 2).toPx()
                                     val fixedOffsetFromEdgePx = (ICON_EDGE_PADDING + DELETE_ICON_SIZE / 2).toPx()
                                     val offsetFromEdgePx = max(fixedOffsetFromEdgePx, revealPx / 2f)
-                                    IntOffset((iconHalfPx - offsetFromEdgePx).roundToInt(), 0)
+                                    val iconCenterXPx = revealPx - offsetFromEdgePx
+                                    IntOffset((iconCenterXPx - iconHalfPx).roundToInt(), 0)
                                 },
                         )
                     }

@@ -84,6 +84,12 @@ private val SEND_ICON_SIZE = 32.dp
 private const val SEND_ICON_WEIGHT = 500
 private const val SEND_LABEL = "Remember this"
 private val CANCEL_ICON_SIZE = 24.dp
+// Fixed rather than derived from the viewport, so shrinking behaves the same whether the keyboard
+// is up or not — tying it to the (keyboard-dependent) available height meant the text had to grow
+// to fill nearly the whole screen before shrinking ever kicked in, since the viewport itself is
+// that tall. This is roughly 5 lines at MAX_FONT_SIZE / 9 lines at MIN_FONT_SIZE: short entries stay
+// big and centred, longer ones shrink first and only scroll once shrinking alone can't fit them.
+private val TEXT_FIT_HEIGHT = 240.dp
 private val EDGE_FADE_HEIGHT = 40.dp
 private val TOP_EDGE_FADE_HEIGHT = 96.dp
 // The bottom row (cancel + send) occupies this much regardless of whether the send pill itself is
@@ -171,12 +177,20 @@ internal fun MemoryFullScreenComposer(
                 val boxMaxHeight = maxHeight
                 val horizontalPaddingPx = with(density) { (Spacing.xxl * 2).toPx() }
                 val maxWidthPx = with(density) { maxWidth.toPx() } - horizontalPaddingPx
-                val maxHeightPx = with(density) { boxMaxHeight.toPx() }
+                val maxHeightPx = with(density) { minOf(TEXT_FIT_HEIGHT, boxMaxHeight).toPx() }
                 val fontSize = remember(value, maxWidthPx, maxHeightPx) {
                     fittingFontSize(textMeasurer, baseStyle, value.ifEmpty { PLACEHOLDER }, maxWidthPx, maxHeightPx)
                 }
                 val textStyle = baseStyle.copy(fontSize = fontSize, lineHeight = fontSize * LINE_HEIGHT_RATIO)
                 val scrollState = rememberScrollState()
+                // BasicTextField's own bring-cursor-into-view behavior doesn't reach this scroll
+                // container reliably once the text overflows the fixed-height centred box below —
+                // confirmed live: scrollState.maxValue correctly grows past 0, but .value never
+                // followed, leaving whatever was just typed hidden behind the send row. Driving the
+                // scroll explicitly on every text change is what actually keeps the caret visible.
+                LaunchedEffect(value, scrollState.maxValue) {
+                    scrollState.animateScrollTo(scrollState.maxValue)
+                }
                 // Scroll surface spans the full screen edge-to-edge (not just the text column) so
                 // the fade bands read as a property of the screen, not the text block — the text
                 // itself keeps its own reading margin via the inner Box's padding.
