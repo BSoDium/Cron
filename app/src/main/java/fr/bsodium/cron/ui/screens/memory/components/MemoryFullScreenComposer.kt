@@ -2,15 +2,17 @@ package fr.bsodium.cron.ui.screens.memory.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,7 +25,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
@@ -31,9 +32,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,15 +46,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextMeasurer
@@ -60,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -83,15 +83,15 @@ private const val LINE_HEIGHT_RATIO = 26f / 18f
 private const val SEND_VISIBLE_MIN_LENGTH = 2
 private val SEND_BUTTON_HEIGHT = 64.dp
 private val SEND_BUTTON_BOTTOM_PADDING = Spacing.xl
-// The button row's own visual footprint, reserved as bottom clearance on the scrollable text area so
-// text (and its fade) can never physically reach underneath the buttons — this is a real layout
-// reservation, not a cosmetic fade, since a fade alone let long typed content visually collide with
-// the button pills once scrolled to the end.
-private val BUTTON_ROW_HEIGHT = SEND_BUTTON_HEIGHT + SEND_BUTTON_BOTTOM_PADDING * 2
 private val SEND_ICON_SIZE = 32.dp
-// Matches the label's own weight below (FontWeight.Medium) so the arrow reads as part of the same
-// typographic voice instead of a thin default-weight glyph next to bold-ish text.
-private const val SEND_ICON_WEIGHT = 500
+// Thinner than the label's own weight (deliberately, not matched to it) — a thick arrow at
+// SEND_ICON_SIZE read as heavy/rounded rather than crisp; this is the Rounded family's own lightest
+// practical weight before strokes start looking broken up.
+private const val SEND_ICON_WEIGHT = 300
+// Derived, not hardcoded: this equals the icon's vertical centering gap ((height - iconSize) / 2) by
+// construction, so the icon sits with equal padding on its top, bottom, and trailing edge instead of
+// that only happening to match at today's SEND_BUTTON_HEIGHT/SEND_ICON_SIZE values.
+private val SEND_ICON_END_PADDING = (SEND_BUTTON_HEIGHT - SEND_ICON_SIZE) / 2
 private const val SEND_LABEL = "Remember this"
 private val CANCEL_ICON_SIZE = 24.dp
 // Fixed rather than derived from the viewport, so shrinking behaves the same whether the keyboard
@@ -100,11 +100,17 @@ private val CANCEL_ICON_SIZE = 24.dp
 // that tall. This is roughly 5 lines at MAX_FONT_SIZE / 9 lines at MIN_FONT_SIZE: short entries stay
 // big and centred, longer ones shrink first and only scroll once shrinking alone can't fit them.
 private val TEXT_FIT_HEIGHT = 240.dp
-private val EDGE_FADE_HEIGHT = 40.dp
 private val TOP_EDGE_FADE_HEIGHT = 96.dp
-// Purely cosmetic now that BUTTON_ROW_HEIGHT reserves real clearance below the scroll area — this
-// just softens the scroll area's own bottom edge, it no longer needs to hide the buttons.
-private val BOTTOM_EDGE_FADE_HEIGHT = EDGE_FADE_HEIGHT
+// Sized to fully cover the floating button row's own footprint (plus headroom) rather than matching
+// it pixel-for-pixel — see the fade Boxes below for why an approximate, static band is preferable to
+// a precisely reserved one.
+private val BOTTOM_EDGE_FADE_HEIGHT = SEND_BUTTON_HEIGHT + SEND_BUTTON_BOTTOM_PADDING * 2 + 40.dp
+// Real scroll-content padding, not just a visual fade — this is what actually keeps a scrolled-to-
+// the-edge line of text out from under the curtains rather than merely dimmed underneath them. Sized
+// a bit past each curtain's own height so the text clears the curtain entirely, not just its opaque
+// core.
+private val SCROLL_TOP_PADDING = TOP_EDGE_FADE_HEIGHT + Spacing.xl
+private val SCROLL_BOTTOM_PADDING = BOTTOM_EDGE_FADE_HEIGHT + Spacing.xl
 // How much of the fade band stays fully erased before ramping to opaque — a plain linear gradient
 // is still half-visible at its midpoint, which read as too weak once content needs to disappear
 // behind the status bar or the send button rather than just softly trail off.
@@ -119,10 +125,9 @@ private const val PLACEHOLDER = "Tell Cron something to remember"
  *  that overload only exists on the read-only `BasicText`, not the editable field). Shrinking stops
  *  at [MIN_FONT_SIZE]: past that, an unbounded dump of text scrolls instead of continuing to shrink
  *  into illegibility, vertically centred until it's long enough to need that scroll. A cancel button
- *  sits beside the send pill (which itself fades in once a few characters land) so backing out is
- *  always explicit — closing this way clears [value] rather than leaving a stale draft for next
- *  time. Every transition here is a plain crossfade — no shape-morph, no slide — per explicit design
- *  direction: bold and modern, not showy; finer motion polish is deferred. */
+ *  sits beside the send pill (always visible, disabled rather than hidden until there's text) so
+ *  backing out is always explicit — closing this way clears [value] rather than leaving a stale draft
+ *  for next time. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MemoryFullScreenComposer(
@@ -164,7 +169,7 @@ internal fun MemoryFullScreenComposer(
         modifier = modifier,
         label = "memory-fullscreen-composer",
     ) {
-        val sendVisible = enabled && value.trim().length >= SEND_VISIBLE_MIN_LENGTH
+        val sendEnabled = enabled && value.trim().length >= SEND_VISIBLE_MIN_LENGTH
         // Requesting focus from here (once this content is actually in composition) rather than from
         // an effect keyed on the outer `visible` flag — that effect fired the instant `visible` flipped
         // true, before AnimatedVisibility had composed the BasicTextField owning focusRequester, so the
@@ -182,16 +187,19 @@ internal fun MemoryFullScreenComposer(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .imePadding()
-                    .padding(bottom = BUTTON_ROW_HEIGHT),
+                    .imePadding(),
             ) {
                 val density = LocalDensity.current
                 val textMeasurer = rememberTextMeasurer()
                 val baseStyle = CronTypography.bodySerif.copy(textAlign = TextAlign.Center)
                 val boxMaxHeight = maxHeight
+                // The height actually free for text once both curtains' real scroll-padding is
+                // excluded — short text centers within just this region, not the full viewport, so it
+                // doesn't visually sit closer to one curtain than the other.
+                val clearHeight = (boxMaxHeight - SCROLL_TOP_PADDING - SCROLL_BOTTOM_PADDING).coerceAtLeast(0.dp)
                 val horizontalPaddingPx = with(density) { (Spacing.xxl * 2).toPx() }
                 val maxWidthPx = with(density) { maxWidth.toPx() } - horizontalPaddingPx
-                val maxHeightPx = with(density) { minOf(TEXT_FIT_HEIGHT, boxMaxHeight).toPx() }
+                val maxHeightPx = with(density) { minOf(TEXT_FIT_HEIGHT, clearHeight).toPx() }
                 val fontSize = remember(value, maxWidthPx, maxHeightPx) {
                     fittingFontSize(textMeasurer, baseStyle, value.ifEmpty { PLACEHOLDER }, maxWidthPx, maxHeightPx)
                 }
@@ -204,63 +212,112 @@ internal fun MemoryFullScreenComposer(
                 // scroll explicitly on every text change is what actually keeps the caret visible. An
                 // animated scroll restarts (and so never catches up) on every keystroke of continuous
                 // typing — confirmed live the animated version still lagged — so this jumps instantly.
+                // Landing on maxValue is exactly right once SCROLL_TOP_PADDING/SCROLL_BOTTOM_PADDING
+                // are real content (below) rather than just a fade drawn over the text: maxValue then
+                // means "the last line is SCROLL_BOTTOM_PADDING clear of the true bottom edge", not
+                // "the last line is flush against it".
                 LaunchedEffect(value, scrollState.maxValue) {
                     scrollState.scrollTo(scrollState.maxValue)
                 }
-                // Scroll surface spans the full screen edge-to-edge (not just the text column) so
-                // the fade bands read as a property of the screen, not the text block — the text
-                // itself keeps its own reading margin via the inner Box's padding.
+                // Spans the full viewport, including behind the floating buttons — the static fade
+                // overlays and the buttons themselves (later siblings below, so drawn on top) are what
+                // visually hide content there. SCROLL_TOP_PADDING/SCROLL_BOTTOM_PADDING below are what
+                // actually keep the text itself clear of that zone once fully scrolled — the curtains
+                // alone only dimmed it, they didn't stop text from sliding under the buttons.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .fadingEdges(topHeight = TOP_EDGE_FADE_HEIGHT, bottomHeight = BOTTOM_EDGE_FADE_HEIGHT),
+                        .verticalScroll(scrollState),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Spacing.xxl)
-                            .heightIn(min = boxMaxHeight)
-                            .wrapContentHeight(Alignment.CenterVertically),
-                    ) {
-                        if (value.isEmpty()) {
-                            Text(
-                                text = PLACEHOLDER,
-                                style = textStyle,
-                                color = scheme.onSurfaceVariant,
-                            )
-                        }
-                        BasicTextField(
-                            value = value,
-                            onValueChange = onValueChange,
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(Modifier.height(SCROLL_TOP_PADDING))
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .focusRequester(focusRequester),
-                            enabled = enabled,
-                            textStyle = textStyle.copy(color = scheme.onBackground),
-                            cursorBrush = SolidColor(scheme.primary),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = { if (value.isNotBlank()) onSend() }),
-                        )
+                                .padding(horizontal = Spacing.xxl)
+                                .heightIn(min = clearHeight)
+                                .wrapContentHeight(Alignment.CenterVertically),
+                        ) {
+                            if (value.isEmpty()) {
+                                Text(
+                                    text = PLACEHOLDER,
+                                    style = textStyle,
+                                    color = scheme.onSurfaceVariant,
+                                )
+                            }
+                            BasicTextField(
+                                value = value,
+                                onValueChange = onValueChange,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester),
+                                enabled = enabled,
+                                textStyle = textStyle.copy(color = scheme.onBackground),
+                                cursorBrush = SolidColor(scheme.primary),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { if (value.isNotBlank()) onSend() }),
+                            )
+                        }
+                        Spacer(Modifier.height(SCROLL_BOTTOM_PADDING))
                     }
                 }
             }
 
-            Row(
+            // Static curtains: pinned to the viewport's own top/bottom, never to the scroll offset or
+            // the ime/nav inset the buttons use, so they can't visibly drift relative to either.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(TOP_EDGE_FADE_HEIGHT)
+                    .background(topCurtain(scheme.background)),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    // ime-aware only, not nav-bar-aware: with the keyboard open this needs to sit
+                    // right above it, same as the button row. But padding for BOTH insets (as the
+                    // button row does) left a gap between the curtain's bottom edge and the true
+                    // screen edge whenever the keyboard was closed — nothing painted there, reading as
+                    // a hard seam instead of a soft edge. Painting through the nav-bar region (like the
+                    // page background already does) has no such gap.
+                    .imePadding()
+                    .height(BOTTOM_EDGE_FADE_HEIGHT)
+                    .background(bottomCurtain(scheme.background)),
+            )
+
+            val sendContainerColor by animateColorAsState(
+                targetValue = if (sendEnabled) scheme.primary else scheme.surfaceContainerHigh,
+                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                label = "send-container-color",
+            )
+            val sendContentColor by animateColorAsState(
+                targetValue = if (sendEnabled) scheme.onPrimary else scheme.onSurfaceVariant,
+                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                label = "send-content-color",
+            )
+            val cancelInteractionSource = remember { MutableInteractionSource() }
+            val sendInteractionSource = remember { MutableInteractionSource() }
+
+            // ButtonGroup + animateWidth is the Expressive "reactive button group" pattern (see
+            // docs/expressive.md): pressing either button expands it and squishes its neighbour,
+            // instead of a plain Row where each button only reacts to its own press.
+            ButtonGroup(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                     .padding(horizontal = Spacing.xxl, vertical = SEND_BUTTON_BOTTOM_PADDING),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     modifier = Modifier
                         .size(SEND_BUTTON_HEIGHT)
+                        .animateWidth(cancelInteractionSource)
                         .clip(Radius.full)
                         .background(scheme.surfaceContainerHigh)
-                        .clickable {
+                        .clickable(interactionSource = cancelInteractionSource, indication = ripple()) {
                             haptics.reject()
                             cancel()
                         },
@@ -274,41 +331,41 @@ internal fun MemoryFullScreenComposer(
                     )
                 }
 
-                AnimatedVisibility(
-                    visible = sendVisible,
-                    modifier = Modifier.weight(1f),
-                    enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
-                    exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()),
-                    label = "memory-send-visibility",
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(SEND_BUTTON_HEIGHT)
+                        .animateWidth(sendInteractionSource)
+                        .clip(Radius.full)
+                        .background(sendContainerColor)
+                        .clickable(
+                            enabled = sendEnabled,
+                            interactionSource = sendInteractionSource,
+                            indication = ripple(),
+                        ) {
+                            haptics.confirm()
+                            onSend()
+                        },
                 ) {
                     val sendLabelStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium)
-                    Row(
+                    Text(
+                        text = SEND_LABEL,
+                        style = sendLabelStyle,
+                        color = sendContentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                    Symbol(
+                        symbol = MaterialSymbol.ArrowForward,
+                        contentDescription = null,
+                        tint = sendContentColor,
+                        size = SEND_ICON_SIZE,
+                        weight = SEND_ICON_WEIGHT,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(SEND_BUTTON_HEIGHT)
-                            .clip(Radius.full)
-                            .background(scheme.primary)
-                            .clickable(enabled = sendVisible) {
-                                haptics.confirm()
-                                onSend()
-                            },
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = SEND_LABEL,
-                            style = sendLabelStyle,
-                            color = scheme.onPrimary,
-                        )
-                        Spacer(Modifier.width(Spacing.sm))
-                        Symbol(
-                            symbol = MaterialSymbol.ArrowForward,
-                            contentDescription = null,
-                            tint = scheme.onPrimary,
-                            size = SEND_ICON_SIZE,
-                            weight = SEND_ICON_WEIGHT,
-                        )
-                    }
+                            .align(Alignment.CenterEnd)
+                            .padding(end = SEND_ICON_END_PADDING),
+                    )
                 }
             }
         }
@@ -344,46 +401,24 @@ private fun fittingFontSize(
     return candidate.coerceAtLeast(MIN_FONT_SIZE.value).sp
 }
 
-/** Fades the top and bottom of scrollable content to transparent — same offscreen-layer +
- *  [BlendMode.DstIn] technique as [fr.bsodium.cron.ui.screens.home.components.fadeBottom],
- *  generalized to both edges. Each band holds fully erased for [STRONG_FADE_HOLD] of its height
- *  before ramping to opaque — stronger than a plain linear gradient, which is still half-visible at
- *  its own midpoint — so content is essentially gone by the time it reaches the status bar (top) or
- *  the send button (bottom), not just dimmed.
- *
- *  Deliberately unconditional rather than gated on [ScrollState.canScrollBackward]/
- *  [ScrollState.canScrollForward]: the status bar and the send button sit on top of this content
- *  regardless of scroll position — e.g. typing pins the caret (and so the scroll offset) at the very
- *  end, where `canScrollForward` is always false, which would silently skip exactly the fade this is
- *  for. A short instruction that never reaches either band pays nothing extra either way, since
- *  there's no content there for [BlendMode.DstIn] to erase. */
-private fun Modifier.fadingEdges(topHeight: Dp, bottomHeight: Dp): Modifier = this
-    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        val topPx = topHeight.toPx()
-        drawRect(
-            brush = Brush.verticalGradient(
-                0f to Color.Transparent,
-                STRONG_FADE_HOLD to Color.Transparent,
-                1f to Color.Black,
-                startY = 0f,
-                endY = topPx,
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-        val bottomPx = bottomHeight.toPx()
-        drawRect(
-            brush = Brush.verticalGradient(
-                0f to Color.Black,
-                (1f - STRONG_FADE_HOLD) to Color.Transparent,
-                1f to Color.Transparent,
-                startY = size.height - bottomPx,
-                endY = size.height,
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-    }
+/** Opaque-to-transparent curtain for the top edge — content is fully covered for [STRONG_FADE_HOLD]
+ *  of the band nearest the true edge, then ramps away over the rest. A plain overlay (painted after,
+ *  i.e. on top of, the scrolling content) rather than an alpha-erase mask on the content itself: since
+ *  the scroll area now spans the full viewport, the erase-mask version would need to track exactly
+ *  where the content's own edge is, while a static overlay just sits at a fixed screen position. */
+private fun topCurtain(background: Color): Brush = Brush.verticalGradient(
+    0f to background,
+    STRONG_FADE_HOLD to background,
+    1f to background.copy(alpha = 0f),
+)
+
+/** Mirror of [topCurtain] for the bottom edge — transparent near the content, ramping to opaque
+ *  toward the true bottom edge where the floating buttons sit. */
+private fun bottomCurtain(background: Color): Brush = Brush.verticalGradient(
+    0f to background.copy(alpha = 0f),
+    (1f - STRONG_FADE_HOLD) to background.copy(alpha = 0f),
+    1f to background,
+)
 
 @Preview(showBackground = true, name = "Memory full-screen composer — empty")
 @Composable

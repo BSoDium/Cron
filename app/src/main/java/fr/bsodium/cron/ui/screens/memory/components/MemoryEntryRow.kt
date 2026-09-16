@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
+import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.screens.home.components.rememberRelativeAgo
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -62,7 +64,15 @@ private val ICON_EDGE_PADDING = Spacing.lg
 internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     val dismissState = rememberSwipeToDismissBoxState()
     val scope = rememberCoroutineScope()
+    val haptics = rememberCronHaptics()
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // A short tick right as the drag crosses into "will delete on release" — the same threshold
+    // that flips onDismiss's direction check — so the reveal card's own motion isn't the only signal
+    // that release now deletes.
+    LaunchedEffect(dismissState.targetValue) {
+        if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) haptics.tick()
+    }
 
     Box(modifier = modifier.testTag("memory-entry-${entry.id}")) {
         SwipeToDismissBox(

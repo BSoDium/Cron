@@ -36,6 +36,7 @@ import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.screens.memory.components.MemoryComposerFab
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
+import fr.bsodium.cron.ui.screens.memory.components.MemoryPendingRow
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
@@ -118,7 +119,7 @@ internal fun MemoryContent(
             contentWindowInsets = WindowInsets(0),
             topBar = { PageAppBar(title = "Memory", scrollBehavior = scrollBehavior) },
         ) { inner ->
-            if (entries.isEmpty()) {
+            if (entries.isEmpty() && !isMutating) {
                 Text(
                     text = "No memories yet. Tell Cron something to remember.",
                     style = MaterialTheme.typography.bodyLarge,
@@ -145,15 +146,10 @@ internal fun MemoryContent(
                     items(entries, key = { it.id }) { entry ->
                         MemoryEntryRow(entry = entry, onDelete = { onDelete(entry.id) })
                     }
+                    // Entries sort oldest-first, so the pending placeholder belongs at the end —
+                    // exactly where a newly-added entry will actually land once the turn resolves.
                     if (isMutating) {
-                        item(key = "pending") {
-                            Text(
-                                text = "Updating memory…",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.xs),
-                            )
-                        }
+                        item(key = "pending") { MemoryPendingRow() }
                     }
                 }
             }
