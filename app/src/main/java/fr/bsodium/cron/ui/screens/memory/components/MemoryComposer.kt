@@ -192,7 +192,7 @@ internal fun MemoryComposer(
                 contentAlignment = Alignment.Center,
             ) {
                 Symbol(
-                    symbol = MaterialSymbol.AutoAwesome,
+                    symbol = MaterialSymbol.HistoryEdu,
                     contentDescription = "Tell Cron something to remember",
                     tint = scheme.onPrimary,
                     size = FAB_ICON_SIZE,

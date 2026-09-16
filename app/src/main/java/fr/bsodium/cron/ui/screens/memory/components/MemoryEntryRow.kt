@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.screens.home.components.rememberRelativeAgo
@@ -37,10 +39,13 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 import kotlinx.datetime.Clock
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 private val TIMESTAMP_COLUMN_WIDTH = 88.dp
 private val DELETE_ICON_SIZE = 22.dp
-private val REVEAL_THRESHOLD = 32.dp
+private val CARD_GAP = Spacing.xs
+private val ICON_EDGE_PADDING = Spacing.lg
 
 /** One memory entry, swipe-left-to-delete (Gmail-style) — never edited in place, only ever removed
  *  directly or superseded by the assistant via the composer above. */
@@ -56,17 +61,18 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
             enableDismissFromStartToEnd = false,
             onDismiss = { direction -> if (direction == SwipeToDismissBoxValue.EndToStart) onDelete() },
             backgroundContent = {
-                // Below REVEAL_THRESHOLD, nothing is shown at all — the delete card stays fully
-                // hidden rather than peeking in. Past it, the card grows from the row's revealed
-                // edge as its own independently-rounded shape (not clipped to the row's own
-                // bounds), so it reads as a separate card next to the row, Gmail-style — the
-                // trash icon centers itself for free since it just sits at the card's own
-                // Alignment.Center as the card's width grows.
+                // The card grows from the row's own revealed edge from the very start of the swipe
+                // (its width always equals the reveal), so it reads as a separate card immediately
+                // adjacent to the row — no gap of bare background peeking through between them.
+                // The trash icon, though, does NOT centre itself for free: it sits at a fixed
+                // distance from the card's trailing edge (clipped by the card's own bounds while
+                // the card is too narrow to fully contain it there — exactly like it started this
+                // swipe pinned near the edge), then once the card is wide enough that the centred
+                // position is farther from the edge than that fixed distance, it switches to
+                // tracking the centre as the card keeps growing. Gmail does the same thing.
                 val offsetPx = runCatching { dismissState.requireOffset() }.getOrDefault(0f)
                 val revealPx = abs(offsetPx)
-                val thresholdPx = with(density) { REVEAL_THRESHOLD.toPx() }
-                val cardWidthPx = (revealPx - thresholdPx).coerceAtLeast(0f)
-                val cardWidth = with(density) { cardWidthPx.toDp() }
+                val cardWidth = with(density) { revealPx.toDp() }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -75,18 +81,25 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                 ) {
                     Box(
                         modifier = Modifier
-                            .padding(end = Spacing.xxs)
+                            .padding(end = CARD_GAP)
                             .width(cardWidth)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(Radius.lg))
+                            .clip(RoundedCornerShape(Radius.xl))
                             .background(MaterialTheme.colorScheme.error),
-                        contentAlignment = Alignment.Center,
                     ) {
+                        val iconHalfPx = with(density) { (DELETE_ICON_SIZE / 2).toPx() }
+                        val fixedOffsetFromEdgePx = with(density) { (ICON_EDGE_PADDING + DELETE_ICON_SIZE / 2).toPx() }
+                        val centeredOffsetFromEdgePx = revealPx / 2f
+                        val offsetFromEdgePx = max(fixedOffsetFromEdgePx, centeredOffsetFromEdgePx)
+                        val iconCenterXPx = revealPx - offsetFromEdgePx
                         Symbol(
                             symbol = MaterialSymbol.Delete,
                             contentDescription = "Delete",
                             tint = MaterialTheme.colorScheme.onError,
                             size = DELETE_ICON_SIZE,
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .offset { IntOffset((iconCenterXPx - iconHalfPx).roundToInt(), 0) },
                         )
                     }
                 }

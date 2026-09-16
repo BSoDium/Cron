@@ -91,6 +91,7 @@ enum class MaterialSymbol(val code: String) {
     EventUpcoming("\uF238"),
     ExpandLess("\uE5CE"),
     ExpandMore("\uE5CF"),
+    HistoryEdu("\uEA3E"),
     Info("\uE88E"),
     Keyboard("\uE312"),
     LightMode("\uE518"),
