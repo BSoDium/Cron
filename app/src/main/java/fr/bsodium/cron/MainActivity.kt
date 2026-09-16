@@ -181,12 +181,11 @@ class MainActivity : ComponentActivity() {
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
                 val useCompactNav = compactNavPref
-                // Memory's composer takes over the full bottom width while expanded in compact
-                // mode (same as CronFloatingNav's row would otherwise occupy) — hide the row
-                // underneath so the nav pill doesn't render on top of it.
+                // Memory's composer takes over the entire screen while expanded — hide the bottom
+                // bar underneath in both nav modes so it doesn't render on top of it.
                 var memoryComposerExpanded by rememberSaveable { mutableStateOf(false) }
                 val showBottomBar = currentRoute in TAB_ROUTES &&
-                    !(currentRoute == ROUTE_MEMORY && useCompactNav && memoryComposerExpanded)
+                    !(currentRoute == ROUTE_MEMORY && memoryComposerExpanded)
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
                 // Mirrors rememberTopAppBarState()'s own defaults, NOT (0f, 0f, 1f): an
                 // initialHeightOffsetLimit of 0f (rather than -Float.MAX_VALUE) left the collapsed

@@ -88,10 +88,10 @@ class MemoryScreenScreenshotTest {
         composeTestRule.onRoot().captureRoboImage()
     }
 
-    /** Tapping the collapsed FAB must morph it into the full-width composer with the scrim up —
-     *  the shape-morph this screen was rebuilt around. */
+    /** Tapping the collapsed FAB must fade in the full-screen composer, dimming the list to the
+     *  page background underneath rather than leaving it visible. */
     @Test
-    fun tapping_fab_expands_to_full_width_composer() {
+    fun tapping_fab_expands_to_full_screen_composer() {
         composeTestRule.setContent {
             CronTheme {
                 MemoryContent(entries = sampleEntries, isMutating = false, onSend = {}, onDelete = {})

@@ -1,19 +1,11 @@
 package fr.bsodium.cron.ui.screens.memory
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,22 +29,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.PageAppBar
-import fr.bsodium.cron.ui.screens.memory.components.MemoryComposer
+import fr.bsodium.cron.ui.screens.memory.components.MemoryComposerFab
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
+import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Clock
 
 /**
- * The Memory tab: a list of durable assistant memory entries (ground truth on screen) with a
- * bottom message-style input, laid out like the Settings root (collapsing [PageAppBar] + edge-to-edge
- * list). Typing an instruction and sending it does NOT start a chat — it triggers a background
+ * The Memory tab: a list of durable assistant memory entries (ground truth on screen), laid out
+ * like the Settings root (collapsing [PageAppBar] + edge-to-edge list). Tapping the FAB opens
+ * [MemoryFullScreenComposer], a full-screen text input, not a chat. Sending triggers a background
  * mutation turn ([MemoryViewModel.sendInstruction]) where the assistant decides what to add/edit;
  * entries are never edited in place. Swiping a row left deletes it directly (no assistant round trip).
  */
@@ -95,13 +87,6 @@ internal fun MemoryContent(
     var composerExpanded by rememberSaveable { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val scrimInteractionSource = remember { MutableInteractionSource() }
-    val composerBottomPaddingRaw by animateDpAsState(
-        targetValue = if (composerExpanded) Spacing.sm else navInsetBottom + Spacing.navBarClearance,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "memory-composer-bottom-padding",
-    )
-    val composerBottomPadding = composerBottomPaddingRaw.coerceAtLeast(0.dp)
 
     // Compact nav: the collapsed trigger lives in CronFloatingNav's own row instead of floating
     // here (same pill-shifts-left mechanism Home's FAB already uses) — publish/withdraw a
@@ -117,7 +102,7 @@ internal fun MemoryContent(
         if (useCompactNav && !composerExpanded) {
             fabRegistry?.set(
                 fabOwner,
-                FabAction(onClick = { composerExpanded = true }, icon = MaterialSymbol.AutoAwesome, label = "Remember"),
+                FabAction(onClick = { composerExpanded = true }, icon = MaterialSymbol.HistoryEdu, label = "Remember"),
             )
         } else {
             fabRegistry?.clear(fabOwner)
@@ -170,25 +155,18 @@ internal fun MemoryContent(
             }
         }
 
-        AnimatedVisibility(
-            visible = composerExpanded,
-            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
-            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
-            label = "memory-scrim",
-        ) {
-            Box(
+        if (!useCompactNav) {
+            MemoryComposerFab(
+                visible = !composerExpanded,
+                onClick = { composerExpanded = true },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .clickable(
-                        interactionSource = scrimInteractionSource,
-                        indication = null,
-                        onClick = { composerExpanded = false },
-                    ),
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = navInsetBottom + Spacing.navBarClearance),
             )
         }
 
-        MemoryComposer(
+        MemoryFullScreenComposer(
+            visible = composerExpanded,
             value = draft,
             onValueChange = { draft = it },
             onSend = {
@@ -196,14 +174,8 @@ internal fun MemoryContent(
                 draft = ""
                 composerExpanded = false
             },
+            onDismiss = { composerExpanded = false },
             enabled = !isMutating,
-            expanded = composerExpanded,
-            onExpandedChange = { composerExpanded = it },
-            showFab = !useCompactNav,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .imePadding()
-                .padding(bottom = composerBottomPadding),
         )
     }
 }
