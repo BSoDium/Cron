@@ -5,9 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,7 +25,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.screens.home.components.rememberRelativeAgo
@@ -38,10 +37,10 @@ import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
 import kotlinx.datetime.Clock
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 private val TIMESTAMP_COLUMN_WIDTH = 88.dp
 private val DELETE_ICON_SIZE = 22.dp
+private val REVEAL_THRESHOLD = 32.dp
 
 /** One memory entry, swipe-left-to-delete (Gmail-style) — never edited in place, only ever removed
  *  directly or superseded by the assistant via the composer above. */
@@ -51,44 +50,52 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
     val dismissState = rememberSwipeToDismissBoxState()
     val density = LocalDensity.current
 
-    Box(
-        modifier = modifier
-            .testTag("memory-entry-${entry.id}")
-            .clip(RoundedCornerShape(Radius.lg)),
-    ) {
+    Box(modifier = modifier.testTag("memory-entry-${entry.id}")) {
         SwipeToDismissBox(
             state = dismissState,
             enableDismissFromStartToEnd = false,
             onDismiss = { direction -> if (direction == SwipeToDismissBoxValue.EndToStart) onDelete() },
             backgroundContent = {
-                // Icon stays pinned near the right edge (clipped, effectively hidden) while the
-                // reveal is narrower than the icon itself, then tracks the center of the growing
-                // red strip as the swipe continues — Gmail's reveal physics, not a static icon.
+                // Below REVEAL_THRESHOLD, nothing is shown at all — the delete card stays fully
+                // hidden rather than peeking in. Past it, the card grows from the row's revealed
+                // edge as its own independently-rounded shape (not clipped to the row's own
+                // bounds), so it reads as a separate card next to the row, Gmail-style — the
+                // trash icon centers itself for free since it just sits at the card's own
+                // Alignment.Center as the card's width grows.
                 val offsetPx = runCatching { dismissState.requireOffset() }.getOrDefault(0f)
-                val revealPx = abs(offsetPx).coerceAtMost(with(density) { DELETE_ICON_SIZE.toPx() } * 3f)
-                val iconPx = with(density) { DELETE_ICON_SIZE.toPx() }
-                val shiftPx = (iconPx - revealPx) / 2f
+                val revealPx = abs(offsetPx)
+                val thresholdPx = with(density) { REVEAL_THRESHOLD.toPx() }
+                val cardWidthPx = (revealPx - thresholdPx).coerceAtLeast(0f)
+                val cardWidth = with(density) { cardWidthPx.toDp() }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.error),
+                        .padding(vertical = Spacing.xxs),
                     contentAlignment = Alignment.CenterEnd,
                 ) {
-                    Symbol(
-                        symbol = MaterialSymbol.Close,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.onError,
-                        size = DELETE_ICON_SIZE,
+                    Box(
                         modifier = Modifier
-                            .padding(end = Spacing.lg)
-                            .offset { IntOffset(x = shiftPx.roundToInt(), y = 0) },
-                    )
+                            .padding(end = Spacing.xxs)
+                            .width(cardWidth)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(Radius.lg))
+                            .background(MaterialTheme.colorScheme.error),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Symbol(
+                            symbol = MaterialSymbol.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.onError,
+                            size = DELETE_ICON_SIZE,
+                        )
+                    }
                 }
             },
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(RoundedCornerShape(Radius.lg))
                     .background(CronColors.elementSurface)
                     .padding(horizontal = Spacing.lg, vertical = Spacing.md),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.md),
