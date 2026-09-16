@@ -118,4 +118,22 @@ class MemoryScreenScreenshotTest {
         composeTestRule.waitForIdle()
         composeTestRule.onRoot().captureRoboImage()
     }
+
+    /** Deep swipe, well past the dismiss threshold: the reveal card must keep growing with the drag
+     *  all the way to (row width - gap) — regression coverage for a bug where the card's reported
+     *  width silently stopped growing partway through the gesture and only translated afterward. */
+    @Test
+    fun swipe_near_full_reveals_almost_full_width_no_capping() {
+        composeTestRule.setContent {
+            CronTheme {
+                MemoryContent(entries = sampleEntries, isMutating = false, onSend = {}, onDelete = {})
+            }
+        }
+        composeTestRule.onNodeWithTag("memory-entry-2").performTouchInput {
+            down(centerRight - Offset(4f, 0f))
+            moveBy(Offset(-(width - 40f), 0f))
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage()
+    }
 }

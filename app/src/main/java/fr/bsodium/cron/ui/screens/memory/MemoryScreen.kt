@@ -119,14 +119,18 @@ internal fun MemoryContent(
             topBar = { PageAppBar(title = "Memory", scrollBehavior = scrollBehavior) },
         ) { inner ->
             if (entries.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "No memories yet — tell me something to remember.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = Spacing.xxl),
-                    )
-                }
+                Text(
+                    text = "No memories yet. Tell Cron something to remember.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(
+                            start = Spacing.lg,
+                            end = Spacing.lg,
+                            top = inner.calculateTopPadding() + Spacing.sm,
+                        ),
+                )
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

@@ -74,13 +74,18 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
             // it dismissed, since the swipe gesture itself never actually deletes anything.
             onDismiss = { direction -> if (direction == SwipeToDismissBoxValue.EndToStart) showDeleteConfirm = true },
             backgroundContent = {
-                // The card is sized to exactly the reveal amount (matches the row's own edge, no
-                // clipping needed) — but that size must be read inside Modifier.layout{}, the LAYOUT
-                // phase, not the composable body (composition phase). A composition-time read of
-                // dismissState.requireOffset() only updates this card on its own, slower
-                // recomposition-and-remeasure cadence, which visibly lagged a frame behind the row's
-                // own layout-phase-deferred offset during a fast fling or snap-back and let the
-                // (still-wide, stale) card overlap the settling row — confirmed live, not theoretical.
+                // The card is sized to (reveal amount - CARD_GAP), flush against the row's trailing
+                // edge, so the gap only ever appears between the card and the sliding row — never
+                // between the card and the screen edge. That size must be read inside
+                // Modifier.layout{}, the LAYOUT phase, not the composable body (composition phase): a
+                // composition-time read of dismissState.requireOffset() lags a frame behind the row's
+                // own layout-phase-deferred offset during a fast fling or snap-back, letting a stale
+                // card overlap the settling row — confirmed live, not theoretical. Subtracting the gap
+                // from the reported width up front (rather than via a separate Modifier.padding, which
+                // — being outside this layout{} — added its inset on the wrong edge and could report a
+                // size past what this node's own constraints allow) keeps the reported width always
+                // <= the constraints this node received, avoiding a width that silently stops growing
+                // mid-swipe.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -89,12 +94,19 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                 ) {
                     Box(
                         modifier = Modifier
-                            .padding(end = CARD_GAP)
                             .fillMaxHeight()
                             .layout { measurable, constraints ->
                                 val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f)).roundToInt()
-                                val placeable = measurable.measure(constraints.copy(minWidth = 0, maxWidth = revealPx))
-                                layout(revealPx, placeable.height) { placeable.placeRelative(0, 0) }
+                                val cardWidthPx = (revealPx - CARD_GAP.roundToPx()).coerceAtLeast(0)
+                                // A loose maxWidth-only constraint lets this Box wrap its own tiny
+                                // content (just the delete icon) instead of actually occupying
+                                // cardWidthPx — the reported layout() size still claimed cardWidthPx
+                                // for positioning purposes, but the drawn clip+background only covered
+                                // the icon's own small natural size, rendering as a small pill parked at
+                                // the start of a mostly-empty reserved slot. A tight minWidth forces the
+                                // Box itself to actually be cardWidthPx wide.
+                                val placeable = measurable.measure(constraints.copy(minWidth = cardWidthPx, maxWidth = cardWidthPx))
+                                layout(cardWidthPx, placeable.height) { placeable.placeRelative(0, 0) }
                             }
                             .clip(RoundedCornerShape(Radius.xl))
                             .background(MaterialTheme.colorScheme.error),
@@ -108,10 +120,11 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                                 .align(Alignment.CenterStart)
                                 .offset {
                                     val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f))
+                                    val cardWidthPx = (revealPx - CARD_GAP.toPx()).coerceAtLeast(0f)
                                     val iconHalfPx = (DELETE_ICON_SIZE / 2).toPx()
                                     val fixedOffsetFromEdgePx = (ICON_EDGE_PADDING + DELETE_ICON_SIZE / 2).toPx()
-                                    val offsetFromEdgePx = max(fixedOffsetFromEdgePx, revealPx / 2f)
-                                    val iconCenterXPx = revealPx - offsetFromEdgePx
+                                    val offsetFromEdgePx = max(fixedOffsetFromEdgePx, cardWidthPx / 2f)
+                                    val iconCenterXPx = cardWidthPx - offsetFromEdgePx
                                     IntOffset((iconCenterXPx - iconHalfPx).roundToInt(), 0)
                                 },
                         )

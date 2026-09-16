@@ -12,14 +12,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -78,6 +83,11 @@ private const val LINE_HEIGHT_RATIO = 26f / 18f
 private const val SEND_VISIBLE_MIN_LENGTH = 2
 private val SEND_BUTTON_HEIGHT = 64.dp
 private val SEND_BUTTON_BOTTOM_PADDING = Spacing.xl
+// The button row's own visual footprint, reserved as bottom clearance on the scrollable text area so
+// text (and its fade) can never physically reach underneath the buttons — this is a real layout
+// reservation, not a cosmetic fade, since a fade alone let long typed content visually collide with
+// the button pills once scrolled to the end.
+private val BUTTON_ROW_HEIGHT = SEND_BUTTON_HEIGHT + SEND_BUTTON_BOTTOM_PADDING * 2
 private val SEND_ICON_SIZE = 32.dp
 // Matches the label's own weight below (FontWeight.Medium) so the arrow reads as part of the same
 // typographic voice instead of a thin default-weight glyph next to bold-ish text.
@@ -92,9 +102,9 @@ private val CANCEL_ICON_SIZE = 24.dp
 private val TEXT_FIT_HEIGHT = 240.dp
 private val EDGE_FADE_HEIGHT = 40.dp
 private val TOP_EDGE_FADE_HEIGHT = 96.dp
-// The bottom row (cancel + send) occupies this much regardless of whether the send pill itself is
-// showing yet — cancel is always there — so the fade only ever needs this one fixed height.
-private val BOTTOM_EDGE_FADE_HEIGHT = SEND_BUTTON_BOTTOM_PADDING + SEND_BUTTON_HEIGHT + EDGE_FADE_HEIGHT
+// Purely cosmetic now that BUTTON_ROW_HEIGHT reserves real clearance below the scroll area — this
+// just softens the scroll area's own bottom edge, it no longer needs to hide the buttons.
+private val BOTTOM_EDGE_FADE_HEIGHT = EDGE_FADE_HEIGHT
 // How much of the fade band stays fully erased before ramping to opaque — a plain linear gradient
 // is still half-visible at its midpoint, which read as too weak once content needs to disappear
 // behind the status bar or the send button rather than just softly trail off.
@@ -133,12 +143,6 @@ internal fun MemoryFullScreenComposer(
         onDismiss()
     }
 
-    LaunchedEffect(visible) {
-        if (visible) {
-            focusRequester.requestFocus()
-            keyboardController?.show()
-        }
-    }
     // Only an explicit Cancel/Send/system-back closes this screen — dismissing the keyboard (e.g.
     // swiping it down to review the full page) must NOT close it. An earlier version watched
     // WindowInsets.isImeVisible and auto-dismissed on every keyboard hide, which closed the whole
@@ -161,6 +165,15 @@ internal fun MemoryFullScreenComposer(
         label = "memory-fullscreen-composer",
     ) {
         val sendVisible = enabled && value.trim().length >= SEND_VISIBLE_MIN_LENGTH
+        // Requesting focus from here (once this content is actually in composition) rather than from
+        // an effect keyed on the outer `visible` flag — that effect fired the instant `visible` flipped
+        // true, before AnimatedVisibility had composed the BasicTextField owning focusRequester, so the
+        // request silently landed on nothing and the keyboard never opened. LaunchedEffect(Unit) here
+        // reruns every time this content re-enters composition, i.e. every time the composer opens.
+        LaunchedEffect(Unit) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -169,7 +182,8 @@ internal fun MemoryFullScreenComposer(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .imePadding(),
+                    .imePadding()
+                    .padding(bottom = BUTTON_ROW_HEIGHT),
             ) {
                 val density = LocalDensity.current
                 val textMeasurer = rememberTextMeasurer()
@@ -187,9 +201,11 @@ internal fun MemoryFullScreenComposer(
                 // container reliably once the text overflows the fixed-height centred box below —
                 // confirmed live: scrollState.maxValue correctly grows past 0, but .value never
                 // followed, leaving whatever was just typed hidden behind the send row. Driving the
-                // scroll explicitly on every text change is what actually keeps the caret visible.
+                // scroll explicitly on every text change is what actually keeps the caret visible. An
+                // animated scroll restarts (and so never catches up) on every keystroke of continuous
+                // typing — confirmed live the animated version still lagged — so this jumps instantly.
                 LaunchedEffect(value, scrollState.maxValue) {
-                    scrollState.animateScrollTo(scrollState.maxValue)
+                    scrollState.scrollTo(scrollState.maxValue)
                 }
                 // Scroll surface spans the full screen edge-to-edge (not just the text column) so
                 // the fade bands read as a property of the screen, not the text block — the text
@@ -234,7 +250,7 @@ internal fun MemoryFullScreenComposer(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                     .padding(horizontal = Spacing.xxl, vertical = SEND_BUTTON_BOTTOM_PADDING),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
