@@ -1,13 +1,18 @@
 package fr.bsodium.cron.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -172,6 +177,25 @@ data class FabAction(
 )
 
 /**
+ * What a FAB button is showing right now — either the working ("Stop") overlay or the resolved
+ * idle icon/label. A single [AnimatedContent] keyed on this (rather than on [FabAction.working]
+ * alone) means a tab switch that swaps in a different screen's [FabAction] — same as a
+ * working/idle flip — crossfades and scales through [fabContentTransition] instead of snapping,
+ * so two different FAB identities read as one continuous morph (docs/expressive.md).
+ */
+private data class FabButtonDisplay(val working: Boolean, val icon: MaterialSymbol, val label: String, val filled: Boolean)
+
+private fun fabContentTransition(
+    alphaSpec: FiniteAnimationSpec<Float>,
+    spatialSpec: FiniteAnimationSpec<Float>,
+    sizeSpec: FiniteAnimationSpec<IntSize>,
+): AnimatedContentTransitionScope<FabButtonDisplay>.() -> ContentTransform = {
+    ((fadeIn(alphaSpec) + scaleIn(spatialSpec, initialScale = 0.8f)) togetherWith
+        (fadeOut(alphaSpec) + scaleOut(spatialSpec, targetScale = 0.8f)))
+        .using(SizeTransform(clip = false) { _, _ -> sizeSpec })
+}
+
+/**
  * Carries the debug-only chevron slot for the split FAB. Defined in main so [CronFloatingNav] can
  * accept it; populated by [rememberFabChevron] from the debug/release source sets.
  *
@@ -194,10 +218,16 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     if (action == null) return
     val haptics = rememberCronHaptics()
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val contentSpatialSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
     val sizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
     var idleLabel by remember { mutableStateOf(action.splitLabel) }
     var idleIcon by remember { mutableStateOf(action.icon) }
     if (!action.working) { idleLabel = action.splitLabel; idleIcon = action.icon }
+    val display = if (action.working) {
+        FabButtonDisplay(working = true, icon = MaterialSymbol.Stop, label = "Stop", filled = true)
+    } else {
+        FabButtonDisplay(working = false, icon = idleIcon, label = idleLabel, filled = action.filled)
+    }
     val chevronColor by animateColorAsState(
         targetValue = if (fabChevron.isExpanded && fabChevron.isMockActive)
             MaterialTheme.colorScheme.secondary
@@ -237,31 +267,28 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     AnimatedContent(
-                        targetState = action.working,
-                        transitionSpec = {
-                            (fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec))
-                                .using(SizeTransform(clip = false) { _, _ -> sizeSpec })
-                        },
+                        targetState = display,
+                        transitionSpec = fabContentTransition(iconAlphaSpec, contentSpatialSpec, sizeSpec),
                         contentAlignment = Alignment.Center,
-                        label = "split-fab-icon",
-                    ) { isWorking ->
+                        label = "split-fab-content",
+                    ) { d ->
                         Row(
                             modifier = Modifier.padding(end = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Symbol(
-                                symbol = if (isWorking) MaterialSymbol.Stop else idleIcon,
+                                symbol = d.icon,
                                 contentDescription = null,
                                 modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
-                                fill = if (isWorking || action.filled) 1f else 0f,
+                                fill = if (d.filled) 1f else 0f,
                             )
                             Column {
                                 Text(
-                                    text = if (isWorking) "Stop" else idleLabel,
+                                    text = d.label,
                                     style = MaterialTheme.typography.labelLarge,
                                 )
                                 AnimatedVisibility(
-                                    visible = !isWorking && fabChevron.isMockActive,
+                                    visible = !d.working && fabChevron.isMockActive,
                                     enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
                                         slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
                                         expandVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), clip = false),
@@ -327,10 +354,16 @@ internal fun PrimaryActionFab(action: FabAction?) {
         label = "fab-press",
     )
     val iconAlphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val contentSpatialSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
     val sizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
     var idleLabel by remember { mutableStateOf(action.label) }
     var idleIcon by remember { mutableStateOf(action.icon) }
     if (!working) { idleLabel = action.label; idleIcon = action.icon }
+    val display = if (working) {
+        FabButtonDisplay(working = true, icon = MaterialSymbol.Stop, label = "Stop", filled = true)
+    } else {
+        FabButtonDisplay(working = false, icon = idleIcon, label = idleLabel, filled = action.filled)
+    }
     IconTooltip(label = if (working) "Cancel" else action.label) {
         FloatingActionButton(
             onClick = {
@@ -361,26 +394,23 @@ internal fun PrimaryActionFab(action: FabAction?) {
             interactionSource = interaction,
         ) {
             AnimatedContent(
-                targetState = working,
-                transitionSpec = {
-                    (fadeIn(iconAlphaSpec) togetherWith fadeOut(iconAlphaSpec))
-                        .using(SizeTransform(clip = false) { _, _ -> sizeSpec })
-                },
+                targetState = display,
+                transitionSpec = fabContentTransition(iconAlphaSpec, contentSpatialSpec, sizeSpec),
                 contentAlignment = Alignment.Center,
-                label = "fab-icon",
-            ) { isWorking ->
+                label = "fab-content",
+            ) { d ->
                 Row(
                     modifier = Modifier.padding(end = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Symbol(
-                        symbol = if (isWorking) MaterialSymbol.Stop else idleIcon,
+                        symbol = d.icon,
                         contentDescription = null,
                         modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
-                        fill = if (isWorking || action.filled) 1f else 0f,
+                        fill = if (d.filled) 1f else 0f,
                     )
                     Text(
-                        text = if (isWorking) "Stop" else idleLabel,
+                        text = d.label,
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
