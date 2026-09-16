@@ -45,4 +45,17 @@ class CronFloatingNavTest {
         composeTestRule.onNodeWithContentDescription("Home").assertIsNotEnabled()
         composeTestRule.onNodeWithContentDescription("Settings").assertIsEnabled()
     }
+
+    @Test
+    fun tapping_the_memory_tab_navigates_to_it() {
+        val navigated = mutableListOf<String>()
+        composeTestRule.setContent {
+            CronTheme {
+                CronFloatingNav(currentRoute = "home", onNavigate = { navigated += it }, fabAction = null)
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Memory").performClick()
+        assertEquals(listOf("memory"), navigated)
+    }
 }

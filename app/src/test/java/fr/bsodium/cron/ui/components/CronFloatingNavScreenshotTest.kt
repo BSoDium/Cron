@@ -45,4 +45,18 @@ class CronFloatingNavScreenshotTest {
         }
         composeTestRule.onRoot().captureRoboImage()
     }
+
+    @Test
+    fun memory_tab_selected_with_fab() {
+        composeTestRule.setContent {
+            CronTheme {
+                CronFloatingNav(
+                    currentRoute = "memory",
+                    onNavigate = {},
+                    fabAction = FabAction(onClick = {}),
+                )
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage()
+    }
 }
