@@ -2,6 +2,7 @@ package fr.bsodium.cron.ui.screens.memory.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -122,7 +123,6 @@ internal fun MemoryFullScreenComposer(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val cancel = {
-        onValueChange("")
         keyboardController?.hide()
         onDismiss()
     }
@@ -139,8 +139,16 @@ internal fun MemoryFullScreenComposer(
     // composer the instant the keyboard so much as flickered — confirmed live, not theoretical.
     BackHandler(enabled = visible, onBack = cancel)
 
+    val transitionState = remember { MutableTransitionState(false) }
+    LaunchedEffect(visible) { transitionState.targetState = visible }
+    // Clearing the draft only once the exit animation has fully settled — not on the cancel click
+    // itself — keeps the placeholder from flashing back over the still-fading-out typed text.
+    LaunchedEffect(transitionState.currentState, transitionState.targetState) {
+        if (!transitionState.currentState && !transitionState.targetState) onValueChange("")
+    }
+
     AnimatedVisibility(
-        visible = visible,
+        visibleState = transitionState,
         enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
         exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()),
         modifier = modifier,

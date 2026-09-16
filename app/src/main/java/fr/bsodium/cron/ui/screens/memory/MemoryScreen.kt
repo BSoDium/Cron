@@ -171,7 +171,6 @@ internal fun MemoryContent(
             onValueChange = { draft = it },
             onSend = {
                 onSend(draft)
-                draft = ""
                 composerExpanded = false
             },
             onDismiss = { composerExpanded = false },

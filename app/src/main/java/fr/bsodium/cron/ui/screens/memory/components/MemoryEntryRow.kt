@@ -75,23 +75,12 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
             // it dismissed, since the swipe gesture itself never actually deletes anything.
             onDismiss = { direction -> if (direction == SwipeToDismissBoxValue.EndToStart) showDeleteConfirm = true },
             backgroundContent = {
-                // The card grows from the row's own revealed edge from the very start of the swipe
-                // (its width always equals the reveal), so it reads as a separate card immediately
-                // adjacent to the row — no gap of bare background peeking through between them.
-                // The trash icon, though, does NOT centre itself for free: it sits at a fixed
-                // distance from the card's trailing edge (clipped by the card's own bounds while
-                // the card is too narrow to fully contain it there — exactly like it started this
-                // swipe pinned near the edge), then once the card is wide enough that the centred
-                // position is farther from the edge than that fixed distance, it switches to
-                // tracking the centre as the card keeps growing. Gmail does the same thing.
-                //
-                // The reveal is read fresh inside drawWithContent/offset{} — the DRAW/layout phase
-                // — rather than once in this composable's body. dismissState.requireOffset() changes
-                // every frame during a fling or the snap-back animation; a composition-time read
-                // updates the card's size on its own, slower recomposition-and-remeasure cadence,
-                // which visibly lagged behind the row's own layout-phase-deferred offset and let the
-                // (still-wide, stale) card overlap the row mid-animation — confirmed live, not
-                // theoretical. Layout/draw-phase reads track the same offset every frame with no lag.
+                // The card box is always the row's full width (never .width(revealPx)) and only its
+                // DRAWING is clipped to the reveal — sizing it to the reveal directly reintroduces the
+                // frame-lag overlap this was built to avoid, since layout only remeasures on its own,
+                // slower cadence. Both the icon offset below and the fill drawn here are anchored to
+                // the box's right edge for that reason, not to a width that no longer tracks the reveal.
+                val errorColor = MaterialTheme.colorScheme.error
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -104,10 +93,15 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                             .fillMaxWidth()
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(Radius.xl))
-                            .background(MaterialTheme.colorScheme.error)
                             .drawWithContent {
                                 val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f))
-                                clipRect(left = size.width - revealPx) { this@drawWithContent.drawContent() }
+                                // Fill painted in here rather than via Modifier.background(), which
+                                // draws unconditionally before drawWithContent runs and would defeat
+                                // this clip — the card would always render at full width.
+                                clipRect(left = size.width - revealPx) {
+                                    drawRect(errorColor)
+                                    this@drawWithContent.drawContent()
+                                }
                             },
                     ) {
                         Symbol(
@@ -116,14 +110,13 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                             tint = MaterialTheme.colorScheme.onError,
                             size = DELETE_ICON_SIZE,
                             modifier = Modifier
-                                .align(Alignment.CenterStart)
+                                .align(Alignment.CenterEnd)
                                 .offset {
                                     val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f))
                                     val iconHalfPx = (DELETE_ICON_SIZE / 2).toPx()
                                     val fixedOffsetFromEdgePx = (ICON_EDGE_PADDING + DELETE_ICON_SIZE / 2).toPx()
                                     val offsetFromEdgePx = max(fixedOffsetFromEdgePx, revealPx / 2f)
-                                    val iconCenterXPx = revealPx - offsetFromEdgePx
-                                    IntOffset((iconCenterXPx - iconHalfPx).roundToInt(), 0)
+                                    IntOffset((iconHalfPx - offsetFromEdgePx).roundToInt(), 0)
                                 },
                         )
                     }
