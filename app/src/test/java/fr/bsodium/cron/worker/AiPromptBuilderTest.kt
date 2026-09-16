@@ -10,25 +10,25 @@ import org.junit.Test
 class AiPromptBuilderTest {
 
     @Test
-    fun evening_plan_includes_session_context_and_instructions() {
+    fun evening_plan_includes_session_context_and_memory() {
         val prompt = AiPromptBuilder.build(
             session = Fixtures.session(),
             isEveningPlan = true,
-            instructions = "wake me gently",
+            memories = listOf(Fixtures.memoryEntry(text = "wake me gently")),
         )
         assertTrue(prompt.contains("## Session context"))
         assertTrue(prompt.contains("Hard latest"))
-        assertTrue(prompt.contains("## User instructions"))
+        assertTrue(prompt.contains("## Memory"))
         assertTrue(prompt.contains("wake me gently"))
         assertTrue(prompt.contains("Plan tomorrow's alarm."))
     }
 
     @Test
-    fun evening_plan_without_location_notes_it_is_unavailable_and_omits_instructions() {
-        val prompt = AiPromptBuilder.build(Fixtures.session(), isEveningPlan = true, instructions = null)
+    fun evening_plan_without_location_notes_it_is_unavailable_and_omits_memory() {
+        val prompt = AiPromptBuilder.build(Fixtures.session(), isEveningPlan = true, memories = emptyList())
         assertTrue(prompt.contains("## Location"))
         assertTrue(prompt.contains("unavailable"))
-        assertFalse(prompt.contains("## User instructions"))
+        assertFalse(prompt.contains("## Memory"))
     }
 
     @Test
@@ -42,7 +42,7 @@ class AiPromptBuilderTest {
                 ),
             ),
         )
-        val prompt = AiPromptBuilder.build(session, isEveningPlan = false, instructions = null)
+        val prompt = AiPromptBuilder.build(session, isEveningPlan = false, memories = emptyList())
         assertTrue(prompt.contains("## Day plan"))
         assertTrue(prompt.contains("## Current instruction"))
         assertTrue(prompt.contains("## Event log"))
@@ -53,7 +53,7 @@ class AiPromptBuilderTest {
     @Test
     fun overnight_replan_includes_the_captured_location_so_origin_is_never_guessed() {
         val session = Fixtures.session(events = listOf(Fixtures.eveningEvent(lat = 46.624, lng = 14.308)))
-        val prompt = AiPromptBuilder.build(session, isEveningPlan = false, instructions = null)
+        val prompt = AiPromptBuilder.build(session, isEveningPlan = false, memories = emptyList())
         assertTrue(prompt.contains("## Current location"))
         assertTrue(prompt.contains("46.624"))
         assertTrue(prompt.contains("14.308"))
@@ -61,8 +61,8 @@ class AiPromptBuilderTest {
 
     @Test
     fun both_messages_list_allowed_commute_modes_defaulting_to_all() {
-        val evening = AiPromptBuilder.build(Fixtures.session(), isEveningPlan = true, instructions = null)
-        val replan = AiPromptBuilder.build(Fixtures.session(), isEveningPlan = false, instructions = null)
+        val evening = AiPromptBuilder.build(Fixtures.session(), isEveningPlan = true, memories = emptyList())
+        val replan = AiPromptBuilder.build(Fixtures.session(), isEveningPlan = false, memories = emptyList())
         assertTrue(evening.contains("Allowed commute modes"))
         assertTrue(replan.contains("Allowed commute modes"))
         assertTrue(evening.contains("DRIVE"))
@@ -74,7 +74,7 @@ class AiPromptBuilderTest {
         val plan = Fixtures.dayPlan().copy(
             allowedCommuteModes = setOf(CommuteMode.Transit, CommuteMode.Bike, CommuteMode.Walk),
         )
-        val prompt = AiPromptBuilder.build(Fixtures.session(plan = plan), isEveningPlan = true, instructions = null)
+        val prompt = AiPromptBuilder.build(Fixtures.session(plan = plan), isEveningPlan = true, memories = emptyList())
         assertTrue(prompt.contains("Allowed commute modes"))
         assertTrue(prompt.contains("TRANSIT"))
         assertFalse(prompt.contains("DRIVE"))

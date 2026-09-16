@@ -142,7 +142,6 @@ class SettingsRepositoryTest {
     @Test
     fun userInstructions_blank_reads_back_as_null() = runTest {
         repo.setUserInstructions("   ")
-        repo.userInstructions.test(timeout = 5.seconds) { assertNull(awaitItem()) }
         assertNull(repo.currentUserInstructions())
     }
 

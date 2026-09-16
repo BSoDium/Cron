@@ -151,10 +151,8 @@ fun NavGraphBuilder.settingsGraph(
             val vm = entry.settingsViewModel(navController)
             val state by vm.uiState.collectAsState()
             AssistantSettingsScreen(
-                userInstructions = state.userInstructions,
                 dailyTokenLimit = state.dailyTokenLimit,
                 tokensUsedToday = state.tokensUsedToday,
-                onUserInstructions = vm::setUserInstructions,
                 onDailyTokenLimit = vm::setDailyTokenLimit,
                 onRefreshUsage = vm::refreshUsage,
                 onBack = { navController.popBackStack() },

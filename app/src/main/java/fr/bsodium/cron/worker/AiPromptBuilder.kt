@@ -1,5 +1,6 @@
 package fr.bsodium.cron.worker
 
+import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.LocationPayload
 import fr.bsodium.cron.session.model.SessionEvent
@@ -20,16 +21,16 @@ import kotlin.time.Duration.Companion.minutes
  */
 object AiPromptBuilder {
 
-    fun build(session: SleepSession, isEveningPlan: Boolean, instructions: String?): String {
+    fun build(session: SleepSession, isEveningPlan: Boolean, memories: List<MemoryEntry>): String {
         val localNow = Clock.System.now().toLocalDateTime(TimeZone.of(session.timezone))
-        return if (isEveningPlan) buildEveningPlanMessage(session, localNow, instructions)
-        else buildOvernightReplanMessage(session, localNow, instructions)
+        return if (isEveningPlan) buildEveningPlanMessage(session, localNow, memories)
+        else buildOvernightReplanMessage(session, localNow, memories)
     }
 
     private fun buildEveningPlanMessage(
         session: SleepSession,
         localNow: LocalDateTime,
-        userInstructions: String?,
+        memories: List<MemoryEntry>,
     ): String {
         val plan = session.plan
         // Latest evening-plan event, so a manual replan's freshly-captured location wins.
@@ -49,7 +50,7 @@ object AiPromptBuilder {
             appendLine()
             appendLocation(location)
             appendLine()
-            appendUserInstructions(userInstructions)
+            appendMemory(memories)
             appendLine("Plan tomorrow's alarm. Follow the process in your system prompt: read calendar, identify anchor event, estimate commute if applicable, then call set_alarm.")
         }
     }
@@ -71,12 +72,12 @@ object AiPromptBuilder {
         }
     }
 
-    /** Appends the user's standing custom instructions, when set, as a labelled block. */
-    private fun StringBuilder.appendUserInstructions(text: String?) {
-        if (text.isNullOrBlank()) return
-        appendLine("## User instructions")
-        appendLine("Standing instructions from the user — honour them unless they'd push the alarm past the hard latest:")
-        appendLine(text)
+    /** Appends the assistant's durable memory of this user, when any exists, as a labelled block. */
+    private fun StringBuilder.appendMemory(memories: List<MemoryEntry>) {
+        if (memories.isEmpty()) return
+        appendLine("## Memory")
+        appendLine("Standing facts and preferences recorded about the user — honour them unless they'd push the alarm past the hard latest:")
+        memories.forEach { appendLine("- ${it.text}") }
         appendLine()
     }
 
@@ -92,7 +93,7 @@ object AiPromptBuilder {
     private fun buildOvernightReplanMessage(
         session: SleepSession,
         localNow: LocalDateTime,
-        userInstructions: String?,
+        memories: List<MemoryEntry>,
     ): String {
         val plan = session.plan
         val instr = session.currentInstruction
@@ -131,7 +132,7 @@ object AiPromptBuilder {
             appendLine()
             appendLocation(location)
             appendLine()
-            appendUserInstructions(userInstructions)
+            appendMemory(memories)
             appendLine("Decide what the alarm system should do. Call set_alarm if you want to adjust the wake time. If the current alarm is already optimal, respond with a brief explanation and do not call any tool.")
         }
     }

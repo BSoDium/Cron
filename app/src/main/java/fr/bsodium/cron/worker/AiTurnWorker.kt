@@ -35,6 +35,7 @@ import fr.bsodium.cron.ai.tools.SetAlarmTool
 import fr.bsodium.cron.alarm.AlarmScheduler
 import fr.bsodium.cron.calendar.CalendarReader
 import fr.bsodium.cron.calendar.RsvpStatus
+import fr.bsodium.cron.memory.MemoryRepository
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.db.CronDatabase
 import fr.bsodium.cron.session.model.ActionType
@@ -136,8 +137,8 @@ class AiTurnWorker(
             onRoundTripUsage = budget::record,
         )
 
-        val instructions = settingsRepository.currentUserInstructions()
-        val userMessage = AiPromptBuilder.build(session, isEveningPlan, instructions)
+        val memories = MemoryRepository(applicationContext).currentAll()
+        val userMessage = AiPromptBuilder.build(session, isEveningPlan, memories)
 
         return try {
             val outcome = runner.run(sessionId, turnIndex, userMessage)

@@ -7,17 +7,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ai.BudgetStore
-import fr.bsodium.cron.ui.screens.settings.components.CustomInstructionsRow
 import fr.bsodium.cron.ui.screens.settings.components.DailyBudgetRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
 import fr.bsodium.cron.ui.theme.CronTheme
 
 @Composable
 fun AssistantSettingsScreen(
-    userInstructions: String?,
     dailyTokenLimit: Int,
     tokensUsedToday: Int,
-    onUserInstructions: (String) -> Unit,
     onDailyTokenLimit: (Int) -> Unit,
     onRefreshUsage: () -> Unit,
     onBack: () -> Unit,
@@ -33,10 +30,6 @@ fun AssistantSettingsScreen(
     }
 
     SettingsDetailScaffold(title = "Assistant", onBack = onBack) {
-        CustomInstructionsRow(
-            instructions = userInstructions,
-            onSave = onUserInstructions,
-        )
         DailyBudgetRow(
             limit = dailyTokenLimit,
             usedToday = tokensUsedToday,
@@ -51,10 +44,8 @@ fun AssistantSettingsScreen(
 private fun AssistantSettingsScreenPreview() {
     CronTheme {
         AssistantSettingsScreen(
-            userInstructions = "Prefer earlier wake-ups on gym days.",
             dailyTokenLimit = BudgetStore.DEFAULT_DAILY_TOKEN_LIMIT,
             tokensUsedToday = 12_400,
-            onUserInstructions = {},
             onDailyTokenLimit = {},
             onRefreshUsage = {},
             onBack = {},

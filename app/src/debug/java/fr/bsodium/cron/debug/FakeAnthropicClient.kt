@@ -32,8 +32,34 @@ class FakeAnthropicClient : AnthropicMessages {
     private var call = 0
     private val scenario = SCENARIOS.random()
 
-    override suspend fun send(request: MessagesRequest): MessagesResponse =
-        throw UnsupportedOperationException("FakeAnthropicClient supports the streaming path only")
+    /** Only the memory-mutation turn ([fr.bsodium.cron.ai.MemoryTurnRunner]) uses the blocking [send]
+     *  path today — every planning turn streams. Simulates calling `add_memory` once with the
+     *  instruction text, then a confirmation on the follow-up round trip, so the mock exercises the
+     *  same tool-dispatch path a real response would. */
+    override suspend fun send(request: MessagesRequest): MessagesResponse {
+        val turn = call++
+        Log.i(TAG, "send turn=$turn model=${request.model}")
+        val toolNames = request.tools.orEmpty().map { it.name }
+        if ("add_memory" !in toolNames) {
+            return response(request.model, listOf(ContentBlock.Text("[mock] no matching tool")))
+        }
+        if (turn == 0) {
+            val instruction = request.messages.lastOrNull()
+                ?.content.orEmpty()
+                .filterIsInstance<ContentBlock.Text>()
+                .joinToString(" ") { it.text }
+                .substringAfter("## Instruction", "")
+                .trim()
+                .ifBlank { "a new memory" }
+            val toolUse = ContentBlock.ToolUse(
+                id = SIM_MEMORY_ID,
+                name = "add_memory",
+                input = buildJsonObject { put("text", instruction) },
+            )
+            return response(request.model, listOf(toolUse), stopReason = "tool_use")
+        }
+        return response(request.model, listOf(ContentBlock.Text("[mock] Got it, I'll remember that.")))
+    }
 
     override suspend fun stream(
         request: MessagesRequest,
@@ -214,6 +240,7 @@ class FakeAnthropicClient : AnthropicMessages {
         private const val SIM_CAL_ID = "sim-cal-1"
         private const val SIM_COMMUTE_ID = "sim-commute-1"
         private const val SIM_ALARM_ID = "sim-alarm-1"
+        private const val SIM_MEMORY_ID = "sim-memory-1"
         private const val WORD_DELAY_MS = 20L
         private const val BURST_PAUSE_MS = 280L
         private const val ERROR_RATE = 0.10f

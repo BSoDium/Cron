@@ -63,7 +63,7 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = buildList {
     add(SettingsSection(
         "ASSISTANT",
         listOf(
-            SettingsCategory(SETTINGS_ASSISTANT, MaterialSymbol.AutoAwesome, "Assistant", "Instructions and token budget"),
+            SettingsCategory(SETTINGS_ASSISTANT, MaterialSymbol.AutoAwesome, "Assistant", "Token budget and developer tools"),
             SettingsCategory(SETTINGS_RELIABILITY, MaterialSymbol.Shield, "Reliability", "Permissions that keep alarms on time"),
         ),
     ))

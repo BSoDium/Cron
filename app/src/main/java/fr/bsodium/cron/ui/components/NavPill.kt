@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HOME
+import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronColors
@@ -41,6 +42,15 @@ import fr.bsodium.cron.ui.theme.Symbol
 
 private val NAV_SLOT_SIZE = 48.dp
 private val NAV_INDICATOR_SIZE = 44.dp
+
+private data class PillDestination(val route: String, val symbol: MaterialSymbol, val label: String)
+
+private val DESTINATIONS = listOf(
+    PillDestination(ROUTE_HOME, MaterialSymbol.Alarm, "Home"),
+    // Reuses the existing Article glyph — see CronNavigationBar.kt's DESTINATIONS for why.
+    PillDestination(ROUTE_MEMORY, MaterialSymbol.Article, "Memory"),
+    PillDestination(SETTINGS_ROOT, MaterialSymbol.Settings, "Settings"),
+)
 
 @Composable
 internal fun NavPill(
@@ -58,8 +68,9 @@ internal fun NavPill(
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavSlot(currentRoute, ROUTE_HOME, MaterialSymbol.Alarm, "Home", onNavigate)
-            NavSlot(currentRoute, SETTINGS_ROOT, MaterialSymbol.Settings, "Settings", onNavigate)
+            for (dest in DESTINATIONS) {
+                NavSlot(currentRoute, dest.route, dest.symbol, dest.label, onNavigate)
+            }
         }
     }
 }

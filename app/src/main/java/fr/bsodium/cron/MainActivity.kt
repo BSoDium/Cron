@@ -61,6 +61,8 @@ import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.home.HomeScreen
 import fr.bsodium.cron.ui.screens.home.HomeViewModel
+import fr.bsodium.cron.ui.screens.memory.MemoryScreen
+import fr.bsodium.cron.ui.screens.memory.MemoryViewModel
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
@@ -80,8 +82,9 @@ private const val ROUTE_ONBOARDING = "onboarding"
 
 /** Tab destinations, shared with [CronBottomBar] so a route rename can't silently un-highlight a tab. */
 const val ROUTE_HOME = "home"
+const val ROUTE_MEMORY = "memory"
 
-private val TAB_ROUTES = setOf(ROUTE_HOME, SETTINGS_ROOT)
+private val TAB_ROUTES = setOf(ROUTE_HOME, ROUTE_MEMORY, SETTINGS_ROOT)
 
 private val forwardTween = tween<Float>(durationMillis = FORWARD_MS, easing = EaseInOutCubic)
 
@@ -286,6 +289,15 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate(SETTINGS_SCHEDULE)
                                         },
                                     )
+                                }
+                                composable(
+                                    route = ROUTE_MEMORY,
+                                    enterTransition = tabEnter,
+                                    exitTransition = tabExit,
+                                    popEnterTransition = tabEnter,
+                                    popExitTransition = tabExit,
+                                ) {
+                                    MemoryScreen(viewModel = viewModel<MemoryViewModel>())
                                 }
                                 settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                             }
