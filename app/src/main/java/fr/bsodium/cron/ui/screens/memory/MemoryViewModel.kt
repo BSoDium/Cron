@@ -37,4 +37,9 @@ class MemoryViewModel(application: Application) : AndroidViewModel(application) 
         _isMutating.value = true
         repository.triggerMutation(trimmed)
     }
+
+    /** Swipe-to-delete: a direct removal, not routed through the assistant — see MemoryScreen's KDoc. */
+    fun deleteEntry(id: Long) {
+        viewModelScope.launch { repository.delete(id) }
+    }
 }
