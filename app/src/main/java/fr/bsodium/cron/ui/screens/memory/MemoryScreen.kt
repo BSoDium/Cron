@@ -1,5 +1,12 @@
 package fr.bsodium.cron.ui.screens.memory
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -27,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.screens.memory.components.MemoryComposer
@@ -66,67 +75,97 @@ internal fun MemoryContent(
     modifier: Modifier = Modifier,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
+    var composerExpanded by rememberSaveable { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val scrimInteractionSource = remember { MutableInteractionSource() }
+    val composerBottomPaddingRaw by animateDpAsState(
+        targetValue = if (composerExpanded) Spacing.sm else navInsetBottom + Spacing.navBarClearance,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "memory-composer-bottom-padding",
+    )
+    val composerBottomPadding = composerBottomPaddingRaw.coerceAtLeast(0.dp)
 
-    Scaffold(
-        modifier = modifier
-            .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0),
-        topBar = { PageAppBar(title = "Memory", scrollBehavior = scrollBehavior) },
-        bottomBar = {
-            MemoryComposer(
-                value = draft,
-                onValueChange = { draft = it },
-                onSend = {
-                    onSend(draft)
-                    draft = ""
-                },
-                enabled = !isMutating,
-                modifier = Modifier
-                    .imePadding()
-                    .padding(horizontal = Spacing.md)
-                    .padding(top = Spacing.sm, bottom = navInsetBottom + Spacing.navBarClearance),
-            )
-        },
-    ) { inner ->
-        if (entries.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "No memories yet — tell me something to remember.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = Spacing.xxl),
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = Spacing.lg,
-                    end = Spacing.lg,
-                    top = inner.calculateTopPadding() + Spacing.sm,
-                    bottom = inner.calculateBottomPadding() + Spacing.sm,
-                ),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-            ) {
-                items(entries, key = { it.id }) { entry ->
-                    MemoryEntryRow(entry = entry, onDelete = { onDelete(entry.id) })
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0),
+            topBar = { PageAppBar(title = "Memory", scrollBehavior = scrollBehavior) },
+        ) { inner ->
+            if (entries.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "No memories yet — tell me something to remember.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = Spacing.xxl),
+                    )
                 }
-                if (isMutating) {
-                    item(key = "pending") {
-                        Text(
-                            text = "Updating memory…",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.xs),
-                        )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = Spacing.lg,
+                        end = Spacing.lg,
+                        top = inner.calculateTopPadding() + Spacing.sm,
+                        bottom = navInsetBottom + Spacing.navBarClearance,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                ) {
+                    items(entries, key = { it.id }) { entry ->
+                        MemoryEntryRow(entry = entry, onDelete = { onDelete(entry.id) })
+                    }
+                    if (isMutating) {
+                        item(key = "pending") {
+                            Text(
+                                text = "Updating memory…",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.xs),
+                            )
+                        }
                     }
                 }
             }
         }
+
+        AnimatedVisibility(
+            visible = composerExpanded,
+            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            label = "memory-scrim",
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clickable(
+                        interactionSource = scrimInteractionSource,
+                        indication = null,
+                        onClick = { composerExpanded = false },
+                    ),
+            )
+        }
+
+        MemoryComposer(
+            value = draft,
+            onValueChange = { draft = it },
+            onSend = {
+                onSend(draft)
+                draft = ""
+                composerExpanded = false
+            },
+            enabled = !isMutating,
+            expanded = composerExpanded,
+            onExpandedChange = { composerExpanded = it },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .imePadding()
+                .padding(bottom = composerBottomPadding),
+        )
     }
 }
 
