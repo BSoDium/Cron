@@ -451,8 +451,11 @@ class TimelineTrackGeometryTest {
         hasLayoutInfoEntry: Boolean = true,
         staleMillis: Long = 0L,
         staleThresholdMillis: Long = 40L,
+        // Defaults to actively-scrolling so every existing staleness-focused test below keeps exercising
+        // that logic unchanged; the isScrollInProgress-specific tests set this explicitly.
+        isScrollInProgress: Boolean = true,
         noRealLazyColumn: Boolean = false,
-    ) = resolveAnchorYSource(isLatest, hasLayoutInfoEntry, staleMillis, staleThresholdMillis, noRealLazyColumn)
+    ) = resolveAnchorYSource(isLatest, hasLayoutInfoEntry, staleMillis, staleThresholdMillis, isScrollInProgress, noRealLazyColumn)
 
     @Test
     fun resolveAnchorYSource_latest_alwaysLive_evenWhenStaleAndInLayoutInfo() {
@@ -495,6 +498,26 @@ class TimelineTrackGeometryTest {
     @Test
     fun resolveAnchorYSource_justBelowThreshold_stillLive() {
         assertEquals(AnchorYSource.Live, ySource(staleMillis = 39L, staleThresholdMillis = 40L, hasLayoutInfoEntry = true))
+    }
+
+    // Round 42 (docs/color-roles.md): a row simply at rest has no reason for its callback to keep
+    // firing, so staleness by elapsed time alone must never demote it once the list has stopped moving —
+    // nonLatestAnchorCenterY's own formula was found measurably wrong for exactly this idle case.
+    @Test
+    fun resolveAnchorYSource_staleButAtRest_prefersLiveRegardlessOfElapsedTime() {
+        assertEquals(
+            AnchorYSource.Live,
+            ySource(staleMillis = 10_000L, staleThresholdMillis = 40L, hasLayoutInfoEntry = true, isScrollInProgress = false),
+        )
+    }
+
+    // Round 40's actual failure mode is a fast fling specifically — this must still fall back while genuinely scrolling.
+    @Test
+    fun resolveAnchorYSource_staleWhileScrolling_stillFallsBackToLayoutInfo() {
+        assertEquals(
+            AnchorYSource.LayoutInfo,
+            ySource(staleMillis = 100L, staleThresholdMillis = 40L, hasLayoutInfoEntry = true, isScrollInProgress = true),
+        )
     }
 
     // A single shared Pill instance, not a fresh `AnchorShape.Pill()` per assertion: Pill's pressProgress lambda field makes two independently-constructed Pill() instances NOT structurally equal, since default-argument lambdas aren't guaranteed to be the same singleton across call sites.

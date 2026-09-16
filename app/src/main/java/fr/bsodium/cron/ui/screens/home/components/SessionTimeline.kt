@@ -12,7 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
@@ -21,8 +20,11 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -158,20 +160,26 @@ private fun LazyItemScope.TimelineRowContent(
     when (item) {
         // Every header renders identically today (see DayHeaderRow's KDoc) and shares the same animateItem choreography as the AiRun/Event rows below it.
         is TimelineItem.DayHeader -> DayHeaderRow(item = item, modifier = gatedAnimateItem(suppressEntranceAnimation))
-        is TimelineItem.AiRun -> AiRunNode(
-            item = item,
-            registry = registry,
-            isSegmentTop = index == firstAnchorIndex,
-            isSegmentBottom = index == lastAnchorIndex,
-            isAsleepAbove = asleepStates[index],
-            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-            isNewlyArrived = item.id in newlyArrivedIds,
-            onClick = { onOpenAiRun(item.iteration, item.sessionId) },
-            // zIndex ahead of animateItem: normal paint order would draw a newly-arrived latest row under the still-demoting previous latest row while its placement slide is in flight; painting the incoming hero on top removes that overlap source.
-            modifier = Modifier
-                .zIndex(if (item.isLatest) 1f else 0f)
-                .then(gatedAnimateItem(suppressEntranceAnimation)),
-        )
+        is TimelineItem.AiRun -> {
+            // True for exactly the one recomposition where this row's own isLatest first flips true→false — it never flips back (see TimelineNode.kt's latestFraction KDoc), so this fires at most once per row identity. Snaps this row's own placement instead of animating it: the row a fresh insertion demotes starts its slide from the exact slot the new Latest row arrives into, so an animated placementSpec here has the demoted row still visually overlapping the incoming row's opaque fade-in for several frames (a real double-exposure, confirmed via on-device screen recording) — see docs/color-roles.md Round 41.
+            val wasLatest = remember(item.id) { mutableStateOf(item.isLatest) }
+            val justDemoted = wasLatest.value && !item.isLatest
+            SideEffect { wasLatest.value = item.isLatest }
+            AiRunNode(
+                item = item,
+                registry = registry,
+                isSegmentTop = index == firstAnchorIndex,
+                isSegmentBottom = index == lastAnchorIndex,
+                isAsleepAbove = asleepStates[index],
+                isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+                isNewlyArrived = item.id in newlyArrivedIds,
+                onClick = { onOpenAiRun(item.iteration, item.sessionId) },
+                // zIndex still guards the tail end of the transition (e.g. a demoted row's own fade/shape settling) even with the placement snap above.
+                modifier = Modifier
+                    .zIndex(if (item.isLatest) 1f else 0f)
+                    .then(gatedAnimateItem(suppressEntranceAnimation || justDemoted)),
+            )
+        }
         is TimelineItem.Event -> EventNode(
             item = item,
             registry = registry,
@@ -309,6 +317,8 @@ internal fun AiRunNode(
         isAsleepAbove = isAsleepAbove,
         isAsleepBelow = isAsleepBelow,
         isNewlyArrived = isNewlyArrived,
+        // Matches the title Crossfade's own targetState below (item.isLatest, not anchor is TimelineAnchor.Latest) — see TimelineNode.kt's isHeroPositioned KDoc for the lag this fixes: the anchor's Loader shape can still be showing (isStreaming) while this row is already the newest one, but the hero padding/alignment blend shouldn't wait for streaming to end just because the shape does.
+        isHeroPositioned = item.isLatest,
         onClick = onClick,
         modifier = modifier,
         // TimelineNode boosts this internally via latestFraction now (Phase 11, docs/color-roles.md) — always pass the resting value.
@@ -336,16 +346,16 @@ internal fun AiRunNode(
                             CronTypography.timelineHeroTimeNew.lineHeight.toDp()
                     }
                 }
-                // Fades the hero headline ↔ plain system-message swap instead of cutting instantly, pairing with TimelineNode's animated anchor-radius shrink; heightIn lives on this wrapping Box (not Crossfade, which has no contentAlignment and top-aligns internally) so centering the demoted text belongs here.
-                Box(
-                    modifier = Modifier.heightIn(min = heroMinHeight),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    Crossfade(
-                        targetState = item.isLatest,
-                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                        label = "ai-run-hero-demote",
-                    ) { isLatest ->
+                // Crossfade's own internal Box top-aligns both branches and only shrinks to the demoted branch's shorter natural height once the hero branch is fully faded out and removed — so reserving heroMinHeight on an outer wrapper alone left the demoted title sitting near the top for the whole fade, then snapping down to center the instant the hero branch dropped out. Forcing every branch to heroMinHeight itself, centered, keeps the title's position continuous across that drop.
+                Crossfade(
+                    targetState = item.isLatest,
+                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                    label = "ai-run-hero-demote",
+                ) { isLatest ->
+                    Box(
+                        modifier = Modifier.height(heroMinHeight),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
                         if (isLatest) {
                             // Computed here from this branch's own (smart-cast true) `isLatest`, not the outer `item.isLatest` — Crossfade still composes this branch for one extra frame while fading it OUT during a demotion, by which point `item.isLatest` has already flipped false; reading the outer value here made that fade-out frame render with newTime/prevTime/kickerText all nulled out, flashing the NO_ALARM_LABEL fallback below (Phase 10, docs/color-roles.md).
                             val newTime = iter.thread.newAlarmTime
