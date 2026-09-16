@@ -1,5 +1,8 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
@@ -49,9 +52,13 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontSynthesis
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -78,7 +85,6 @@ private const val LINE_HEIGHT_RATIO = 26f / 18f
 private const val SEND_VISIBLE_MIN_LENGTH = 2
 private val SEND_BUTTON_HEIGHT = 64.dp
 private val SEND_BUTTON_BOTTOM_PADDING = Spacing.xl
-private val SEND_ICON_SIZE = 24.dp
 private const val SEND_LABEL = "Remember this"
 private val EDGE_FADE_HEIGHT = 40.dp
 private val TOP_EDGE_FADE_HEIGHT = 96.dp
@@ -224,6 +230,8 @@ internal fun MemoryFullScreenComposer(
                     .padding(horizontal = Spacing.xxl, vertical = SEND_BUTTON_BOTTOM_PADDING),
                 label = "memory-send-visibility",
             ) {
+                val sendLabelStyle = MaterialTheme.typography.titleLarge
+                val sendIconSize = rememberXHeightDp(sendLabelStyle)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -239,7 +247,7 @@ internal fun MemoryFullScreenComposer(
                 ) {
                     Text(
                         text = SEND_LABEL,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = sendLabelStyle,
                         color = scheme.onPrimary,
                     )
                     Spacer(Modifier.width(Spacing.sm))
@@ -247,7 +255,7 @@ internal fun MemoryFullScreenComposer(
                         symbol = MaterialSymbol.ArrowForward,
                         contentDescription = null,
                         tint = scheme.onPrimary,
-                        size = SEND_ICON_SIZE,
+                        size = sendIconSize,
                     )
                 }
             }
@@ -282,6 +290,32 @@ private fun fittingFontSize(
         candidate -= FONT_STEP.value
     }
     return candidate.coerceAtLeast(MIN_FONT_SIZE.value).sp
+}
+
+/** The x-height (ink height of a lowercase "x") of [style] at its resolved size — measured, not
+ *  approximated as a fraction of font size, via the same [android.graphics.Paint.getTextBounds]
+ *  technique [fr.bsodium.cron.ui.theme.Symbol] already uses to centre glyphs on their own ink rather
+ *  than font-box metrics. Used to size the send button's arrow to match the visual weight of its
+ *  label's lowercase letters instead of a arbitrarily-picked icon size next to it. */
+@Composable
+private fun rememberXHeightDp(style: TextStyle): Dp {
+    val resolver = LocalFontFamilyResolver.current
+    val density = LocalDensity.current
+    return remember(resolver, style.fontFamily, style.fontWeight, style.fontSize, density) {
+        val typeface = resolver.resolve(
+            fontFamily = style.fontFamily,
+            fontWeight = style.fontWeight ?: FontWeight.Normal,
+            fontStyle = style.fontStyle ?: FontStyle.Normal,
+            fontSynthesis = FontSynthesis.None,
+        ).value as? Typeface
+        val paint = Paint().apply {
+            this.typeface = typeface
+            textSize = with(density) { style.fontSize.toPx() }
+        }
+        val inkBounds = Rect()
+        paint.getTextBounds("x", 0, 1, inkBounds)
+        with(density) { inkBounds.height().toDp() }
+    }
 }
 
 /** Fades the top and bottom of scrollable content to transparent — same offscreen-layer +
