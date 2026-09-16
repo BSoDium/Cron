@@ -21,7 +21,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -30,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.PageAppBar
@@ -92,9 +92,8 @@ internal fun MemoryContent(
     // Compact nav: the collapsed trigger lives in CronFloatingNav's own row instead of floating
     // here (same pill-shifts-left mechanism Home's FAB already uses) — publish/withdraw a
     // FabAction as the composer opens and closes, mirroring HomeScreen's own fabRegistry usage.
-    val fabOwner = remember { Any() }
     DisposableEffect(fabRegistry) {
-        onDispose { fabRegistry?.clear(fabOwner) }
+        onDispose { fabRegistry?.clear(ROUTE_MEMORY) }
     }
     LaunchedEffect(composerExpanded) {
         onComposerExpandedChange(composerExpanded)
@@ -102,11 +101,11 @@ internal fun MemoryContent(
     LaunchedEffect(composerExpanded, useCompactNav, fabRegistry) {
         if (useCompactNav && !composerExpanded) {
             fabRegistry?.set(
-                fabOwner,
+                ROUTE_MEMORY,
                 FabAction(onClick = { composerExpanded = true }, icon = MaterialSymbol.HistoryEdu, label = "Remember", filled = false),
             )
         } else {
-            fabRegistry?.clear(fabOwner)
+            fabRegistry?.clear(ROUTE_MEMORY)
         }
     }
 

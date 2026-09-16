@@ -33,6 +33,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -108,28 +109,27 @@ internal val tabExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> Ex
 }
 
 /**
- * Lets a screen publish its primary action to the [CronFloatingNav] FAB while the screen is
- * mounted. The FAB clears when the screen calls [clear] from its onDispose hook, so other tabs
- * don't inherit a stale action. [set]/[clear] take an `owner` token (each caller's own
- * `remember { Any() }`) so an outgoing screen's onDispose — which can fire *after* the incoming
- * screen has already mounted and published its own action, since NavHost keeps both composed for
- * the duration of the tab transition — can't clear an action it no longer owns.
+ * Lets a tab screen publish its primary action to the [CronFloatingNav] FAB while mounted, keyed
+ * by [route] rather than a single last-writer-wins slot. Predictive back's built-in seekable
+ * preview (`docs/navigation.md`) composes the gesture's *target* tab (e.g. Home) alongside the
+ * *current* one (e.g. Memory) as soon as the drag starts — well before it commits — so a shared
+ * slot let the target's mount stomp the current tab's action mid-gesture, and let a cancelled
+ * gesture's unmount clear it out from under the tab the user never actually left. [actionFor]
+ * reads back against `currentRoute`, which the seekable preview leaves untouched until release,
+ * so the FAB shown always matches the tab that's actually current.
  */
 class FabRegistry {
-    var action by mutableStateOf<FabAction?>(null)
-        private set
-    private var owner: Any? = null
+    private val actions = mutableStateMapOf<String, FabAction?>()
 
-    fun set(owner: Any, action: FabAction?) {
-        this.owner = owner
-        this.action = action
+    fun set(route: String, action: FabAction?) {
+        actions[route] = action
     }
 
-    fun clear(owner: Any) {
-        if (this.owner !== owner) return
-        this.owner = null
-        this.action = null
+    fun clear(route: String) {
+        actions.remove(route)
     }
+
+    fun actionFor(route: String?): FabAction? = actions[route]
 }
 
 class MainActivity : ComponentActivity() {
@@ -222,7 +222,7 @@ class MainActivity : ComponentActivity() {
                                     CronFloatingNav(
                                         currentRoute = currentRoute,
                                         onNavigate = navigate,
-                                        fabAction = fabRegistry.action,
+                                        fabAction = fabRegistry.actionFor(currentRoute),
                                         fabChevron = fabChevron,
                                     )
                                 } else {
@@ -235,7 +235,7 @@ class MainActivity : ComponentActivity() {
                         },
                         floatingActionButton = {
                             if (!useCompactNav) {
-                                val action = fabRegistry.action
+                                val action = fabRegistry.actionFor(currentRoute)
                                 var lastShown by remember { mutableStateOf(action) }
                                 if (action != null) lastShown = action
                                 val fabVisible = currentRoute == ROUTE_HOME && action != null
