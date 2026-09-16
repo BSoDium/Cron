@@ -121,6 +121,14 @@ android {
         getByName("benchmark") {
             kotlin.srcDirs("src/release/java")
         }
+        // Exported Room schema JSONs, read by MigrationTestHelper in Robolectric unit tests. Must live
+        // in "main" assets, not "test": Robolectric's Instrumentation.context.assets resolves against
+        // the merged MAIN assets output (see generateDebugUnitTestConfig's test_config.properties),
+        // not a separate test-only asset merge — this repo runs all Room tests under Robolectric, not
+        // instrumented androidTest, so this is the source set that actually gets picked up.
+        getByName("main") {
+            assets.srcDirs("$projectDir/schemas")
+        }
     }
 
     compileOptions {
@@ -141,6 +149,11 @@ android {
 
 composeCompiler {
     stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose_stability.conf"))
+}
+
+// Exports each Room schema version as JSON so migrations can be tested against a real prior schema.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 // Failing tests print their full stack trace into the CI log; the HTML report is a download-only artifact.

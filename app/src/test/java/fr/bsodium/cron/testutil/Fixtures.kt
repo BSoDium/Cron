@@ -1,5 +1,6 @@
 package fr.bsodium.cron.testutil
 
+import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.DayPlan
 import fr.bsodium.cron.session.model.EventData
@@ -101,6 +102,14 @@ object Fixtures {
         createdAt = createdAt,
         updatedAt = updatedAt,
     )
+
+    fun memoryEntry(
+        id: Long = 0,
+        text: String = "Prefers earlier wake-ups on gym days",
+        category: String? = null,
+        createdAt: Instant = T0,
+        updatedAt: Instant = T0,
+    ) = MemoryEntry(id = id, text = text, category = category, createdAt = createdAt, updatedAt = updatedAt)
 
     /** [count] sessions, each on its own consecutive calendar date ending at [startingAt] (index 0 is
      *  the most recent), each carrying a same-day SleepOnset/OutOfBedConfirmed event pair. Enough to
