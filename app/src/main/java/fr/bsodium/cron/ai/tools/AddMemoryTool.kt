@@ -11,8 +11,17 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** Adds a new durable memory entry. */
-class AddMemoryTool(private val repository: MemoryRepository) : Tool {
+/** Adds a new durable memory entry. When [placeholderId] is given (the in-flight placeholder row
+ *  the ViewModel inserted before this turn started -- see `MemoryRepository.addPending`), the first
+ *  call in a turn finalizes that row in place rather than inserting a second one; a model can call
+ *  this tool multiple times per turn, so only the first call gets to reuse the placeholder. */
+class AddMemoryTool(
+    private val repository: MemoryRepository,
+    private val placeholderId: Long? = null,
+) : Tool {
+
+    var placeholderConsumed: Boolean = false
+        private set
 
     override val definition: ToolDefinition = ToolDefinition(
         name = NAME,
@@ -35,7 +44,12 @@ class AddMemoryTool(private val repository: MemoryRepository) : Tool {
             ?: return ToolResult("""{"error":"text is required"}""", isError = true)
         val category = input.jsonObject["category"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
 
-        val id = repository.add(text = text, category = category)
+        val id = if (!placeholderConsumed && placeholderId != null && repository.finalizePending(placeholderId, text, category)) {
+            placeholderConsumed = true
+            placeholderId
+        } else {
+            repository.add(text = text, category = category)
+        }
         return ToolResult("""{"id":$id,"logged":true}""")
     }
 

@@ -35,7 +35,10 @@ class MemoryViewModel(application: Application) : AndroidViewModel(application) 
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         _isMutating.value = true
-        repository.triggerMutation(trimmed)
+        viewModelScope.launch {
+            val placeholderId = repository.addPending()
+            repository.triggerMutation(trimmed, placeholderId)
+        }
     }
 
     /** Swipe-to-delete: a direct removal, not routed through the assistant — see MemoryScreen's KDoc. */
