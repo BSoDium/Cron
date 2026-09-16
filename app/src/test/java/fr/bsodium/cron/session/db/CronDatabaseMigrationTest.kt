@@ -35,6 +35,30 @@ class CronDatabaseMigrationTest {
         db.close()
     }
 
+    @Test
+    fun migrate2To3_addsPendingColumn_defaultingToFalseForExistingRows() {
+        helper.createDatabase(TEST_DB, 2).apply {
+            execSQL(
+                "INSERT INTO memory_entries (text, category, createdAt, updatedAt) VALUES ('pre-existing', NULL, 0, 0)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3)
+        db.execSQL(
+            "INSERT INTO memory_entries (text, category, createdAt, updatedAt, pending) VALUES ('placeholder', NULL, 1, 1, 1)"
+        )
+        db.query("SELECT text, pending FROM memory_entries ORDER BY createdAt ASC").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("pre-existing", cursor.getString(0))
+            assertEquals(0, cursor.getInt(1))
+            cursor.moveToNext()
+            assertEquals("placeholder", cursor.getString(0))
+            assertEquals(1, cursor.getInt(1))
+        }
+        db.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test"
     }

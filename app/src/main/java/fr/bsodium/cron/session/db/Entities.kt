@@ -71,4 +71,5 @@ data class MemoryEntity(
     val category: String?, // free-text, optional -- no closed set defined by the feature spec
     val createdAt: Long,
     val updatedAt: Long,
+    val pending: Boolean = false,
 )

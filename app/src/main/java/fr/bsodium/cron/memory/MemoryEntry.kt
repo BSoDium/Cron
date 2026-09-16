@@ -8,4 +8,5 @@ data class MemoryEntry(
     val category: String?,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val pending: Boolean = false,
 )
