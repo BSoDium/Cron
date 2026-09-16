@@ -218,13 +218,16 @@ private const val PAINT_STALE_THRESHOLD_MS = 40L
  *
  *  X always comes from the live [LayoutCoordinates] handle ([AnchorPosition]) — scroll-invariant (every
  *  anchor centers in the same fixed-width gutter), so per-frame staleness there is harmless. Y's source
- *  is decided per anchor by [resolveAnchorYSource] (Phase 8, docs/color-roles.md): the live handle by
- *  default (it correctly reflects `animateItem`'s real interpolated placement — see
+ *  is decided per anchor by [resolveAnchorYSource] (Phase 8 + Round 42, docs/color-roles.md): the live
+ *  handle by default (it correctly reflects `animateItem`'s real interpolated placement — see
  *  [nonLatestAnchorCenterY]'s KDoc for why), falling back to [nonLatestAnchorCenterY]'s `layoutInfo`
- *  snapshot only once the live handle has gone genuinely stale (Round 40's jank scenario, not an
- *  actively-animating spring, which keeps the live handle fresh every tick). The Latest row is a
- *  deliberate, permanent exception — always live, never falls back — since its anchor aligns to a
- *  variable-height hero headline that only the live handle measures correctly.
+ *  snapshot only once the live handle has gone genuinely stale *during active scroll* (Round 40's jank
+ *  scenario — a fast fling, not an actively-animating spring, which keeps the live handle fresh every
+ *  tick, and not a row simply at rest, whose callback has no reason to fire again but whose last-reported
+ *  position is still correct — Round 42 found `nonLatestAnchorCenterY`'s own formula measurably wrong for
+ *  exactly that idle case). The Latest row is a deliberate, permanent exception — always live, never
+ *  falls back — since its anchor aligns to a variable-height hero headline that only the live handle
+ *  measures correctly.
  *
  *  A non-Latest anchor that's both stale AND missing from `listState.layoutInfo.visibleItemsInfo` this
  *  frame is EXCLUDED rather than painted with a guess — unless `visibleItemsInfo` is entirely empty,
@@ -277,6 +280,7 @@ private fun computePlacedAnchors(
             hasLayoutInfoEntry = item != null,
             staleMillis = staleness.staleMillis(id, nowNanos),
             staleThresholdMillis = PAINT_STALE_THRESHOLD_MS,
+            isScrollInProgress = listState.isScrollInProgress,
             noRealLazyColumn = noRealLazyColumn,
         )
         val cy = when (source) {

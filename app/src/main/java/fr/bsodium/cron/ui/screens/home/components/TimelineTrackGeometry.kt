@@ -63,19 +63,33 @@ internal fun nonLatestAnchorCenterY(
  *  `onGloballyPositioned`-reported position) is the default: it correctly reflects `animateItem`'s
  *  real interpolated placement, since `LazyListMeasuredItem.place()` re-runs and re-reports position on
  *  every tick a placement spring is active. [LayoutInfo] is used only when the live position has gone
- *  genuinely stale — the live callback has stopped firing altogether (Round 40's actual failure mode: a
- *  large single-frame scroll jump under jank can skip a row's callback for a frame), not merely because
- *  a spring is mid-flight, which keeps the callback firing every tick and so never reads as stale here.
- *  [Excluded] means: stale, and there's nothing safe to paint with — a real `LazyColumn` genuinely
- *  doesn't have this id visible right now (better to skip a frame than guess; see [nonLatestAnchorCenterY]'s
- *  history for why an earlier, less careful fallback here reintroduced the Round 40 race). */
+ *  genuinely stale *while the list is actively scrolling* — the live callback has stopped firing
+ *  altogether (Round 40's actual failure mode: a large single-frame scroll jump under jank can skip a
+ *  row's callback for a frame), not merely because a spring is mid-flight, which keeps the callback
+ *  firing every tick and so never reads as stale here.
+ *
+ *  Round 42 (docs/color-roles.md) found `nonLatestAnchorCenterY`'s formula can be measurably wrong
+ *  (confirmed live, ~11.5px, via direct instrumentation comparing it against the true
+ *  `onGloballyPositioned` position) for a row that's simply settled and at rest — nothing about it is
+ *  animating, so its callback has no reason to fire again, and elapsed time alone doesn't mean the last
+ *  value it reported is wrong. Gating the fallback on [isScrollInProgress] fixes this without touching
+ *  Round 40's actual danger zone: that failure mode is specifically a fast **fling**, so it only exists
+ *  while genuinely scrolling. At rest, a stale-by-time-alone live handle is still trustworthy — there's
+ *  nothing in flight that could have moved it out from under a correct value.
+ *
+ *  [Excluded] means: stale during active scroll, and there's nothing safe to paint with — a real
+ *  `LazyColumn` genuinely doesn't have this id visible right now (better to skip a frame than guess; see
+ *  [nonLatestAnchorCenterY]'s history for why an earlier, less careful fallback here reintroduced the
+ *  Round 40 race). */
 internal enum class AnchorYSource { Live, LayoutInfo, Excluded }
 
 /** Pure decision behind [AnchorYSource] — see that enum's KDoc for the reasoning. [staleMillis] must be
  *  wall-clock elapsed time since the anchor's live position last actually updated, not a draw-call
  *  count: `computePlacedAnchors` runs once per `drawBehind` invocation, which isn't strictly 1:1 with
  *  vsync frames, so a call count is only a proxy for elapsed time, not the thing itself — especially
- *  under the exact multi-row-`animateItem` load this function exists to handle correctly.
+ *  under the exact multi-row-`animateItem` load this function exists to handle correctly. [isScrollInProgress]
+ *  is `LazyListState`'s own flag — Round 40's freeze-then-jump failure mode only exists during a fling;
+ *  at rest, staleness alone never demotes Live (Round 42).
  *  [noRealLazyColumn] mirrors Phase 7's compatibility path: true only when `listState.layoutInfo
  *  .visibleItemsInfo` is entirely empty (an isolated screenshot test/`@Preview` with no real
  *  `LazyColumn` behind `listState` at all), in which case falling back to a stale live position is still
@@ -85,9 +99,11 @@ internal fun resolveAnchorYSource(
     hasLayoutInfoEntry: Boolean,
     staleMillis: Long,
     staleThresholdMillis: Long,
+    isScrollInProgress: Boolean,
     noRealLazyColumn: Boolean,
 ): AnchorYSource = when {
     isLatest -> AnchorYSource.Live
+    !isScrollInProgress -> AnchorYSource.Live
     staleMillis < staleThresholdMillis -> AnchorYSource.Live
     hasLayoutInfoEntry -> AnchorYSource.LayoutInfo
     noRealLazyColumn -> AnchorYSource.Live

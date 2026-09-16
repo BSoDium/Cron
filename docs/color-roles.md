@@ -1355,3 +1355,42 @@ pinpointing the exact frame.
   gate green, Roborazzi re-recorded for `TimelineNodeScreenshotTest`/`SessionTimelineScreenshotTest` with
   no diffs (every existing suite exercises only settled `isLatest`/`isStreaming` combinations, where
   `isHeroPositioned` and the old `anchor is TimelineAnchor.Latest` check already agreed).
+
+Round 43 — a third, unrelated symptom on a completely different anchor: a non-Latest row's *pill-shaped
+socket* would occasionally sit measurably higher than the icon actually drawn inside it — not during any
+particular transition, and not reliably reproducible on demand ("it simply self-fixes sometimes," per the
+live report) — visible on any row, any icon, well after everything had settled.
+
+- **Root cause, found from real numbers via a temporary three-point diagnostic** (`Log.d` at the point
+  `TimelineNode.kt` reports its true `onGloballyPositioned` position, at `TimelineTrackOverlay.kt`'s own
+  Y-source decision, and at `latestFraction` itself — all removed after diagnosis). The confirmed chain,
+  reproduced three separate times with the exact same signature:
+  - `liveY` (the row's real, current `onGloballyPositioned`-derived position) was correct in **every**
+    single capture, with no exceptions — including every case flagged below as wrong.
+  - `nonLatestAnchorCenterY`'s `layoutInfo`-derived formula was sometimes off by a fixed, non-transient
+    ~11.5px — present from the very first frame a row was measured this way, unchanged across 10+ seconds
+    of otherwise-idle observation. Not caused by lingering hero padding (ruled out directly: the gap was
+    identical whether `effectiveVerticalPadding` had just reached its settled 12dp or had been there the
+    whole time) — its actual cause (something about `LazyListItemInfo.offset` itself under-reporting by
+    that amount for some rows) wasn't fully pinned down, and didn't need to be for the fix below.
+  - `resolveAnchorYSource` was choosing the wrong side anyway: [AnchorYSource.LayoutInfo] was reached
+    whenever a row's `onGloballyPositioned` callback simply hadn't fired in the last 40ms
+    (`PAINT_STALE_THRESHOLD_MS`) — which happens constantly for a row that's genuinely settled and has no
+    reason to re-fire, not just for Round 40's fast-fling freeze. The staleness check couldn't tell "this
+    row froze mid-scroll and its cached position is now wrong" (Round 40's real danger) from "this row is
+    simply at rest and its cached position is still exactly right" (this bug) — both look identical by
+    elapsed-time-alone, but only the first one is actually unsafe to trust.
+- **Fix: gate the `LayoutInfo` fallback on `LazyListState.isScrollInProgress`, not staleness alone.**
+  Round 40's actual failure mode is specifically a fast fling — it only exists while the list is
+  genuinely scrolling. At rest, a `LayoutCoordinates` handle that hasn't fired recently is still
+  live and correct (it isn't a frozen snapshot; querying it walks the current layout tree), so there's
+  nothing to distrust. `resolveAnchorYSource` now checks `!isScrollInProgress -> Live` before the
+  staleness check, so a settled row never falls back to the (confirmed-sometimes-wrong) `layoutInfo`
+  formula purely because time passed — while a genuine fast-fling freeze, which only happens *during*
+  active scroll, is caught exactly as before.
+- **Verified live**, three sequential replans (mid-stream and fully settled, both light and dark theme —
+  the bug's own repro had gone stale between sessions when the device's day/night theme flipped),
+  ~220 frames pixel-measured directly against the true icon position: zero instances of the signature
+  that reproduced reliably (3 for 3) before the fix. Full local gate green;
+  `TimelineTrackGeometryTest.kt` gained direct coverage for both sides of the new gate (stale-but-at-rest
+  stays Live; stale-while-scrolling still falls back, preserving Round 40's own protection).

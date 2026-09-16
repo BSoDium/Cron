@@ -382,7 +382,7 @@ internal fun TimelineNode(
                     Box(
                         modifier = Modifier
                             .size(anchorDiam)
-                            // Still reported for every row: the overlay only trusts this handle's Y for the Latest row now (Phase 7, docs/color-roles.md — every other row's Y comes from LazyListState.layoutInfo instead), but its X is scroll-invariant (every anchor centers in the same fixed-width gutter) and stays the shared source for trackCenterX, including when no Latest row happens to be visible.
+                            // Still reported for every row: the overlay trusts this handle's Y whenever the list is at rest, falling back to LazyListState.layoutInfo only for a non-Latest row gone stale *during active scroll* (Phase 7 + Round 42, docs/color-roles.md). X is scroll-invariant (every anchor centers in the same fixed-width gutter) and stays the shared source for trackCenterX regardless.
                             .onGloballyPositioned { coords -> registry.setPosition(id, coords) },
                         contentAlignment = Alignment.Center,
                     ) {
