@@ -43,6 +43,9 @@ class MaterialSymbolsScreenshotTest {
                     horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     listOf(
+                        MaterialSymbol.Article,
+                        MaterialSymbol.Cognition,
+                        MaterialSymbol.Delete,
                         MaterialSymbol.PlayArrow,
                         MaterialSymbol.Bedtime,
                         MaterialSymbol.AlarmOff,

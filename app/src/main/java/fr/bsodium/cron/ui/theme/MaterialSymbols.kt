@@ -60,9 +60,9 @@ import java.io.File
  * resource names respectively.
  */
 enum class SymbolFamily(val fontRes: Int, val fileName: String) {
-    Rounded(R.font.material_symbols_rounded, "material_symbols_rounded.ttf"),
-    Sharp(R.font.material_symbols_sharp, "material_symbols_sharp.ttf"),
-    Standard(R.font.material_symbols_standard, "material_symbols_standard.ttf"),
+    Rounded(R.font.material_symbols_rounded, "material_symbols_rounded-v2.ttf"),
+    Sharp(R.font.material_symbols_sharp, "material_symbols_sharp-v2.ttf"),
+    Standard(R.font.material_symbols_standard, "material_symbols_standard-v2.ttf"),
 }
 
 val LocalSymbolFamily = staticCompositionLocalOf { SymbolFamily.Rounded }
@@ -73,7 +73,7 @@ enum class MaterialSymbol(val code: String) {
     ArrowBack("\uE5C4"),
     ArrowForward("\uE5C8"),
     NavigateNext("\uE409"),
-    Article("\uEF87"),
+    Article("\uEF42"),
     AutoAwesome("\uE65F"),
     Autoplay("\uF6B5"),
     Bedtime("\uF159"),
