@@ -125,7 +125,13 @@ internal fun MemoryContent(
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0),
-            topBar = { PageAppBar(title = "Memory", scrollBehavior = scrollBehavior) },
+            topBar = {
+                PageAppBar(
+                    title = "Memory",
+                    subtitle = "Things Cron should remember about you",
+                    scrollBehavior = scrollBehavior,
+                )
+            },
         ) { inner ->
             // Keep the empty state hidden during the brief gap before a pending row is inserted.
             if (entries.isEmpty() && !isMutating) {
