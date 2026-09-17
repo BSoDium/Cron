@@ -116,11 +116,7 @@ class AiTurnWorker(
         val mockTools = ToolRegistryFactory.mockOrNull(useMock)
         val tools = mockTools ?: buildToolRegistry(session, apiKey ?: "", allowedRsvp)
         val client = AnthropicClientFactory.create(useMock, apiKeyProvider = { apiKey })
-        // Every turn now thinks — even a terse replan needs somewhere to put deliberation that
-        // isn't the visible text channel (see docs/replan-answer-leak.md). Anthropic requires
-        // max_tokens > thinking budget, so the ceiling always tracks whichever budget applies, and
-        // forbids a forced tool_choice alongside thinking, so tool_choice is auto (TurnRunner's
-        // default) for every turn now, not just evening plans.
+        // Thinking applies to every turn; max_tokens and tool choice must accommodate that API mode.
         val thinkingBudget = if (isEveningPlan) THINKING_BUDGET else REPLAN_THINKING_BUDGET
         val thinking = ThinkingConfig(budgetTokens = thinkingBudget)
         val maxTokens = thinkingBudget + 2048

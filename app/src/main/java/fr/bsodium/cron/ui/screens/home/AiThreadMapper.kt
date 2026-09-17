@@ -147,11 +147,7 @@ object AiThreadMapper {
             }
         }
 
-        // answerStart is a block index — it doesn't guarantee SUMMARY: leads that block's own text
-        // (the model can write narration before it in the same block despite being asked not to);
-        // truncate the first (SUMMARY-bearing) block to that line onward so leaked narration never
-        // reaches the displayed answer, mirroring how DeepSeek-style <think> parsing strips content
-        // mechanically rather than trusting the model's formatting discipline.
+        // Trim narration before SUMMARY in the first answer block because model formatting is not reliable.
         val response = blocks.drop(answerStart)
             .filterIsInstance<ContentBlock.Text>()
             .mapIndexed { index, block -> if (index == 0) block.text.substringFromSummaryLine() else block.text }

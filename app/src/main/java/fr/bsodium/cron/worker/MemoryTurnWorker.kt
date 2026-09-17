@@ -59,17 +59,13 @@ class MemoryTurnWorker(
             return terminalFailure(placeholderId, workDataOf(KEY_REASON to REASON_BUDGET, KEY_USED to used, KEY_LIMIT to limit))
         }
 
-        // Unlike AiTurnWorker, mock mode never swaps the tool registry here: ToolRegistryFactory's
-        // mockOrNull() returns FakeToolRegistry, which is built for the planning turn's tools
-        // (read_calendar, set_alarm, ...) and has no memory tools at all. The real Add/Update/
-        // DeleteMemoryTool trio writes to Room regardless of mock mode — only the LLM client is faked,
-        // matching FakeAnthropicClient's own contract ("tool calls still execute against real tools").
+        // Mock mode fakes only the LLM client; memory tools must remain real Room-backed tools.
         val addMemoryTool = AddMemoryTool(repository, placeholderId)
         val tools = buildToolRegistry(addMemoryTool)
         val client = AnthropicClientFactory.create(useMock, apiKeyProvider = { apiKey })
         val runner = MemoryTurnRunner(
             client = client,
-            // A mutation turn is a structured, low-complexity task — same tier as an overnight replan.
+            // Memory mutation uses the same model tier as an overnight replan.
             model = TurnRunner.MODEL_HAIKU,
             systemPrompt = SystemPrompts.MEMORY_MUTATION,
             tools = tools,
@@ -86,18 +82,16 @@ class MemoryTurnWorker(
                     Log.w(TAG, "Memory turn round-trip budget exhausted after ${outcome.roundTrips} round-trips")
             }
             outcome.usage()?.let(budget::record)
-            // The turn finished without ever calling add_memory (an update/delete-only turn, or one
-            // that changed nothing) -- nothing was actually added, so the placeholder shouldn't linger.
-            if (placeholderId != null && !addMemoryTool.placeholderConsumed) repository.delete(placeholderId)
+            if (placeholderId != null && !addMemoryTool.placeholderConsumed) {
+                repository.markFailed(placeholderId, REASON_NO_MEMORY_ADDED)
+            }
             Result.success()
         } catch (e: AnthropicClient.MissingApiKeyException) {
             Log.e(TAG, "Missing API key during memory turn", e)
             terminalFailure(placeholderId, workDataOf(KEY_REASON to REASON_NO_API_KEY), addMemoryTool)
         } catch (e: AnthropicClient.AnthropicHttpException) {
             Log.e(TAG, "Anthropic HTTP ${e.code} during memory turn", e)
-            // A retry re-runs doWork() from scratch with the same inputData, so the same placeholder
-            // id comes back around and must survive to be reused -- only clean it up once no more
-            // retries will happen.
+            // Preserve the placeholder across retries and clean it up only after the final attempt.
             if (e.isRetryable && runAttemptCount < MAX_RETRY_ATTEMPTS) Result.retry()
             else terminalFailure(placeholderId, workDataOf(KEY_REASON to REASON_HTTP), addMemoryTool)
         } catch (e: Exception) {
@@ -115,7 +109,10 @@ class MemoryTurnWorker(
     /** A non-retryable failure: the placeholder placed for this turn (if any, and if not already
      *  finalized into a real entry by [tool]) must not linger forever as a stuck "in progress" row. */
     private suspend fun terminalFailure(placeholderId: Long?, data: Data = Data.EMPTY, tool: AddMemoryTool? = null): Result {
-        if (placeholderId != null && tool?.placeholderConsumed != true) repository.delete(placeholderId)
+        if (placeholderId != null && tool?.placeholderConsumed != true) {
+            val reason = data.getString(KEY_REASON) ?: REASON_MAX_RETRIES
+            repository.markFailed(placeholderId, reason)
+        }
         return Result.failure(data)
     }
 
@@ -139,6 +136,7 @@ class MemoryTurnWorker(
         const val REASON_NO_API_KEY = "no_api_key"
         const val REASON_HTTP = "http_error"
         const val REASON_MAX_RETRIES = "max_retries_exceeded"
+        const val REASON_NO_MEMORY_ADDED = "no_memory_added"
 
         private const val TAG = "MemoryTurnWorker"
         private const val MAX_RETRY_ATTEMPTS = 5

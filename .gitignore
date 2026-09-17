@@ -25,5 +25,8 @@ local.properties
 .claude/*
 !.claude/settings.json
 
+# Agent session artifacts are local planning state, not repository content.
+.artifacts/
+
 # Gradle toolchain auto-discovery (machine-specific)
 gradle/gradle-daemon-jvm.properties

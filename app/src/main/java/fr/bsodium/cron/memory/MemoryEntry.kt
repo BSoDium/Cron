@@ -9,4 +9,6 @@ data class MemoryEntry(
     val createdAt: Instant,
     val updatedAt: Instant,
     val pending: Boolean = false,
+    val instruction: String? = null,
+    val failureReason: String? = null,
 )

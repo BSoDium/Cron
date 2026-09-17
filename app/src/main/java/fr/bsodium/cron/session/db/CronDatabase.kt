@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         AiMessageEntity::class,
         MemoryEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class CronDatabase : RoomDatabase() {
@@ -29,7 +29,7 @@ abstract class CronDatabase : RoomDatabase() {
                 context.applicationContext,
                 CronDatabase::class.java,
                 "cron.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
     }
 }

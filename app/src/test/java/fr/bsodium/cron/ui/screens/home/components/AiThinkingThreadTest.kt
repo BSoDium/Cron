@@ -65,9 +65,7 @@ class AiThinkingThreadTest {
         }
         composeTestRule.waitForIdle()
 
-        // A drag that steps through many frames on a long process list is exactly #14's repro —
-        // this must settle without crashing, and the full height must still be reported so
-        // HomeScreen's drag threshold has a real target to pull toward.
+        // A long-list drag must settle without crashing and retain a usable full-height target.
         repeat(40) { frame ->
             px = (frame + 1) * 20f
             composeTestRule.waitForIdle()

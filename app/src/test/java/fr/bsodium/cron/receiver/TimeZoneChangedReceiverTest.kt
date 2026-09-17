@@ -25,8 +25,7 @@ class TimeZoneChangedReceiverTest {
     @Before
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
-        // Room's CronDatabase singleton and DataStore's backing file aren't reset between test
-        // classes by Robolectric, so a disabled toggle can leak in from an unrelated test — reset it.
+        // Reset persisted state because Robolectric shares it between test classes.
         runBlocking { SettingsRepository(app).setAutoAlarmsEnabled(true) }
     }
 

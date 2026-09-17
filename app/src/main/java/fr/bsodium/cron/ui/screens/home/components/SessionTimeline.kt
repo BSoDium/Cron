@@ -437,8 +437,7 @@ internal fun AiRunNode(
                 demotedStatus()
             }
         },
-        // The headline above is now exclusively a time fact or NO_ALARM_LABEL, never heroHeadline, so this can't duplicate it; "Latest · HH:MM" moved into the kicker's kickerSuffix. `.merge(TightTextStyle)` — see EventNode.kt's `content` KDoc for why an explicit style needs this directly rather than an ambient provider.
-        // MarkdownBlock, not plain Text — the model is told the UI renders full Markdown and uses it here; plain Text showed literal asterisks instead (#193).
+        // Render the latest hero headline as Markdown so model emphasis is displayed instead of literal markers.
         content = if (item.isLatest && heroHeadline != null) {
             {
                 MarkdownBlock(
@@ -477,4 +476,3 @@ internal fun timelineTimeLabel(epochMs: Long, absoluteLabel: String): String {
 }
 
 private const val RECENT_THRESHOLD_MS = 60 * 60 * 1000L
-

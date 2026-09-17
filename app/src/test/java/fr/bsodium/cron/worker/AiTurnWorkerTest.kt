@@ -30,8 +30,7 @@ class AiTurnWorkerTest {
         app = ApplicationProvider.getApplicationContext()
         WorkManagerTestInitHelper.initializeTestWorkManager(app)
         db = CronDatabase.get(app)
-        // The production CronDatabase singleton is file-backed and persists across tests in the JVM;
-        // wipe it (cascades to events + ai_messages) so each test starts from a clean slate.
+        // Reset the file-backed singleton and its cascaded rows so each test starts clean.
         runBlocking { db.sessionDao().deleteOlderThan(Long.MAX_VALUE) }
     }
 

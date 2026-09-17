@@ -81,55 +81,33 @@ import fr.bsodium.cron.ui.theme.Symbol
 private val MAX_FONT_SIZE = 34.sp
 private val MIN_FONT_SIZE = 18.sp
 private val FONT_STEP = 1.sp
-// CronTypography.bodySerif's own 26sp/18sp ratio, carried to every stepped-down size so line
-// spacing stays proportional instead of cramping at the smaller end.
+/** Preserves the body-serif line-height ratio while stepping down the font size. */
 private const val LINE_HEIGHT_RATIO = 26f / 18f
 private const val SEND_VISIBLE_MIN_LENGTH = 2
 private val SEND_BUTTON_HEIGHT = 64.dp
 private val SEND_BUTTON_BOTTOM_PADDING = Spacing.xl
-// Close to the label's own cap height (titleLarge is 22sp) rather than a fixed "big icon" size —
-// at 32dp the arrow read as oversized/disconnected next to the text; matching it to the text's own
-// scale is what actually reads as one coherent lockup instead of two separately-sized elements.
+/** Matches the send label's cap height. */
 private val SEND_ICON_SIZE = 22.dp
-// Thinner than the label's own weight (deliberately, not matched to it) — a thick arrow at
-// SEND_ICON_SIZE read as heavy/rounded rather than crisp; this is the Rounded family's own lightest
-// practical weight before strokes start looking broken up.
+/** Keeps the arrow lighter than the label for a crisp lockup. */
 private const val SEND_ICON_WEIGHT = 500
-// Derived, not hardcoded: this equals the icon's vertical centering gap ((height - iconSize) / 2) by
-// construction, so the icon sits with equal padding on its top, bottom, and trailing edge instead of
-// that only happening to match at today's SEND_BUTTON_HEIGHT/SEND_ICON_SIZE values.
+/** Keeps the icon's trailing and vertical padding equal. */
 private val SEND_ICON_END_PADDING = (SEND_BUTTON_HEIGHT - SEND_ICON_SIZE) / 2
 private const val SEND_LABEL = "Remember this"
-// ButtonGroupDefaults.ExpandedRatio (0.15f) expands the pressed child by 15% of *its own* width —
-// fine for same-sized siblings, but the send pill is many times wider than the fixed-size cancel
-// circle, so 15% of the pill's width is a huge absolute delta to subtract from the circle's small
-// budget: pressing send nearly erased cancel. A much smaller ratio keeps the bounce noticeable
-// without the neighbour collapsing.
+/** Limits the expanded-width delta so the smaller cancel button remains usable. */
 private const val BUTTON_GROUP_EXPANDED_RATIO = 0.04f
 private val CANCEL_ICON_SIZE = 24.dp
-// Fixed rather than derived from the viewport, so shrinking behaves the same whether the keyboard
-// is up or not — tying it to the (keyboard-dependent) available height meant the text had to grow
-// to fill nearly the whole screen before shrinking ever kicked in, since the viewport itself is
-// that tall. This is roughly 5 lines at MAX_FONT_SIZE / 9 lines at MIN_FONT_SIZE: short entries stay
-// big and centred, longer ones shrink first and only scroll once shrinking alone can't fit them.
+/** Keeps text fitting stable when the keyboard changes the available viewport. */
 private val TEXT_FIT_HEIGHT = 240.dp
 private val TOP_EDGE_FADE_HEIGHT = 96.dp
-// Sized to fully cover the floating button row's own footprint (plus headroom) rather than matching
-// it pixel-for-pixel — see the fade Boxes below for why an approximate, static band is preferable to
-// a precisely reserved one.
+/** Covers the floating button row and a small amount of headroom. */
 private val BOTTOM_EDGE_FADE_HEIGHT = SEND_BUTTON_HEIGHT + SEND_BUTTON_BOTTOM_PADDING * 2 + 40.dp
-// Real scroll-content padding, not just a visual fade — this is what actually keeps a scrolled-to-
-// the-edge line of text out from under the curtains rather than merely dimmed underneath them. Sized
-// a bit past each curtain's own height so the text clears the curtain entirely, not just its opaque
-// core.
+/** Keeps scrolled text clear of both edge fades. */
 private val SCROLL_TOP_PADDING = TOP_EDGE_FADE_HEIGHT + Spacing.xl
 private val SCROLL_BOTTOM_PADDING = BOTTOM_EDGE_FADE_HEIGHT + Spacing.xl
 /** Consistent button squish amount */
 private val SQUISH_AMOUNT = 12.dp
 
-// How much of the fade band stays fully erased before ramping to opaque — a plain linear gradient
-// is still half-visible at its midpoint, which read as too weak once content needs to disappear
-// behind the status bar or the send button rather than just softly trail off.
+/** Holds the fade at full opacity before its final ramp. */
 private const val STRONG_FADE_HOLD = 0.55f
 private const val PLACEHOLDER = "Tell Cron something to remember"
 
@@ -164,16 +142,12 @@ internal fun MemoryFullScreenComposer(
         onDismiss()
     }
 
-    // Only an explicit Cancel/Send/system-back closes this screen — dismissing the keyboard (e.g.
-    // swiping it down to review the full page) must NOT close it. An earlier version watched
-    // WindowInsets.isImeVisible and auto-dismissed on every keyboard hide, which closed the whole
-    // composer the instant the keyboard so much as flickered — confirmed live, not theoretical.
+    // Keyboard dismissal must not close the composer; only explicit actions and system back do.
     BackHandler(enabled = visible, onBack = cancel)
 
     val transitionState = remember { MutableTransitionState(false) }
     LaunchedEffect(visible) { transitionState.targetState = visible }
-    // Clearing the draft only once the exit animation has fully settled — not on the cancel click
-    // itself — keeps the placeholder from flashing back over the still-fading-out typed text.
+    // Clear the draft after the exit animation so the placeholder cannot flash during fade-out.
     LaunchedEffect(transitionState.currentState, transitionState.targetState) {
         if (!transitionState.currentState && !transitionState.targetState) onValueChange("")
     }
@@ -186,11 +160,7 @@ internal fun MemoryFullScreenComposer(
         label = "memory-fullscreen-composer",
     ) {
         val sendEnabled = enabled && value.trim().length >= SEND_VISIBLE_MIN_LENGTH
-        // Requesting focus from here (once this content is actually in composition) rather than from
-        // an effect keyed on the outer `visible` flag — that effect fired the instant `visible` flipped
-        // true, before AnimatedVisibility had composed the BasicTextField owning focusRequester, so the
-        // request silently landed on nothing and the keyboard never opened. LaunchedEffect(Unit) here
-        // reruns every time this content re-enters composition, i.e. every time the composer opens.
+        // Request focus after AnimatedVisibility composes the BasicTextField.
         LaunchedEffect(Unit) {
             focusRequester.requestFocus()
             keyboardController?.show()
@@ -209,9 +179,7 @@ internal fun MemoryFullScreenComposer(
                 val textMeasurer = rememberTextMeasurer()
                 val baseStyle = CronTypography.bodySerif.copy(textAlign = TextAlign.Center)
                 val boxMaxHeight = maxHeight
-                // The height actually free for text once both curtains' real scroll-padding is
-                // excluded — short text centers within just this region, not the full viewport, so it
-                // doesn't visually sit closer to one curtain than the other.
+                // Center short text within the area left clear by both curtains.
                 val clearHeight = (boxMaxHeight - SCROLL_TOP_PADDING - SCROLL_BOTTOM_PADDING).coerceAtLeast(0.dp)
                 val horizontalPaddingPx = with(density) { (Spacing.xxl * 2).toPx() }
                 val maxWidthPx = with(density) { maxWidth.toPx() } - horizontalPaddingPx
@@ -221,25 +189,10 @@ internal fun MemoryFullScreenComposer(
                 }
                 val textStyle = baseStyle.copy(fontSize = fontSize, lineHeight = fontSize * LINE_HEIGHT_RATIO)
                 val scrollState = rememberScrollState()
-                // BasicTextField's own bring-cursor-into-view behavior doesn't reach this scroll
-                // container reliably once the text overflows the fixed-height centred box below —
-                // confirmed live: scrollState.maxValue correctly grows past 0, but .value never
-                // followed, leaving whatever was just typed hidden behind the send row. Driving the
-                // scroll explicitly on every text change is what actually keeps the caret visible. An
-                // animated scroll restarts (and so never catches up) on every keystroke of continuous
-                // typing — confirmed live the animated version still lagged — so this jumps instantly.
-                // Landing on maxValue is exactly right once SCROLL_TOP_PADDING/SCROLL_BOTTOM_PADDING
-                // are real content (below) rather than just a fade drawn over the text: maxValue then
-                // means "the last line is SCROLL_BOTTOM_PADDING clear of the true bottom edge", not
-                // "the last line is flush against it".
+                // Explicitly keep the caret visible because BasicTextField cannot reliably scroll this container.
                 LaunchedEffect(value, scrollState.maxValue) {
                     scrollState.scrollTo(scrollState.maxValue)
                 }
-                // Spans the full viewport, including behind the floating buttons — the static fade
-                // overlays and the buttons themselves (later siblings below, so drawn on top) are what
-                // visually hide content there. SCROLL_TOP_PADDING/SCROLL_BOTTOM_PADDING below are what
-                // actually keep the text itself clear of that zone once fully scrolled — the curtains
-                // alone only dimmed it, they didn't stop text from sliding under the buttons.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -279,8 +232,6 @@ internal fun MemoryFullScreenComposer(
                 }
             }
 
-            // Static curtains: pinned to the viewport's own top/bottom, never to the scroll offset or
-            // the ime/nav inset the buttons use, so they can't visibly drift relative to either.
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -292,12 +243,7 @@ internal fun MemoryFullScreenComposer(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    // ime-aware only, not nav-bar-aware: with the keyboard open this needs to sit
-                    // right above it, same as the button row. But padding for BOTH insets (as the
-                    // button row does) left a gap between the curtain's bottom edge and the true
-                    // screen edge whenever the keyboard was closed — nothing painted there, reading as
-                    // a hard seam instead of a soft edge. Painting through the nav-bar region (like the
-                    // page background already does) has no such gap.
+                    // Paint through the navigation-bar region to avoid a hard seam when the keyboard is closed.
                     .imePadding()
                     .height(BOTTOM_EDGE_FADE_HEIGHT)
                     .background(bottomCurtain(scheme.background)),
@@ -389,8 +335,7 @@ internal fun MemoryFullScreenComposer(
                             color = sendContentColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            // fill = false ensures the text only takes up the space it needs,
-                            // keeping the entire Row tight and centered as one lockup.
+                            // Keep the label width intrinsic so the lockup stays centered.
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(Modifier.width(Spacing.sm))

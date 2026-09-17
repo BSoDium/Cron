@@ -118,12 +118,10 @@ class SleepSessionService : Service() {
         val isRearm = intent?.action == ACTION_REARM
         val eveningPlan = intent?.action == ACTION_EVENING_PLAN
         ensureNotificationChannel()
-        // Location-typed for the whole session lifetime, not just the evening-plan moment: a genuine
-        // sleep onset can trigger a stale-location refresh (#223) hours into monitoring, and that fetch
-        // needs the same "in use" FGS exemption the evening plan's own fetch relies on.
+        // Keep location service typing for the full session because sleep-onset refreshes may need it.
         startForegroundService(includeLocation = true)
 
-        // A REARM after the service was killed and restarted fresh finds screenStateMonitor null — treat that the same as a normal start (build the monitors) before rearming, so REARM never silently no-ops.
+        // Rebuild monitors after a killed-service restart so REARM cannot silently no-op.
         val freshlyConstructed = screenStateMonitor == null
         if (freshlyConstructed) {
             screenStateMonitor = ScreenStateMonitor(

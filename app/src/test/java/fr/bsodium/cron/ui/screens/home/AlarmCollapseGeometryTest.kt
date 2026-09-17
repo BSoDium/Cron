@@ -36,9 +36,7 @@ class AlarmCollapseGeometryTest {
 
     @Test
     fun computeAlarmCollapse_alarmSpacerMissingButStillAtFirstIndex_fallsBackToExpanded_notStuckCollapsed() {
-        // The exact fix from fdecb40: a fling can leave "alarm-spacer" out of visibleItemsInfo for a
-        // frame even while the list genuinely hasn't scrolled past it — this must resolve as expanded,
-        // not collapsed, or the card gets stuck.
+        // A transiently missing spacer during a fling must resolve as expanded.
         val result = collapse(
             visibleItems = listOf(VisibleItemSnapshot(key = "some-other-row", offset = 500)),
             firstVisibleItemIndex = 0,

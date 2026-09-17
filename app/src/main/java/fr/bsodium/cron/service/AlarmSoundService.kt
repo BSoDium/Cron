@@ -136,17 +136,13 @@ class AlarmSoundService : Service() {
             this, requestCode, buildAlarmActivityIntent(label, requestCode, sessionId, snoozeCount),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        // Android 13+ lets a user swipe away a foreground service's notification regardless of
-        // setOngoing(true) (there's a system-level "stop" affordance for exactly this) — without a
-        // deleteIntent, that swipe left the ring orphaned: notification gone, sound/vibration still
-        // going (live-reported). Treat it the same as the in-app dismiss gesture.
+        // Treat a foreground-notification swipe as an in-app dismiss so the ring cannot be orphaned.
         val deletePendingIntent = PendingIntent.getBroadcast(
             this, requestCode, Intent(this, AlarmReceiver::class.java).apply { action = AlarmReceiver.ACTION_DISMISS },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // Sound/vibration come from the looping MediaPlayer/Vibrator above, not this notification — see the class KDoc.
-        // setFullScreenIntent's known ~10s-delayed double-ring issue: see docs/alarm-full-screen-intent.md and #214.
+        // The service owns sound/vibration; the full-screen intent timing caveat is documented separately.
         return NotificationCompat.Builder(this, AlarmReceiver.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle("Cron")

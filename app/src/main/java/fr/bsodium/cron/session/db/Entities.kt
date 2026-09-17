@@ -72,4 +72,6 @@ data class MemoryEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val pending: Boolean = false,
+    val instruction: String? = null,
+    val failureReason: String? = null,
 )

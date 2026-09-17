@@ -40,9 +40,7 @@ class AlarmReceiver : BroadcastReceiver() {
         const val EXTRA_LABEL = "extra_label"
         const val EXTRA_SNOOZE_COUNT = "extra_snooze_count"
 
-        // v2: a notification channel's sound/vibration can't be changed once created (Android ignores
-        // updates), so the fix for the old channel's sound/vibration doubling AlarmSoundService's own
-        // looping ring needed a new channel id — see ensureNotificationChannel.
+        // v2 avoids the immutable channel settings that previously duplicated the service-owned ring.
         const val CHANNEL_ID = "cron_alarm_channel_v2"
         private const val LEGACY_CHANNEL_ID = "cron_alarm_channel"
         val ALARM_VIBRATION_PATTERN = longArrayOf(0, 500, 200, 500, 200, 500)
@@ -88,9 +86,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         ensureNotificationChannel(context)
 
-        // AlarmSoundService builds and posts the ringing notification itself (as its foreground-service
-        // notification) and owns the actual looping sound/vibration — see its KDoc for why a plain
-        // notification can't loop.
+        // AlarmSoundService owns the foreground notification and looping sound/vibration.
         val soundIntent = Intent(context, AlarmSoundService::class.java).apply {
             putExtra(EXTRA_LABEL, label)
             putExtra(EXTRA_REQUEST_CODE, requestCode)
@@ -190,10 +186,7 @@ class AlarmReceiver : BroadcastReceiver() {
         )
     }
 
-    // AlarmSoundService owns the actual ring (looping MediaPlayer + repeating Vibrator); this channel
-    // deliberately carries no sound/vibration of its own, or every notification post would also fire
-    // the channel's one-shot alert on top of it — audible as a second "ding" on a same-session re-post
-    // (e.g. the AI alarm and hard-latest firing moments apart), not just a negligible first-frame overlap.
+    // Keep this channel silent because AlarmSoundService owns the looping ring.
     private fun ensureNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager =

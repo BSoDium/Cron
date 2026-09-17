@@ -22,8 +22,7 @@ class MemoryViewModel(application: Application) : AndroidViewModel(application) 
     val isMutating: StateFlow<Boolean> = _isMutating
 
     init {
-        // Drives isMutating off the real WorkManager job, not a client-side flag, so it can never
-        // disagree with whether a mutation is actually in flight (same idiom as HomeViewModel.isRetrying).
+        // Derive mutation state from WorkManager so it cannot drift from the real job.
         viewModelScope.launch {
             repository.observeMutationWork().collect { infos ->
                 _isMutating.value = infos.any { !it.state.isFinished }
@@ -36,8 +35,16 @@ class MemoryViewModel(application: Application) : AndroidViewModel(application) 
         if (trimmed.isEmpty()) return
         _isMutating.value = true
         viewModelScope.launch {
-            val placeholderId = repository.addPending()
+            val placeholderId = repository.addPending(trimmed)
             repository.triggerMutation(trimmed, placeholderId)
+        }
+    }
+
+    fun retryEntry(id: Long) {
+        viewModelScope.launch {
+            val instruction = repository.retry(id) ?: return@launch
+            _isMutating.value = true
+            repository.triggerMutation(instruction, id)
         }
     }
 
