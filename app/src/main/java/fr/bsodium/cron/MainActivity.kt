@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -70,7 +69,6 @@ import fr.bsodium.cron.ui.screens.settings.SETTINGS_SCHEDULE
 import fr.bsodium.cron.ui.screens.settings.settingsGraph
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
-import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -240,7 +238,6 @@ class MainActivity : ComponentActivity() {
                                 if (lastShown != null) {
                                     AnimatedVisibility(
                                         visible = visible,
-                                        modifier = Modifier.padding(end = Spacing.lg),
                                         enter = scaleIn(
                                             animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                                             initialScale = 0.8f,
