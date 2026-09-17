@@ -53,7 +53,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
-import fr.bsodium.cron.ui.components.CronFloatingNav
+import fr.bsodium.cron.ui.components.CronCompactNavigationBar
 import fr.bsodium.cron.ui.components.CronNavigationBar
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
@@ -109,7 +109,7 @@ internal val tabExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> Ex
 }
 
 /**
- * Lets a tab screen publish its primary action to the [CronFloatingNav] FAB while mounted, keyed
+ * Lets a tab screen publish its primary action to the [CronCompactNavigationBar] FAB while mounted, keyed
  * by [route] rather than a single last-writer-wins slot. Predictive back's built-in seekable
  * preview (`docs/navigation.md`) composes the gesture's *target* tab (e.g. Home) alongside the
  * *current* one (e.g. Memory) as soon as the drag starts — well before it commits — so a shared
@@ -219,7 +219,7 @@ class MainActivity : ComponentActivity() {
                                 label = "bottom-bar",
                             ) {
                                 if (useCompactNav) {
-                                    CronFloatingNav(
+                                    CronCompactNavigationBar(
                                         currentRoute = currentRoute,
                                         onNavigate = navigate,
                                         fabAction = fabRegistry.actionFor(currentRoute),
@@ -322,7 +322,11 @@ class MainActivity : ComponentActivity() {
                                 }
                                 settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                             }
-                            EdgeFades(showTopScrim = showTopScrim, showNavPillClearance = showBottomBar)
+                            EdgeFades(
+                                showTopScrim = showTopScrim,
+                                showBottomScrim = showBottomBar,
+                                showNavPillClearance = showBottomBar,
+                            )
                         }
                     }
                 }

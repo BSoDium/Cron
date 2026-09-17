@@ -8,11 +8,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
@@ -83,16 +87,25 @@ private const val LINE_HEIGHT_RATIO = 26f / 18f
 private const val SEND_VISIBLE_MIN_LENGTH = 2
 private val SEND_BUTTON_HEIGHT = 64.dp
 private val SEND_BUTTON_BOTTOM_PADDING = Spacing.xl
-private val SEND_ICON_SIZE = 32.dp
+// Close to the label's own cap height (titleLarge is 22sp) rather than a fixed "big icon" size —
+// at 32dp the arrow read as oversized/disconnected next to the text; matching it to the text's own
+// scale is what actually reads as one coherent lockup instead of two separately-sized elements.
+private val SEND_ICON_SIZE = 22.dp
 // Thinner than the label's own weight (deliberately, not matched to it) — a thick arrow at
 // SEND_ICON_SIZE read as heavy/rounded rather than crisp; this is the Rounded family's own lightest
 // practical weight before strokes start looking broken up.
-private const val SEND_ICON_WEIGHT = 300
+private const val SEND_ICON_WEIGHT = 500
 // Derived, not hardcoded: this equals the icon's vertical centering gap ((height - iconSize) / 2) by
 // construction, so the icon sits with equal padding on its top, bottom, and trailing edge instead of
 // that only happening to match at today's SEND_BUTTON_HEIGHT/SEND_ICON_SIZE values.
 private val SEND_ICON_END_PADDING = (SEND_BUTTON_HEIGHT - SEND_ICON_SIZE) / 2
 private const val SEND_LABEL = "Remember this"
+// ButtonGroupDefaults.ExpandedRatio (0.15f) expands the pressed child by 15% of *its own* width —
+// fine for same-sized siblings, but the send pill is many times wider than the fixed-size cancel
+// circle, so 15% of the pill's width is a huge absolute delta to subtract from the circle's small
+// budget: pressing send nearly erased cancel. A much smaller ratio keeps the bounce noticeable
+// without the neighbour collapsing.
+private const val BUTTON_GROUP_EXPANDED_RATIO = 0.04f
 private val CANCEL_ICON_SIZE = 24.dp
 // Fixed rather than derived from the viewport, so shrinking behaves the same whether the keyboard
 // is up or not — tying it to the (keyboard-dependent) available height meant the text had to grow
@@ -111,6 +124,9 @@ private val BOTTOM_EDGE_FADE_HEIGHT = SEND_BUTTON_HEIGHT + SEND_BUTTON_BOTTOM_PA
 // core.
 private val SCROLL_TOP_PADDING = TOP_EDGE_FADE_HEIGHT + Spacing.xl
 private val SCROLL_BOTTOM_PADDING = BOTTOM_EDGE_FADE_HEIGHT + Spacing.xl
+/** Consistent button squish amount */
+private val SQUISH_AMOUNT = 12.dp
+
 // How much of the fade band stays fully erased before ramping to opaque — a plain linear gradient
 // is still half-visible at its midpoint, which read as too weak once content needs to disappear
 // behind the status bar or the send button rather than just softly trail off.
@@ -300,21 +316,34 @@ internal fun MemoryFullScreenComposer(
             val cancelInteractionSource = remember { MutableInteractionSource() }
             val sendInteractionSource = remember { MutableInteractionSource() }
 
-            // ButtonGroup + animateWidth is the Expressive "reactive button group" pattern (see
-            // docs/expressive.md): pressing either button expands it and squishes its neighbour,
-            // instead of a plain Row where each button only reacts to its own press.
-            ButtonGroup(
+            val cancelPressed by cancelInteractionSource.collectIsPressedAsState()
+            val sendPressed by sendInteractionSource.collectIsPressedAsState()
+
+            val cancelTargetWidth = when {
+                cancelPressed -> SEND_BUTTON_HEIGHT + SQUISH_AMOUNT
+                sendPressed -> SEND_BUTTON_HEIGHT - SQUISH_AMOUNT
+                else -> SEND_BUTTON_HEIGHT
+            }
+
+            val cancelWidth by animateDpAsState(
+                targetValue = cancelTargetWidth,
+                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                label = "cancel-width"
+            )
+
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                     .padding(horizontal = Spacing.xxl, vertical = SEND_BUTTON_BOTTOM_PADDING),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(SEND_BUTTON_HEIGHT)
-                        .animateWidth(cancelInteractionSource)
+                        .width(cancelWidth)
+                        .height(SEND_BUTTON_HEIGHT)
                         .clip(Radius.full)
                         .background(scheme.surfaceContainerHigh)
                         .clickable(interactionSource = cancelInteractionSource, indication = ripple()) {
@@ -335,7 +364,6 @@ internal fun MemoryFullScreenComposer(
                     modifier = Modifier
                         .weight(1f)
                         .height(SEND_BUTTON_HEIGHT)
-                        .animateWidth(sendInteractionSource)
                         .clip(Radius.full)
                         .background(sendContainerColor)
                         .clickable(
@@ -347,25 +375,33 @@ internal fun MemoryFullScreenComposer(
                             onSend()
                         },
                 ) {
-                    val sendLabelStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium)
-                    Text(
-                        text = SEND_LABEL,
-                        style = sendLabelStyle,
-                        color = sendContentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                    Symbol(
-                        symbol = MaterialSymbol.ArrowForward,
-                        contentDescription = null,
-                        tint = sendContentColor,
-                        size = SEND_ICON_SIZE,
-                        weight = SEND_ICON_WEIGHT,
+                    val sendLabelStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Light)
+                    Row(
                         modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = SEND_ICON_END_PADDING),
-                    )
+                            .align(Alignment.Center)
+                            .padding(horizontal = Spacing.xl),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = SEND_LABEL,
+                            style = sendLabelStyle,
+                            color = sendContentColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            // fill = false ensures the text only takes up the space it needs,
+                            // keeping the entire Row tight and centered as one lockup.
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(Modifier.width(Spacing.sm))
+                        Symbol(
+                            symbol = MaterialSymbol.ArrowForward,
+                            contentDescription = null,
+                            tint = sendContentColor,
+                            size = SEND_ICON_SIZE,
+                            weight = SEND_ICON_WEIGHT,
+                        )
+                    }
                 }
             }
         }
@@ -408,7 +444,7 @@ private fun fittingFontSize(
  *  where the content's own edge is, while a static overlay just sits at a fixed screen position. */
 private fun topCurtain(background: Color): Brush = Brush.verticalGradient(
     0f to background,
-    STRONG_FADE_HOLD to background,
+    STRONG_FADE_HOLD to background.copy(0.75f),
     1f to background.copy(alpha = 0f),
 )
 
@@ -416,7 +452,7 @@ private fun topCurtain(background: Color): Brush = Brush.verticalGradient(
  *  toward the true bottom edge where the floating buttons sit. */
 private fun bottomCurtain(background: Color): Brush = Brush.verticalGradient(
     0f to background.copy(alpha = 0f),
-    (1f - STRONG_FADE_HOLD) to background.copy(alpha = 0f),
+    (1f - STRONG_FADE_HOLD) to background.copy(alpha = 0.75f),
     1f to background,
 )
 

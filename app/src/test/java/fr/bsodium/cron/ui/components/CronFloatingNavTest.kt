@@ -26,7 +26,7 @@ class CronFloatingNavTest {
         val navigated = mutableListOf<String>()
         composeTestRule.setContent {
             CronTheme {
-                CronFloatingNav(currentRoute = "home", onNavigate = { navigated += it }, fabAction = null)
+                CronCompactNavigationBar(currentRoute = "home", onNavigate = { navigated += it }, fabAction = null)
             }
         }
 
@@ -38,7 +38,7 @@ class CronFloatingNavTest {
     fun selection_disables_the_current_tab() {
         composeTestRule.setContent {
             CronTheme {
-                CronFloatingNav(currentRoute = "home", onNavigate = {}, fabAction = null)
+                CronCompactNavigationBar(currentRoute = "home", onNavigate = {}, fabAction = null)
             }
         }
 
@@ -51,7 +51,7 @@ class CronFloatingNavTest {
         val navigated = mutableListOf<String>()
         composeTestRule.setContent {
             CronTheme {
-                CronFloatingNav(currentRoute = "home", onNavigate = { navigated += it }, fabAction = null)
+                CronCompactNavigationBar(currentRoute = "home", onNavigate = { navigated += it }, fabAction = null)
             }
         }
 

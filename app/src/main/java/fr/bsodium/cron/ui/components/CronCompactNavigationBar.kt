@@ -80,7 +80,7 @@ import fr.bsodium.cron.ui.theme.Symbol
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun CronFloatingNav(
+fun CronCompactNavigationBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     fabAction: FabAction?,
@@ -196,7 +196,7 @@ private fun fabContentTransition(
 }
 
 /**
- * Carries the debug-only chevron slot for the split FAB. Defined in main so [CronFloatingNav] can
+ * Carries the debug-only chevron slot for the split FAB. Defined in main so [CronCompactNavigationBar] can
  * accept it; populated by [rememberFabChevron] from the debug/release source sets.
  *
  * [isMockActiveState] is a [State] reference so reads of [isMockActive] inside [SplitActionFab]
@@ -423,9 +423,9 @@ internal fun PrimaryActionFab(action: FabAction?) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Preview(showBackground = true)
 @Composable
-private fun CronFloatingNavPreview() {
+private fun CronCompactNavigationBarPreview() {
     CronTheme {
-        CronFloatingNav(
+        CronCompactNavigationBar(
             currentRoute = ROUTE_HOME,
             onNavigate = {},
             fabAction = FabAction(onClick = {}),
@@ -436,9 +436,9 @@ private fun CronFloatingNavPreview() {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Preview(showBackground = true)
 @Composable
-private fun CronFloatingNavNoFabPreview() {
+private fun CronCompactNavigationBarNoFabPreview() {
     CronTheme {
-        CronFloatingNav(
+        CronCompactNavigationBar(
             currentRoute = SETTINGS_ROOT,
             onNavigate = {},
             fabAction = null,
@@ -449,11 +449,11 @@ private fun CronFloatingNavNoFabPreview() {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Preview(showBackground = true)
 @Composable
-private fun CronFloatingNavSplitPreview() {
+private fun CronCompactNavigationBarSplitPreview() {
     CronTheme {
         val mockState = remember { mutableStateOf(true) }
         val expandedState = remember { mutableStateOf(false) }
-        CronFloatingNav(
+        CronCompactNavigationBar(
             currentRoute = ROUTE_HOME,
             onNavigate = {},
             fabAction = FabAction(onClick = {}),

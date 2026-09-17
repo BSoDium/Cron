@@ -29,7 +29,7 @@ private val FAB_ICON_SIZE = 24.dp
 /** Normal (fixed bar) nav mode's freestanding trigger for [MemoryFullScreenComposer] — the app's
  *  usual Expressive [RoundedCornerShape], matching [fr.bsodium.cron.ui.components.PrimaryActionFab]'s
  *  silhouette. Compact-nav mode doesn't use this: its trigger lives in
- *  [fr.bsodium.cron.ui.components.CronFloatingNav]'s own row instead (see [MemoryScreen]). Fades
+ *  [fr.bsodium.cron.ui.components.CronCompactNavigationBar]'s own row instead (see [MemoryScreen]). Fades
  *  out rather than disappearing outright while the full-screen composer is up. */
 @Composable
 internal fun MemoryComposerFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
