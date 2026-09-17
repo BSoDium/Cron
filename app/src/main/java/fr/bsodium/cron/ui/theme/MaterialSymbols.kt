@@ -73,7 +73,7 @@ enum class MaterialSymbol(val code: String) {
     ArrowBack("\uE5C4"),
     ArrowForward("\uE5C8"),
     NavigateNext("\uE409"),
-    Article("\uEF87"),
+    Article("\uEF42"),
     AutoAwesome("\uE65F"),
     Autoplay("\uF6B5"),
     Bedtime("\uF159"),
