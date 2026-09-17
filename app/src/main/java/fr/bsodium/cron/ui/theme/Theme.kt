@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
@@ -32,11 +33,13 @@ fun CronTheme(content: @Composable () -> Unit) {
     }
     // Dark neutrals ship near-black; lift them so page, list rows and icon chips read as distinct dark greys and the predictive-back card contrasts against the dimmed page behind it. Light mode is already light, so it's left alone.
     val colorScheme = if (dark) base.liftedSurfaces() else base
-    MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalSymbolFamily provides SymbolFamily.Rounded) {
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content,
+        )
+    }
 }
 
 /** Nudge every neutral surface role toward white by [amount], leaving text and accent roles untouched. */

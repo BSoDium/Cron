@@ -14,6 +14,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -39,20 +40,32 @@ import fr.bsodium.cron.R
 import java.io.File
 
 /**
- * Material Symbols (Rounded), rendered from the bundled variable font with its FILL / wght / GRAD / opsz
- * axes live. [Symbol] is the drop-in replacement for the old `Icon(imageVector = …)` — icons are
- * **outlined by default** (`fill = 0f`); pass `fill` (animatable) to morph toward filled.
+ * Material Symbols, rendered from bundled Rounded, Sharp, or Standard variable fonts with their
+ * FILL / wght / GRAD / opsz axes live. [Symbol] is the drop-in replacement for the old
+ * `Icon(imageVector = …)` — icons are **outlined by default** (`fill = 0f`); pass `fill` (animatable)
+ * to morph toward filled.
  *
- * The `.ttf` is a SUBSET of the official `MaterialSymbolsRounded[FILL,GRAD,opsz,wght].ttf`, carrying only
- * the glyphs below to stay tiny (~115 KB vs ~15 MB). To add an icon: add an entry with its codepoint
- * (from the matching `MaterialSymbolsRounded …codepoints` file in google/material-design-icons), then
- * re-subset with every enum codepoint:
+ * Each `.ttf` is a SUBSET of its official variable font, carrying only the glyphs below to stay
+ * tiny (~100 KB vs ~15 MB). To add an icon: add an entry with its codepoint (from the matching
+ * codepoints file in google/material-design-icons), then re-subset each family with every enum
+ * codepoint:
  *
  *   python3 -m fontTools.subset "MaterialSymbolsRounded[FILL,GRAD,opsz,wght].ttf" \
  *     --unicodes=<all codepoints, comma-separated> \
  *     --output-file=app/src/main/res/font/material_symbols_rounded.ttf \
  *     --no-hinting --layout-features='*' --glyph-names --recalc-bounds
+ *
+ * Repeat for `MaterialSymbolsSharp` and `MaterialSymbolsOutlined`, writing the Sharp and Standard
+ * resource names respectively.
  */
+enum class SymbolFamily(val fontRes: Int, val fileName: String) {
+    Rounded(R.font.material_symbols_rounded, "material_symbols_rounded.ttf"),
+    Sharp(R.font.material_symbols_sharp, "material_symbols_sharp.ttf"),
+    Standard(R.font.material_symbols_standard, "material_symbols_standard.ttf"),
+}
+
+val LocalSymbolFamily = staticCompositionLocalOf { SymbolFamily.Rounded }
+
 enum class MaterialSymbol(val code: String) {
     Alarm("\uE855"),
     AlarmOff("\uE857"),
@@ -100,14 +113,14 @@ enum class MaterialSymbol(val code: String) {
     Weekend("\uE16B"),
 }
 
-/** Resolves the bundled symbols font to a [Typeface] once per resolver (axes ride on the draw Paint). */
+/** Resolves the selected bundled symbols font to a [Typeface] once per resolver. */
 @Composable
-private fun rememberSymbolTypeface(): Typeface? {
+private fun rememberSymbolTypeface(family: SymbolFamily): Typeface? {
     val resolver = LocalFontFamilyResolver.current
-    return remember(resolver) {
+    return remember(resolver, family) {
         runCatching {
             resolver.resolve(
-                fontFamily = FontFamily(Font(R.font.material_symbols_rounded)),
+                fontFamily = FontFamily(Font(family.fontRes)),
                 fontWeight = FontWeight.Normal,
                 fontStyle = FontStyle.Normal,
                 fontSynthesis = FontSynthesis.None,
@@ -118,7 +131,12 @@ private fun rememberSymbolTypeface(): Typeface? {
     }
 }
 
-private data class VariationKey(val weight: Int, val grade: Int, val opticalSize: Float)
+private data class VariationKey(
+    val family: SymbolFamily,
+    val weight: Int,
+    val grade: Int,
+    val opticalSize: Float,
+)
 
 /** `Typeface.Builder` has no constructor that wraps an already-resolved [Typeface] or reads a `res/font`
  *  id directly — only a raw [File]/`FileDescriptor`/asset path. [get] extracts the bundled subset once
@@ -127,17 +145,17 @@ private data class VariationKey(val weight: Int, val grade: Int, val opticalSize
  *  `res/font` ttf id works exactly like a `res/raw` one here, lint's `@RawRes` contract just doesn't
  *  know that. */
 private object VariedFontFile {
-    @Volatile private var cached: File? = null
+    private val cached = mutableMapOf<SymbolFamily, File>()
 
     @Suppress("ResourceType")
-    fun get(context: Context): File = cached ?: synchronized(this) {
-        cached ?: File(context.cacheDir, "material_symbols_rounded.ttf").also { file ->
+    fun get(context: Context, family: SymbolFamily): File = synchronized(this) {
+        cached[family] ?: File(context.cacheDir, family.fileName).also { file ->
             if (!file.exists()) {
-                context.resources.openRawResource(R.font.material_symbols_rounded).use { input ->
+                context.resources.openRawResource(family.fontRes).use { input ->
                     file.outputStream().use { output -> input.copyTo(output) }
                 }
             }
-        }.also { cached = it }
+        }.also { cached[family] = it }
     }
 }
 
@@ -155,7 +173,7 @@ private object VariedTypefaceCache {
     private val cache = HashMap<VariationKey, Typeface>()
 
     fun get(context: Context, key: VariationKey): Typeface? = cache[key] ?: runCatching {
-        Typeface.Builder(VariedFontFile.get(context))
+        Typeface.Builder(VariedFontFile.get(context, key.family))
             .setFontVariationSettings("'wght' ${key.weight},'GRAD' ${key.grade},'opsz' ${key.opticalSize}")
             .build()
     }
@@ -176,9 +194,15 @@ private object VariedTypefaceCache {
  *  tab-selection morph) and mostly affects interior strokework, not the outer bbox centering depends
  *  on, so it stays on the cheap per-Paint path instead of rebuilding a [Typeface] every frame. */
 @Composable
-private fun rememberVariedTypeface(fallback: Typeface?, weight: Int, grade: Int, opticalSize: Float): Typeface? {
+private fun rememberVariedTypeface(
+    fallback: Typeface?,
+    family: SymbolFamily,
+    weight: Int,
+    grade: Int,
+    opticalSize: Float,
+): Typeface? {
     val context = LocalContext.current
-    val key = VariationKey(weight, grade, opticalSize)
+    val key = VariationKey(family, weight, grade, opticalSize)
     return remember(key) { VariedTypefaceCache.get(context, key) } ?: fallback
 }
 
@@ -194,8 +218,8 @@ private fun rememberVariedTypeface(fallback: Typeface?, weight: Int, grade: Int,
  * centre lands on the box's centre — this stays correct regardless of a specific font's side-bearings or
  * baseline assumptions, unlike a fixed `(size/2, size)` origin (which measured ~3px off-centre for this
  * bundled subset font; see docs/color-roles.md Round 10). The px-derived `textSize` also keeps the icon
- * fixed-size under the user's font-scale setting, and the axes ride on the Paint (no per-frame
- * `FontFamily` rebuild for an animated [fill]).
+ * fixed-size under the user's font-scale setting, and only the animated [fill] axis rides on the
+ * Paint (there is no per-frame `FontFamily` rebuild).
  */
 @Composable
 fun Symbol(
@@ -207,12 +231,13 @@ fun Symbol(
     fill: Float = 0f,
     weight: Int = 400,
     grade: Int = 0,
+    family: SymbolFamily = LocalSymbolFamily.current,
     autoMirror: Boolean = false,
 ) {
-    val baseTypeface = rememberSymbolTypeface()
+    val baseTypeface = rememberSymbolTypeface(family)
     val mirror = autoMirror && LocalLayoutDirection.current == LayoutDirection.Rtl
     val opticalSize = size.value.coerceIn(20f, 48f)
-    val typeface = rememberVariedTypeface(baseTypeface, weight, grade, opticalSize)
+    val typeface = rememberVariedTypeface(baseTypeface, family, weight, grade, opticalSize)
     Canvas(
         modifier = modifier
             .size(size)
