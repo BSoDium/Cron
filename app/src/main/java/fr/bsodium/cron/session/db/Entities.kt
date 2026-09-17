@@ -63,3 +63,12 @@ data class AiMessageEntity(
     val contentJson: String, // Anthropic content blocks as JSON
     val createdAt: Long,
 )
+
+@Entity(tableName = "memory_entries")
+data class MemoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val text: String,
+    val category: String?, // free-text, optional -- no closed set defined by the feature spec
+    val createdAt: Long,
+    val updatedAt: Long,
+)

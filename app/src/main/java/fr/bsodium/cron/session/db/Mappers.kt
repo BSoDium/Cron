@@ -1,5 +1,6 @@
 package fr.bsodium.cron.session.db
 
+import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.session.model.DayPlan
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.Instruction
@@ -51,4 +52,20 @@ fun SessionEvent.toEntity(sessionId: String): SessionEventEntity = SessionEventE
     trigger = trigger.name,
     timestamp = timestamp.toEpochMilliseconds(),
     dataJson = SessionJson.encodeToString<EventData>(data),
+)
+
+fun MemoryEntity.toModel(): MemoryEntry = MemoryEntry(
+    id = id,
+    text = text,
+    category = category,
+    createdAt = Instant.fromEpochMilliseconds(createdAt),
+    updatedAt = Instant.fromEpochMilliseconds(updatedAt),
+)
+
+fun MemoryEntry.toEntity(): MemoryEntity = MemoryEntity(
+    id = id,
+    text = text,
+    category = category,
+    createdAt = createdAt.toEpochMilliseconds(),
+    updatedAt = updatedAt.toEpochMilliseconds(),
 )

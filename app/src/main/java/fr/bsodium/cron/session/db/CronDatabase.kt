@@ -10,14 +10,16 @@ import androidx.room.RoomDatabase
         SessionEntity::class,
         SessionEventEntity::class,
         AiMessageEntity::class,
+        MemoryEntity::class,
     ],
-    version = 1,
-    exportSchema = false,
+    version = 2,
+    exportSchema = true,
 )
 abstract class CronDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao
     abstract fun eventDao(): EventDao
     abstract fun aiMessageDao(): AiMessageDao
+    abstract fun memoryDao(): MemoryDao
 
     companion object {
         @Volatile private var instance: CronDatabase? = null
@@ -27,7 +29,7 @@ abstract class CronDatabase : RoomDatabase() {
                 context.applicationContext,
                 CronDatabase::class.java,
                 "cron.db",
-            ).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
         }
     }
 }
