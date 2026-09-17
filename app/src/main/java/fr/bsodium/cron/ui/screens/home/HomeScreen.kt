@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.ROUTE_HOME
 import fr.bsodium.cron.session.model.ActionType
 import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.ui.components.FabAction
@@ -110,11 +111,12 @@ fun HomeScreen(
     val fabSplitLabel = if (isFirstRun) "Run plan" else "Re-plan"
     val fabIcon = if (isFirstRun) MaterialSymbol.RocketLaunch else MaterialSymbol.Update
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, splitLabel = fabSplitLabel, icon = fabIcon))
-        onDispose { fabRegistry.clear() }
+        fabRegistry.set(ROUTE_HOME, FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, splitLabel = fabSplitLabel, icon = fabIcon))
+        onDispose { fabRegistry.clear(ROUTE_HOME) }
     }
     LaunchedEffect(uiState.isRetrying, fabLabel, fabSplitLabel, fabIcon, fabRegistry) {
         fabRegistry.set(
+            ROUTE_HOME,
             FabAction(
                 onClick = viewModel::retryAiPlan,
                 working = uiState.isRetrying,

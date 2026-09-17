@@ -26,7 +26,7 @@ class CronFloatingNavTest {
         val navigated = mutableListOf<String>()
         composeTestRule.setContent {
             CronTheme {
-                CronFloatingNav(currentRoute = "home", onNavigate = { navigated += it }, fabAction = null)
+                CronCompactNavigationBar(currentRoute = "home", onNavigate = { navigated += it }, fabAction = null)
             }
         }
 
@@ -38,11 +38,24 @@ class CronFloatingNavTest {
     fun selection_disables_the_current_tab() {
         composeTestRule.setContent {
             CronTheme {
-                CronFloatingNav(currentRoute = "home", onNavigate = {}, fabAction = null)
+                CronCompactNavigationBar(currentRoute = "home", onNavigate = {}, fabAction = null)
             }
         }
 
         composeTestRule.onNodeWithContentDescription("Home").assertIsNotEnabled()
         composeTestRule.onNodeWithContentDescription("Settings").assertIsEnabled()
+    }
+
+    @Test
+    fun tapping_the_memory_tab_navigates_to_it() {
+        val navigated = mutableListOf<String>()
+        composeTestRule.setContent {
+            CronTheme {
+                CronCompactNavigationBar(currentRoute = "home", onNavigate = { navigated += it }, fabAction = null)
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Memory").performClick()
+        assertEquals(listOf("memory"), navigated)
     }
 }

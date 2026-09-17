@@ -1,0 +1,59 @@
+package fr.bsodium.cron.ai.tools
+
+import fr.bsodium.cron.ai.Tool
+import fr.bsodium.cron.ai.ToolResult
+import fr.bsodium.cron.ai.toolSchema
+import fr.bsodium.cron.ai.wire.ToolDefinition
+import fr.bsodium.cron.memory.MemoryRepository
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+/** Adds a new durable memory entry. When [placeholderId] is given (the in-flight placeholder row
+ *  the ViewModel inserted before this turn started -- see `MemoryRepository.addPending`), the first
+ *  call in a turn finalizes that row in place rather than inserting a second one; a model can call
+ *  this tool multiple times per turn, so only the first call gets to reuse the placeholder. */
+class AddMemoryTool(
+    private val repository: MemoryRepository,
+    private val placeholderId: Long? = null,
+) : Tool {
+
+    var placeholderConsumed: Boolean = false
+        private set
+
+    override val definition: ToolDefinition = ToolDefinition(
+        name = NAME,
+        description = "Record a new durable fact or preference about the user.",
+        input_schema = toolSchema(
+            "text" to JsonObject(mapOf(
+                "type" to JsonPrimitive("string"),
+                "description" to JsonPrimitive("The fact or preference to remember, as a short standalone sentence"),
+            )),
+            "category" to JsonObject(mapOf(
+                "type" to JsonPrimitive("string"),
+                "description" to JsonPrimitive("Optional short free-text label to group related entries"),
+            )),
+            required = listOf("text"),
+        ),
+    )
+
+    override suspend fun execute(input: JsonElement): ToolResult {
+        val text = input.jsonObject["text"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            ?: return ToolResult("""{"error":"text is required"}""", isError = true)
+        val category = input.jsonObject["category"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+
+        val id = if (!placeholderConsumed && placeholderId != null && repository.finalizePending(placeholderId, text, category)) {
+            placeholderConsumed = true
+            placeholderId
+        } else {
+            repository.add(text = text, category = category)
+        }
+        return ToolResult("""{"id":$id,"logged":true}""")
+    }
+
+    companion object {
+        const val NAME = "add_memory"
+    }
+}

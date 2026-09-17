@@ -126,7 +126,7 @@ class TurnRunner(
 
                 // Execute every tool_use block emitted in this assistant message.
                 val toolResults: List<ContentBlock> = toolUses.map { call ->
-                    executeToolCall(call)
+                    executeToolCall(tools, call)
                 }
 
                 persistMessage(sessionId, turnIndex, role = "user", blocks = toolResults)
@@ -159,7 +159,7 @@ class TurnRunner(
             .orEmpty()
         if (pending.isEmpty()) return null
 
-        val toolResults: List<ContentBlock> = pending.map { executeToolCall(it) }
+        val toolResults: List<ContentBlock> = pending.map { executeToolCall(tools, it) }
         persistMessage(sessionId, turnIndex, role = "user", blocks = toolResults)
         messages.add(MessageInput(role = "user", content = toolResults))
         return toolResults
@@ -183,28 +183,6 @@ class TurnRunner(
             output_tokens = output_tokens + other.output_tokens,
             cache_creation_input_tokens = cache_creation_input_tokens + other.cache_creation_input_tokens,
             cache_read_input_tokens = cache_read_input_tokens + other.cache_read_input_tokens,
-        )
-    }
-
-    private suspend fun executeToolCall(call: ContentBlock.ToolUse): ContentBlock.ToolResult {
-        val tool = tools[call.name] ?: return ContentBlock.ToolResult(
-            tool_use_id = call.id,
-            content = toolErrorResult("unknown tool '${call.name}'").payload,
-            is_error = true,
-        )
-        val result = runCatching { tool.execute(call.input) }.getOrElse { thrown ->
-            return ContentBlock.ToolResult(
-                tool_use_id = call.id,
-                content = toolErrorResult(
-                    "tool '${call.name}' threw: ${thrown.message?.take(200) ?: thrown::class.simpleName}"
-                ).payload,
-                is_error = true,
-            )
-        }
-        return ContentBlock.ToolResult(
-            tool_use_id = call.id,
-            content = result.payload,
-            is_error = result.isError.takeIf { it },
         )
     }
 

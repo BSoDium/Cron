@@ -14,8 +14,10 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import fr.bsodium.cron.alarm.EveningPlanScheduler
 import fr.bsodium.cron.debug.DebugReceivers
+import fr.bsodium.cron.memory.MemoryRepository
 import fr.bsodium.cron.receiver.AlarmReceiver
 import fr.bsodium.cron.service.SleepSessionService
+import fr.bsodium.cron.settings.SettingsRepository
 import fr.bsodium.cron.worker.HealthConnectPollWorker
 import fr.bsodium.cron.worker.SessionCleanupWorker
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +36,7 @@ class CronApplication : Application() {
         super.onCreate()
         createNotificationChannels()
         armEveningPlan()
+        migrateUserInstructionsToMemory()
         enqueueHealthConnectPoll()
         enqueueSessionCleanup()
         DebugReceivers.register(this)
@@ -45,6 +48,24 @@ class CronApplication : Application() {
                 EveningPlanScheduler(this@CronApplication).armNext()
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to arm evening plan", t)
+            }
+        }
+    }
+
+    /** One-time seed: any pre-existing `userInstructions` free text becomes a memory entry, then gets
+     *  cleared — self-clearing, so this is a no-op on every subsequent start (see
+     *  [SettingsRepository.setUserInstructions]'s KDoc for why these two methods are kept at all). */
+    private fun migrateUserInstructionsToMemory() {
+        appScope.launch {
+            try {
+                val settings = SettingsRepository(this@CronApplication)
+                val existing = settings.currentUserInstructions()
+                if (!existing.isNullOrBlank()) {
+                    MemoryRepository(this@CronApplication).add(text = existing, category = "migrated")
+                    settings.setUserInstructions("")
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to migrate user instructions to memory", t)
             }
         }
     }

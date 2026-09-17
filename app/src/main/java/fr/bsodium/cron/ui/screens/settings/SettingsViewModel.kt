@@ -29,7 +29,6 @@ data class SettingsUiState(
     val allowedRsvpStatuses: Set<RsvpStatus> = DEFAULT_RSVP_STATUSES,
     val hasApiKey: Boolean = false,
     val displayName: String? = null,
-    val userInstructions: String? = null,
     val dailyTokenLimit: Int = BudgetStore.DEFAULT_DAILY_TOKEN_LIMIT,
     val tokensUsedToday: Int = 0,
     val hapticsEnabled: Boolean = true,
@@ -75,8 +74,6 @@ class SettingsViewModel @JvmOverloads constructor(
         state.copy(allowedRsvpStatuses = rsvp)
     }.combine(repo.displayName) { state, name ->
         state.copy(displayName = name)
-    }.combine(repo.userInstructions) { state, instructions ->
-        state.copy(userInstructions = instructions)
     }.combine(repo.dailyTokenLimit) { state, limit ->
         state.copy(dailyTokenLimit = limit)
     }.combine(_tokensUsedToday) { state, used ->
@@ -126,10 +123,6 @@ class SettingsViewModel @JvmOverloads constructor(
 
     fun setDisplayName(name: String) {
         viewModelScope.launch { repo.setDisplayName(name) }
-    }
-
-    fun setUserInstructions(text: String) {
-        viewModelScope.launch { repo.setUserInstructions(text) }
     }
 
     fun setDailyTokenLimit(tokens: Int) {

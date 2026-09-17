@@ -109,7 +109,8 @@ object Fixtures {
         category: String? = null,
         createdAt: Instant = T0,
         updatedAt: Instant = T0,
-    ) = MemoryEntry(id = id, text = text, category = category, createdAt = createdAt, updatedAt = updatedAt)
+        pending: Boolean = false,
+    ) = MemoryEntry(id = id, text = text, category = category, createdAt = createdAt, updatedAt = updatedAt, pending = pending)
 
     /** [count] sessions, each on its own consecutive calendar date ending at [startingAt] (index 0 is
      *  the most recent), each carrying a same-day SleepOnset/OutOfBedConfirmed event pair. Enough to

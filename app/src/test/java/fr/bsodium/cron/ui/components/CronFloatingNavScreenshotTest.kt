@@ -22,7 +22,7 @@ class CronFloatingNavScreenshotTest {
     fun home_tab_selected_with_fab() {
         composeTestRule.setContent {
             CronTheme {
-                CronFloatingNav(
+                CronCompactNavigationBar(
                     currentRoute = "home",
                     onNavigate = {},
                     fabAction = FabAction(onClick = {}),
@@ -36,10 +36,24 @@ class CronFloatingNavScreenshotTest {
     fun settings_tab_selected_no_fab() {
         composeTestRule.setContent {
             CronTheme {
-                CronFloatingNav(
+                CronCompactNavigationBar(
                     currentRoute = "settings/root",
                     onNavigate = {},
                     fabAction = null,
+                )
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    @Test
+    fun memory_tab_selected_with_fab() {
+        composeTestRule.setContent {
+            CronTheme {
+                CronCompactNavigationBar(
+                    currentRoute = "memory",
+                    onNavigate = {},
+                    fabAction = FabAction(onClick = {}),
                 )
             }
         }

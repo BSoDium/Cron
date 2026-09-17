@@ -29,12 +29,16 @@ import fr.bsodium.cron.ui.theme.Spacing
  * status-bar strip, and its scrolled `surfaceContainer` shade would otherwise show a
  * two-tone band under the `background`-tinted top scrim.
  *
+ * [showBottomScrim] is off for routes where the floating nav pill itself is hidden (settings
+ * sub-screens) — without this, the gradient would still lift a non-existent pill,
+ * needlessly dimming the bottom of the screen.
+ *
  * [showNavPillClearance] is off for routes where the floating nav pill itself is hidden (settings
  * sub-screens) — without this, every route reserved [Spacing.navBarClearance] worth of scrim
  * regardless, needlessly dimming/obscuring a pill-less screen's own last few rows of content.
  */
 @Composable
-fun EdgeFades(modifier: Modifier = Modifier, showTopScrim: Boolean = true, showNavPillClearance: Boolean = true) {
+fun EdgeFades(modifier: Modifier = Modifier, showTopScrim: Boolean = true, showBottomScrim: Boolean = true, showNavPillClearance: Boolean = true) {
     val background = CronColors.pageBackground
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -49,12 +53,14 @@ fun EdgeFades(modifier: Modifier = Modifier, showTopScrim: Boolean = true, showN
                     .background(Brush.verticalGradient(listOf(background, Color.Transparent))),
             )
         }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(navBottom + pillClearance + Spacing.xxxl)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, background))),
-        )
+        if (showBottomScrim) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(navBottom + pillClearance + Spacing.xxxl)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, background))),
+            )
+        }
     }
 }

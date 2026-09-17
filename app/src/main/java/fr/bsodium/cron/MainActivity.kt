@@ -33,6 +33,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,7 +53,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import fr.bsodium.cron.settings.SecureKeyStore
 import fr.bsodium.cron.settings.SettingsRepository
-import fr.bsodium.cron.ui.components.CronFloatingNav
+import fr.bsodium.cron.ui.components.CronCompactNavigationBar
 import fr.bsodium.cron.ui.components.CronNavigationBar
 import fr.bsodium.cron.ui.components.EdgeFades
 import fr.bsodium.cron.ui.components.FabAction
@@ -61,6 +62,8 @@ import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.components.rememberFabChevron
 import fr.bsodium.cron.ui.screens.home.HomeScreen
 import fr.bsodium.cron.ui.screens.home.HomeViewModel
+import fr.bsodium.cron.ui.screens.memory.MemoryScreen
+import fr.bsodium.cron.ui.screens.memory.MemoryViewModel
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingScreen
 import fr.bsodium.cron.ui.screens.onboarding.OnboardingViewModel
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
@@ -80,8 +83,9 @@ private const val ROUTE_ONBOARDING = "onboarding"
 
 /** Tab destinations, shared with [CronBottomBar] so a route rename can't silently un-highlight a tab. */
 const val ROUTE_HOME = "home"
+const val ROUTE_MEMORY = "memory"
 
-private val TAB_ROUTES = setOf(ROUTE_HOME, SETTINGS_ROOT)
+private val TAB_ROUTES = setOf(ROUTE_HOME, ROUTE_MEMORY, SETTINGS_ROOT)
 
 private val forwardTween = tween<Float>(durationMillis = FORWARD_MS, easing = EaseInOutCubic)
 
@@ -105,21 +109,27 @@ internal val tabExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> Ex
 }
 
 /**
- * Lets a screen publish its primary action to the [CronFloatingNav] FAB while
- * the screen is mounted. The FAB clears when the screen calls [clear] from its
- * onDispose hook, so other tabs don't inherit a stale action.
+ * Lets a tab screen publish its primary action to the [CronCompactNavigationBar] FAB while mounted, keyed
+ * by [route] rather than a single last-writer-wins slot. Predictive back's built-in seekable
+ * preview (`docs/navigation.md`) composes the gesture's *target* tab (e.g. Home) alongside the
+ * *current* one (e.g. Memory) as soon as the drag starts — well before it commits — so a shared
+ * slot let the target's mount stomp the current tab's action mid-gesture, and let a cancelled
+ * gesture's unmount clear it out from under the tab the user never actually left. [actionFor]
+ * reads back against `currentRoute`, which the seekable preview leaves untouched until release,
+ * so the FAB shown always matches the tab that's actually current.
  */
 class FabRegistry {
-    var action by mutableStateOf<FabAction?>(null)
-        private set
+    private val actions = mutableStateMapOf<String, FabAction?>()
 
-    fun set(action: FabAction?) {
-        this.action = action
+    fun set(route: String, action: FabAction?) {
+        actions[route] = action
     }
 
-    fun clear() {
-        action = null
+    fun clear(route: String) {
+        actions.remove(route)
     }
+
+    fun actionFor(route: String?): FabAction? = actions[route]
 }
 
 class MainActivity : ComponentActivity() {
@@ -163,7 +173,6 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(currentRoute, jankMetricsState) {
                     jankMetricsState?.putState("Screen", currentRoute ?: "unknown")
                 }
-                val showBottomBar = currentRoute in TAB_ROUTES
                 // Pages with a PageAppBar own the status-bar strip; the top edge-fade would two-tone it against the bar's scrolled surfaceContainer shade, so suppress it there.
                 val hasTopAppBar = currentRoute?.startsWith("settings") == true
                 // Home owns its own top-of-screen occlusion via StickyAlarm's collapse-driven fade (HomeContent.kt) — layering this generic scrim on top produced a visible "double gradient" while scrolling.
@@ -172,8 +181,18 @@ class MainActivity : ComponentActivity() {
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
                 val useCompactNav = compactNavPref
+                // Memory's composer takes over the entire screen while expanded — hide the bottom
+                // bar underneath in both nav modes so it doesn't render on top of it.
+                var memoryComposerExpanded by rememberSaveable { mutableStateOf(false) }
+                val showBottomBar = currentRoute in TAB_ROUTES &&
+                    !(currentRoute == ROUTE_MEMORY && memoryComposerExpanded)
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-                val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) { TopAppBarState(0f, 0f, 1f) }
+                // Mirrors rememberTopAppBarState()'s own defaults, NOT (0f, 0f, 1f): an
+                // initialHeightOffsetLimit of 0f (rather than -Float.MAX_VALUE) left the collapsed
+                // small title permanently invisible — see docs/compose-gotchas.md.
+                val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) {
+                    TopAppBarState(-Float.MAX_VALUE, 0f, 0f)
+                }
                 val navigate: (String) -> Unit = { route ->
                     navController.navigate(route) {
                         popUpTo(ROUTE_HOME) {
@@ -200,10 +219,10 @@ class MainActivity : ComponentActivity() {
                                 label = "bottom-bar",
                             ) {
                                 if (useCompactNav) {
-                                    CronFloatingNav(
+                                    CronCompactNavigationBar(
                                         currentRoute = currentRoute,
                                         onNavigate = navigate,
-                                        fabAction = fabRegistry.action,
+                                        fabAction = fabRegistry.actionFor(currentRoute),
                                         fabChevron = fabChevron,
                                     )
                                 } else {
@@ -216,7 +235,7 @@ class MainActivity : ComponentActivity() {
                         },
                         floatingActionButton = {
                             if (!useCompactNav) {
-                                val action = fabRegistry.action
+                                val action = fabRegistry.actionFor(currentRoute)
                                 var lastShown by remember { mutableStateOf(action) }
                                 if (action != null) lastShown = action
                                 val fabVisible = currentRoute == ROUTE_HOME && action != null
@@ -287,9 +306,27 @@ class MainActivity : ComponentActivity() {
                                         },
                                     )
                                 }
+                                composable(
+                                    route = ROUTE_MEMORY,
+                                    enterTransition = tabEnter,
+                                    exitTransition = tabExit,
+                                    popEnterTransition = tabEnter,
+                                    popExitTransition = tabExit,
+                                ) {
+                                    MemoryScreen(
+                                        viewModel = viewModel<MemoryViewModel>(),
+                                        fabRegistry = fabRegistry,
+                                        useCompactNav = useCompactNav,
+                                        onComposerExpandedChange = { memoryComposerExpanded = it },
+                                    )
+                                }
                                 settingsGraph(navController, tabEnter = tabEnter, tabExit = tabExit)
                             }
-                            EdgeFades(showTopScrim = showTopScrim, showNavPillClearance = showBottomBar)
+                            EdgeFades(
+                                showTopScrim = showTopScrim,
+                                showBottomScrim = showBottomBar,
+                                showNavPillClearance = showBottomBar,
+                            )
                         }
                     }
                 }

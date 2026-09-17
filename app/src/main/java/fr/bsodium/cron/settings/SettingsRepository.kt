@@ -122,11 +122,6 @@ class SettingsRepository(private val context: Context) {
         prefs[DISPLAY_NAME]?.takeIf { it.isNotBlank() }
     }
 
-    /** Free-text instructions the user gives the planning assistant; injected into every AI turn. */
-    val userInstructions: Flow<String?> = context.dataStore.data.map { prefs ->
-        prefs[USER_INSTRUCTIONS]?.takeIf { it.isNotBlank() }
-    }
-
     /** Daily AI token cap. Unset → the default cap; 0 (or less) means the user disabled it (unlimited). */
     val dailyTokenLimit: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[DAILY_TOKEN_LIMIT] ?: BudgetStore.DEFAULT_DAILY_TOKEN_LIMIT
@@ -204,7 +199,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDisplayName(name: String) =
         context.dataStore.edit { it[DISPLAY_NAME] = name.trim() }
 
-    /** Plain edit (not plan-affecting): editing instructions shouldn't raise the "replan?" pill. */
+    /** Retained only for [fr.bsodium.cron.CronApplication]'s one-time migration of any pre-existing
+     *  standing instructions into the memory feature — no UI writes this anymore. Delete this pair
+     *  (and [USER_INSTRUCTIONS]) once enough time has passed that no installs still carry old data. */
     suspend fun setUserInstructions(text: String) =
         context.dataStore.edit { it[USER_INSTRUCTIONS] = text.trim() }
 
@@ -212,7 +209,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDailyTokenLimit(tokens: Int) =
         context.dataStore.edit { it[DAILY_TOKEN_LIMIT] = tokens }
 
-    suspend fun currentUserInstructions(): String? = userInstructions.first()
+    suspend fun currentUserInstructions(): String? =
+        context.dataStore.data.map { prefs -> prefs[USER_INSTRUCTIONS]?.takeIf { it.isNotBlank() } }.first()
     suspend fun currentDailyTokenLimit(): Int = dailyTokenLimit.first()
 
     /** One-shot read for use from broadcast receivers and one-shot workers. */

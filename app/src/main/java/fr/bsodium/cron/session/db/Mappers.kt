@@ -60,6 +60,7 @@ fun MemoryEntity.toModel(): MemoryEntry = MemoryEntry(
     category = category,
     createdAt = Instant.fromEpochMilliseconds(createdAt),
     updatedAt = Instant.fromEpochMilliseconds(updatedAt),
+    pending = pending,
 )
 
 fun MemoryEntry.toEntity(): MemoryEntity = MemoryEntity(
@@ -68,4 +69,5 @@ fun MemoryEntry.toEntity(): MemoryEntity = MemoryEntity(
     category = category,
     createdAt = createdAt.toEpochMilliseconds(),
     updatedAt = updatedAt.toEpochMilliseconds(),
+    pending = pending,
 )

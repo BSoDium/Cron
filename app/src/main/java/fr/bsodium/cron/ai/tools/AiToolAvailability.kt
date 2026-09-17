@@ -23,5 +23,9 @@ internal fun aiToolAvailability(): List<AiToolStatus> {
         AiToolStatus(CancelAlarmTool.NAME, available = true),
         AiToolStatus(SendBriefTool.NAME, available = true),
         AiToolStatus(NotifyWarningTool.NAME, available = true),
+        // Attached only to the memory-mutation turn (MemoryTurnWorker), never the planning turn above.
+        AiToolStatus(AddMemoryTool.NAME, available = true),
+        AiToolStatus(UpdateMemoryTool.NAME, available = true),
+        AiToolStatus(DeleteMemoryTool.NAME, available = true),
     )
 }

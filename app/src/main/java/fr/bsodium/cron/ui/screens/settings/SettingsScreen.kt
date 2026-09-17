@@ -63,7 +63,7 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = buildList {
     add(SettingsSection(
         "ASSISTANT",
         listOf(
-            SettingsCategory(SETTINGS_ASSISTANT, MaterialSymbol.AutoAwesome, "Assistant", "Instructions and token budget"),
+            SettingsCategory(SETTINGS_ASSISTANT, MaterialSymbol.AutoAwesome, "Assistant", "Token budget and developer tools"),
             SettingsCategory(SETTINGS_RELIABILITY, MaterialSymbol.Shield, "Reliability", "Permissions that keep alarms on time"),
         ),
     ))
@@ -88,8 +88,10 @@ private val SETTINGS_SECTIONS: List<SettingsSection> = buildList {
 /** Scroll state for the settings root list, hoisted to MainActivity so PredictiveBackCard can snapshot it. */
 val LocalSettingsListState = compositionLocalOf { LazyListState() }
 
-/** App-bar collapse state for the settings root, hoisted so the predictive back preview reflects the real bar height. */
-val LocalSettingsTopAppBarState = compositionLocalOf { TopAppBarState(0f, 0f, 1f) }
+/** App-bar collapse state for the settings root, hoisted so the predictive back preview reflects the real bar height.
+ *  Mirrors rememberTopAppBarState()'s own defaults — see MainActivity.kt's hoisted instance for why
+ *  initialHeightOffsetLimit must be -Float.MAX_VALUE, not 0f. */
+val LocalSettingsTopAppBarState = compositionLocalOf { TopAppBarState(-Float.MAX_VALUE, 0f, 0f) }
 
 private val CARD_GAP = Spacing.xs
 private val GROUP_OUTER_RADIUS = Radius.xl
