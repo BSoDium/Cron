@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -312,6 +313,31 @@ private fun SymbolGalleryFilledPreview() {
                     fill = 1f,
                     weight = 600,
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Preview(showBackground = true, name = "Material Symbols — sharp")
+@Composable
+private fun SymbolGallerySharpPreview() {
+    CronTheme {
+        CompositionLocalProvider(LocalSymbolFamily provides SymbolFamily.Sharp) {
+            FlowRow(
+                modifier = Modifier.padding(Spacing.lg),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                MaterialSymbol.entries.forEach { s ->
+                    Symbol(
+                        symbol = s,
+                        contentDescription = s.name,
+                        size = 28.dp,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        family = SymbolFamily.Sharp,
+                    )
+                }
             }
         }
     }
