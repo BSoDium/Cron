@@ -41,8 +41,7 @@ class TimelineRepositoryTest {
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
         db = CronDatabase.get(app)
-        // The production CronDatabase singleton is file-backed and persists across tests in the JVM --
-        // wipe it (cascades to events + ai_messages) so each test starts from a clean slate.
+        // Reset the file-backed singleton and its cascaded rows so each test starts clean.
         runBlocking { db.sessionDao().deleteOlderThan(Long.MAX_VALUE) }
         repo = TimelineRepository(db)
     }
@@ -70,8 +69,7 @@ class TimelineRepositoryTest {
         val events = items.filterIsInstance<TimelineItem.Event>()
         assertEquals(sessions.size - 1, headers.size)
         assertEquals(sessions.size * 2, events.size)
-        // Reverse-chronological, latest session first: no header before the very first session's own
-        // items (that leading edge is deliberately the UI layer's seamDayHeader to own, not this feed's).
+        // The leading edge belongs to the UI seam header, not this feed.
         assertTrue(items.first() is TimelineItem.Event)
         // The most recent session's own later event (wake) sorts ahead of its earlier one (onset).
         assertEquals(sessions.first().events.maxOf { it.timestamp }, items.first().timestamp)

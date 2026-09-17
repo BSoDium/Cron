@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HOME
+import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -88,17 +89,22 @@ fun CronCompactNavigationBar(
     fabChevron: FabChevronSlot? = null,
 ) {
     val systemBars: PaddingValues = WindowInsets.navigationBars.asPaddingValues()
-    val visible = fabAction != null
     val density = LocalDensity.current
     var measuredFabWidth by remember { mutableStateOf(0.dp) }
+    // Retain last non-null action so the FAB has content to fade out during the exit transition.
+    var lastShown by remember { mutableStateOf(fabAction) }
+    if (fabAction != null && fabAction != lastShown) lastShown = fabAction
+    /**
+     * Tab navigation updates the route before the destination publishes its action. Keep the
+     * existing slot through that handoff so Home <-> Memory morphs the FAB instead of moving the pill.
+     */
+    val visible = fabAction != null ||
+        (currentRoute == ROUTE_HOME || currentRoute == ROUTE_MEMORY) && lastShown != null
     val fabSlotWidth by animateDpAsState(
         targetValue = if (visible) measuredFabWidth else 0.dp,
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "fab-slot-width",
     )
-    // Retain last non-null action so the FAB has content to fade out during the exit transition.
-    var lastShown by remember { mutableStateOf(fabAction) }
-    if (fabAction != null && fabAction != lastShown) lastShown = fabAction
 
     Row(
         modifier = modifier
@@ -174,6 +180,8 @@ data class FabAction(
     val icon: MaterialSymbol = MaterialSymbol.Update,
     /** Whether [icon] renders filled or outlined. Defaults to filled, matching Home's rocket. */
     val filled: Boolean = true,
+    /** Accessible tooltip text, independent from the visible FAB label. */
+    val tooltipLabel: String = label,
 )
 
 /**
@@ -249,7 +257,7 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     )
     SplitButtonLayout(
         leadingButton = {
-            IconTooltip(label = if (action.working) "Cancel" else action.splitLabel) {
+            IconTooltip(label = if (action.working) "Cancel" else action.tooltipLabel) {
                 SplitButtonDefaults.LeadingButton(
                     onClick = {
                         if (action.working) { haptics.reject(); action.onCancel?.invoke() }
@@ -257,7 +265,10 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                     },
                     modifier = Modifier
                         .wrapContentWidth()
-                        .height(56.dp),
+                        .height(56.dp)
+                        .semantics {
+                            contentDescription = if (action.working) "Cancel" else action.tooltipLabel
+                        },
                     shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -364,7 +375,7 @@ internal fun PrimaryActionFab(action: FabAction?) {
     } else {
         FabButtonDisplay(working = false, icon = idleIcon, label = idleLabel, filled = action.filled)
     }
-    IconTooltip(label = if (working) "Cancel" else action.label) {
+    IconTooltip(label = if (working) "Cancel" else action.tooltipLabel) {
         FloatingActionButton(
             onClick = {
                 if (working) {
@@ -378,6 +389,9 @@ internal fun PrimaryActionFab(action: FabAction?) {
             modifier = Modifier
                 .wrapContentWidth()
                 .height(FAB_SLOT_HEIGHT)
+                .semantics {
+                    contentDescription = if (working) "Cancel" else action.tooltipLabel
+                }
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale

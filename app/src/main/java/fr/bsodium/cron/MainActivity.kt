@@ -14,7 +14,6 @@ import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -26,6 +25,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -43,7 +43,6 @@ import fr.bsodium.cron.perf.trackJank
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsTopAppBarState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
@@ -71,6 +70,7 @@ import fr.bsodium.cron.ui.screens.settings.SETTINGS_SCHEDULE
 import fr.bsodium.cron.ui.screens.settings.settingsGraph
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -181,15 +181,12 @@ class MainActivity : ComponentActivity() {
                 val fabChevron = rememberFabChevron()
                 val compactNavPref by settings.compactNavEnabled.collectAsState(initial = false)
                 val useCompactNav = compactNavPref
-                // Memory's composer takes over the entire screen while expanded — hide the bottom
-                // bar underneath in both nav modes so it doesn't render on top of it.
+                // Hide the bottom bar while Memory's full-screen composer is expanded.
                 var memoryComposerExpanded by rememberSaveable { mutableStateOf(false) }
                 val showBottomBar = currentRoute in TAB_ROUTES &&
                     !(currentRoute == ROUTE_MEMORY && memoryComposerExpanded)
                 val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-                // Mirrors rememberTopAppBarState()'s own defaults, NOT (0f, 0f, 1f): an
-                // initialHeightOffsetLimit of 0f (rather than -Float.MAX_VALUE) left the collapsed
-                // small title permanently invisible — see docs/compose-gotchas.md.
+                // Match rememberTopAppBarState() defaults; zero height limits hide the collapsed title.
                 val settingsTopAppBarState = rememberSaveable(saver = TopAppBarState.Saver) {
                     TopAppBarState(-Float.MAX_VALUE, 0f, 0f)
                 }
@@ -238,14 +235,22 @@ class MainActivity : ComponentActivity() {
                                 val action = fabRegistry.actionFor(currentRoute)
                                 var lastShown by remember { mutableStateOf(action) }
                                 if (action != null) lastShown = action
-                                val fabVisible = currentRoute == ROUTE_HOME && action != null
-                                val fabAlpha by animateFloatAsState(
-                                    targetValue = if (fabVisible) 1f else 0f,
-                                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                                    label = "fab-alpha",
-                                )
-                                if (lastShown != null && (fabVisible || fabAlpha > 0f)) {
-                                    Box(modifier = Modifier.graphicsLayer { alpha = fabAlpha }) {
+                                // Retain the FAB slot while adjacent top-level tabs exchange actions.
+                                val visible = action != null || (currentRoute == ROUTE_HOME || currentRoute == ROUTE_MEMORY) && lastShown != null
+                                if (lastShown != null) {
+                                    AnimatedVisibility(
+                                        visible = visible,
+                                        modifier = Modifier.padding(end = Spacing.lg),
+                                        enter = scaleIn(
+                                            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                                            initialScale = 0.8f,
+                                        ) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                                        exit = scaleOut(
+                                            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                                            targetScale = 0.8f,
+                                        ) + fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                                        label = "fab-host-visibility",
+                                    ) {
                                         if (fabChevron != null) SplitActionFab(lastShown, fabChevron)
                                         else PrimaryActionFab(lastShown)
                                     }
@@ -317,6 +322,7 @@ class MainActivity : ComponentActivity() {
                                         viewModel = viewModel<MemoryViewModel>(),
                                         fabRegistry = fabRegistry,
                                         useCompactNav = useCompactNav,
+                                        fabChevron = fabChevron,
                                         onComposerExpandedChange = { memoryComposerExpanded = it },
                                     )
                                 }
@@ -324,7 +330,7 @@ class MainActivity : ComponentActivity() {
                             }
                             EdgeFades(
                                 showTopScrim = showTopScrim,
-                                showBottomScrim = showBottomBar,
+                                showBottomScrim = showBottomBar && !(currentRoute == ROUTE_MEMORY && !useCompactNav),
                                 showNavPillClearance = showBottomBar,
                             )
                         }

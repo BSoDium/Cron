@@ -24,8 +24,7 @@ class MemoryRepositoryTest {
     @Before
     fun setUp() {
         val app: Application = ApplicationProvider.getApplicationContext()
-        // The production CronDatabase singleton is file-backed and persists across tests in the JVM --
-        // wipe it so each test starts from a clean slate (same idiom as TimelineRepositoryTest).
+        // Reset the file-backed singleton so each test starts clean.
         runTest { CronDatabase.get(app).memoryDao().deleteAll() }
         repository = MemoryRepository(app)
     }
@@ -76,5 +75,22 @@ class MemoryRepositoryTest {
         assertEquals(1, all.size)
         assertEquals("Real entry", all.single().text)
         assertNull(all.singleOrNull { it.pending })
+    }
+
+    @Test
+    fun failedPendingRow_staysVisibleWithReason_andCanBeRetried() = runTest {
+        val id = repository.addPending("Remember that I prefer tea")
+        repository.markFailed(id, "no_memory_added")
+
+        val failed = repository.observeAll().first().single()
+        assertFalse(failed.pending)
+        assertEquals("no_memory_added", failed.failureReason)
+        assertEquals("Remember that I prefer tea", failed.instruction)
+        assertTrue(repository.currentAll().isEmpty())
+
+        assertEquals("Remember that I prefer tea", repository.retry(id))
+        val retried = repository.observeAll().first().single()
+        assertTrue(retried.pending)
+        assertNull(retried.failureReason)
     }
 }

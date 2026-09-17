@@ -50,7 +50,6 @@ class TimelineTrackGeometryTest {
         cy,
     )
 
-    // ---- resolvePlacedAnchors ----
 
     @Test
     fun resolvePlacedAnchors_emptyInputs_returnsEmpty() {
@@ -72,7 +71,6 @@ class TimelineTrackGeometryTest {
         assertTrue(resolvePlacedAnchors(descriptors, positions).isEmpty())
     }
 
-    // ---- resolveTrackEnds ----
 
     @Test
     fun resolveTrackEnds_freshMount_emptyPlaced_keepsNullPrevious() {
@@ -99,9 +97,7 @@ class TimelineTrackGeometryTest {
         val endsA = resolveTrackEnds(frameA, TrackEnds(null, null))
         assertEquals("old", endsA.topId)
 
-        // Frame B: data says "new" is now the true top (SessionTimeline recomputed firstAnchorIndex),
-        // so "old"'s descriptor no longer claims isSegmentTop — but "new" hasn't registered a
-        // descriptor OR a position yet, so it's entirely absent from `placed`.
+        // Frame B has a new logical top, but no placed descriptor yet.
         val frameB = listOf(anchor("old", cy = 200f, isSegmentTop = false))
         val endsB = resolveTrackEnds(frameB, endsA)
         assertEquals("old", endsB.topId) // must NOT regress to null.
@@ -123,8 +119,7 @@ class TimelineTrackGeometryTest {
         val endsA = resolveTrackEnds(listOf(anchor("old", cy = 200f, isSegmentTop = true)), TrackEnds(null, null))
         assertEquals("old", endsA.topId)
 
-        // "new" is placed (has a position) and its descriptor claims isSegmentTop — but its cy
-        // (300f) is still BELOW "old"'s (200f), i.e. animateItem hasn't carried it to the top yet.
+        // "new" claims the top before animateItem has moved it above "old".
         val frameB = listOf(
             anchor("old", cy = 200f, isSegmentTop = false),
             anchor("new", cy = 300f, isSegmentTop = true),
@@ -171,8 +166,7 @@ class TimelineTrackGeometryTest {
         val endsA = resolveTrackEnds(listOf(anchor("top", cy = 50f, isSegmentTop = true)), TrackEnds(null, null))
         assertEquals("top", endsA.topId)
 
-        // "top" scrolled off and disposed; "next" is now the topmost placed anchor but its
-        // descriptor doesn't claim isSegmentTop (that belongs to the still-off-screen "top").
+        // "top" was disposed; "next" is placed but does not yet claim the segment top.
         val frameB = listOf(anchor("next", cy = 60f, isSegmentTop = false))
         val endsB = resolveTrackEnds(frameB, endsA)
         assertEquals("top", endsB.topId) // remembered id persists...
@@ -229,7 +223,6 @@ class TimelineTrackGeometryTest {
         assertEquals("c", ends.topId)
     }
 
-    // ---- segmentCapDecision ----
 
     @Test
     fun segmentCapDecision_bothEndsConfirmed_roundsBothCaps() {
@@ -255,15 +248,13 @@ class TimelineTrackGeometryTest {
 
     @Test
     fun segmentCapDecision_singleAnchorSegment_independentTopBottomIds() {
-        // A single-anchor segment mid-replacement: the remembered top/bottom ids can genuinely
-        // differ from the one anchor currently placed (e.g. mid-transition on both ends at once).
+        // Remembered top and bottom ids may differ during a two-ended replacement.
         val a = anchor("a", cy = 150f)
         val decision = segmentCapDecision(listOf(a), TrackEnds(topId = "a", bottomId = "stale"), viewportHeight = 1000f, halfTrack = 20f)
         assertTrue(decision.roundTop)
         assertFalse(decision.roundBottom)
     }
 
-    // ---- spineGapRanges ----
 
     @Test
     fun spineGapRanges_noAnchors_singleFullRange() {
@@ -295,7 +286,6 @@ class TimelineTrackGeometryTest {
         assertEquals(listOf(0f to 15f, 95f to 200f), ranges)
     }
 
-    // ---- buildSleepPills ----
 
     @Test
     fun buildSleepPills_allAwake_noPills() {
@@ -377,7 +367,6 @@ class TimelineTrackGeometryTest {
         assertFalse(pills[0].roundBottom)
     }
 
-    // ---- cappedRoundRect ----
 
     @Test
     fun cappedRoundRect_neitherRounded_allCornersZero() {
@@ -426,9 +415,7 @@ class TimelineTrackGeometryTest {
 
     @Test
     fun nonLatestAnchorCenterY_nonZeroViewportStartOffset_isSubtracted() {
-        // A LazyColumn with beforeContentPadding reports a negative viewportStartOffset; the item's
-        // on-screen position is itemOffset - viewportStartOffset, matching computeAlarmCollapse's
-        // identical convention (AlarmCollapseGeometry.kt).
+        // Match LazyColumn's on-screen position convention used by computeAlarmCollapse.
         val y = nonLatestAnchorCenterY(itemOffset = 100, viewportStartOffset = -50, verticalPaddingPx = 20f, anchorDiamPx = 40f)
         assertEquals(190f, y, 0f)
     }
@@ -451,8 +438,7 @@ class TimelineTrackGeometryTest {
         hasLayoutInfoEntry: Boolean = true,
         staleMillis: Long = 0L,
         staleThresholdMillis: Long = 40L,
-        // Defaults to actively-scrolling so every existing staleness-focused test below keeps exercising
-        // that logic unchanged; the isScrollInProgress-specific tests set this explicitly.
+        // Keep existing staleness tests in the actively-scrolling mode by default.
         isScrollInProgress: Boolean = true,
         noRealLazyColumn: Boolean = false,
     ) = resolveAnchorYSource(isLatest, hasLayoutInfoEntry, staleMillis, staleThresholdMillis, isScrollInProgress, noRealLazyColumn)
@@ -500,9 +486,7 @@ class TimelineTrackGeometryTest {
         assertEquals(AnchorYSource.Live, ySource(staleMillis = 39L, staleThresholdMillis = 40L, hasLayoutInfoEntry = true))
     }
 
-    // Round 42 (docs/color-roles.md): a row simply at rest has no reason for its callback to keep
-    // firing, so staleness by elapsed time alone must never demote it once the list has stopped moving —
-    // nonLatestAnchorCenterY's own formula was found measurably wrong for exactly this idle case.
+    // At rest, elapsed time alone must not demote a row from the live source.
     @Test
     fun resolveAnchorYSource_staleButAtRest_prefersLiveRegardlessOfElapsedTime() {
         assertEquals(

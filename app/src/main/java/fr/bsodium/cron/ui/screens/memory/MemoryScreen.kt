@@ -15,6 +15,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -32,14 +35,17 @@ import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.FabAction
+import fr.bsodium.cron.ui.components.FabChevronSlot
+import fr.bsodium.cron.ui.components.PrimaryActionFab
+import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.components.PageAppBar
-import fr.bsodium.cron.ui.screens.memory.components.MemoryComposerFab
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Clock
+import java.util.Locale
 
 /**
  * The Memory tab: a list of durable assistant memory entries (ground truth on screen), laid out
@@ -54,6 +60,7 @@ fun MemoryScreen(
     viewModel: MemoryViewModel,
     fabRegistry: FabRegistry,
     useCompactNav: Boolean,
+    fabChevron: FabChevronSlot? = null,
     modifier: Modifier = Modifier,
     onComposerExpandedChange: (Boolean) -> Unit = {},
 ) {
@@ -64,8 +71,10 @@ fun MemoryScreen(
         isMutating = isMutating,
         onSend = viewModel::sendInstruction,
         onDelete = viewModel::deleteEntry,
+        onRetry = viewModel::retryEntry,
         fabRegistry = fabRegistry,
         useCompactNav = useCompactNav,
+        fabChevron = fabChevron,
         onComposerExpandedChange = onComposerExpandedChange,
         modifier = modifier,
     )
@@ -78,8 +87,10 @@ internal fun MemoryContent(
     isMutating: Boolean,
     onSend: (String) -> Unit,
     onDelete: (Long) -> Unit,
+    onRetry: (Long) -> Unit = {},
     fabRegistry: FabRegistry? = null,
     useCompactNav: Boolean = false,
+    fabChevron: FabChevronSlot? = null,
     onComposerExpandedChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -88,17 +99,16 @@ internal fun MemoryContent(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    // Compact nav: the collapsed trigger lives in CronFloatingNav's own row instead of floating
-    // here (same pill-shifts-left mechanism Home's FAB already uses) — publish/withdraw a
-    // FabAction as the composer opens and closes, mirroring HomeScreen's own fabRegistry usage.
+    // Publish the collapsed trigger through FabRegistry so both navigation modes share one FAB host.
     DisposableEffect(fabRegistry) {
         onDispose { fabRegistry?.clear(ROUTE_MEMORY) }
     }
     LaunchedEffect(composerExpanded) {
         onComposerExpandedChange(composerExpanded)
     }
-    LaunchedEffect(composerExpanded, useCompactNav, fabRegistry) {
-        if (useCompactNav && !composerExpanded) {
+    LaunchedEffect(composerExpanded, fabRegistry) {
+        // Keep the global FAB host empty while the full-screen composer is open.
+        if (!composerExpanded) {
             fabRegistry?.set(
                 ROUTE_MEMORY,
                 FabAction(onClick = { composerExpanded = true }, icon = MaterialSymbol.HistoryEdu, label = "Remember", filled = false),
@@ -117,9 +127,7 @@ internal fun MemoryContent(
             contentWindowInsets = WindowInsets(0),
             topBar = { PageAppBar(title = "Memory", scrollBehavior = scrollBehavior) },
         ) { inner ->
-            // isMutating can flip true a beat before the pending row it corresponds to lands in
-            // entries (sendInstruction sets it eagerly; the row only appears once the suspend insert
-            // completes) -- keep the guard so that gap doesn't flash the empty state.
+            // Keep the empty state hidden during the brief gap before a pending row is inserted.
             if (entries.isEmpty() && !isMutating) {
                 Text(
                     text = "No memories yet. Tell Cron something to remember.",
@@ -144,21 +152,50 @@ internal fun MemoryContent(
                     ),
                     verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
-                    items(entries, key = { it.id }) { entry ->
-                        MemoryEntryRow(entry = entry, onDelete = { onDelete(entry.id) })
+                    entries
+                        .groupBy { it.category?.trim()?.takeIf(String::isNotEmpty) ?: UNCATEGORISED }
+                        .toList()
+                        .sortedBy { it.first.lowercase(Locale.ROOT) }
+                        .forEach { (category, groupedEntries) ->
+                            item(key = "section-$category") {
+                                SectionHeader(category)
+                            }
+                            groupedEntries.forEach { entry ->
+                                item(key = "entry-${entry.id}") {
+                                    MemoryEntryRow(
+                                        entry = entry,
+                                        onDelete = { onDelete(entry.id) },
+                                        onRetry = { onRetry(entry.id) },
+                                    )
+                                }
+                            }
                     }
                 }
             }
         }
 
-        if (!useCompactNav) {
-            MemoryComposerFab(
+        // Standalone previews and screenshot tests do not provide the app-level FAB host.
+        if (!useCompactNav && fabRegistry == null) {
+            AnimatedVisibility(
                 visible = !composerExpanded,
-                onClick = { composerExpanded = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(bottom = navInsetBottom + Spacing.navBarClearance),
-            )
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                label = "memory-fab-visibility",
+            ) {
+                val action = FabAction(
+                    onClick = { composerExpanded = true },
+                    label = "Remember",
+                    splitLabel = "Remember",
+                    icon = MaterialSymbol.HistoryEdu,
+                    filled = false,
+                    tooltipLabel = "Tell Cron something to remember",
+                )
+                if (fabChevron != null) SplitActionFab(action, fabChevron)
+                else PrimaryActionFab(action)
+            }
         }
 
         MemoryFullScreenComposer(
@@ -175,6 +212,18 @@ internal fun MemoryContent(
     }
 }
 
+private const val UNCATEGORISED = "Uncategorised"
+
+@Composable
+private fun SectionHeader(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = Spacing.lg, top = Spacing.lg, bottom = Spacing.xs),
+    )
+}
+
 @Preview(showBackground = true, name = "Memory — with entries")
 @Composable
 private fun MemoryContentPreview() {
@@ -182,7 +231,7 @@ private fun MemoryContentPreview() {
     CronTheme {
         MemoryContent(
             entries = listOf(
-                MemoryEntry(id = 1, text = "Prefers earlier wake-ups on gym days", category = "schedule", createdAt = now, updatedAt = now),
+                MemoryEntry(id = 1, text = "Prefers earlier wake-ups on gym days", category = "Schedule", createdAt = now, updatedAt = now),
                 MemoryEntry(id = 2, text = "Commutes by bike", category = null, createdAt = now, updatedAt = now),
             ),
             isMutating = false,

@@ -43,8 +43,7 @@ class BootReceiverTest {
     @Before
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
-        // The production CronDatabase singleton is file-backed and persists across tests in the JVM;
-        // wipe it so each test starts from a clean slate.
+        // Reset the file-backed singleton so each test starts clean.
         runBlocking { CronDatabase.get(app).sessionDao().deleteOlderThan(Long.MAX_VALUE) }
     }
 

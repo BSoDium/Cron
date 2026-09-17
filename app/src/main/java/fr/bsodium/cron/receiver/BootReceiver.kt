@@ -104,8 +104,7 @@ class BootReceiver : BroadcastReceiver() {
         val instruction = runCatching { SessionJson.decodeFromString<Instruction>(session.currentInstructionJson) }
             .onFailure { Log.w(TAG, "Skipping planned-alarm re-arm: unparseable instruction", it) }
             .getOrNull() ?: return
-        // A null alarmTime means no AI decision has armed an alarm (CancelAlarm resets it,
-        // DoNothing carries it forward) — hard-latest alone is the correct state.
+        // A null alarmTime means no AI decision armed an alarm; hard-latest alone is valid.
         val alarmTime = instruction.alarmTime ?: return
         val requested = sessionDate.atTime(alarmTime).toInstant(timezone)
         if (requested <= Clock.System.now()) {

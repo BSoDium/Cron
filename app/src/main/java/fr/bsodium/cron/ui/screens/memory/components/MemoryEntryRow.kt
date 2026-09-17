@@ -69,15 +69,17 @@ private val SPINNER_STROKE = 2.dp
  *  rather than a separate placeholder being swapped for a second, real one. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+internal fun MemoryEntryRow(
+    entry: MemoryEntry,
+    onDelete: () -> Unit,
+    onRetry: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     val dismissState = rememberSwipeToDismissBoxState()
     val scope = rememberCoroutineScope()
     val haptics = rememberCronHaptics()
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // A short tick right as the drag crosses into "will delete on release" — the same threshold
-    // that flips onDismiss's direction check — so the reveal card's own motion isn't the only signal
-    // that release now deletes.
     LaunchedEffect(dismissState.targetValue) {
         if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) haptics.tick()
     }
@@ -86,24 +88,8 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
         SwipeToDismissBox(
             state = dismissState,
             enableDismissFromStartToEnd = false,
-            // A completed swipe only asks for confirmation — deleting is irreversible and this is
-            // the one action in Memory that isn't routed through the assistant, so there's no
-            // second chance to notice a mistake later. Declining resets the row rather than leaving
-            // it dismissed, since the swipe gesture itself never actually deletes anything.
             onDismiss = { direction -> if (direction == SwipeToDismissBoxValue.EndToStart) showDeleteConfirm = true },
             backgroundContent = {
-                // The card is sized to (reveal amount - CARD_GAP), flush against the row's trailing
-                // edge, so the gap only ever appears between the card and the sliding row — never
-                // between the card and the screen edge. That size must be read inside
-                // Modifier.layout{}, the LAYOUT phase, not the composable body (composition phase): a
-                // composition-time read of dismissState.requireOffset() lags a frame behind the row's
-                // own layout-phase-deferred offset during a fast fling or snap-back, letting a stale
-                // card overlap the settling row — confirmed live, not theoretical. Subtracting the gap
-                // from the reported width up front (rather than via a separate Modifier.padding, which
-                // — being outside this layout{} — added its inset on the wrong edge and could report a
-                // size past what this node's own constraints allow) keeps the reported width always
-                // <= the constraints this node received, avoiding a width that silently stops growing
-                // mid-swipe.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -116,13 +102,6 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                             .layout { measurable, constraints ->
                                 val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f)).roundToInt()
                                 val cardWidthPx = (revealPx - CARD_GAP.roundToPx()).coerceAtLeast(0)
-                                // A loose maxWidth-only constraint lets this Box wrap its own tiny
-                                // content (just the delete icon) instead of actually occupying
-                                // cardWidthPx — the reported layout() size still claimed cardWidthPx
-                                // for positioning purposes, but the drawn clip+background only covered
-                                // the icon's own small natural size, rendering as a small pill parked at
-                                // the start of a mostly-empty reserved slot. A tight minWidth forces the
-                                // Box itself to actually be cardWidthPx wide.
                                 val placeable = measurable.measure(constraints.copy(minWidth = cardWidthPx, maxWidth = cardWidthPx))
                                 layout(cardWidthPx, placeable.height) { placeable.placeRelative(0, 0) }
                             }
@@ -172,6 +151,25 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            } else if (entry.failureReason != null) {
+                Column(
+                    modifier = rowShape,
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
+                    Text(
+                        text = "Couldn't save this memory",
+                        style = CronTypography.timelineRowTitle,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        text = failureMessage(entry.failureReason),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = onRetry) {
+                        Text("Retry")
+                    }
+                }
             } else {
                 Row(
                     modifier = rowShape,
@@ -184,15 +182,8 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                             style = CronTypography.timelineRowTitle,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
-                        entry.category?.let { category ->
-                            Text(
-                                text = category,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = Spacing.xxs),
-                            )
-                        }
                     }
+
                     Box(
                         modifier = Modifier.width(TIMESTAMP_COLUMN_WIDTH),
                         contentAlignment = Alignment.TopEnd,
@@ -204,6 +195,7 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
                             textAlign = TextAlign.End,
                         )
                     }
+
                 }
             }
         }
@@ -231,6 +223,14 @@ internal fun MemoryEntryRow(entry: MemoryEntry, onDelete: () -> Unit, modifier: 
             },
         )
     }
+}
+
+private fun failureMessage(reason: String): String = when (reason) {
+    "no_api_key" -> "Add an API key in Settings and try again."
+    "budget_exhausted" -> "Today's AI token budget is exhausted."
+    "no_memory_added" -> "The assistant did not create a memory from that instruction."
+    "http_error" -> "The AI service couldn't be reached."
+    else -> "The assistant couldn't process this instruction."
 }
 
 @Preview(showBackground = true)

@@ -270,11 +270,10 @@ class SessionFsm(
                         timezone = timezone,
                         label = "Wake up",
                         sessionId = sessionId,
-                        // Already a correctly-dated instant, not an AI date to correct -- see AlarmScheduler.clamp (#219).
+                        // This instant is already dated; do not clamp it to the session date.
                         pinToSessionDate = false,
                     )
-                    // #219: the armed alarm and Instruction.alarmTime (what Home reads) are separate
-                    // data sources -- write one here or the UI keeps showing "no alarm" over a real one.
+                    // Keep the persisted instruction aligned with the armed alarm shown by Home.
                     repository.updateInstruction(
                         sessionId,
                         Instruction(

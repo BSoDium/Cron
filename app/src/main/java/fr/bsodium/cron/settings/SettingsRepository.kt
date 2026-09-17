@@ -219,7 +219,9 @@ class SettingsRepository(private val context: Context) {
 
     private fun Preferences.localTime(key: Preferences.Key<String>, default: LocalTime): LocalTime {
         val raw = this[key] ?: return default
-        return runCatching { LocalTime.parse(raw) }.getOrDefault(default)
+        return runCatching { LocalTime.parse(raw) }
+            .onFailure { Log.w(TAG, "Invalid persisted local time for ${key.name}: $raw", it) }
+            .getOrDefault(default)
     }
 
     private companion object {

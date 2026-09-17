@@ -73,10 +73,7 @@ object FakeToolRegistry {
         override suspend fun execute(input: JsonElement) = ToolResult(response)
     }
 
-    /** Unlike every other stub, `set_alarm`'s result has to echo the requested `time_iso` back as
-     *  `alarm_time` — `AiThreadMapper.resolveNewAlarmTime` reads that field to resolve the timeline's
-     *  PREV › NEW headline, so a flat canned "ok" (no side effects, matching every other stub here)
-     *  left every mocked run showing "No alarm set" regardless of what the mock LLM client requested. */
+    /** Echoes the requested alarm time so mocked timeline headlines resolve correctly. */
     private fun setAlarmStub() = object : Tool {
         override val definition = ToolDefinition(
             name = "set_alarm",

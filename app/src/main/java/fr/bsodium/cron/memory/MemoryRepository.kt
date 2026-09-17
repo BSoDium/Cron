@@ -39,11 +39,11 @@ class MemoryRepository(private val context: Context) {
     /** Inserts a blank, in-flight placeholder row at the append position a real entry would land at,
      *  so the pending state lives in the same list the UI already renders -- see
      *  [fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow]'s pending branch. Call
-     *  [finalizePending] once the assistant's turn resolves, or [delete] if it never does. */
-    suspend fun addPending(): Long {
+     *  [finalizePending] once the assistant's turn resolves, or [markFailed] if it cannot. */
+    suspend fun addPending(instruction: String = ""): Long {
         val now = Clock.System.now()
         return db.memoryDao().insert(
-            MemoryEntry(id = 0, text = "", category = null, createdAt = now, updatedAt = now, pending = true).toEntity(),
+            MemoryEntry(id = 0, text = "", category = null, createdAt = now, updatedAt = now, pending = true, instruction = instruction).toEntity(),
         )
     }
 
@@ -52,8 +52,39 @@ class MemoryRepository(private val context: Context) {
      *  row no longer exists (e.g. deleted out from under a slow turn). */
     suspend fun finalizePending(id: Long, text: String, category: String?): Boolean {
         val existing = db.memoryDao().findById(id) ?: return false
-        val updated = existing.copy(text = text, category = category, updatedAt = Clock.System.now().toEpochMilliseconds(), pending = false)
+        val updated = existing.copy(
+            text = text,
+            category = category,
+            updatedAt = Clock.System.now().toEpochMilliseconds(),
+            pending = false,
+            instruction = null,
+            failureReason = null,
+        )
         return db.memoryDao().update(updated) > 0
+    }
+
+    suspend fun markFailed(id: Long, reason: String): Boolean {
+        val existing = db.memoryDao().findById(id) ?: return false
+        return db.memoryDao().update(
+            existing.copy(
+                pending = false,
+                failureReason = reason,
+                updatedAt = Clock.System.now().toEpochMilliseconds(),
+            ),
+        ) > 0
+    }
+
+    suspend fun retry(id: Long): String? {
+        val existing = db.memoryDao().findById(id) ?: return null
+        val instruction = existing.instruction ?: return null
+        db.memoryDao().update(
+            existing.copy(
+                pending = true,
+                failureReason = null,
+                updatedAt = Clock.System.now().toEpochMilliseconds(),
+            ),
+        )
+        return instruction
     }
 
     suspend fun update(id: Long, text: String?, category: String?): Boolean {

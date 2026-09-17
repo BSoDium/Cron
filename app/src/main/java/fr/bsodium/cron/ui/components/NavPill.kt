@@ -47,7 +47,6 @@ private data class PillDestination(val route: String, val symbol: MaterialSymbol
 
 private val DESTINATIONS = listOf(
     PillDestination(ROUTE_HOME, MaterialSymbol.Alarm, "Home"),
-    // Reuses the existing Article glyph — see CronNavigationBar.kt's DESTINATIONS for why.
     PillDestination(ROUTE_MEMORY, MaterialSymbol.Cognition, "Memory"),
     PillDestination(SETTINGS_ROOT, MaterialSymbol.Settings, "Settings"),
 )

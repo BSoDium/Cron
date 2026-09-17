@@ -429,8 +429,7 @@ private fun TimelineTestContent(timeline: List<TimelineItem>) {
     val firstAnchorIndex = timeline.indexOfFirst { it !is TimelineItem.DayHeader }
     val lastAnchorIndex = timeline.indexOfLast { it !is TimelineItem.DayHeader }
     val registry = rememberTimelineTrackRegistry()
-    // No real LazyColumn backs this static harness, so listState.layoutInfo is always empty — every
-    // anchor resolves via TimelineTrackOverlay's live-handle fallback, same as before Phase 7.
+    // The static harness resolves anchors through TimelineTrackOverlay's live-handle fallback.
     val listState = rememberLazyListState()
     Box {
         TimelineTrackOverlay(registry = registry, listState = listState)

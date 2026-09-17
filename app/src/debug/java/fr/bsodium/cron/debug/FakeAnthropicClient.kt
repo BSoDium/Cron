@@ -61,8 +61,7 @@ class FakeAnthropicClient : AnthropicMessages {
         return response(request.model, listOf(ContentBlock.Text("[mock] Got it, I'll remember that.")))
     }
 
-    /** Mirrors [fr.bsodium.cron.ai.SystemPrompts.MEMORY_MUTATION]'s real third-person distillation
-     *  with a cheap heuristic — good enough to exercise the mock path without a real model call. */
+    /** Applies a lightweight third-person heuristic for the mock memory path. */
     private fun fakeDistill(raw: String): String = raw
         .replaceFirst(Regex("^i'?m\\s+", RegexOption.IGNORE_CASE), "Is ")
         .replaceFirst(Regex("^i\\s+", RegexOption.IGNORE_CASE), "")
@@ -225,11 +224,7 @@ class FakeAnthropicClient : AnthropicMessages {
         usage = Usage(),
     )
 
-    /** One self-contained planning scenario: a destination, an anchor event to be on time for, and
-     *  the wake time it resolves to. Picked once per [FakeAnthropicClient] instance (i.e. once per
-     *  AI turn) so a single run's calendar → commute → alarm steps stay narratively consistent,
-     *  while different turns (a base plan vs. a later replan, each its own fresh instance) land on
-     *  genuinely different destinations/times instead of the same hardcoded one every time. */
+    /** Holds one internally consistent planning scenario for a mock AI turn. */
     private data class Scenario(
         val destination: String,
         val transitMode: String,

@@ -26,8 +26,6 @@ private data class NavDestination(
 
 private val DESTINATIONS = listOf(
     NavDestination(ROUTE_HOME, MaterialSymbol.Alarm, "Home"),
-    // Reuses the existing Article glyph rather than adding a new one — see MaterialSymbols.kt's KDoc:
-    // a new codepoint needs the ~15MB source variable font + a fontTools re-subset, neither available here.
     NavDestination(ROUTE_MEMORY, MaterialSymbol.Cognition, "Memory"),
     NavDestination(SETTINGS_ROOT, MaterialSymbol.Settings, "Settings"),
 )

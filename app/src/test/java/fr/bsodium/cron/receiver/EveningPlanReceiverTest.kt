@@ -29,8 +29,7 @@ class EveningPlanReceiverTest {
     @Before
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
-        // Room's CronDatabase singleton and DataStore's backing file aren't reset between test
-        // classes by Robolectric, so a disabled toggle can leak in from an unrelated test — reset it.
+        // Reset persisted state because Robolectric shares it between test classes.
         runBlocking { SettingsRepository(app).setAutoAlarmsEnabled(true) }
     }
 
@@ -57,7 +56,7 @@ class EveningPlanReceiverTest {
         dispatch()
 
         awaitCondition { nextTriggerPendingIntent() != null }
-        // The receiver re-arms *before* starting the service, so the arm landing says nothing about the start.
+        // Re-arming precedes service startup, so the alarm landing does not prove startup.
         val started = awaitNotNull { shadowOf(app).nextStartedService }
         assertEquals(SleepSessionService::class.java.name, started.component?.className)
     }
@@ -69,7 +68,7 @@ class EveningPlanReceiverTest {
         dispatch()
         shadowOf(Looper.getMainLooper()).idle()
 
-        // Give the background coroutine a moment; then assert neither side effect happened.
+        // Allow the background coroutine to settle before checking side effects.
         Thread.sleep(200)
         assertNull(nextTriggerPendingIntent())
         assertNull(shadowOf(app).nextStartedService)

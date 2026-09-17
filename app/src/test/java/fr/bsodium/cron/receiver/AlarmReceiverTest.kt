@@ -40,8 +40,7 @@ class AlarmReceiverTest {
         repository = SessionRepository(app)
         runBlocking {
             repository.clearAll()
-            // Room's CronDatabase singleton and DataStore's backing file aren't reset between test
-            // classes by Robolectric, so a disabled toggle can leak in from an unrelated test — reset it.
+            // Reset persisted state because Robolectric shares it between test classes.
             SettingsRepository(app).setAutoAlarmsEnabled(true)
         }
     }
@@ -139,8 +138,7 @@ class AlarmReceiverTest {
     }
 
     private fun postNotification() {
-        // handleDismiss/handleSnooze cancel unconditionally; a real prior notification isn't required to
-        // exercise that path, but posting one first is a closer approximation of the real ring→dismiss flow.
+        // Post first to approximate the real ring-to-dismiss flow.
         val nm = app.getSystemService(NotificationManager::class.java)
         nm.notify(AlarmReceiver.NOTIFICATION_ID, android.app.Notification.Builder(app, AlarmReceiver.CHANNEL_ID).build())
     }

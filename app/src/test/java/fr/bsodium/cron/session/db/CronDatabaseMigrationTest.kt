@@ -59,6 +59,23 @@ class CronDatabaseMigrationTest {
         db.close()
     }
 
+    @Test
+    fun migrate3To4_addsProcessingMetadataColumns() {
+        helper.createDatabase(TEST_DB, 3).close()
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4)
+        db.execSQL(
+            "INSERT INTO memory_entries (text, category, createdAt, updatedAt, pending, instruction, failureReason) " +
+                "VALUES ('', NULL, 0, 0, 0, 'remember tea', 'no_memory_added')",
+        )
+        db.query("SELECT instruction, failureReason FROM memory_entries").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("remember tea", cursor.getString(0))
+            assertEquals("no_memory_added", cursor.getString(1))
+        }
+        db.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test"
     }
