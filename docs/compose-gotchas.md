@@ -27,7 +27,7 @@ Pitfalls that have caused bugs or broken builds in this repo. Read before writin
 
 ## LargeFlexibleTopAppBar subtitle trap
 
-- **Don't put screen description text in `LargeFlexibleTopAppBar`'s `subtitle` slot.** The bar renders `smallSubtitle` in the collapsed bar too (see M3 source: `smallSubtitle = subtitle ?: {}`), so long text crowds the collapsed state and clips the title. The canonical Android pattern (used by Android Settings) is: functional description text is the first item in the scrolling content column, where it naturally scrolls away. In this project that means the `subtitle: String?` parameter on `SettingsDetailScaffold`. The `LargeFlexibleTopAppBar` subtitle slot is reserved for very short complementary labels that should remain visible at all scroll positions — not used in this project.
+- **`LargeFlexibleTopAppBar` renders its `subtitle` in both expanded and collapsed states** (see M3 source: `smallSubtitle = subtitle ?: {}`). `PageAppBar` uses this native slot for its optional description, so descriptions should be short enough to fit beside the collapsed title. For longer functional descriptions, use the first item in the scrolling content column, as `SettingsDetailScaffold` does.
 
 ## Hoisting `TopAppBarState`
 

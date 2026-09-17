@@ -9,8 +9,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.view.WindowCompat
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -241,6 +239,7 @@ private fun SlideToActTrack(
 
     val scope = rememberCoroutineScope()
     val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val settleSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
 
     Box(
         modifier = modifier
@@ -281,7 +280,7 @@ private fun SlideToActTrack(
                             } else {
                                 thumbAnim.animateTo(
                                     startOffset,
-                                    spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                    settleSpec,
                                 )
                             }
                         }

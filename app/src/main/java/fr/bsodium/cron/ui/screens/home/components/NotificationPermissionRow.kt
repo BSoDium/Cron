@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.Radius
+import fr.bsodium.cron.ui.theme.Spacing
 
 /** Inline error row shown when notifications are disabled (Cron can't ring without them). */
 @Composable
@@ -26,7 +27,10 @@ internal fun NotificationPermissionRow(onEnable: () -> Unit, modifier: Modifier 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 10.dp),
+                .padding(
+                    horizontal = Spacing.notificationHorizontal,
+                    vertical = Spacing.notificationVertical,
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(

@@ -1,9 +1,7 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,9 +34,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.ProcessItem
+import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
@@ -59,7 +59,6 @@ private const val REASONING_COLLAPSE_CHARS = 280
 private const val REASONING_COLLAPSED_LINES = 6
 // Soft dissolve into "See more"; the band's height sets how gradual the fade reads.
 private val REASONING_FADE_HEIGHT = 56.dp
-private val REASONING_HEIGHT_SPEC = tween<Int>(durationMillis = 200, easing = FastOutSlowInEasing)
 
 @Composable
 private fun ThinkingIcon() = Symbol(
@@ -83,7 +82,7 @@ internal fun ProcessTextRow(text: String, isFirst: Boolean, isLast: Boolean) {
     // Ease the fade + "See more" pill in on first crossing the collapse threshold; already-long blocks start at 1f.
     val affordance by animateFloatAsState(
         targetValue = if (collapsible) 1f else 0f,
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "collapse-affordance",
     )
     val bodyStyle = MaterialTheme.typography.bodyMedium.copy(
@@ -168,7 +167,11 @@ private fun ClippedReveal(
     var fullPx by remember { mutableIntStateOf(0) }
     // Collapsed target is always the constant collapsedPx, never `minOf(..., fullPx)` (0 before first measure) — so animateIntAsState never starts a static preview at 0.
     val target = if (expanded) (if (fullPx > 0) fullPx else collapsedPx) else collapsedPx
-    val animatedPx by animateIntAsState(target, REASONING_HEIGHT_SPEC, label = "reasoning-reveal")
+    val animatedPx by animateIntAsState(
+        targetValue = target,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "reasoning-reveal",
+    )
     val fading = fullPx > 0 && animatedPx < fullPx
     SubcomposeLayout(
         modifier = Modifier
@@ -286,6 +289,18 @@ internal fun DoneRow(isFirst: Boolean, isLast: Boolean) {
             text = "Done",
             style = MaterialTheme.typography.bodyMedium.copy(lineHeightStyle = STEP_LINE_HEIGHT),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ProcessTextRowPreview() {
+    CronTheme {
+        ProcessTextRow(
+            text = "Checking the calendar and preparing a concise sleep plan for tonight.",
+            isFirst = true,
+            isLast = true,
         )
     }
 }

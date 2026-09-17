@@ -9,8 +9,10 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
-// Derive version from git tags so it stays in sync automatically.
-// Tag format: v1.0.0 or v1.0.0-alpha.1
+/*
+ * Derive version from git tags so it stays in sync automatically.
+ * Tag format: v1.0.0 or v1.0.0-alpha.1
+ */
 fun gitVersionName(): String {
     return try {
         val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
@@ -96,17 +98,21 @@ android {
                 signingConfig = it
             }
         }
-        // Sign debug builds with the release key when available so dev and release APKs share a
-        // cert and install as an update instead of losing data — see docs/signing.md.
+        /*
+         * Sign debug builds with the release key when available so dev and release APKs share a
+         * cert and install as an update instead of losing data — see docs/signing.md.
+         */
         getByName("debug") {
             signingConfigs.getByName("release").takeIf { it.storeFile != null }?.let {
                 signingConfig = it
             }
         }
-        // AOT-compiled, never shipped — see docs/performance.md "The debug-build trap". Mirrors the
-        // `debug` build type's own signing choice just above (docs/signing.md), not a hardcoded plain
-        // debug keystore — otherwise this drifts out of sync with whatever cert debug/release builds
-        // actually carry and fails to install as an update over them (signature mismatch).
+        /*
+         * AOT-compiled, never shipped — see docs/performance.md "The debug-build trap". Mirrors the
+         * `debug` build type's own signing choice just above (docs/signing.md), not a hardcoded plain
+         * debug keystore — otherwise this drifts out of sync with whatever cert debug/release builds
+         * actually carry and fails to install as an update over them (signature mismatch).
+         */
         create("benchmark") {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
@@ -121,11 +127,13 @@ android {
         getByName("benchmark") {
             kotlin.srcDirs("src/release/java")
         }
-        // Exported Room schema JSONs, read by MigrationTestHelper in Robolectric unit tests. Must live
-        // in "main" assets, not "test": Robolectric's Instrumentation.context.assets resolves against
-        // the merged MAIN assets output (see generateDebugUnitTestConfig's test_config.properties),
-        // not a separate test-only asset merge — this repo runs all Room tests under Robolectric, not
-        // instrumented androidTest, so this is the source set that actually gets picked up.
+        /*
+         * Exported Room schema JSONs, read by MigrationTestHelper in Robolectric unit tests. Must live
+         * in "main" assets, not "test": Robolectric's Instrumentation.context.assets resolves against
+         * the merged MAIN assets output (see generateDebugUnitTestConfig's test_config.properties),
+         * not a separate test-only asset merge — this repo runs all Room tests under Robolectric, not
+         * instrumented androidTest, so this is the source set that actually gets picked up.
+         */
         getByName("main") {
             assets.srcDirs("$projectDir/schemas")
         }
