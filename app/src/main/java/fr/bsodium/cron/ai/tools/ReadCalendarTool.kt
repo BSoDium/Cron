@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ai.tools
 
+import android.util.Log
 import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolResult
 import fr.bsodium.cron.ai.toolSchema
@@ -17,6 +18,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+
+private const val TAG = "ReadCalendarTool"
 
 /**
  * Exposes [CalendarReader] to the model.
@@ -86,8 +89,12 @@ class ReadCalendarTool(
                 isError = true,
             )
         }
-        val start = runCatching { Instant.parse(startStr) }.getOrNull()
-        val end = runCatching { Instant.parse(endStr) }.getOrNull()
+        val start = runCatching { Instant.parse(startStr) }
+            .onFailure { Log.w(TAG, "Invalid calendar start instant: $startStr", it) }
+            .getOrNull()
+        val end = runCatching { Instant.parse(endStr) }
+            .onFailure { Log.w(TAG, "Invalid calendar end instant: $endStr", it) }
+            .getOrNull()
         if (start == null || end == null) {
             return ToolResult(
                 payload = """{"error":"start_iso and end_iso must be ISO-8601 instants"}""",

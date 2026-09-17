@@ -5,10 +5,7 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- Keep sensitive preferences out of cloud backup. -->
         <exclude domain="sharedpref" path="cron_secure.xml" />
     </cloud-backup>
     <!--

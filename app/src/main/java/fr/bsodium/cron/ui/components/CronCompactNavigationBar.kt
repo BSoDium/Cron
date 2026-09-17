@@ -284,13 +284,13 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                         label = "split-fab-content",
                     ) { d ->
                         Row(
-                            modifier = Modifier.padding(end = 16.dp),
+                            modifier = Modifier.padding(end = Spacing.lg),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Symbol(
                                 symbol = d.icon,
                                 contentDescription = null,
-                                modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
+                                modifier = Modifier.padding(start = Spacing.lg, end = Spacing.sm),
                                 fill = if (d.filled) 1f else 0f,
                             )
                             Column {
@@ -414,13 +414,13 @@ internal fun PrimaryActionFab(action: FabAction?) {
                 label = "fab-content",
             ) { d ->
                 Row(
-                    modifier = Modifier.padding(end = 16.dp),
+                    modifier = Modifier.padding(end = Spacing.lg),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Symbol(
                         symbol = d.icon,
                         contentDescription = null,
-                        modifier = Modifier.padding(start = 16.dp, end = Spacing.sm),
+                        modifier = Modifier.padding(start = Spacing.lg, end = Spacing.sm),
                         fill = if (d.filled) 1f else 0f,
                     )
                     Text(

@@ -41,6 +41,7 @@ fun PageAppBar(
     scrollBehavior: TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    subtitle: String? = null,
 ) {
     val barContainer = CronColors.pageBackground
     LargeFlexibleTopAppBar(
@@ -66,6 +67,16 @@ fun PageAppBar(
                 overflow = TextOverflow.Ellipsis,
             )
         },
+        subtitle = subtitle?.let { text ->
+            {
+                Text(
+                    text = text,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
         modifier = modifier,
         navigationIcon = {
             if (onBack != null) {
@@ -88,7 +99,7 @@ fun PageAppBar(
         },
         titleHorizontalAlignment = Alignment.Start,
         colors = TopAppBarDefaults.topAppBarColors(
-            // Same for both: suppresses M3's snapping container transition; we drive the fade via barContainer.
+            // Same for both: suppresses M3's snapping container transition.
             containerColor = barContainer,
             scrolledContainerColor = barContainer,
         ),
@@ -128,3 +139,23 @@ private fun PageAppBarWithBackPreview() {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
+@Composable
+private fun PageAppBarWithSubtitlePreview() {
+    CronTheme {
+        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                PageAppBar(
+                    title = "Top 10 hiking trails",
+                    subtitle = "Discover popular trails",
+                    scrollBehavior = scrollBehavior,
+                )
+            },
+        ) { inner ->
+            Text("body", modifier = Modifier.padding(inner))
+        }
+    }
+}

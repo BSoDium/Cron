@@ -287,7 +287,7 @@ internal fun AiRunNode(
      *  [trackOnAccentColor]). The `!atCap` case's `primaryContainer`/`onPrimaryContainer` is never
      *  actually seen — [TimelineNode]'s `effectiveAnchor` normalization discards and overrides any
      *  non-cap `Icon`'s tint/container with its own track-matched interior treatment — but stays
-     *  here as a placeholder rather than `null`/a TODO. */
+     *  here as a placeholder rather than `null`/a sentinel value. */
     val anchor = when {
         item.isStreaming -> TimelineAnchor.Loader
         item.isLatest -> TimelineAnchor.Latest(symbol)

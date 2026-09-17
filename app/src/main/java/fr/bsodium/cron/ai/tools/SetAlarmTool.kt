@@ -75,7 +75,9 @@ class SetAlarmTool(
         val label = obj["label"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "Cron Alarm"
         val reason = obj["reason"]?.jsonPrimitive?.content ?: ""
 
-        val requested = runCatching { Instant.parse(timeIso) }.getOrNull()
+        val requested = runCatching { Instant.parse(timeIso) }
+            .onFailure { Log.w(TAG, "Invalid alarm instant: $timeIso", it) }
+            .getOrNull()
             ?: return toolErrorResult("time_iso is not a valid ISO-8601 instant: $timeIso")
 
         val plan = scheduler.schedule(

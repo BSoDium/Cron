@@ -31,6 +31,53 @@ class PageAppBarScreenshotTest {
     private val longTitle = "This is a deliberately long AI-generated title meant to overflow the app bar"
 
     @Test
+    fun subtitle_is_visible_expanded() {
+        composeTestRule.setContent {
+            CronTheme {
+                val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
+                        PageAppBar(
+                            title = "Top 10 hiking trails",
+                            subtitle = "Discover popular trails",
+                            scrollBehavior = scrollBehavior,
+                            onBack = {},
+                        )
+                    },
+                ) { inner -> Text("body", modifier = Modifier.padding(inner)) }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    @Test
+    fun subtitle_is_visible_collapsed() {
+        composeTestRule.setContent {
+            CronTheme {
+                val state = TopAppBarState(
+                    initialHeightOffsetLimit = -500f,
+                    initialHeightOffset = -500f,
+                    initialContentOffset = 0f,
+                )
+                val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = state)
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
+                        PageAppBar(
+                            title = "Top 10 hiking trails",
+                            subtitle = "Discover popular trails",
+                            scrollBehavior = scrollBehavior,
+                            onBack = {},
+                        )
+                    },
+                ) { inner -> Text("body", modifier = Modifier.padding(inner)) }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    @Test
     fun long_title_ellipsizes_expanded() {
         composeTestRule.setContent {
             CronTheme {

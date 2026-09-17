@@ -37,6 +37,7 @@ import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
 import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -227,8 +228,8 @@ private val THINKING_POOL: List<RoundedPolygon> = RESTING_SET + SHARP + Material
 private fun ThinkingShapePreview() {
     CronTheme {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
+            modifier = Modifier.padding(Spacing.lg),
         ) {
             StaticShape(RESTING_SET.first(), fill = 1f)
             StaticShape(THINKING_ARROW, fill = 0f)
