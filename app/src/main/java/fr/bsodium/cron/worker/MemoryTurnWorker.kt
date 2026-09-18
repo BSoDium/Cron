@@ -18,7 +18,6 @@ import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.tools.AddMemoryTool
 import fr.bsodium.cron.ai.tools.DeleteMemoryTool
 import fr.bsodium.cron.ai.tools.UpdateMemoryTool
-import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.memory.MemoryPromptBuilder
 import fr.bsodium.cron.memory.MemoryRepository
 import fr.bsodium.cron.settings.SecureKeyStore
@@ -80,15 +79,7 @@ class MemoryTurnWorker(
                 is MemoryTurnRunner.Outcome.Completed -> {
                     Log.i(TAG, "Memory turn complete (stop=${outcome.response.stop_reason})")
                     if (placeholderId != null && !addMemoryTool.placeholderConsumed) {
-                        repository.markFailed(
-                            placeholderId,
-                            outcome.response.content
-                                .filterIsInstance<ContentBlock.Text>()
-                                .joinToString(" ") { it.text.trim() }
-                                .trim()
-                                .takeIf { it.isNotEmpty() }
-                                ?: REASON_TECHNICAL_ERROR,
-                        )
+                        repository.delete(placeholderId)
                     }
                 }
                 is MemoryTurnRunner.Outcome.BudgetExhausted -> {
@@ -151,7 +142,6 @@ class MemoryTurnWorker(
         const val REASON_HTTP = "http_error"
         const val REASON_MAX_RETRIES = "max_retries_exceeded"
         const val REASON_NO_MEMORY_ADDED = "no_memory_added"
-        const val REASON_TECHNICAL_ERROR = "technical_error"
 
         private const val TAG = "MemoryTurnWorker"
         private const val MAX_RETRY_ATTEMPTS = 5

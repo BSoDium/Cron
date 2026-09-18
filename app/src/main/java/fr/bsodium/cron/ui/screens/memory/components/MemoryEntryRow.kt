@@ -1,5 +1,12 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -33,16 +41,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.rememberCronHaptics
-import fr.bsodium.cron.ui.components.aiPulse
 import fr.bsodium.cron.ui.screens.home.components.rememberRelativeAgo
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -51,21 +64,71 @@ import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-private val TIMESTAMP_COLUMN_WIDTH = 88.dp
 private val DELETE_ICON_SIZE = 22.dp
 private val CARD_GAP = Spacing.xs
 private val ICON_EDGE_PADDING = Spacing.lg
 
+/**
+ * Sweeps a highlight gradient across text glyphs to signal processing state.
+ *
+ * @param durationMillis Duration in milliseconds for one complete sweep (controls shimmer frequency).
+ * @param baseColor Exact default/resting color of the text glyphs.
+ * @param highlightColor Exact color of the sweeping highlight across the glyphs.
+ */
+@Composable
+fun Modifier.textShimmer(
+    durationMillis: Int = 1600,
+    baseColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    highlightColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+): Modifier {
+    val transition = rememberInfiniteTransition(label = "text_shimmer_transition")
+    val progress by transition.animateFloat(
+        initialValue = -0.5f,
+        targetValue = 1.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = durationMillis, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "text_shimmer_progress",
+    )
+
+    return this
+        .graphicsLayer { alpha = 0.99f }
+        .drawWithContent {
+            val width = size.width
+            val startX = width * progress
+            val shimmerWidth = width
+
+            val brush = Brush.linearGradient(
+                colors = listOf(
+                    baseColor,
+                    highlightColor,
+                    baseColor,
+                ),
+                start = Offset(startX - shimmerWidth, 0f),
+                end = Offset(startX, 0f),
+            )
+
+            drawContent()
+            drawRect(
+                brush = brush,
+                blendMode = BlendMode.SrcIn,
+            )
+        }
+}
+
 /** One memory entry, swipe-left-to-delete (Gmail-style) — never edited in place, only ever removed
  *  directly or superseded by the assistant via the composer above. While [MemoryEntry.pending] is
  *  true (the assistant's mutation turn hasn't finalized this row yet — see
- *  `MemoryRepository.addPending`), it renders as a spinner placeholder in the same shape and
+ *  `MemoryRepository.addPending`), it renders with a shimmer placeholder in the same shape and
  *  position instead of the entry's not-yet-real text, so the row flips to real content in place
  *  rather than a separate placeholder being swapped for a second, real one. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +144,21 @@ internal fun MemoryEntryRow(
     val scope = rememberCoroutineScope()
     val haptics = rememberCronHaptics()
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    var displayedText by remember(entry.id) { mutableStateOf(entry.text) }
+    var lastText by remember(entry.id) { mutableStateOf(entry.text) }
+
+    LaunchedEffect(entry.text, entry.id) {
+        if (entry.text != lastText) {
+            for (len in 0..entry.text.length) {
+                displayedText = entry.text.substring(0, len)
+                delay(20.milliseconds)
+            }
+            lastText = entry.text
+        } else {
+            displayedText = entry.text
+        }
+    }
 
     LaunchedEffect(dismissState.targetValue) {
         if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) haptics.tick()
@@ -143,27 +221,51 @@ internal fun MemoryEntryRow(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radius.lg))
                 .background(CronColors.elementSurface)
+                .animateContentSize()
+
             if (entry.pending) {
-                Row(
-                    modifier = rowShape
-                        .aiPulse(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.colorScheme.tertiaryContainer,
-                                MaterialTheme.colorScheme.primaryContainer,
-                            ),
-                            cornerRadius = Radius.lg,
-                        )
-                        .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
+                    modifier = rowShape.padding(start = Spacing.md, end = Spacing.md, top = Spacing.md, bottom = Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
                         text = entry.instruction?.takeIf { it.isNotBlank() } ?: "Updating memory…",
                         style = CronTypography.timelineRowTitle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
+                        maxLines = 10,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.xs)
+                            .textShimmer(),
                     )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        FilledTonalButton(
+                            onClick = onDelete,
+                            contentPadding = PaddingValues(
+                                start = 12.dp,
+                                end = 16.dp,
+                                top = 8.dp,
+                                bottom = 8.dp,
+                            ),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            ),
+                        ) {
+                            Symbol(
+                                symbol = MaterialSymbol.Close,
+                                contentDescription = null,
+                                size = 18.dp,
+                                weight = 500,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Cancel")
+                        }
+                    }
                 }
             } else if (entry.failureReason != null) {
                 val isSystemError = isSystemFailure(entry.failureReason)
@@ -182,6 +284,8 @@ internal fun MemoryEntryRow(
                             text = "Couldn't save this memory",
                             style = CronTypography.timelineRowTitle,
                             color = MaterialTheme.colorScheme.error,
+                            maxLines = 10,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = "\"${entry.instruction.orEmpty()}\"",
@@ -190,11 +294,15 @@ internal fun MemoryEntryRow(
                                 fontFamily = CronTypography.bodySerif.fontFamily,
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 10,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = failureMessage(entry.failureReason),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 10,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Row(
@@ -249,9 +357,13 @@ internal fun MemoryEntryRow(
                                     top = 8.dp,
                                     bottom = 8.dp,
                                 ),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                ),
                             ) {
                                 Symbol(
-                                    symbol = MaterialSymbol.DoneAll,
+                                    symbol = MaterialSymbol.ArrowInsert,
                                     contentDescription = null,
                                     size = 18.dp,
                                     weight = 500,
@@ -263,26 +375,32 @@ internal fun MemoryEntryRow(
                     }
                 }
             } else {
-                Row(
+                Column(
                     modifier = rowShape.padding(horizontal = Spacing.lg, vertical = Spacing.md),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                    verticalAlignment = Alignment.Top,
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalAlignment = Alignment.Start,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = displayedText,
+                        style = CronTypography.timelineRowTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 10,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .clip(Radius.full)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = Spacing.sm, vertical = Spacing.xxs),
+                    ) {
                         Text(
-                            text = entry.text,
-                            style = CronTypography.timelineRowTitle,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            text = "Updated ${rememberRelativeAgo(entry.updatedAt.toEpochMilliseconds())}",
+                            style = CronTypography.timelineRowTime,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-
-                    Text(
-                        text = rememberRelativeAgo(entry.createdAt.toEpochMilliseconds()),
-                        style = CronTypography.timelineRowTime,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.width(TIMESTAMP_COLUMN_WIDTH),
-                    )
                 }
             }
         }
@@ -296,7 +414,11 @@ internal fun MemoryEntryRow(
             },
             title = { Text("Delete this memory?") },
             text = {
-                Text(entry.text.ifBlank { entry.instruction ?: "This memory is still being processed." })
+                Text(
+                    text = entry.text.ifBlank { entry.instruction ?: "This memory is still being processed." },
+                    maxLines = 10,
+                    overflow = TextOverflow.Ellipsis,
+                )
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -319,7 +441,6 @@ private fun isSystemFailure(reason: String): Boolean = when (reason) {
     else -> false
 }
 
-
 private fun failureMessage(reason: String): String = when (reason) {
     "no_api_key" -> "Add an API key in Settings and try again."
     "budget_exhausted" -> "Today's AI token budget is exhausted."
@@ -328,7 +449,6 @@ private fun failureMessage(reason: String): String = when (reason) {
     "max_retries_exceeded", "technical_error" -> "A technical error prevented the assistant from processing this instruction."
     else -> reason
 }
-
 
 @Preview(showBackground = true)
 @Composable
@@ -351,11 +471,11 @@ private fun MemoryEntryRowPreview() {
                 onDelete = {},
             )
             MemoryEntryRow(
-                entry = MemoryEntry(id = 3, text = "", category = null, createdAt = now, updatedAt = now, pending = true),
+                entry = MemoryEntry(id = 4, text = "", instruction = "I am a moderate fan of vegetables. Especially fried ones.", category = null, createdAt = now, updatedAt = now, pending = false, failureReason = "I'm not storing that because it's a food preference unrelated to sleep planning. The sleep-planning assistant needs facts about your schedule, commute, wake times, and other constraints that affect when you should go to bed —not general food likes or dislikes."),
                 onDelete = {},
             )
             MemoryEntryRow(
-                entry = MemoryEntry(id = 4, text = "", instruction = "I am a moderate fan of vegetables. Especially fried ones.", category = null, createdAt = now, updatedAt = now, pending = false, failureReason = "I'm not storing that because it's a food preference unrelated to sleep planning. The sleep-planning assistant needs facts about your schedule, commute, wake times, and other constraints that affect when you should go to bed —not general food likes or dislikes."),
+                entry = MemoryEntry(id = 3, text = "", instruction = "I only wake up late on weekends.", category = null, createdAt = now, updatedAt = now, pending = true),
                 onDelete = {},
             )
         }
