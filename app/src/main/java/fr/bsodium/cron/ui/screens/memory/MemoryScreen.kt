@@ -72,6 +72,7 @@ fun MemoryScreen(
         onSend = viewModel::sendInstruction,
         onDelete = viewModel::deleteEntry,
         onRetry = viewModel::retryEntry,
+        onAddAnyway = viewModel::addAnyway,
         fabRegistry = fabRegistry,
         useCompactNav = useCompactNav,
         fabChevron = fabChevron,
@@ -89,6 +90,7 @@ internal fun MemoryContent(
     onDelete: (Long) -> Unit,
     modifier: Modifier = Modifier,
     onRetry: (Long) -> Unit = {},
+    onAddAnyway: (Long) -> Unit = {},
     fabRegistry: FabRegistry? = null,
     useCompactNav: Boolean = false,
     fabChevron: FabChevronSlot? = null,
@@ -177,6 +179,7 @@ internal fun MemoryContent(
                                     entry = entry,
                                     onDelete = { onDelete(entry.id) },
                                     onRetry = { onRetry(entry.id) },
+                                    onAddAnyway = { onAddAnyway(entry.id) },
                                     modifier = Modifier.animateItem(),
                                 )
                             }
@@ -251,6 +254,8 @@ private fun MemoryContentPreview() {
             isMutating = false,
             onSend = {},
             onDelete = {},
+            onRetry = {},
+            onAddAnyway = {},
         )
     }
 }
@@ -259,7 +264,14 @@ private fun MemoryContentPreview() {
 @Composable
 private fun MemoryContentEmptyPreview() {
     CronTheme {
-        MemoryContent(entries = emptyList(), isMutating = false, onSend = {}, onDelete = {})
+        MemoryContent(
+            entries = emptyList(),
+            isMutating = false,
+            onSend = {},
+            onDelete = {},
+            onRetry = {},
+            onAddAnyway = {},
+        )
     }
 }
 
@@ -276,6 +288,33 @@ private fun MemoryContentMutatingPreview() {
             isMutating = true,
             onSend = {},
             onDelete = {},
+            onRetry = {},
+            onAddAnyway = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Memory — failure state")
+@Composable
+private fun MemoryContentFailurePreview() {
+    val now = Clock.System.now()
+    CronTheme {
+        MemoryContent(
+            entries = listOf(
+                MemoryEntry(
+                    id = 1,
+                    text = "Already known",
+                    category = null,
+                    createdAt = now,
+                    updatedAt = now,
+                    failureReason = "ALREADY_EXISTS: I already know you commute by bike.",
+                    instruction = "Commutes by bike"
+                ),
+            ),
+            isMutating = false,
+            onSend = {},
+            onDelete = {},
+            onAddAnyway = {},
         )
     }
 }

@@ -4,6 +4,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
@@ -73,6 +75,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.days
 
 private val DELETE_ICON_SIZE = 22.dp
 private val CARD_GAP = Spacing.xs
@@ -383,6 +386,7 @@ internal fun MemoryEntryRow(
                         } else {
                             TextButton(
                                 onClick = onAddAnyway,
+                                modifier = Modifier.testTag("add-anyway-button"),
                                 contentPadding = PaddingValues(
                                     start = 12.dp,
                                     end = 16.dp,
@@ -454,14 +458,19 @@ internal fun MemoryEntryRow(
                             }
                         }
 
-                        val fadeFraction = ((300_000L - elapsedMillis).toFloat() / 300_000L).coerceIn(0f, 1f)
+                        val isRecent = elapsedMillis < 300_000L
+                        val animatedFadeFraction by animateFloatAsState(
+                            targetValue = if (isRecent) 1f else 0f,
+                            label = "recent-fade-fraction",
+                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                        )
 
                         Box(
                             modifier = Modifier
                                 .clip(Radius.full)
-                                .background(MaterialTheme.colorScheme.secondary.copy(alpha = fadeFraction))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = animatedFadeFraction))
                                 .padding(
-                                    start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xxs, fadeFraction),
+                                    start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xxs, animatedFadeFraction),
                                     end = Spacing.sm,
                                     top = Spacing.xxs,
                                     bottom = Spacing.xxs
@@ -471,21 +480,22 @@ internal fun MemoryEntryRow(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
-                                if (fadeFraction > 0f) {
+                                if (animatedFadeFraction > 0f) {
                                     Symbol(
                                         symbol = MaterialSymbol.Update,
                                         contentDescription = null,
                                         size = 14.dp,
-                                        tint = MaterialTheme.colorScheme.onSecondary.copy(alpha = fadeFraction),
+                                        tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = animatedFadeFraction),
                                     )
                                 }
+                                val label = if (entry.createdAt == entry.updatedAt) "Created" else "Updated"
                                 Text(
-                                    text = "Updated ${rememberRelativeAgo(entry.updatedAt.toEpochMilliseconds())}",
+                                    text = "$label ${rememberRelativeAgo(entry.updatedAt.toEpochMilliseconds())}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = lerp(
                                         MaterialTheme.colorScheme.onSurfaceVariant,
-                                        MaterialTheme.colorScheme.onSecondary,
-                                        fadeFraction
+                                        MaterialTheme.colorScheme.onPrimary,
+                                        animatedFadeFraction
                                     ),
                                 )
                             }
@@ -546,6 +556,7 @@ private fun failureMessage(reason: String): String = when (reason) {
 @Composable
 private fun MemoryEntryRowPreview() {
     val now = Clock.System.now()
+    val yesterday = now.minus(1.days)
     CronTheme {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             MemoryEntryRow(
@@ -553,8 +564,8 @@ private fun MemoryEntryRowPreview() {
                     id = 1,
                     text = "Prefers earlier wake-ups on gym days",
                     category = "schedule",
-                    createdAt = now,
-                    updatedAt = now,
+                    createdAt = yesterday,
+                    updatedAt = yesterday,
                 ),
                 onDelete = {},
             )
@@ -563,7 +574,7 @@ private fun MemoryEntryRowPreview() {
                     id = 2,
                     text = "Commutes by bike",
                     category = null,
-                    createdAt = now,
+                    createdAt = yesterday,
                     updatedAt = now
                 ),
                 onDelete = {},
