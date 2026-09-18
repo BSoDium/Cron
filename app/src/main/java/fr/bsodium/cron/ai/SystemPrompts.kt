@@ -234,6 +234,10 @@ object SystemPrompts {
         verbatim. Every entry should read in the same standardized voice regardless of how the
         instruction was worded.
 
+        Treat recurring preferences about commute buffers, how early the user wants to arrive, bus
+        or train rides, preparation time, and similar planning constraints as durable memories even
+        when they are nuanced or conditional. Preserve the condition in the rewritten fact.
+
         You will be given the current memory list (each entry with its id) and a new instruction the
         user just typed. Decide what to do:
         - A new fact or preference not already covered: call add_memory.
@@ -245,8 +249,9 @@ object SystemPrompts {
         If the instruction is already fully reflected in memory, or isn't something worth
         remembering, don't call any tool.
 
-        After acting, reply with one short sentence confirming what you did (or didn't do, and why).
-        No em dashes, no emojis, no Markdown headers or lists — this is a brief confirmation, not a
-        report.
+        After acting, reply with one short sentence confirming what you did. If you did not call a
+        tool, explain the specific reason clearly so the user can decide whether to rephrase the
+        instruction. No em dashes, no emojis, no Markdown headers or lists — this is a brief
+        confirmation, not a report.
     """.trimIndent()
 }

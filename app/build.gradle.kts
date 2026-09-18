@@ -40,7 +40,8 @@ fun gitVersionCode(): Int {
 }
 
 // Fixed debug versionCode so switching branches never triggers a version-downgrade error on device.
-val isReleaseBuild = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+val isReleaseBuild =
+    gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
 
 // Read local.properties for sensitive config (file is gitignored)
 val localProps = Properties().apply {
@@ -80,9 +81,11 @@ android {
                 ?: localProps.getProperty("STORE_FILE")?.takeIf { it.isNotBlank() }
             if (keyStorePath != null) {
                 storeFile = file(keyStorePath)
-                storePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: localProps.getProperty("STORE_PASSWORD")
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                    ?: localProps.getProperty("STORE_PASSWORD")
                 keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: localProps.getProperty("KEY_ALIAS")
-                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: localProps.getProperty("KEY_PASSWORD")
+                keyPassword =
+                    System.getenv("RELEASE_KEY_PASSWORD") ?: localProps.getProperty("KEY_PASSWORD")
             }
         }
     }
@@ -276,7 +279,8 @@ tasks.register("checkFileLength") {
     val mainSrc = layout.projectDirectory.dir("src/main")
     val projectRoot = rootDir
     doLast {
-        val ktFiles = mainSrc.asFile.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        val ktFiles =
+            mainSrc.asFile.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
         val offenders = ktFiles
             .mapNotNull { file ->
                 val lines = file.readLines().size
@@ -285,13 +289,13 @@ tasks.register("checkFileLength") {
             .sortedByDescending { it.first }
         logger.lifecycle(
             "checkFileLength: scanned ${ktFiles.size} Kotlin files, " +
-                "largest ${ktFiles.maxOfOrNull { it.readLines().size } ?: 0} lines (cap $maxKotlinFileLines).",
+                    "largest ${ktFiles.maxOfOrNull { it.readLines().size } ?: 0} lines (cap$maxKotlinFileLines).",
         )
         if (offenders.isNotEmpty()) {
-            val report = offenders.joinToString("\n") { (lines, path) -> "  $lines  $path" }
+            val report = offenders.joinToString("\n") { (lines, path) -> "  $lines$path" }
             throw GradleException(
                 "These Kotlin files exceed $maxKotlinFileLines lines — split into atomic files " +
-                    "(one file, one responsibility), don't suppress:\n$report",
+                        "(one file, one responsibility), don't suppress:\n$report",
             )
         }
     }
@@ -320,7 +324,8 @@ tasks.register("checkAnimationPreviews") {
         val callPatterns = animationApis.map { it to Regex("""(?<!\w)$it\s*\(""") }
         val labelPattern = Regex("""label\s*=""")
         val previewPattern = Regex("""@Preview""")
-        val suppressPattern = Regex("""@(?:file:)?Suppress\([^)]*AnimationPreviewNotRequired[^)]*\)""")
+        val suppressPattern =
+            Regex("""@(?:file:)?Suppress\([^)]*AnimationPreviewNotRequired[^)]*\)""")
 
         val ktFiles = mainSrc.asFile.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
@@ -338,11 +343,12 @@ tasks.register("checkAnimationPreviews") {
             for ((i, line) in lines.withIndex()) {
                 val trimmed = line.trimStart()
                 if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("import ")) continue
-                val apiMatch = callPatterns.firstOrNull { (_, p) -> p.containsMatchIn(line) }?.first ?: continue
+                val apiMatch = callPatterns.firstOrNull { (_, p) -> p.containsMatchIn(line) }?.first
+                    ?: continue
                 val window = lines.subList(i, minOf(i + 12, lines.size))
                 val hasLabel = window.any { labelPattern.containsMatchIn(it) }
                 if (!hasLabel) {
-                    unlabeled += "  ${file.relativeTo(projectRoot).path}:${i + 1} — $apiMatch"
+                    unlabeled += "  ${file.relativeTo(projectRoot).path}:${i + 1} —$apiMatch"
                 }
             }
 
@@ -365,7 +371,7 @@ tasks.register("checkAnimationPreviews") {
                     if (unlabeled.isNotEmpty()) appendLine()
                     appendLine(
                         "Files with animations but no @Preview " +
-                            "(add one, or @Suppress(\"AnimationPreviewNotRequired\")):",
+                                "(add one, or @Suppress(\"AnimationPreviewNotRequired\")):",
                     )
                     noPreview.forEach { appendLine(it) }
                 }
@@ -377,3 +383,54 @@ tasks.register("checkAnimationPreviews") {
 }
 
 tasks.named("check") { dependsOn("checkFileLength", "checkAnimationPreviews") }
+
+/**
+ * Task to automatically subset Material Symbols fonts based on unicode usage in Kotlin code.
+ */
+val generateFontSubsets = tasks.register<Exec>("generateFontSubsets") {
+    group = "build"
+    description = "Regenerates Material Symbols font subsets inside an isolated Python venv"
+
+    val venvDir = rootProject.layout.projectDirectory.dir(".venv")
+    val venvPython = if (System.getProperty("os.name").lowercase().contains("win")) {
+        venvDir.file("Scripts/python.exe")
+    } else {
+        venvDir.file("bin/python")
+    }
+
+    val scriptFile = rootProject.layout.projectDirectory.file("scripts/update_icons.py")
+    val symbolKt = layout.projectDirectory.file("src/main/java/fr/bsodium/cron/ui/theme/MaterialSymbols.kt")
+    val sourceFontsDir = rootProject.layout.projectDirectory.dir("tools/fonts")
+    val outputFontsDir = layout.projectDirectory.dir("src/main/res/font")
+
+    inputs.file(scriptFile)
+    inputs.file(symbolKt).optional()
+    inputs.dir(sourceFontsDir)
+    outputs.dir(outputFontsDir)
+
+    doFirst {
+        if (!venvPython.asFile.exists()) {
+            logger.lifecycle("Creating isolated Python venv for font subsetting...")
+            providers.exec {
+                commandLine("python3", "-m", "venv", venvDir.asFile.absolutePath)
+            }.result.get().assertNormalExitValue()
+
+            logger.lifecycle("Installing required Python dependencies (fonttools, brotli)...")
+            providers.exec {
+                commandLine(venvPython.asFile.absolutePath, "-m", "pip", "install", "fonttools", "brotli")
+            }.result.get().assertNormalExitValue()
+        }
+    }
+
+    commandLine(venvPython.asFile.absolutePath, scriptFile.asFile.absolutePath)
+}
+
+tasks.matching {
+    it.name.contains("Resource") || it.name.contains("SourceSetPaths")
+}.configureEach {
+    dependsOn(generateFontSubsets)
+}
+
+tasks.named("preBuild") {
+    dependsOn(generateFontSubsets)
+}

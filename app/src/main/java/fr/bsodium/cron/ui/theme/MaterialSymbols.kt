@@ -47,22 +47,17 @@ import java.io.File
  * to morph toward filled.
  *
  * Each `.ttf` is a SUBSET of its official variable font, carrying only the glyphs below to stay
- * tiny (~100 KB vs ~15 MB). To add an icon: add an entry with its codepoint (from the matching
- * codepoints file in google/material-design-icons), then re-subset each family with every enum
- * codepoint:
- *
- *   python3 -m fontTools.subset "MaterialSymbolsRounded[FILL,GRAD,opsz,wght].ttf" \
- *     --unicodes=<all codepoints, comma-separated> \
- *     --output-file=app/src/main/res/font/material_symbols_rounded.ttf \
- *     --no-hinting --layout-features='*' --glyph-names --recalc-bounds
- *
- * Repeat for `MaterialSymbolsSharp` and `MaterialSymbolsOutlined`, writing the Sharp and Standard
- * resource names respectively.
+ * tiny (~100 KB vs ~15 MB). To add an icon:
+ * 1. Add an entry to [MaterialSymbol] with its codepoint (from the matching codepoints file in
+ *    google/material-design-icons).
+ * 2. Run `./gradlew :app:generateFontSubsets` (or assemble the app). Gradle automatically manages
+ *    a project-local Python `.venv`, installs `fonttools`, and regenerates the `` font files
+ *    in `app/src/main/res/font/`.
  */
 enum class SymbolFamily(val fontRes: Int, val fileName: String) {
-    Rounded(R.font.material_symbols_rounded, "material_symbols_rounded-v2.ttf"),
-    Sharp(R.font.material_symbols_sharp, "material_symbols_sharp-v2.ttf"),
-    Standard(R.font.material_symbols_standard, "material_symbols_standard-v2.ttf"),
+    Rounded(R.font.material_symbols_rounded, "material_symbols_rounded.ttf"),
+    Sharp(R.font.material_symbols_sharp, "material_symbols_sharp.ttf"),
+    Standard(R.font.material_symbols_standard, "material_symbols_standard.ttf"),
 }
 
 val LocalSymbolFamily = staticCompositionLocalOf { SymbolFamily.Rounded }
@@ -115,6 +110,7 @@ enum class MaterialSymbol(val code: String) {
     VitalSigns("\uE650"),
     Warning("\uF083"),
     Weekend("\uE16B"),
+    DoneAll(code = "\uE877"),
 }
 
 /** Resolves the selected bundled symbols font to a [Typeface] once per resolver. */
@@ -153,15 +149,22 @@ private object VariedFontFile {
 
     @Suppress("ResourceType")
     fun get(context: Context, family: SymbolFamily): File = synchronized(this) {
-        cached[family] ?: File(context.cacheDir, family.fileName).also { file ->
-            if (!file.exists()) {
+        cached[family] ?: run {
+            val file = File(context.cacheDir, family.fileName)
+            val resourceLength = context.resources.openRawResourceFd(family.fontRes)?.use { it.length } ?: -1L
+
+            // Only overwrite if missing or if the resource length differs from the cached file
+            if (!file.exists() || file.length() != resourceLength) {
                 context.resources.openRawResource(family.fontRes).use { input ->
                     file.outputStream().use { output -> input.copyTo(output) }
                 }
             }
+            file
         }.also { cached[family] = it }
     }
 }
+
+
 
 /** Built once per process per [VariationKey], not once per call site: [rememberVariedTypeface] runs
  *  from every timeline row's [Symbol], and `Typeface.Builder(...).build()` is a real native call, not
@@ -194,7 +197,7 @@ private object VariedTypefaceCache {
  *  shows up as a visible centering offset; a simple convex glyph's silhouette barely changes shape
  *  across the axes, so the same divergence stays invisible (see docs/color-roles.md Round 12). Baking
  *  the axes into the [Typeface] itself makes both paths resolve the same physical glyph outline.
- *  `fill` is deliberately excluded — it's animated per-frame elsewhere ([CronNavigationBar]'s
+ *  `fill` is deliberately excluded — it's animated per-frame elsewhere ([fr.bsodium.cron.ui.components.CronNavigationBar]'s
  *  tab-selection morph) and mostly affects interior strokework, not the outer bbox centering depends
  *  on, so it stays on the cheap per-Paint path instead of rebuilding a [Typeface] every frame. */
 @Composable
