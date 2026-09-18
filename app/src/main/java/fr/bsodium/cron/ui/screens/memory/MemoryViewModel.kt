@@ -48,6 +48,10 @@ class MemoryViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun addAnyway(id: Long) {
+        viewModelScope.launch { repository.addAnyway(id) }
+    }
+
     /** Swipe-to-delete: a direct removal, not routed through the assistant — see MemoryScreen's KDoc. */
     fun deleteEntry(id: Long) {
         viewModelScope.launch { repository.delete(id) }

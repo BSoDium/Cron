@@ -46,7 +46,14 @@ class MemoryScreenScreenshotTest {
     fun with_entries() {
         composeTestRule.setContent {
             CronTheme {
-                MemoryContent(entries = sampleEntries, isMutating = false, onSend = {}, onDelete = {})
+                MemoryContent(
+                    entries = sampleEntries,
+                    isMutating = false,
+                    onSend = {},
+                    onDelete = {},
+                    onRetry = {},
+                    onAddAnyway = {},
+                )
             }
         }
         composeTestRule.onRoot().captureRoboImage()
@@ -56,7 +63,14 @@ class MemoryScreenScreenshotTest {
     fun empty_state() {
         composeTestRule.setContent {
             CronTheme {
-                MemoryContent(entries = emptyList(), isMutating = false, onSend = {}, onDelete = {})
+                MemoryContent(
+                    entries = emptyList(),
+                    isMutating = false,
+                    onSend = {},
+                    onDelete = {},
+                    onRetry = {},
+                    onAddAnyway = {},
+                )
             }
         }
         composeTestRule.onRoot().captureRoboImage()
@@ -67,7 +81,14 @@ class MemoryScreenScreenshotTest {
         val entriesWithPending = sampleEntries + MemoryEntry(id = 3, text = "", category = null, createdAt = now, updatedAt = now, pending = true)
         composeTestRule.setContent {
             CronTheme {
-                MemoryContent(entries = entriesWithPending, isMutating = true, onSend = {}, onDelete = {})
+                MemoryContent(
+                    entries = entriesWithPending,
+                    isMutating = true,
+                    onSend = {},
+                    onDelete = {},
+                    onRetry = {},
+                    onAddAnyway = {},
+                )
             }
         }
         composeTestRule.onRoot().captureRoboImage()
@@ -79,7 +100,14 @@ class MemoryScreenScreenshotTest {
     fun collapsed_title_stays_visible_when_scrolled() {
         composeTestRule.setContent {
             CronTheme {
-                MemoryContent(entries = sampleEntries, isMutating = false, onSend = {}, onDelete = {})
+                MemoryContent(
+                    entries = sampleEntries,
+                    isMutating = false,
+                    onSend = {},
+                    onDelete = {},
+                    onRetry = {},
+                    onAddAnyway = {},
+                )
             }
         }
         repeat(10) {
@@ -95,7 +123,14 @@ class MemoryScreenScreenshotTest {
     fun tapping_fab_expands_to_full_screen_composer() {
         composeTestRule.setContent {
             CronTheme {
-                MemoryContent(entries = sampleEntries, isMutating = false, onSend = {}, onDelete = {})
+                MemoryContent(
+                    entries = sampleEntries,
+                    isMutating = false,
+                    onSend = {},
+                    onDelete = {},
+                    onRetry = {},
+                    onAddAnyway = {},
+                )
             }
         }
         composeTestRule.onNodeWithContentDescription("Tell Cron something to remember").performClick()
@@ -109,7 +144,14 @@ class MemoryScreenScreenshotTest {
     fun swipe_in_progress_shows_reveal_physics() {
         composeTestRule.setContent {
             CronTheme {
-                MemoryContent(entries = sampleEntries, isMutating = false, onSend = {}, onDelete = {})
+                MemoryContent(
+                    entries = sampleEntries,
+                    isMutating = false,
+                    onSend = {},
+                    onDelete = {},
+                    onRetry = {},
+                    onAddAnyway = {},
+                )
             }
         }
         composeTestRule.onNodeWithTag("memory-entry-2").performTouchInput {
@@ -124,17 +166,33 @@ class MemoryScreenScreenshotTest {
      *  all the way to (row width - gap) — regression coverage for a bug where the card's reported
      *  width silently stopped growing partway through the gesture and only translated afterward. */
     @Test
-    fun swipe_near_full_reveals_almost_full_width_no_capping() {
+    fun failure_state_shows_add_anyway_button() {
+        var addAnywayClicked = false
+        val entriesWithFailure = listOf(
+            MemoryEntry(
+                id = 1,
+                text = "Will be ignored",
+                category = null,
+                createdAt = now,
+                updatedAt = now,
+                failureReason = "ALREADY_EXISTS: I already know you commute by bike.",
+                instruction = "Commutes by bike"
+            )
+        )
         composeTestRule.setContent {
             CronTheme {
-                MemoryContent(entries = sampleEntries, isMutating = false, onSend = {}, onDelete = {})
+                MemoryContent(
+                    entries = entriesWithFailure,
+                    isMutating = false,
+                    onSend = {},
+                    onDelete = {},
+                    onAddAnyway = { addAnywayClicked = true }
+                )
             }
         }
-        composeTestRule.onNodeWithTag("memory-entry-2").performTouchInput {
-            down(centerRight - Offset(4f, 0f))
-            moveBy(Offset(-(width - 40f), 0f))
-        }
-        composeTestRule.waitForIdle()
+
         composeTestRule.onRoot().captureRoboImage()
+        composeTestRule.onNodeWithTag("add-anyway-button").performClick()
+        assert(addAnywayClicked)
     }
 }

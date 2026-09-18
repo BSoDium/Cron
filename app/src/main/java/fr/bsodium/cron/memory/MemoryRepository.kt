@@ -87,6 +87,13 @@ class MemoryRepository(private val context: Context) {
         return instruction
     }
 
+    /** Forces a failed mutation to be added as a literal entry using its original instruction. */
+    suspend fun addAnyway(id: Long): Boolean {
+        val existing = db.memoryDao().findById(id) ?: return false
+        val instruction = existing.instruction ?: return false
+        return finalizePending(id, instruction, category = null)
+    }
+
     suspend fun update(id: Long, text: String?, category: String?): Boolean {
         val existing = db.memoryDao().findAll().find { it.id == id } ?: return false
         val updated: MemoryEntity = existing.copy(
