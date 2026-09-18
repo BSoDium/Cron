@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.rememberCronHaptics
+import fr.bsodium.cron.ui.components.textShimmer
 import fr.bsodium.cron.ui.screens.home.components.rememberRelativeAgo
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -80,55 +81,6 @@ import kotlin.time.Duration.Companion.days
 private val DELETE_ICON_SIZE = 22.dp
 private val CARD_GAP = Spacing.xs
 private val ICON_EDGE_PADDING = Spacing.lg
-
-/**
- * Sweeps a highlight gradient across text glyphs to signal processing state.
- *
- * @param durationMillis Duration in milliseconds for one complete sweep (controls shimmer frequency).
- * @param baseColor Exact default/resting color of the text glyphs.
- * @param highlightColor Exact color of the sweeping highlight across the glyphs.
- */
-@Composable
-fun Modifier.textShimmer(
-    durationMillis: Int = 1600,
-    baseColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    highlightColor: Color = MaterialTheme.colorScheme.surfaceVariant,
-): Modifier {
-    val transition = rememberInfiniteTransition(label = "text_shimmer_transition")
-    val progress by transition.animateFloat(
-        initialValue = -0.5f,
-        targetValue = 1.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = durationMillis, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "text_shimmer_progress",
-    )
-
-    return this
-        .graphicsLayer { alpha = 0.99f }
-        .drawWithContent {
-            val width = size.width
-            val startX = width * progress
-            val shimmerWidth = width
-
-            val brush = Brush.linearGradient(
-                colors = listOf(
-                    baseColor,
-                    highlightColor,
-                    baseColor,
-                ),
-                start = Offset(startX - shimmerWidth, 0f),
-                end = Offset(startX, 0f),
-            )
-
-            drawContent()
-            drawRect(
-                brush = brush,
-                blendMode = BlendMode.SrcIn,
-            )
-        }
-}
 
 /** One memory entry, swipe-left-to-delete (Gmail-style) — never edited in place, only ever removed
  *  directly or superseded by the assistant via the composer above. While [MemoryEntry.pending] is
@@ -246,262 +198,27 @@ internal fun MemoryEntryRow(
                 .animateContentSize()
 
             if (entry.pending) {
-                Column(
-                    modifier = rowShape.padding(
-                        start = Spacing.md,
-                        end = Spacing.md,
-                        top = Spacing.md,
-                        bottom = Spacing.sm
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                ) {
-                    Text(
-                        text = entry.instruction?.takeIf { it.isNotBlank() } ?: "Updating memory…",
-                        style = CronTypography.timelineRowTitle,
-                        maxLines = 10,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Spacing.xs)
-                            .textShimmer(),
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        FilledTonalButton(
-                            onClick = onDelete,
-                            contentPadding = PaddingValues(
-                                start = 12.dp,
-                                end = 16.dp,
-                                top = 8.dp,
-                                bottom = 8.dp,
-                            ),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            ),
-                        ) {
-                            Symbol(
-                                symbol = MaterialSymbol.Close,
-                                contentDescription = null,
-                                size = 18.dp,
-                                weight = 500,
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Cancel")
-                        }
-                    }
-                }
+                PendingMemoryEntryContent(
+                    instruction = entry.instruction,
+                    onDelete = onDelete,
+                    modifier = rowShape
+                )
             } else if (entry.failureReason != null) {
-                val isSystemError = isSystemFailure(entry.failureReason)
-
-                Column(
-                    modifier = rowShape.padding(
-                        start = Spacing.md,
-                        end = Spacing.md,
-                        top = Spacing.md,
-                        bottom = Spacing.sm
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Spacing.xs, vertical = 0.dp),
-                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        Text(
-                            text = "Couldn't save this memory",
-                            style = CronTypography.timelineRowTitle,
-                            color = MaterialTheme.colorScheme.error,
-                            maxLines = 10,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "\"${entry.instruction.orEmpty()}\"",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontStyle = FontStyle.Italic,
-                                fontFamily = CronTypography.bodySerif.fontFamily,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 10,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = failureMessage(entry.failureReason),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 10,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        if (isSystemError) {
-                            TextButton(
-                                onClick = onDelete,
-                                contentPadding = PaddingValues(
-                                    start = 12.dp,
-                                    end = 16.dp,
-                                    top = 8.dp,
-                                    bottom = 8.dp,
-                                ),
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                ),
-                            ) {
-                                Symbol(
-                                    symbol = MaterialSymbol.Delete,
-                                    contentDescription = null,
-                                    size = 18.dp,
-                                    weight = 400,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Delete")
-                            }
-
-                            FilledTonalButton(
-                                onClick = onRetry,
-                                contentPadding = PaddingValues(
-                                    start = 12.dp,
-                                    end = 16.dp,
-                                    top = 8.dp,
-                                    bottom = 8.dp,
-                                ),
-                            ) {
-                                Symbol(
-                                    symbol = MaterialSymbol.Update,
-                                    contentDescription = null,
-                                    size = 18.dp,
-                                    weight = 500,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Retry")
-                            }
-                        } else {
-                            TextButton(
-                                onClick = onAddAnyway,
-                                modifier = Modifier.testTag("add-anyway-button"),
-                                contentPadding = PaddingValues(
-                                    start = 12.dp,
-                                    end = 16.dp,
-                                    top = 8.dp,
-                                    bottom = 8.dp,
-                                ),
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.secondary
-                                ),
-                            ) {
-                                Symbol(
-                                    symbol = MaterialSymbol.ArrowInsert,
-                                    contentDescription = null,
-                                    size = 18.dp,
-                                    weight = 400,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Add anyway")
-                            }
-
-                            FilledTonalButton(
-                                onClick = onDelete,
-                                contentPadding = PaddingValues(
-                                    start = 12.dp,
-                                    end = 16.dp,
-                                    top = 8.dp,
-                                    bottom = 8.dp,
-                                ),
-                            ) {
-                                Symbol(
-                                    symbol = MaterialSymbol.Delete,
-                                    contentDescription = null,
-                                    size = 18.dp,
-                                    weight = 500,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Delete")
-                            }
-                        }
-                    }
-                }
+                FailedMemoryEntryContent(
+                    instruction = entry.instruction,
+                    failureReason = entry.failureReason,
+                    onDelete = onDelete,
+                    onRetry = onRetry,
+                    onAddAnyway = onAddAnyway,
+                    modifier = rowShape
+                )
             } else {
-                Column(
-                    modifier = rowShape.padding(start = Spacing.lg, end = Spacing.md, top = Spacing.md, bottom = Spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                    horizontalAlignment = Alignment.Start,
-                ) {
-                    Text(
-                        text = displayedText,
-                        style = CronTypography.timelineRowTitle,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 10,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        val elapsedMillis by produceState(
-                            initialValue = Clock.System.now().toEpochMilliseconds() - entry.updatedAt.toEpochMilliseconds(),
-                            key1 = entry.updatedAt
-                        ) {
-                            while (true) {
-                                delay(1000.milliseconds)
-                                value = Clock.System.now().toEpochMilliseconds() - entry.updatedAt.toEpochMilliseconds()
-                            }
-                        }
-
-                        val isRecent = elapsedMillis < 300_000L
-                        val animatedFadeFraction by animateFloatAsState(
-                            targetValue = if (isRecent) 1f else 0f,
-                            label = "recent-fade-fraction",
-                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .clip(Radius.full)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = animatedFadeFraction))
-                                .padding(
-                                    start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xxs, animatedFadeFraction),
-                                    end = Spacing.sm,
-                                    top = Spacing.xxs,
-                                    bottom = Spacing.xxs
-                                ),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                            ) {
-                                if (animatedFadeFraction > 0f) {
-                                    Symbol(
-                                        symbol = MaterialSymbol.Update,
-                                        contentDescription = null,
-                                        size = 14.dp,
-                                        tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = animatedFadeFraction),
-                                    )
-                                }
-                                val label = if (entry.createdAt == entry.updatedAt) "Created" else "Updated"
-                                Text(
-                                    text = "$label ${rememberRelativeAgo(entry.updatedAt.toEpochMilliseconds())}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = lerp(
-                                        MaterialTheme.colorScheme.onSurfaceVariant,
-                                        MaterialTheme.colorScheme.onPrimary,
-                                        animatedFadeFraction
-                                    ),
-                                )
-                            }
-                        }
-                    }
-                }
+                SuccessMemoryEntryContent(
+                    displayedText = displayedText,
+                    createdAt = entry.createdAt,
+                    updatedAt = entry.updatedAt,
+                    modifier = rowShape
+                )
             }
         }
     }
