@@ -15,6 +15,9 @@ import kotlinx.serialization.json.jsonPrimitive
 /** Removes a durable memory entry, by its id. */
 class DeleteMemoryTool(private val repository: MemoryRepository) : Tool {
 
+    var wasCalled: Boolean = false
+        private set
+
     override val definition: ToolDefinition = ToolDefinition(
         name = NAME,
         description = "Delete a memory entry that's no longer true or relevant, by its id.",
@@ -28,6 +31,7 @@ class DeleteMemoryTool(private val repository: MemoryRepository) : Tool {
     )
 
     override suspend fun execute(input: JsonElement): ToolResult {
+        wasCalled = true
         val id = input.jsonObject["id"]?.jsonPrimitive?.content?.toLongOrNull()
             ?: return ToolResult("""{"error":"id is required"}""", isError = true)
 

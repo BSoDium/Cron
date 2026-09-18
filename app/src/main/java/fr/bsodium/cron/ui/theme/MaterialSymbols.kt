@@ -110,7 +110,7 @@ enum class MaterialSymbol(val code: String) {
     VitalSigns("\uE650"),
     Warning("\uF083"),
     Weekend("\uE16B"),
-    DoneAll(code = "\uE877"),
+    ArrowInsert(code = "\uF837"),
 }
 
 /** Resolves the selected bundled symbols font to a [Typeface] once per resolver. */

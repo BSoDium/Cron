@@ -18,7 +18,6 @@ import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.tools.AddMemoryTool
 import fr.bsodium.cron.ai.tools.DeleteMemoryTool
 import fr.bsodium.cron.ai.tools.UpdateMemoryTool
-import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.memory.MemoryPromptBuilder
 import fr.bsodium.cron.memory.MemoryRepository
 import fr.bsodium.cron.settings.SecureKeyStore
@@ -62,7 +61,9 @@ class MemoryTurnWorker(
 
         // Mock mode fakes only the LLM client; memory tools must remain real Room-backed tools.
         val addMemoryTool = AddMemoryTool(repository, placeholderId)
-        val tools = buildToolRegistry(addMemoryTool)
+        val updateMemoryTool = UpdateMemoryTool(repository)
+        val deleteMemoryTool = DeleteMemoryTool(repository)
+        val tools = ToolRegistry(listOf(addMemoryTool, updateMemoryTool, deleteMemoryTool))
         val client = AnthropicClientFactory.create(useMock, apiKeyProvider = { apiKey })
         val runner = MemoryTurnRunner(
             client = client,
@@ -80,15 +81,11 @@ class MemoryTurnWorker(
                 is MemoryTurnRunner.Outcome.Completed -> {
                     Log.i(TAG, "Memory turn complete (stop=${outcome.response.stop_reason})")
                     if (placeholderId != null && !addMemoryTool.placeholderConsumed) {
-                        repository.markFailed(
-                            placeholderId,
-                            outcome.response.content
-                                .filterIsInstance<ContentBlock.Text>()
-                                .joinToString(" ") { it.text.trim() }
-                                .trim()
-                                .takeIf { it.isNotEmpty() }
-                                ?: REASON_TECHNICAL_ERROR,
-                        )
+                        if (updateMemoryTool.wasCalled || deleteMemoryTool.wasCalled) {
+                            repository.delete(placeholderId)
+                        } else {
+                            repository.markFailed(placeholderId, REASON_NO_MEMORY_ADDED)
+                        }
                     }
                 }
                 is MemoryTurnRunner.Outcome.BudgetExhausted -> {
@@ -130,13 +127,6 @@ class MemoryTurnWorker(
         return Result.failure(data)
     }
 
-    private fun buildToolRegistry(addMemoryTool: AddMemoryTool): ToolRegistry {
-        val tools = mutableListOf<Tool>()
-        tools.add(addMemoryTool)
-        tools.add(UpdateMemoryTool(repository))
-        tools.add(DeleteMemoryTool(repository))
-        return ToolRegistry(tools)
-    }
 
     companion object {
         const val KEY_INSTRUCTION = "instruction"
@@ -151,7 +141,6 @@ class MemoryTurnWorker(
         const val REASON_HTTP = "http_error"
         const val REASON_MAX_RETRIES = "max_retries_exceeded"
         const val REASON_NO_MEMORY_ADDED = "no_memory_added"
-        const val REASON_TECHNICAL_ERROR = "technical_error"
 
         private const val TAG = "MemoryTurnWorker"
         private const val MAX_RETRY_ATTEMPTS = 5

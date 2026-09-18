@@ -15,6 +15,9 @@ import kotlinx.serialization.json.jsonPrimitive
 /** Edits an existing durable memory entry's text and/or category. */
 class UpdateMemoryTool(private val repository: MemoryRepository) : Tool {
 
+    var wasCalled: Boolean = false
+        private set
+
     override val definition: ToolDefinition = ToolDefinition(
         name = NAME,
         description = "Edit an existing memory entry's text and/or category, by its id.",
@@ -36,6 +39,7 @@ class UpdateMemoryTool(private val repository: MemoryRepository) : Tool {
     )
 
     override suspend fun execute(input: JsonElement): ToolResult {
+        wasCalled = true
         val id = input.jsonObject["id"]?.jsonPrimitive?.content?.toLongOrNull()
             ?: return ToolResult("""{"error":"id is required"}""", isError = true)
         val text = input.jsonObject["text"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
