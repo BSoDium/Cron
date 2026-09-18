@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,7 +45,6 @@ import kotlin.time.Duration.Companion.milliseconds
 @Composable
 internal fun PendingMemoryEntryContent(
     instruction: String?,
-    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -70,27 +71,31 @@ internal fun PendingMemoryEntryContent(
             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            FilledTonalButton(
-                onClick = onDelete,
-                contentPadding = PaddingValues(
-                    start = 12.dp,
-                    end = 16.dp,
-                    top = 8.dp,
-                    bottom = 8.dp,
-                ),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                ),
+            Box(
+                modifier = Modifier
+                    .clip(Radius.full)
+                    .padding(
+                        start = Spacing.xs,
+                        end = Spacing.xs,
+                        top = Spacing.xs,
+                        bottom = Spacing.xs
+                    ),
             ) {
-                Symbol(
-                    symbol = MaterialSymbol.Close,
-                    contentDescription = null,
-                    size = 18.dp,
-                    weight = 500,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Cancel")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Text(
+                        text = "Processing memory",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
             }
         }
     }
@@ -288,10 +293,10 @@ internal fun SuccessMemoryEntryContent(
                     .clip(Radius.full)
                     .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = animatedFadeFraction))
                     .padding(
-                        start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xxs, animatedFadeFraction),
+                        start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xs, animatedFadeFraction),
                         end = Spacing.sm,
-                        top = Spacing.xxs,
-                        bottom = Spacing.xxs
+                        top = Spacing.xs,
+                        bottom = Spacing.xs
                     ),
             ) {
                 Row(
