@@ -74,20 +74,19 @@ internal fun PendingMemoryEntryContent(
             Box(
                 modifier = Modifier
                     .clip(Radius.full)
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
                     .padding(
-                        start = Spacing.xxs,
-                        end = Spacing.sm,
-                        top = Spacing.xxs,
-                        bottom = Spacing.xxs
+                        start = Spacing.xs,
+                        end = Spacing.xs,
+                        top = Spacing.xs,
+                        bottom = Spacing.xs
                     ),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(12.dp),
                         strokeWidth = 1.5.dp,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
@@ -294,10 +293,10 @@ internal fun SuccessMemoryEntryContent(
                     .clip(Radius.full)
                     .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = animatedFadeFraction))
                     .padding(
-                        start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xxs, animatedFadeFraction),
+                        start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xs, animatedFadeFraction),
                         end = Spacing.sm,
-                        top = Spacing.xxs,
-                        bottom = Spacing.xxs
+                        top = Spacing.xs,
+                        bottom = Spacing.xs
                     ),
             ) {
                 Row(
