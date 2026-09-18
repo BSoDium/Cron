@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -47,6 +48,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
@@ -188,10 +190,21 @@ internal fun MemoryEntryRow(
                         modifier = Modifier
                             .fillMaxHeight()
                             .layout { measurable, constraints ->
-                                val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f)).roundToInt()
+                                val revealPx =
+                                    abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f)).roundToInt()
                                 val cardWidthPx = (revealPx - CARD_GAP.roundToPx()).coerceAtLeast(0)
-                                val placeable = measurable.measure(constraints.copy(minWidth = cardWidthPx, maxWidth = cardWidthPx))
-                                layout(cardWidthPx, placeable.height) { placeable.placeRelative(0, 0) }
+                                val placeable = measurable.measure(
+                                    constraints.copy(
+                                        minWidth = cardWidthPx,
+                                        maxWidth = cardWidthPx
+                                    )
+                                )
+                                layout(cardWidthPx, placeable.height) {
+                                    placeable.placeRelative(
+                                        0,
+                                        0
+                                    )
+                                }
                             }
                             .clip(RoundedCornerShape(Radius.xl))
                             .background(MaterialTheme.colorScheme.error),
@@ -204,11 +217,17 @@ internal fun MemoryEntryRow(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
                                 .offset {
-                                    val revealPx = abs(runCatching { dismissState.requireOffset() }.getOrDefault(0f))
+                                    val revealPx = abs(
+                                        runCatching { dismissState.requireOffset() }.getOrDefault(
+                                            0f
+                                        )
+                                    )
                                     val cardWidthPx = (revealPx - CARD_GAP.toPx()).coerceAtLeast(0f)
                                     val iconHalfPx = (DELETE_ICON_SIZE / 2).toPx()
-                                    val fixedOffsetFromEdgePx = (ICON_EDGE_PADDING + DELETE_ICON_SIZE / 2).toPx()
-                                    val offsetFromEdgePx = max(fixedOffsetFromEdgePx, cardWidthPx / 2f)
+                                    val fixedOffsetFromEdgePx =
+                                        (ICON_EDGE_PADDING + DELETE_ICON_SIZE / 2).toPx()
+                                    val offsetFromEdgePx =
+                                        max(fixedOffsetFromEdgePx, cardWidthPx / 2f)
                                     val iconCenterXPx = cardWidthPx - offsetFromEdgePx
                                     IntOffset((iconCenterXPx - iconHalfPx).roundToInt(), 0)
                                 },
@@ -225,7 +244,12 @@ internal fun MemoryEntryRow(
 
             if (entry.pending) {
                 Column(
-                    modifier = rowShape.padding(start = Spacing.md, end = Spacing.md, top = Spacing.md, bottom = Spacing.sm),
+                    modifier = rowShape.padding(
+                        start = Spacing.md,
+                        end = Spacing.md,
+                        top = Spacing.md,
+                        bottom = Spacing.sm
+                    ),
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
@@ -271,7 +295,12 @@ internal fun MemoryEntryRow(
                 val isSystemError = isSystemFailure(entry.failureReason)
 
                 Column(
-                    modifier = rowShape.padding(start = Spacing.md, end = Spacing.md, top = Spacing.md, bottom = Spacing.sm),
+                    modifier = rowShape.padding(
+                        start = Spacing.md,
+                        end = Spacing.md,
+                        top = Spacing.md,
+                        bottom = Spacing.sm
+                    ),
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Column(
@@ -376,7 +405,7 @@ internal fun MemoryEntryRow(
                 }
             } else {
                 Column(
-                    modifier = rowShape.padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                    modifier = rowShape.padding(start = Spacing.lg, end = Spacing.md, top = Spacing.md, bottom = Spacing.md),
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     horizontalAlignment = Alignment.Start,
                 ) {
@@ -389,17 +418,57 @@ internal fun MemoryEntryRow(
                         modifier = Modifier.fillMaxWidth(),
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .clip(Radius.full)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(horizontal = Spacing.sm, vertical = Spacing.xxs),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(
-                            text = "Updated ${rememberRelativeAgo(entry.updatedAt.toEpochMilliseconds())}",
-                            style = CronTypography.timelineRowTime,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        val elapsedMillis by produceState(
+                            initialValue = Clock.System.now().toEpochMilliseconds() - entry.updatedAt.toEpochMilliseconds(),
+                            key1 = entry.updatedAt
+                        ) {
+                            while (true) {
+                                delay(1000.milliseconds)
+                                value = Clock.System.now().toEpochMilliseconds() - entry.updatedAt.toEpochMilliseconds()
+                            }
+                        }
+
+                        val fadeFraction = ((300_000L - elapsedMillis).toFloat() / 300_000L).coerceIn(0f, 1f)
+
+                        Box(
+                            modifier = Modifier
+                                .clip(Radius.full)
+                                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = fadeFraction))
+                                .padding(
+                                    start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xs, fadeFraction),
+                                    end = Spacing.sm,
+                                    top = Spacing.xxs,
+                                    bottom = Spacing.xxs
+                                ),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                            ) {
+                                if (fadeFraction > 0f) {
+                                    Symbol(
+                                        symbol = MaterialSymbol.Update,
+                                        contentDescription = null,
+                                        size = 14.dp,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = fadeFraction),
+                                    )
+                                }
+                                Text(
+                                    text = "Updated ${rememberRelativeAgo(entry.updatedAt.toEpochMilliseconds())}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = lerp(
+                                        MaterialTheme.colorScheme.onSurfaceVariant,
+                                        MaterialTheme.colorScheme.onSecondaryContainer,
+                                        fadeFraction
+                                    ),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -415,7 +484,9 @@ internal fun MemoryEntryRow(
             title = { Text("Delete this memory?") },
             text = {
                 Text(
-                    text = entry.text.ifBlank { entry.instruction ?: "This memory is still being processed." },
+                    text = entry.text.ifBlank {
+                        entry.instruction ?: "This memory is still being processed."
+                    },
                     maxLines = 10,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -467,15 +538,38 @@ private fun MemoryEntryRowPreview() {
                 onDelete = {},
             )
             MemoryEntryRow(
-                entry = MemoryEntry(id = 2, text = "Commutes by bike", category = null, createdAt = now, updatedAt = now),
+                entry = MemoryEntry(
+                    id = 2,
+                    text = "Commutes by bike",
+                    category = null,
+                    createdAt = now,
+                    updatedAt = now
+                ),
                 onDelete = {},
             )
             MemoryEntryRow(
-                entry = MemoryEntry(id = 4, text = "", instruction = "I am a moderate fan of vegetables. Especially fried ones.", category = null, createdAt = now, updatedAt = now, pending = false, failureReason = "I'm not storing that because it's a food preference unrelated to sleep planning. The sleep-planning assistant needs facts about your schedule, commute, wake times, and other constraints that affect when you should go to bed —not general food likes or dislikes."),
+                entry = MemoryEntry(
+                    id = 4,
+                    text = "",
+                    instruction = "I am a moderate fan of vegetables. Especially fried ones.",
+                    category = null,
+                    createdAt = now,
+                    updatedAt = now,
+                    pending = false,
+                    failureReason = "I'm not storing that because it's a food preference unrelated to sleep planning. The sleep-planning assistant needs facts about your schedule, commute, wake times, and other constraints that affect when you should go to bed —not general food likes or dislikes."
+                ),
                 onDelete = {},
             )
             MemoryEntryRow(
-                entry = MemoryEntry(id = 3, text = "", instruction = "I only wake up late on weekends.", category = null, createdAt = now, updatedAt = now, pending = true),
+                entry = MemoryEntry(
+                    id = 3,
+                    text = "",
+                    instruction = "I only wake up late on weekends.",
+                    category = null,
+                    createdAt = now,
+                    updatedAt = now,
+                    pending = true
+                ),
                 onDelete = {},
             )
         }

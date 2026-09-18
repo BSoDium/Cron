@@ -61,7 +61,9 @@ class MemoryTurnWorker(
 
         // Mock mode fakes only the LLM client; memory tools must remain real Room-backed tools.
         val addMemoryTool = AddMemoryTool(repository, placeholderId)
-        val tools = buildToolRegistry(addMemoryTool)
+        val updateMemoryTool = UpdateMemoryTool(repository)
+        val deleteMemoryTool = DeleteMemoryTool(repository)
+        val tools = ToolRegistry(listOf(addMemoryTool, updateMemoryTool, deleteMemoryTool))
         val client = AnthropicClientFactory.create(useMock, apiKeyProvider = { apiKey })
         val runner = MemoryTurnRunner(
             client = client,
@@ -79,7 +81,11 @@ class MemoryTurnWorker(
                 is MemoryTurnRunner.Outcome.Completed -> {
                     Log.i(TAG, "Memory turn complete (stop=${outcome.response.stop_reason})")
                     if (placeholderId != null && !addMemoryTool.placeholderConsumed) {
-                        repository.delete(placeholderId)
+                        if (updateMemoryTool.wasCalled || deleteMemoryTool.wasCalled) {
+                            repository.delete(placeholderId)
+                        } else {
+                            repository.markFailed(placeholderId, REASON_NO_MEMORY_ADDED)
+                        }
                     }
                 }
                 is MemoryTurnRunner.Outcome.BudgetExhausted -> {
@@ -121,13 +127,6 @@ class MemoryTurnWorker(
         return Result.failure(data)
     }
 
-    private fun buildToolRegistry(addMemoryTool: AddMemoryTool): ToolRegistry {
-        val tools = mutableListOf<Tool>()
-        tools.add(addMemoryTool)
-        tools.add(UpdateMemoryTool(repository))
-        tools.add(DeleteMemoryTool(repository))
-        return ToolRegistry(tools)
-    }
 
     companion object {
         const val KEY_INSTRUCTION = "instruction"
