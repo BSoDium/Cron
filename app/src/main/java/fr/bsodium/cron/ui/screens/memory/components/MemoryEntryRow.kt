@@ -276,8 +276,8 @@ internal fun MemoryEntryRow(
                                 bottom = 8.dp,
                             ),
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
                             ),
                         ) {
                             Symbol(
@@ -339,26 +339,29 @@ internal fun MemoryEntryRow(
                         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        TextButton(
-                            onClick = onDelete,
-                            contentPadding = PaddingValues(
-                                start = 12.dp,
-                                end = 16.dp,
-                                top = 8.dp,
-                                bottom = 8.dp,
-                            ),
-                        ) {
-                            Symbol(
-                                symbol = MaterialSymbol.Delete,
-                                contentDescription = null,
-                                size = 18.dp,
-                                weight = 400,
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Delete")
-                        }
-
                         if (isSystemError) {
+                            TextButton(
+                                onClick = onDelete,
+                                contentPadding = PaddingValues(
+                                    start = 12.dp,
+                                    end = 16.dp,
+                                    top = 8.dp,
+                                    bottom = 8.dp,
+                                ),
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                ),
+                            ) {
+                                Symbol(
+                                    symbol = MaterialSymbol.Delete,
+                                    contentDescription = null,
+                                    size = 18.dp,
+                                    weight = 400,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Delete")
+                            }
+
                             FilledTonalButton(
                                 onClick = onRetry,
                                 contentPadding = PaddingValues(
@@ -378,7 +381,7 @@ internal fun MemoryEntryRow(
                                 Text("Retry")
                             }
                         } else {
-                            FilledTonalButton(
+                            TextButton(
                                 onClick = onAddAnyway,
                                 contentPadding = PaddingValues(
                                     start = 12.dp,
@@ -386,19 +389,37 @@ internal fun MemoryEntryRow(
                                     top = 8.dp,
                                     bottom = 8.dp,
                                 ),
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.secondary
                                 ),
                             ) {
                                 Symbol(
                                     symbol = MaterialSymbol.ArrowInsert,
                                     contentDescription = null,
                                     size = 18.dp,
-                                    weight = 500,
+                                    weight = 400,
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Add anyway")
+                            }
+
+                            FilledTonalButton(
+                                onClick = onDelete,
+                                contentPadding = PaddingValues(
+                                    start = 12.dp,
+                                    end = 16.dp,
+                                    top = 8.dp,
+                                    bottom = 8.dp,
+                                ),
+                            ) {
+                                Symbol(
+                                    symbol = MaterialSymbol.Delete,
+                                    contentDescription = null,
+                                    size = 18.dp,
+                                    weight = 500,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Delete")
                             }
                         }
                     }
@@ -406,7 +427,7 @@ internal fun MemoryEntryRow(
             } else {
                 Column(
                     modifier = rowShape.padding(start = Spacing.lg, end = Spacing.md, top = Spacing.md, bottom = Spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                     horizontalAlignment = Alignment.Start,
                 ) {
                     Text(
@@ -438,9 +459,9 @@ internal fun MemoryEntryRow(
                         Box(
                             modifier = Modifier
                                 .clip(Radius.full)
-                                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = fadeFraction))
+                                .background(MaterialTheme.colorScheme.secondary.copy(alpha = fadeFraction))
                                 .padding(
-                                    start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xs, fadeFraction),
+                                    start = androidx.compose.ui.unit.lerp(Spacing.sm, Spacing.xxs, fadeFraction),
                                     end = Spacing.sm,
                                     top = Spacing.xxs,
                                     bottom = Spacing.xxs
@@ -455,7 +476,7 @@ internal fun MemoryEntryRow(
                                         symbol = MaterialSymbol.Update,
                                         contentDescription = null,
                                         size = 14.dp,
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = fadeFraction),
+                                        tint = MaterialTheme.colorScheme.onSecondary.copy(alpha = fadeFraction),
                                     )
                                 }
                                 Text(
@@ -463,7 +484,7 @@ internal fun MemoryEntryRow(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = lerp(
                                         MaterialTheme.colorScheme.onSurfaceVariant,
-                                        MaterialTheme.colorScheme.onSecondaryContainer,
+                                        MaterialTheme.colorScheme.onSecondary,
                                         fadeFraction
                                     ),
                                 )
@@ -557,6 +578,19 @@ private fun MemoryEntryRowPreview() {
                     updatedAt = now,
                     pending = false,
                     failureReason = "I'm not storing that because it's a food preference unrelated to sleep planning. The sleep-planning assistant needs facts about your schedule, commute, wake times, and other constraints that affect when you should go to bed —not general food likes or dislikes."
+                ),
+                onDelete = {},
+            )
+            MemoryEntryRow(
+                entry = MemoryEntry(
+                    id = 4,
+                    text = "",
+                    instruction = "When I take the plane, I need a 2 to 3 hour buffer to clear security.",
+                    category = null,
+                    createdAt = now,
+                    updatedAt = now,
+                    pending = false,
+                    failureReason = "budget_exhausted"
                 ),
                 onDelete = {},
             )
