@@ -1,5 +1,8 @@
 package fr.bsodium.cron.ui.screens.memory
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,9 +18,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,9 +36,9 @@ import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.FabChevronSlot
+import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.components.PrimaryActionFab
 import fr.bsodium.cron.ui.components.SplitActionFab
-import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
 import fr.bsodium.cron.ui.theme.CronTheme
@@ -60,8 +60,8 @@ fun MemoryScreen(
     viewModel: MemoryViewModel,
     fabRegistry: FabRegistry,
     useCompactNav: Boolean,
-    fabChevron: FabChevronSlot? = null,
     modifier: Modifier = Modifier,
+    fabChevron: FabChevronSlot? = null,
     onComposerExpandedChange: (Boolean) -> Unit = {},
 ) {
     val entries by viewModel.entries.collectAsState()
@@ -87,12 +87,12 @@ internal fun MemoryContent(
     isMutating: Boolean,
     onSend: (String) -> Unit,
     onDelete: (Long) -> Unit,
+    modifier: Modifier = Modifier,
     onRetry: (Long) -> Unit = {},
     fabRegistry: FabRegistry? = null,
     useCompactNav: Boolean = false,
     fabChevron: FabChevronSlot? = null,
     onComposerExpandedChange: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     var composerExpanded by rememberSaveable { mutableStateOf(false) }
@@ -164,18 +164,23 @@ internal fun MemoryContent(
                         .sortedBy { it.first.lowercase(Locale.ROOT) }
                         .forEach { (category, groupedEntries) ->
                             item(key = "section-$category") {
-                                SectionHeader(category)
+                                SectionHeader(
+                                    label = category,
+                                    modifier = Modifier.animateItem(),
+                                )
                             }
-                            groupedEntries.forEach { entry ->
-                                item(key = "entry-${entry.id}") {
-                                    MemoryEntryRow(
-                                        entry = entry,
-                                        onDelete = { onDelete(entry.id) },
-                                        onRetry = { onRetry(entry.id) },
-                                    )
-                                }
+                            items(
+                                items = groupedEntries,
+                                key = { entry -> entry.id },
+                            ) { entry ->
+                                MemoryEntryRow(
+                                    entry = entry,
+                                    onDelete = { onDelete(entry.id) },
+                                    onRetry = { onRetry(entry.id) },
+                                    modifier = Modifier.animateItem(),
+                                )
                             }
-                    }
+                        }
                 }
             }
         }
@@ -221,12 +226,15 @@ internal fun MemoryContent(
 private const val UNCATEGORISED = "Uncategorised"
 
 @Composable
-private fun SectionHeader(label: String) {
+private fun SectionHeader(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
     Text(
         text = label,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = Spacing.lg, top = Spacing.lg, bottom = Spacing.xs),
+        modifier = modifier.padding(start = Spacing.lg, top = Spacing.lg, bottom = Spacing.xs),
     )
 }
 

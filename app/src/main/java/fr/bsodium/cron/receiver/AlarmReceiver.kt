@@ -41,7 +41,7 @@ class AlarmReceiver : BroadcastReceiver() {
         const val EXTRA_SNOOZE_COUNT = "extra_snooze_count"
 
         // v2 avoids the immutable channel settings that previously duplicated the service-owned ring.
-        const val CHANNEL_ID = "cron_alarm_channel_v2"
+        const val CHANNEL_ID = "cron_alarm_channel"
         private const val LEGACY_CHANNEL_ID = "cron_alarm_channel"
         val ALARM_VIBRATION_PATTERN = longArrayOf(0, 500, 200, 500, 200, 500)
         const val NOTIFICATION_ID = 9001

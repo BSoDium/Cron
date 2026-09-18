@@ -30,3 +30,6 @@ local.properties
 
 # Gradle toolchain auto-discovery (machine-specific)
 gradle/gradle-daemon-jvm.properties
+
+# Python virtual env
+.venv/
