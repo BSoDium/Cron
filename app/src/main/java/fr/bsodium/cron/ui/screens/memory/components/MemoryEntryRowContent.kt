@@ -372,32 +372,34 @@ internal fun SuccessMemoryEntryContent(
         horizontalAlignment = Alignment.Start,
     ) {
         val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
-        AnimatedContent(
-            targetState = text,
-            transitionSpec = {
-                fadeIn(animationSpec = effectsSpec) togetherWith
-                fadeOut(animationSpec = effectsSpec)
-            },
-            label = "memory-text-fade-blur",
-            modifier = Modifier.fillMaxWidth()
-        ) { targetText ->
-            val blurRadius by transition.animateFloat(
-                transitionSpec = { effectsSpec },
-                label = "memory-text-blur"
-            ) { state ->
-                if (state == EnterExitState.Visible) 0f else 16f
-            }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            AnimatedContent(
+                targetState = text,
+                transitionSpec = {
+                    fadeIn(animationSpec = effectsSpec) togetherWith
+                    fadeOut(animationSpec = effectsSpec)
+                },
+                label = "memory-text-fade-blur",
+                modifier = Modifier.fillMaxWidth()
+            ) { targetText ->
+                val blurRadius by transition.animateFloat(
+                    transitionSpec = { effectsSpec },
+                    label = "memory-text-blur"
+                ) { state ->
+                    if (state == EnterExitState.Visible) 0f else 16f
+                }
 
-            Text(
-                text = targetText,
-                style = CronTypography.timelineRowTitle,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 10,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (blurRadius > 0f) Modifier.blur(blurRadius.dp) else Modifier)
-            )
+                Text(
+                    text = targetText,
+                    style = CronTypography.timelineRowTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 10,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (blurRadius > 0f) Modifier.blur(blurRadius.dp) else Modifier)
+                )
+            }
         }
 
         Row(
