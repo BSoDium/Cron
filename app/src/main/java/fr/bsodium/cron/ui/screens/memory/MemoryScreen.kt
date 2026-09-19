@@ -39,8 +39,10 @@ import fr.bsodium.cron.ui.components.FabChevronSlot
 import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.components.PrimaryActionFab
 import fr.bsodium.cron.ui.components.SplitActionFab
+import fr.bsodium.cron.ui.screens.memory.components.MemoryEmptyState
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
+import fr.bsodium.cron.ui.screens.memory.components.MemorySkeleton
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
@@ -66,9 +68,11 @@ fun MemoryScreen(
 ) {
     val entries by viewModel.entries.collectAsState()
     val isMutating by viewModel.isMutating.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     MemoryContent(
         entries = entries,
         isMutating = isMutating,
+        isLoading = isLoading,
         onSend = viewModel::sendInstruction,
         onDelete = viewModel::deleteEntry,
         onRetry = viewModel::retryEntry,
@@ -86,6 +90,7 @@ fun MemoryScreen(
 internal fun MemoryContent(
     entries: List<MemoryEntry>,
     isMutating: Boolean,
+    isLoading: Boolean,
     onSend: (String) -> Unit,
     onDelete: (Long) -> Unit,
     modifier: Modifier = Modifier,
@@ -135,55 +140,57 @@ internal fun MemoryContent(
                 )
             },
         ) { inner ->
-            // Keep the empty state hidden during the brief gap before a pending row is inserted.
-            if (entries.isEmpty() && !isMutating) {
-                Text(
-                    text = "No memories yet. Tell Cron something to remember.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        top = inner.calculateTopPadding(),
+                        bottom = navInsetBottom + Spacing.navBarClearance,
+                    )
+            ) {
+                if (isLoading) {
+                    MemorySkeleton(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
+                    )
+                } else if (entries.isEmpty() && !isMutating) {
+                    MemoryEmptyState()
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
                             start = Spacing.lg,
                             end = Spacing.lg,
-                            top = inner.calculateTopPadding() + Spacing.sm,
+                            top = Spacing.sm,
                         ),
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = Spacing.lg,
-                        end = Spacing.lg,
-                        top = inner.calculateTopPadding() + Spacing.sm,
-                        bottom = navInsetBottom + Spacing.navBarClearance,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                ) {
-                    entries
-                        .groupBy { it.category?.trim()?.takeIf(String::isNotEmpty) ?: UNCATEGORISED }
-                        .toList()
-                        .sortedBy { it.first.lowercase(Locale.ROOT) }
-                        .forEach { (category, groupedEntries) ->
-                            item(key = "section-$category") {
-                                SectionHeader(
-                                    label = category,
-                                    modifier = Modifier.animateItem(),
-                                )
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    ) {
+                        entries
+                            .groupBy { it.category?.trim()?.takeIf(String::isNotEmpty) ?: UNCATEGORISED }
+                            .toList()
+                            .sortedBy { it.first.lowercase(Locale.ROOT) }
+                            .forEach { (category, groupedEntries) ->
+                                item(key = "section-$category") {
+                                    SectionHeader(
+                                        label = category,
+                                        modifier = Modifier.animateItem(),
+                                    )
+                                }
+                                items(
+                                    items = groupedEntries,
+                                    key = { entry -> entry.id },
+                                ) { entry ->
+                                    MemoryEntryRow(
+                                        entry = entry,
+                                        onDelete = { onDelete(entry.id) },
+                                        onRetry = { onRetry(entry.id) },
+                                        onAddAnyway = { onAddAnyway(entry.id) },
+                                        modifier = Modifier.animateItem(),
+                                    )
+                                }
                             }
-                            items(
-                                items = groupedEntries,
-                                key = { entry -> entry.id },
-                            ) { entry ->
-                                MemoryEntryRow(
-                                    entry = entry,
-                                    onDelete = { onDelete(entry.id) },
-                                    onRetry = { onRetry(entry.id) },
-                                    onAddAnyway = { onAddAnyway(entry.id) },
-                                    modifier = Modifier.animateItem(),
-                                )
-                            }
-                        }
+                    }
                 }
             }
         }
@@ -252,6 +259,23 @@ private fun MemoryContentPreview() {
                 MemoryEntry(id = 2, text = "Commutes by bike", category = null, createdAt = now, updatedAt = now),
             ),
             isMutating = false,
+            isLoading = false,
+            onSend = {},
+            onDelete = {},
+            onRetry = {},
+            onAddAnyway = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Memory — loading")
+@Composable
+private fun MemoryContentLoadingPreview() {
+    CronTheme {
+        MemoryContent(
+            entries = emptyList(),
+            isMutating = false,
+            isLoading = true,
             onSend = {},
             onDelete = {},
             onRetry = {},
@@ -267,6 +291,7 @@ private fun MemoryContentEmptyPreview() {
         MemoryContent(
             entries = emptyList(),
             isMutating = false,
+            isLoading = false,
             onSend = {},
             onDelete = {},
             onRetry = {},
@@ -286,6 +311,7 @@ private fun MemoryContentMutatingPreview() {
                 MemoryEntry(id = 2, text = "", category = null, createdAt = now, updatedAt = now, pending = true),
             ),
             isMutating = true,
+            isLoading = false,
             onSend = {},
             onDelete = {},
             onRetry = {},
@@ -312,6 +338,7 @@ private fun MemoryContentFailurePreview() {
                 ),
             ),
             isMutating = false,
+            isLoading = false,
             onSend = {},
             onDelete = {},
             onAddAnyway = {},
