@@ -302,20 +302,26 @@ private fun MemoryEntryRowPreview() {
     }
 }
 
-@Preview(name = "MemoryEntryRow — Interactive Status Transition")
+@Preview(name = "MemoryEntryRow — Interactive Update & Status Transitions")
 @Composable
 private fun MemoryEntryRowInteractivePreview() {
     val now = Clock.System.now()
-    var isPending by remember { mutableStateOf(true) }
-    var entryText by remember { mutableStateOf("") }
+    var stateIndex by remember { mutableStateOf(0) } // 0: Pending, 1: Created, 2: Updated
     
-    val entry = remember(isPending, entryText) {
+    val entryText = when (stateIndex) {
+        0 -> ""
+        1 -> "Prefers earlier wake-ups on gym days"
+        else -> "Prefers earlier wake-ups on gym days (updated: gym opens at 6 AM now)"
+    }
+    
+    val isPending = stateIndex == 0
+    val entry = remember(stateIndex, entryText) {
         MemoryEntry(
             id = 42,
             text = entryText,
             category = "Schedule",
             createdAt = now,
-            updatedAt = now,
+            updatedAt = if (stateIndex == 2) now else now,
             pending = isPending,
             instruction = "Prefers earlier wake-ups on gym days",
         )
@@ -327,18 +333,17 @@ private fun MemoryEntryRowInteractivePreview() {
                 .fillMaxWidth()
                 .padding(Spacing.md)
                 .clickable {
-                    if (isPending) {
-                        entryText = "Prefers earlier wake-ups on gym days"
-                        isPending = false
-                    } else {
-                        entryText = ""
-                        isPending = true
-                    }
+                    stateIndex = (stateIndex + 1) % 3
                 },
             verticalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
+            val label = when (stateIndex) {
+                0 -> "PENDING (Initial user input)"
+                1 -> "SUCCESS (Created Fact)"
+                else -> "SUCCESS (Updated Fact content)"
+            }
             Text(
-                text = "Tap anywhere to toggle status: ${if (isPending) "PENDING" else "SUCCESS"}",
+                text = "Tap anywhere to advance cycle: $label",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
