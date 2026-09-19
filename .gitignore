@@ -33,3 +33,10 @@ gradle/gradle-daemon-jvm.properties
 
 # Python virtual env
 .venv/
+
+# Android Studio / IntelliJ IDEA settings
+.idea/
+!.idea/runConfigurations/
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+!.idea/vcs.xml

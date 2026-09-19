@@ -11,13 +11,13 @@ import fr.bsodium.cron.ai.AnthropicClientFactory
 import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.ai.MemoryTurnRunner
 import fr.bsodium.cron.ai.SystemPrompts
-import fr.bsodium.cron.ai.Tool
 import fr.bsodium.cron.ai.ToolRegistry
 import fr.bsodium.cron.ai.ToolRegistryFactory
 import fr.bsodium.cron.ai.TurnRunner
 import fr.bsodium.cron.ai.tools.AddMemoryTool
 import fr.bsodium.cron.ai.tools.DeleteMemoryTool
 import fr.bsodium.cron.ai.tools.UpdateMemoryTool
+import fr.bsodium.cron.ai.wire.ContentBlock
 import fr.bsodium.cron.memory.MemoryPromptBuilder
 import fr.bsodium.cron.memory.MemoryRepository
 import fr.bsodium.cron.settings.SecureKeyStore
@@ -84,7 +84,14 @@ class MemoryTurnWorker(
                         if (updateMemoryTool.wasCalled || deleteMemoryTool.wasCalled) {
                             repository.delete(placeholderId)
                         } else {
-                            repository.markFailed(placeholderId, REASON_NO_MEMORY_ADDED)
+                            // Extract text content from response content blocks
+                            val justification = outcome.response.content
+                                .filterIsInstance<ContentBlock.Text>()
+                                .joinToString("\n") { it.text }
+                                .takeIf { it.isNotBlank() }
+                                ?: REASON_NO_MEMORY_ADDED
+
+                            repository.markFailed(placeholderId, justification)
                         }
                     }
                 }
@@ -95,6 +102,7 @@ class MemoryTurnWorker(
                     }
                 }
             }
+
             outcome.usage()?.let(budget::record)
             Result.success()
         } catch (e: AnthropicClient.MissingApiKeyException) {
