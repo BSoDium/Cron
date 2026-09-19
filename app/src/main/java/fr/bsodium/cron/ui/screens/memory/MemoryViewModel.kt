@@ -8,6 +8,7 @@ import fr.bsodium.cron.memory.MemoryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -15,7 +16,11 @@ class MemoryViewModel(application: Application) : AndroidViewModel(application) 
 
     private val repository = MemoryRepository(application)
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading
+
     val entries: StateFlow<List<MemoryEntry>> = repository.observeAll()
+        .onEach { _isLoading.value = false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _isMutating = MutableStateFlow(false)
