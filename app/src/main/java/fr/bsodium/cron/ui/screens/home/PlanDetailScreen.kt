@@ -15,6 +15,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,8 +65,25 @@ fun PlanDetailScreen(
     ) { innerPadding ->
         if (iteration != null) {
             val scope = rememberCoroutineScope()
-            val pullState = remember(iteration.turnIndex) { PullState() }
+            val pullState = remember(iteration.turnIndex) {
+                PullState().apply {
+                    expanded = iteration.thread.response.isNullOrBlank()
+                }
+            }
             val scrollState = rememberScrollState()
+
+            val hasResponse = !iteration.thread.response.isNullOrBlank()
+            LaunchedEffect(hasResponse) {
+                if (hasResponse && pullState.expanded) {
+                    val full = pullState.fullPx.intValue
+                    if (full > 0 && pullState.reveal.value == 0f) {
+                        pullState.reveal.snapTo(full.toFloat())
+                    }
+                    pullState.expanded = false
+                    pullState.reveal.animateTo(0f)
+                }
+            }
+
             val pullConnection = rememberPullConnection(
                 scrollState = scrollState,
                 pullState = pullState,
@@ -73,12 +91,8 @@ fun PlanDetailScreen(
                 hapticsEnabled = hapticsEnabled,
             )
 
-            /** Read explicitly rather than guessing a flat bottom padding — a 3-button nav bar and a
-             *  gesture nav bar differ enough in height that a single guessed constant cleared one but
-             *  not the other, leaving the assistant shape uncleared once the thinking timeline is
-             *  expanded and scrolled to the bottom. Layered on top of Scaffold's own `innerPadding`,
-             *  which only reserves top/side safe-drawing insets. */
-            val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val navBarBottom =
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -92,7 +106,6 @@ fun PlanDetailScreen(
                     thread = iteration.thread,
                     expanded = pullState.expanded,
                     onExpandedChange = { next ->
-                        // Animate to the measured height before setting expanded; the expanded path clips directly.
                         if (next) {
                             scope.launch {
                                 val full = pullState.fullPx.intValue
@@ -100,12 +113,25 @@ fun PlanDetailScreen(
                                 pullState.expanded = true
                             }
                         } else {
-                            pullState.expanded = false
-                            scope.launch { pullState.reveal.animateTo(0f) }
+                            scope.launch {
+                                val full = pullState.fullPx.intValue
+                                // If closing while reveal is 0f (e.g. came from default open state), snap to full before animating down
+                                if (pullState.reveal.value == 0f && full > 0) {
+                                    pullState.reveal.snapTo(full.toFloat())
+                                }
+                                pullState.expanded = false
+                                pullState.reveal.animateTo(0f)
+                            }
                         }
                     },
                     expandPx = { pullState.reveal.value },
-                    onFullHeight = { pullState.fullPx.intValue = it },
+                    onFullHeight = { height ->
+                        pullState.fullPx.intValue = height
+                        // Ensure reveal state matches full height if initialized open
+                        if (pullState.expanded && pullState.reveal.value == 0f && height > 0) {
+                            scope.launch { pullState.reveal.snapTo(height.toFloat()) }
+                        }
+                    },
                     expansionFraction = {
                         val full = pullState.fullPx.intValue
                         if (full > 0) (pullState.reveal.value / full).coerceIn(0f, 1f) else 0f
@@ -139,7 +165,10 @@ private fun rememberPullConnection(
         object : NestedScrollConnection {
             fun triggerPx(): Float {
                 val full = pullState.fullPx.intValue
-                return if (full > 0) minOf(full * PULL_THRESHOLD_FRACTION, triggerMaxPx) else Float.MAX_VALUE
+                return if (full > 0) minOf(
+                    full * PULL_THRESHOLD_FRACTION,
+                    triggerMaxPx
+                ) else Float.MAX_VALUE
             }
 
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -154,7 +183,10 @@ private fun rememberPullConnection(
                 val canPull = hasProcessState.value && !pullState.expanded
                 if (available.y > 0f && canPull && scrollState.value == 0) {
                     val full = pullState.fullPx.intValue
-                    val rubber = if (full > 0) (1f - pullState.reveal.value / full).coerceIn(PULL_RUBBER_FLOOR, 1f) else 1f
+                    val rubber = if (full > 0) (1f - pullState.reveal.value / full).coerceIn(
+                        PULL_RUBBER_FLOOR,
+                        1f
+                    ) else 1f
                     val next = pullState.reveal.value + available.y * rubber
                     val nowPast = next >= triggerPx()
                     if (nowPast && !pullState.pastThreshold) haptics.value.tick()
@@ -193,8 +225,16 @@ private fun PlanDetailScreenPreview() {
                     turnIndex = 0,
                     summary = "Set a 6:40 alarm",
                     process = listOf(
-                        ProcessItem.Tool(name = "read_calendar", isComplete = true, contextLabel = "6 events"),
-                        ProcessItem.Tool(name = "set_alarm", isComplete = true, contextLabel = "set for 06:40"),
+                        ProcessItem.Tool(
+                            name = "read_calendar",
+                            isComplete = true,
+                            contextLabel = "6 events"
+                        ),
+                        ProcessItem.Tool(
+                            name = "set_alarm",
+                            isComplete = true,
+                            contextLabel = "set for 06:40"
+                        ),
                     ),
                     response = "Set a **6:40** alarm so you make your 9:00 stand-up.",
                     durationSeconds = 15,

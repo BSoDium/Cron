@@ -58,7 +58,6 @@ import fr.bsodium.cron.ui.screens.home.components.AiFailureBanner
 import fr.bsodium.cron.ui.screens.home.components.AlarmTiming
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NextAlarmCard
-import fr.bsodium.cron.ui.screens.home.components.NextPlanHint
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
@@ -98,20 +97,27 @@ fun HomeScreen(
     val streamingThread = uiState.aiPlan?.iterations?.lastOrNull { it.thread.isStreaming }?.thread
     val revealed = rememberRevealedThread(streamingThread)
     val displayPlan = uiState.aiPlan?.withStreamingReplaced(revealed)
-    val timing = rememberAlarmTiming(uiState.sessionDisplay?.alarmTime, uiState.sessionDisplay?.sessionDate)
-    val resting = when (uiState.sessionDisplay?.status) {
-        SessionStatus.Complete, null -> true
-        SessionStatus.Awake, SessionStatus.ReMonitoring -> false
-        SessionStatus.Planning, SessionStatus.Monitoring -> timing is AlarmTiming.Past
-    }
+    val timing =
+        rememberAlarmTiming(uiState.sessionDisplay?.alarmTime, uiState.sessionDisplay?.sessionDate)
+    var detailKey by remember { mutableStateOf<PlanDetailKey?>(null) }
+
     // Subtle haptic ticks paced to the reveal animation (gated by the preference). UI-less effect.
-    StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled)
+    StreamingHaptics(thread = revealed, enabled = uiState.hapticsEnabled && detailKey != null)
     val isFirstRun = displayPlan == null
     val fabLabel = if (isFirstRun) "Start planning" else "Re-plan"
     val fabSplitLabel = if (isFirstRun) "Run plan" else "Re-plan"
     val fabIcon = if (isFirstRun) MaterialSymbol.RocketLaunch else MaterialSymbol.Update
     DisposableEffect(viewModel, fabRegistry) {
-        fabRegistry.set(ROUTE_HOME, FabAction(onClick = viewModel::retryAiPlan, onCancel = viewModel::cancelAiPlan, label = fabLabel, splitLabel = fabSplitLabel, icon = fabIcon))
+        fabRegistry.set(
+            ROUTE_HOME,
+            FabAction(
+                onClick = viewModel::retryAiPlan,
+                onCancel = viewModel::cancelAiPlan,
+                label = fabLabel,
+                splitLabel = fabSplitLabel,
+                icon = fabIcon
+            )
+        )
         onDispose { fabRegistry.clear(ROUTE_HOME) }
     }
     LaunchedEffect(uiState.isRetrying, fabLabel, fabSplitLabel, fabIcon, fabRegistry) {
@@ -133,16 +139,22 @@ fun HomeScreen(
     var hasNotificationPermission by remember {
         mutableStateOf(
             Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-                PackageManager.PERMISSION_GRANTED
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) ==
+                    PackageManager.PERMISSION_GRANTED
         )
     }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasNotificationPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-                    PackageManager.PERMISSION_GRANTED
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) ==
+                        PackageManager.PERMISSION_GRANTED
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -151,9 +163,11 @@ fun HomeScreen(
 
     var showTimePicker by remember { mutableStateOf(false) }
     val alarmEditable = uiState.autoAlarmsEnabled
-        && uiState.sessionDisplay?.alarmTime != null
-        && timing is AlarmTiming.Upcoming
-    val onAlarmTimeClick: (() -> Unit)? = if (alarmEditable) {{ showTimePicker = true }} else null
+            && uiState.sessionDisplay?.alarmTime != null
+            && timing is AlarmTiming.Upcoming
+    val onAlarmTimeClick: (() -> Unit)? = if (alarmEditable) {
+        { showTimePicker = true }
+    } else null
 
     val navInsetBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusInsetTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -165,13 +179,20 @@ fun HomeScreen(
         )
     }
 
-    var detailKey by remember { mutableStateOf<PlanDetailKey?>(null) }
+    LaunchedEffect(displayPlan) {
+        val currentKey = detailKey ?: return@LaunchedEffect
+        val updatedIteration = displayPlan?.iterations?.firstOrNull {
+            it.turnIndex == currentKey.iteration.turnIndex
+        }
+        if (updatedIteration != null && updatedIteration != currentKey.iteration) {
+            detailKey = currentKey.copy(iteration = updatedIteration)
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         HomeRootContent(
             uiState = uiState,
             displayPlan = displayPlan,
-            resting = resting,
             statusInsetTop = statusInsetTop,
             navInsetBottom = navInsetBottom,
             hasNotificationPermission = hasNotificationPermission,
@@ -197,9 +218,11 @@ fun HomeScreen(
             )
 
             Box(
-                Modifier.fillMaxSize().graphicsLayer {
-                    translationX = enterOffset * size.width
-                },
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationX = enterOffset * size.width
+                    },
             ) {
                 PredictiveBackCard(
                     onBack = { detailKey = null },
@@ -220,7 +243,6 @@ fun HomeScreen(
 private fun HomeRootContent(
     uiState: HomeUiState,
     displayPlan: AiPlanUi?,
-    resting: Boolean,
     statusInsetTop: Dp,
     navInsetBottom: Dp,
     hasNotificationPermission: Boolean,
@@ -242,7 +264,6 @@ private fun HomeRootContent(
             !uiState.initialized -> HomePhase.Loading
             displayPlan != null -> HomePhase.Plan
             lastPlan != null && uiState.isRetrying -> HomePhase.Plan
-            // No current plan, but there's history worth showing — show it instead of a blank splash that hides data that's still there.
             uiState.liveTimeline.isNotEmpty() || historyItems.itemCount > 0 -> HomePhase.Plan
             else -> HomePhase.Idle
         }
@@ -262,6 +283,7 @@ private fun HomeRootContent(
                     onNotifEnable = onNotifEnable,
                     onAutoAlarmsChange = onAutoAlarmsChange,
                 )
+
                 HomePhase.Plan -> HomePlanContent(
                     uiState = uiState.let { state ->
                         val plan = displayPlan ?: lastPlan
@@ -352,12 +374,10 @@ private fun HomeIdleContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            // Horizontal inset is applied per-child so the card can hug wider than the rest.
             .padding(
                 top = statusInsetTop + Spacing.md,
                 bottom = navInsetBottom + Spacing.navBarClearance,
             ),
-        // Tight gap from the greeting down to the card; the card→hint area is a weighted box below.
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         HomeGreetingRow(
@@ -368,15 +388,17 @@ private fun HomeIdleContent(
             modifier = Modifier.padding(horizontal = Spacing.xl),
             hapticsEnabled = uiState.hapticsEnabled,
         )
-        Box(Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) {
-            // No active alarm in this state — render the blank onset card; "what's next" lives below it.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.md)
+        ) {
             NextAlarmCard(
                 dateLabel = EMPTY_STATE_DATE_LABEL,
                 alarmTime = null,
                 sessionDate = null,
             )
         }
-        // Bias the hint toward the upper third so it sits near eye height rather than dead-centre.
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -384,15 +406,7 @@ private fun HomeIdleContent(
                 .padding(horizontal = Spacing.xl),
             contentAlignment = BiasAlignment(0f, -0.4f),
         ) {
-            // First run (no session ever) → the onboarding invite; otherwise the between-sessions rest state.
-            if (uiState.sessionDisplay == null) {
-                OnboardingHint()
-            } else {
-                NextPlanHint(
-                    autoAlarmsEnabled = uiState.autoAlarmsEnabled,
-                    eveningTriggerTime = uiState.eveningTriggerTime,
-                )
-            }
+            OnboardingHint()
         }
         if (!hasNotificationPermission) {
             NotificationPermissionRow(
@@ -403,16 +417,15 @@ private fun HomeIdleContent(
     }
 }
 
-@Preview(showBackground = true, name = "Home — resting (no plan yet)")
+@Preview(showBackground = true, name = "Home — no plan yet")
 @Composable
-private fun HomeRestingPreview() {
+private fun HomeNoPlanPreview() {
     CronTheme {
         HomeIdleContent(
             uiState = HomeUiState(
                 initialized = true,
                 greetingPrefix = "Good evening",
                 greetingName = "Elliot",
-                // A completed (dismissed) session → the resting NextPlanHint branch, not first-run onboarding.
                 sessionDisplay = SessionDisplayState(
                     status = SessionStatus.Complete,
                     action = ActionType.DoNothing,
