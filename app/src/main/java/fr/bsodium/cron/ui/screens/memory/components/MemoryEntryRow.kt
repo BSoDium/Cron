@@ -26,6 +26,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -306,7 +307,7 @@ private fun MemoryEntryRowPreview() {
 @Composable
 private fun MemoryEntryRowInteractivePreview() {
     val now = Clock.System.now()
-    var stateIndex by remember { mutableStateOf(0) } // 0: Pending, 1: Created, 2: Updated
+    var stateIndex by remember { mutableIntStateOf(0) } // 0: Pending, 1: Created, 2: Updated
     
     val entryText = when (stateIndex) {
         0 -> ""
@@ -317,11 +318,11 @@ private fun MemoryEntryRowInteractivePreview() {
     val isPending = stateIndex == 0
     val entry = remember(stateIndex, entryText) {
         MemoryEntry(
-            id = 42,
+            id = 42 + stateIndex.toLong(),
             text = entryText,
             category = "Schedule",
             createdAt = now,
-            updatedAt = if (stateIndex == 2) now else now,
+            updatedAt = now,
             pending = isPending,
             instruction = "Prefers earlier wake-ups on gym days",
         )
