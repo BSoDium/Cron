@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -300,3 +301,52 @@ private fun MemoryEntryRowPreview() {
         }
     }
 }
+
+@Preview(name = "MemoryEntryRow — Interactive Status Transition")
+@Composable
+private fun MemoryEntryRowInteractivePreview() {
+    val now = Clock.System.now()
+    var isPending by remember { mutableStateOf(true) }
+    var entryText by remember { mutableStateOf("") }
+    
+    val entry = remember(isPending, entryText) {
+        MemoryEntry(
+            id = 42,
+            text = entryText,
+            category = "Schedule",
+            createdAt = now,
+            updatedAt = now,
+            pending = isPending,
+            instruction = "Prefers earlier wake-ups on gym days",
+        )
+    }
+
+    CronTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(Spacing.md)
+                .clickable {
+                    if (isPending) {
+                        entryText = "Prefers earlier wake-ups on gym days"
+                        isPending = false
+                    } else {
+                        entryText = ""
+                        isPending = true
+                    }
+                },
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            Text(
+                text = "Tap anywhere to toggle status: ${if (isPending) "PENDING" else "SUCCESS"}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            MemoryEntryRow(
+                entry = entry,
+                onDelete = {},
+            )
+        }
+    }
+}
+
