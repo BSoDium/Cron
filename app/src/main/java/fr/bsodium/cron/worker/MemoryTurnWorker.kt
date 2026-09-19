@@ -67,7 +67,6 @@ class MemoryTurnWorker(
         val client = AnthropicClientFactory.create(useMock, apiKeyProvider = { apiKey })
         val runner = MemoryTurnRunner(
             client = client,
-            // Memory mutation uses the same model tier as an overnight replan.
             model = TurnRunner.MODEL_HAIKU,
             systemPrompt = SystemPrompts.MEMORY_MUTATION,
             tools = tools,

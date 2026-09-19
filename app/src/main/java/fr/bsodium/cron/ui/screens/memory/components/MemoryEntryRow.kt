@@ -3,11 +3,9 @@ package fr.bsodium.cron.ui.screens.memory.components
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -28,7 +27,6 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,6 +39,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.rememberCronHaptics
@@ -67,7 +66,7 @@ private val ICON_EDGE_PADDING = Spacing.lg
  *  `MemoryRepository.addPending`), it renders with a shimmer placeholder in the same shape and
  *  position instead of the entry's not-yet-real text, so the row flips to real content in place
  *  rather than a separate placeholder being swapped for a second, real one. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MemoryEntryRow(
     entry: MemoryEntry,
@@ -161,13 +160,14 @@ internal fun MemoryEntryRow(
                 else -> "success"
             }
             val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+            val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
             AnimatedContent(
                 targetState = status,
                 transitionSpec = {
                     ContentTransform(
                         initialContentExit = fadeOut(animationSpec = effectsSpec),
                         targetContentEnter = fadeIn(animationSpec = effectsSpec),
-                        sizeTransform = SizeTransform { _, _ -> snap() }
+                        sizeTransform = SizeTransform { _, _ -> spatialSpec }
                     )
                 },
                 label = "memory-entry-status-transition"
@@ -307,57 +307,3 @@ private fun MemoryEntryRowPreview() {
         }
     }
 }
-
-@Preview(name = "MemoryEntryRow — Interactive Update & Status Transitions")
-@Composable
-private fun MemoryEntryRowInteractivePreview() {
-    val now = Clock.System.now()
-    var stateIndex by remember { mutableIntStateOf(0) } // 0: Pending, 1: Created, 2: Updated
-    
-    val entryText = when (stateIndex) {
-        0 -> ""
-        1 -> "Prefers earlier wake-ups on gym days"
-        else -> "Prefers earlier wake-ups on gym days (updated: gym opens at 6 AM now)"
-    }
-    
-    val isPending = stateIndex == 0
-    val entry = remember(stateIndex, entryText) {
-        MemoryEntry(
-            id = 42 + stateIndex.toLong(),
-            text = entryText,
-            category = "Schedule",
-            createdAt = now,
-            updatedAt = now,
-            pending = isPending,
-            instruction = "Prefers earlier wake-ups on gym days",
-        )
-    }
-
-    CronTheme {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(Spacing.md)
-                .clickable {
-                    stateIndex = (stateIndex + 1) % 3
-                },
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-        ) {
-            val label = when (stateIndex) {
-                0 -> "PENDING (Initial user input)"
-                1 -> "SUCCESS (Created Fact)"
-                else -> "SUCCESS (Updated Fact content)"
-            }
-            Text(
-                text = "Tap anywhere to advance cycle: $label",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            MemoryEntryRow(
-                entry = entry,
-                onDelete = {},
-            )
-        }
-    }
-}
-

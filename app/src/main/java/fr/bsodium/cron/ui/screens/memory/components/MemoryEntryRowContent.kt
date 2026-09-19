@@ -2,16 +2,11 @@ package fr.bsodium.cron.ui.screens.memory.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.SubcomposeLayout
@@ -81,6 +76,7 @@ private fun justificationCollapsedHeight(): Dp {
  * Smoothly expands and collapses content by animating layout height using defaultSpatialSpec,
  * measuring the full height via SubcomposeLayout so text isn't reflowed during motion.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ClippedReveal(
     expanded: Boolean,
@@ -168,6 +164,7 @@ internal fun PendingMemoryEntryContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun FailedMemoryEntryContent(
     instruction: String?,
@@ -360,6 +357,7 @@ internal fun FailedMemoryEntryContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SuccessMemoryEntryContent(
     text: String,
@@ -369,43 +367,33 @@ internal fun SuccessMemoryEntryContent(
 ) {
     Column(
         modifier = modifier
-            .animateContentSize()
             .padding(start = Spacing.lg, end = Spacing.md, top = Spacing.md, bottom = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         horizontalAlignment = Alignment.Start,
     ) {
         val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
-        Box(modifier = Modifier.fillMaxWidth()) {
-            AnimatedContent(
-                targetState = text,
-                transitionSpec = {
-                    ContentTransform(
-                        initialContentExit = fadeOut(animationSpec = effectsSpec),
-                        targetContentEnter = fadeIn(animationSpec = effectsSpec),
-                        sizeTransform = SizeTransform { _, _ -> snap() }
-                    )
-                },
-                label = "memory-text-fade-blur",
-                modifier = Modifier.fillMaxWidth()
-            ) { targetText ->
-                val blurRadius by transition.animateFloat(
-                    transitionSpec = { effectsSpec },
-                    label = "memory-text-blur"
-                ) { state ->
-                    if (state == EnterExitState.Visible) 0f else 16f
-                }
+        val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
 
-                Text(
-                    text = targetText,
-                    style = CronTypography.timelineRowTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 10,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (blurRadius > 0f) Modifier.blur(blurRadius.dp) else Modifier)
+        AnimatedContent(
+            targetState = text,
+            transitionSpec = {
+                ContentTransform(
+                    initialContentExit = fadeOut(animationSpec = effectsSpec),
+                    targetContentEnter = fadeIn(animationSpec = effectsSpec),
+                    sizeTransform = SizeTransform { _, _ -> spatialSpec }
                 )
-            }
+            },
+            label = "memory-text-fade",
+            modifier = Modifier.fillMaxWidth()
+        ) { targetText ->
+            Text(
+                text = targetText,
+                style = CronTypography.timelineRowTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 10,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         Row(
