@@ -1,7 +1,9 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -51,6 +53,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.textShimmer
 import fr.bsodium.cron.ui.screens.home.components.rememberRelativeAgo
@@ -372,12 +375,16 @@ internal fun SuccessMemoryEntryContent(
         horizontalAlignment = Alignment.Start,
     ) {
         val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+        val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
         Box(modifier = Modifier.fillMaxWidth()) {
             AnimatedContent(
                 targetState = text,
                 transitionSpec = {
-                    fadeIn(animationSpec = effectsSpec) togetherWith
-                    fadeOut(animationSpec = effectsSpec)
+                    ContentTransform(
+                        initialContentExit = fadeOut(animationSpec = effectsSpec),
+                        targetContentEnter = fadeIn(animationSpec = effectsSpec),
+                        sizeTransform = SizeTransform(clip = false) { _, _ -> spatialSpec }
+                    )
                 },
                 label = "memory-text-fade-blur",
                 modifier = Modifier.fillMaxWidth()
