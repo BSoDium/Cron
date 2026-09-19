@@ -1,9 +1,11 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -162,8 +164,11 @@ internal fun MemoryEntryRow(
             AnimatedContent(
                 targetState = status,
                 transitionSpec = {
-                    fadeIn(animationSpec = effectsSpec) togetherWith
-                    fadeOut(animationSpec = effectsSpec)
+                    ContentTransform(
+                        initialContentExit = fadeOut(animationSpec = effectsSpec),
+                        targetContentEnter = fadeIn(animationSpec = effectsSpec),
+                        sizeTransform = SizeTransform { _, _ -> snap() }
+                    )
                 },
                 label = "memory-entry-status-transition"
             ) { targetStatus ->

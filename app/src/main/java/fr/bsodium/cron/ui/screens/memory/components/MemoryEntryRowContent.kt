@@ -8,9 +8,9 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -375,7 +375,6 @@ internal fun SuccessMemoryEntryContent(
         horizontalAlignment = Alignment.Start,
     ) {
         val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
-        val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
         Box(modifier = Modifier.fillMaxWidth()) {
             AnimatedContent(
                 targetState = text,
@@ -383,7 +382,7 @@ internal fun SuccessMemoryEntryContent(
                     ContentTransform(
                         initialContentExit = fadeOut(animationSpec = effectsSpec),
                         targetContentEnter = fadeIn(animationSpec = effectsSpec),
-                        sizeTransform = SizeTransform(clip = false) { _, _ -> spatialSpec }
+                        sizeTransform = SizeTransform { _, _ -> snap() }
                     )
                 },
                 label = "memory-text-fade-blur",
