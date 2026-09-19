@@ -231,8 +231,8 @@ object SystemPrompts {
         Distill, don't transcribe: the user's instruction is spoken casually and often in first
         person ("I usually get up earlier on Fridays"). Rewrite it as a clean third-person fact in
         the entry text ("Wakes up earlier on Fridays") — never store the user's raw phrasing
-        verbatim. Every entry should read in the same standardized voice regardless of how the
-        instruction was worded.
+        verbatim unless the user is already using the required tone and style. Every entry should 
+        read in the same standardized voice regardless of how the instruction was worded.
 
         Treat recurring preferences about commute buffers, how early the user wants to arrive, bus
         or train rides, preparation time, and similar planning constraints as durable memories even

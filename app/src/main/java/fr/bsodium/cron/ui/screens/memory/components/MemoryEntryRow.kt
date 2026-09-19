@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,15 +79,15 @@ internal fun MemoryEntryRow(
     var lastText by remember(entry.id) { mutableStateOf(entry.text) }
 
     LaunchedEffect(entry.text, entry.id) {
-        if (entry.text != lastText) {
+        if (entry.text != lastText && lastText.isNotEmpty()) {
             for (len in 0..entry.text.length) {
                 displayedText = entry.text.substring(0, len)
                 delay(20.milliseconds)
             }
-            lastText = entry.text
         } else {
             displayedText = entry.text
         }
+        lastText = entry.text
     }
 
     LaunchedEffect(dismissState.targetValue) {
@@ -169,7 +168,6 @@ internal fun MemoryEntryRow(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radius.lg))
                 .background(CronColors.elementSurface)
-                .animateContentSize()
 
             if (entry.pending) {
                 PendingMemoryEntryContent(
@@ -187,6 +185,7 @@ internal fun MemoryEntryRow(
                 )
             } else {
                 SuccessMemoryEntryContent(
+                    fullText = entry.text,
                     displayedText = displayedText,
                     createdAt = entry.createdAt,
                     updatedAt = entry.updatedAt,
@@ -226,20 +225,6 @@ internal fun MemoryEntryRow(
             },
         )
     }
-}
-
-private fun isSystemFailure(reason: String): Boolean = when (reason) {
-    "no_api_key", "budget_exhausted", "http_error", "max_retries_exceeded", "technical_error" -> true
-    else -> false
-}
-
-private fun failureMessage(reason: String): String = when (reason) {
-    "no_api_key" -> "Add an API key in Settings and try again."
-    "budget_exhausted" -> "Today's AI token budget is exhausted."
-    "no_memory_added" -> "The assistant did not create a memory from that instruction."
-    "http_error" -> "The AI service couldn't be reached."
-    "max_retries_exceeded", "technical_error" -> "A technical error prevented the assistant from processing this instruction."
-    else -> reason
 }
 
 @Preview(showBackground = true)

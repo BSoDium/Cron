@@ -1,7 +1,10 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,17 +22,28 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.textShimmer
 import fr.bsodium.cron.ui.screens.home.components.rememberRelativeAgo
@@ -40,7 +55,49 @@ import fr.bsodium.cron.ui.theme.Symbol
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
+
+private val SEE_MORE_ICON_SIZE = 16.dp
+
+@Composable
+private fun justificationCollapsedHeight(): Dp {
+    val density = LocalDensity.current
+    val lineHeight = MaterialTheme.typography.bodySmall.lineHeight
+    return with(density) { lineHeight.toDp() } * 3
+}
+
+/**
+ * Smoothly expands and collapses content by animating layout height using defaultSpatialSpec,
+ * measuring the full height via SubcomposeLayout so text isn't reflowed during motion.
+ */
+@Composable
+private fun ClippedReveal(
+    expanded: Boolean,
+    collapsedHeight: Dp,
+    onHasOverflowChanged: (Boolean) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val collapsedPx = with(LocalDensity.current) { collapsedHeight.roundToPx() }
+    var fullPx by remember { mutableIntStateOf(0) }
+    val target = if (expanded) (if (fullPx > 0) fullPx else collapsedPx) else collapsedPx
+    val animatedPx by animateIntAsState(
+        targetValue = target,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "justification-reveal",
+    )
+    SubcomposeLayout(
+        modifier = Modifier.clipToBounds(),
+    ) { constraints ->
+        val placeable = subcompose(Unit, content).first().measure(constraints.copy(minHeight = 0))
+        if (placeable.height != fullPx) {
+            fullPx = placeable.height
+            onHasOverflowChanged(fullPx > collapsedPx + 2)
+        }
+        val h = if (fullPx == 0) placeable.height else animatedPx.coerceIn(0, placeable.height)
+        layout(placeable.width, h) { placeable.place(0, 0) }
+    }
+}
 
 @Composable
 internal fun PendingMemoryEntryContent(
@@ -111,6 +168,14 @@ internal fun FailedMemoryEntryContent(
     modifier: Modifier = Modifier
 ) {
     val isSystemError = isSystemFailure(failureReason)
+    var expanded by rememberSaveable(failureReason) { mutableStateOf(false) }
+    var canExpand by remember(failureReason) { mutableStateOf(false) }
+
+    val affordance by animateFloatAsState(
+        targetValue = if (canExpand || expanded) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "collapse-affordance",
+    )
 
     Column(
         modifier = modifier.padding(
@@ -144,13 +209,53 @@ internal fun FailedMemoryEntryContent(
                 maxLines = 10,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = failureMessage(failureReason),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 10,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column {
+                ClippedReveal(
+                    expanded = expanded,
+                    collapsedHeight = justificationCollapsedHeight(),
+                    onHasOverflowChanged = { overflow -> canExpand = overflow },
+                ) {
+                    Text(
+                        text = failureMessage(failureReason),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (canExpand || expanded) {
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer { alpha = affordance }
+                            .offset(x = -Spacing.xs, y = Spacing.xxs)
+                            .minimumInteractiveComponentSize()
+                            .clip(Radius.full)
+                            .clickable { expanded = !expanded }
+                            .padding(
+                                start = Spacing.xs,
+                                end = Spacing.sm,
+                                top = Spacing.xs,
+                                bottom = Spacing.xs
+                            ),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Symbol(
+                                symbol = if (expanded) MaterialSymbol.ExpandLess else MaterialSymbol.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                size = SEE_MORE_ICON_SIZE,
+                            )
+                            Text(
+                                text = if (expanded) "See less" else "See more",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+            }
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -247,24 +352,37 @@ internal fun FailedMemoryEntryContent(
 
 @Composable
 internal fun SuccessMemoryEntryContent(
+    fullText: String,
     displayedText: String,
     createdAt: Instant,
     updatedAt: Instant,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(start = Spacing.lg, end = Spacing.md, top = Spacing.md, bottom = Spacing.md),
+        modifier = modifier
+            .animateContentSize()
+            .padding(start = Spacing.lg, end = Spacing.md, top = Spacing.md, bottom = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         horizontalAlignment = Alignment.Start,
     ) {
-        Text(
-            text = displayedText,
-            style = CronTypography.timelineRowTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 10,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = fullText,
+                style = CronTypography.timelineRowTitle,
+                color = Color.Transparent,
+                maxLines = 10,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = displayedText,
+                style = CronTypography.timelineRowTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 10,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -311,7 +429,9 @@ internal fun SuccessMemoryEntryContent(
                             tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = animatedFadeFraction),
                         )
                     }
-                    val label = if (createdAt == updatedAt) "Created" else "Updated"
+                    val timeDiff = abs(createdAt.toEpochMilliseconds() - updatedAt.toEpochMilliseconds())
+                    val label = if (timeDiff < 1000L) "Created" else "Updated"
+
                     Text(
                         text = "$label ${rememberRelativeAgo(updatedAt.toEpochMilliseconds())}",
                         style = MaterialTheme.typography.bodySmall,
