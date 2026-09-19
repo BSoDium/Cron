@@ -9,17 +9,17 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -54,11 +54,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -99,37 +99,46 @@ fun CronCompactNavigationBar(
      * existing slot through that handoff so Home <-> Memory morphs the FAB instead of moving the pill.
      */
     val visible = fabAction != null ||
-        (currentRoute == ROUTE_HOME || currentRoute == ROUTE_MEMORY) && lastShown != null
+            (currentRoute == ROUTE_HOME || currentRoute == ROUTE_MEMORY) && lastShown != null
     val fabSlotWidth by animateDpAsState(
         targetValue = if (visible) measuredFabWidth else 0.dp,
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "fab-slot-width",
     )
+    val pillBias by animateFloatAsState(
+        targetValue = if (visible) -1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "pill-bias",
+    )
 
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(bottom = systemBars.calculateBottomPadding())
             .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val pillBias by animateFloatAsState(
-            targetValue = if (visible) -1f else 0f,
-            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-            label = "pill-bias",
-        )
         Box(
-            modifier = Modifier.weight(1f),
-            contentAlignment = BiasAlignment(horizontalBias = pillBias, verticalBias = 0f),
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = BiasAlignment(
+                horizontalBias = pillBias,
+                verticalBias = 0f,
+            ),
         ) {
-            NavPill(currentRoute = currentRoute, onNavigate = onNavigate)
+            NavPill(
+                currentRoute = currentRoute,
+                onNavigate = onNavigate,
+            )
         }
+
         FabSlot(
+            modifier = Modifier.align(Alignment.CenterEnd),
             fabSlotWidth = fabSlotWidth,
             visible = visible,
             lastShown = lastShown,
             fabChevron = fabChevron,
-            onWidthMeasured = { measuredFabWidth = with(density) { it.toDp() } },
+            onWidthMeasured = {
+                measuredFabWidth = with(density) { it.toDp() }
+            },
         )
     }
 }
@@ -141,11 +150,12 @@ private fun FabSlot(
     lastShown: FabAction?,
     fabChevron: FabChevronSlot?,
     onWidthMeasured: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val spatialSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntOffset>()
     val alphaSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     Box(
-        modifier = Modifier
+        modifier = modifier
             .width(fabSlotWidth)
             .height(FAB_SLOT_HEIGHT),
         contentAlignment = Alignment.CenterEnd,
@@ -191,7 +201,12 @@ data class FabAction(
  * working/idle flip — crossfades and scales through [fabContentTransition] instead of snapping,
  * so two different FAB identities read as one continuous morph (docs/expressive.md).
  */
-private data class FabButtonDisplay(val working: Boolean, val icon: MaterialSymbol, val label: String, val filled: Boolean)
+private data class FabButtonDisplay(
+    val working: Boolean,
+    val icon: MaterialSymbol,
+    val label: String,
+    val filled: Boolean
+)
 
 private fun fabContentTransition(
     alphaSpec: FiniteAnimationSpec<Float>,
@@ -199,7 +214,7 @@ private fun fabContentTransition(
     sizeSpec: FiniteAnimationSpec<IntSize>,
 ): AnimatedContentTransitionScope<FabButtonDisplay>.() -> ContentTransform = {
     ((fadeIn(alphaSpec) + scaleIn(spatialSpec, initialScale = 0.8f)) togetherWith
-        (fadeOut(alphaSpec) + scaleOut(spatialSpec, targetScale = 0.8f)))
+            (fadeOut(alphaSpec) + scaleOut(spatialSpec, targetScale = 0.8f)))
         .using(SizeTransform(clip = false) { _, _ -> sizeSpec })
 }
 
@@ -230,11 +245,18 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
     val sizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
     var idleLabel by remember { mutableStateOf(action.splitLabel) }
     var idleIcon by remember { mutableStateOf(action.icon) }
-    if (!action.working) { idleLabel = action.splitLabel; idleIcon = action.icon }
+    if (!action.working) {
+        idleLabel = action.splitLabel; idleIcon = action.icon
+    }
     val display = if (action.working) {
         FabButtonDisplay(working = true, icon = MaterialSymbol.Stop, label = "Stop", filled = true)
     } else {
-        FabButtonDisplay(working = false, icon = idleIcon, label = idleLabel, filled = action.filled)
+        FabButtonDisplay(
+            working = false,
+            icon = idleIcon,
+            label = idleLabel,
+            filled = action.filled
+        )
     }
     val chevronColor by animateColorAsState(
         targetValue = if (fabChevron.isExpanded && fabChevron.isMockActive)
@@ -260,14 +282,18 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
             IconTooltip(label = if (action.working) "Cancel" else action.tooltipLabel) {
                 SplitButtonDefaults.LeadingButton(
                     onClick = {
-                        if (action.working) { haptics.reject(); action.onCancel?.invoke() }
-                        else { haptics.confirm(); action.onClick() }
+                        if (action.working) {
+                            haptics.reject(); action.onCancel?.invoke()
+                        } else {
+                            haptics.confirm(); action.onClick()
+                        }
                     },
                     modifier = Modifier
                         .wrapContentWidth()
                         .height(56.dp)
                         .semantics {
-                            contentDescription = if (action.working) "Cancel" else action.tooltipLabel
+                            contentDescription =
+                                if (action.working) "Cancel" else action.tooltipLabel
                         },
                     shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -279,7 +305,11 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                 ) {
                     AnimatedContent(
                         targetState = display,
-                        transitionSpec = fabContentTransition(iconAlphaSpec, contentSpatialSpec, sizeSpec),
+                        transitionSpec = fabContentTransition(
+                            iconAlphaSpec,
+                            contentSpatialSpec,
+                            sizeSpec
+                        ),
                         contentAlignment = Alignment.Center,
                         label = "split-fab-content",
                     ) { d ->
@@ -301,11 +331,17 @@ internal fun SplitActionFab(action: FabAction?, fabChevron: FabChevronSlot) {
                                 AnimatedVisibility(
                                     visible = !d.working && fabChevron.isMockActive,
                                     enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                                        slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
-                                        expandVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), clip = false),
+                                            slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
+                                            expandVertically(
+                                                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                                                clip = false
+                                            ),
                                     exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                                        slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
-                                        shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), clip = false),
+                                            slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it } +
+                                            shrinkVertically(
+                                                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                                                clip = false
+                                            ),
                                     label = "mock-badge",
                                 ) {
                                     Text(
@@ -369,11 +405,18 @@ internal fun PrimaryActionFab(action: FabAction?) {
     val sizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
     var idleLabel by remember { mutableStateOf(action.label) }
     var idleIcon by remember { mutableStateOf(action.icon) }
-    if (!working) { idleLabel = action.label; idleIcon = action.icon }
+    if (!working) {
+        idleLabel = action.label; idleIcon = action.icon
+    }
     val display = if (working) {
         FabButtonDisplay(working = true, icon = MaterialSymbol.Stop, label = "Stop", filled = true)
     } else {
-        FabButtonDisplay(working = false, icon = idleIcon, label = idleLabel, filled = action.filled)
+        FabButtonDisplay(
+            working = false,
+            icon = idleIcon,
+            label = idleLabel,
+            filled = action.filled
+        )
     }
     IconTooltip(label = if (working) "Cancel" else action.tooltipLabel) {
         FloatingActionButton(
