@@ -55,7 +55,7 @@ class MemoryRepository(private val context: Context) {
         val updated = existing.copy(
             text = text,
             category = category,
-            updatedAt = Clock.System.now().toEpochMilliseconds(),
+            updatedAt = existing.createdAt,
             pending = false,
             instruction = null,
             failureReason = null,
