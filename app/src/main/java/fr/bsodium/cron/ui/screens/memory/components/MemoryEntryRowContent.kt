@@ -1,8 +1,15 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -352,8 +359,7 @@ internal fun FailedMemoryEntryContent(
 
 @Composable
 internal fun SuccessMemoryEntryContent(
-    fullText: String,
-    displayedText: String,
+    text: String,
     createdAt: Instant,
     updatedAt: Instant,
     modifier: Modifier = Modifier
@@ -365,22 +371,32 @@ internal fun SuccessMemoryEntryContent(
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         horizontalAlignment = Alignment.Start,
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+        AnimatedContent(
+            targetState = text,
+            transitionSpec = {
+                fadeIn(animationSpec = effectsSpec) togetherWith
+                fadeOut(animationSpec = effectsSpec)
+            },
+            label = "memory-text-fade-blur",
+            modifier = Modifier.fillMaxWidth()
+        ) { targetText ->
+            val blurRadius by transition.animateFloat(
+                transitionSpec = { effectsSpec },
+                label = "memory-text-blur"
+            ) { state ->
+                if (state == EnterExitState.Visible) 0f else 8f
+            }
+
             Text(
-                text = fullText,
-                style = CronTypography.timelineRowTitle,
-                color = Color.Transparent,
-                maxLines = 10,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = displayedText,
+                text = targetText,
                 style = CronTypography.timelineRowTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 10,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (blurRadius > 0f) Modifier.blur(blurRadius.dp) else Modifier)
             )
         }
 
