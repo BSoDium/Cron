@@ -1,5 +1,10 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -33,6 +39,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.rememberCronHaptics
@@ -42,10 +49,8 @@ import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -61,7 +66,7 @@ private val ICON_EDGE_PADDING = Spacing.lg
  *  `MemoryRepository.addPending`), it renders with a shimmer placeholder in the same shape and
  *  position instead of the entry's not-yet-real text, so the row flips to real content in place
  *  rather than a separate placeholder being swapped for a second, real one. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MemoryEntryRow(
     entry: MemoryEntry,
@@ -74,21 +79,6 @@ internal fun MemoryEntryRow(
     val scope = rememberCoroutineScope()
     val haptics = rememberCronHaptics()
     var showDeleteConfirm by remember { mutableStateOf(false) }
-
-    var displayedText by remember(entry.id) { mutableStateOf(entry.text) }
-    var lastText by remember(entry.id) { mutableStateOf(entry.text) }
-
-    LaunchedEffect(entry.text, entry.id) {
-        if (entry.text != lastText && lastText.isNotEmpty()) {
-            for (len in 0..entry.text.length) {
-                displayedText = entry.text.substring(0, len)
-                delay(20.milliseconds)
-            }
-        } else {
-            displayedText = entry.text
-        }
-        lastText = entry.text
-    }
 
     LaunchedEffect(dismissState.targetValue) {
         if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) haptics.tick()
@@ -164,33 +154,55 @@ internal fun MemoryEntryRow(
                 }
             },
         ) {
-            val rowShape = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(Radius.lg))
-                .background(CronColors.elementSurface)
+            val status = when {
+                entry.pending -> "pending"
+                entry.failureReason != null -> "failed"
+                else -> "success"
+            }
+            val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+            val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+            AnimatedContent(
+                targetState = status,
+                transitionSpec = {
+                    ContentTransform(
+                        initialContentExit = fadeOut(animationSpec = effectsSpec),
+                        targetContentEnter = fadeIn(animationSpec = effectsSpec),
+                        sizeTransform = SizeTransform { _, _ -> spatialSpec }
+                    )
+                },
+                label = "memory-entry-status-transition"
+            ) { targetStatus ->
+                val rowShape = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(Radius.lg))
+                    .background(CronColors.elementSurface)
 
-            if (entry.pending) {
-                PendingMemoryEntryContent(
-                    instruction = entry.instruction,
-                    modifier = rowShape
-                )
-            } else if (entry.failureReason != null) {
-                FailedMemoryEntryContent(
-                    instruction = entry.instruction,
-                    failureReason = entry.failureReason,
-                    onDelete = onDelete,
-                    onRetry = onRetry,
-                    onAddAnyway = onAddAnyway,
-                    modifier = rowShape
-                )
-            } else {
-                SuccessMemoryEntryContent(
-                    fullText = entry.text,
-                    displayedText = displayedText,
-                    createdAt = entry.createdAt,
-                    updatedAt = entry.updatedAt,
-                    modifier = rowShape
-                )
+                when (targetStatus) {
+                    "pending" -> {
+                        PendingMemoryEntryContent(
+                            instruction = entry.instruction,
+                            modifier = rowShape
+                        )
+                    }
+                    "failed" -> {
+                        FailedMemoryEntryContent(
+                            instruction = entry.instruction,
+                            failureReason = entry.failureReason ?: "",
+                            onDelete = onDelete,
+                            onRetry = onRetry,
+                            onAddAnyway = onAddAnyway,
+                            modifier = rowShape
+                        )
+                    }
+                    else -> {
+                        SuccessMemoryEntryContent(
+                            text = entry.text,
+                            createdAt = entry.createdAt,
+                            updatedAt = entry.updatedAt,
+                            modifier = rowShape
+                        )
+                    }
+                }
             }
         }
     }

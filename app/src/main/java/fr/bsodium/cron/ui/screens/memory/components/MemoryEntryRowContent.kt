@@ -1,8 +1,12 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.SubcomposeLayout
@@ -44,6 +48,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.textShimmer
 import fr.bsodium.cron.ui.screens.home.components.rememberRelativeAgo
@@ -71,6 +76,7 @@ private fun justificationCollapsedHeight(): Dp {
  * Smoothly expands and collapses content by animating layout height using defaultSpatialSpec,
  * measuring the full height via SubcomposeLayout so text isn't reflowed during motion.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ClippedReveal(
     expanded: Boolean,
@@ -158,6 +164,7 @@ internal fun PendingMemoryEntryContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun FailedMemoryEntryContent(
     instruction: String?,
@@ -350,37 +357,42 @@ internal fun FailedMemoryEntryContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SuccessMemoryEntryContent(
-    fullText: String,
-    displayedText: String,
+    text: String,
     createdAt: Instant,
     updatedAt: Instant,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
-            .animateContentSize()
             .padding(start = Spacing.lg, end = Spacing.md, top = Spacing.md, bottom = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         horizontalAlignment = Alignment.Start,
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+        val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+
+        AnimatedContent(
+            targetState = text,
+            transitionSpec = {
+                ContentTransform(
+                    initialContentExit = fadeOut(animationSpec = effectsSpec),
+                    targetContentEnter = fadeIn(animationSpec = effectsSpec),
+                    sizeTransform = SizeTransform { _, _ -> spatialSpec }
+                )
+            },
+            label = "memory-text-fade",
+            modifier = Modifier.fillMaxWidth()
+        ) { targetText ->
             Text(
-                text = fullText,
-                style = CronTypography.timelineRowTitle,
-                color = Color.Transparent,
-                maxLines = 10,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = displayedText,
+                text = targetText,
                 style = CronTypography.timelineRowTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 10,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
         }
 
