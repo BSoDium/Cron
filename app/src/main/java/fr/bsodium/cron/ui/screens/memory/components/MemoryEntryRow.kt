@@ -156,7 +156,7 @@ internal fun MemoryEntryRow(
                 entry.failureReason != null -> "failed"
                 else -> "success"
             }
-            val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+            val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
             AnimatedContent(
                 targetState = status,
                 transitionSpec = {

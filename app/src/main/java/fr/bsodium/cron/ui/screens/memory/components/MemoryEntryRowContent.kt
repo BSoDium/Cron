@@ -371,7 +371,7 @@ internal fun SuccessMemoryEntryContent(
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         horizontalAlignment = Alignment.Start,
     ) {
-        val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+        val effectsSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
         AnimatedContent(
             targetState = text,
             transitionSpec = {
@@ -385,7 +385,7 @@ internal fun SuccessMemoryEntryContent(
                 transitionSpec = { effectsSpec },
                 label = "memory-text-blur"
             ) { state ->
-                if (state == EnterExitState.Visible) 0f else 8f
+                if (state == EnterExitState.Visible) 0f else 16f
             }
 
             Text(
