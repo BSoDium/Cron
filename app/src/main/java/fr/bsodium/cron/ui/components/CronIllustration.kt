@@ -1,15 +1,30 @@
 package fr.bsodium.cron.ui.components
 
+import android.content.res.Configuration
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.R
+import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.Spacing
 
 /**
  * A themed illustration whose palette tracks the active Material 3 color scheme.
@@ -47,7 +62,7 @@ fun CronIllustration(
     )
 }
 
-enum class CronIllustrationType(@DrawableRes internal val resourceId: Int) {
+enum class CronIllustrationType(@param:DrawableRes internal val resourceId: Int) {
     Landscape(R.drawable.illus_landscape),
     Flowers1(R.drawable.illus_flowers_1),
     Flowers2(R.drawable.illus_flowers_2),
@@ -64,3 +79,36 @@ private val SENTINEL_TERTIARY_VARIANT = Color(0xFFFF0005)
 private val SENTINEL_PAPER = Color(0xFFFF0006)
 private val SENTINEL_INK = Color(0xFFFF0007)
 private val SENTINEL_PRIMARY_VARIANT = Color(0xFFFF0008)
+
+@Preview(name = "Illustrations Library — Light", showBackground = true)
+@Preview(name = "Illustrations Library — Dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun CronIllustrationLibraryPreview() {
+    CronTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(Spacing.md),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                verticalArrangement = Arrangement.spacedBy(Spacing.lg),
+            ) {
+                items(CronIllustrationType.entries) { type ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+                    ) {
+                        CronIllustration(
+                            type = type,
+                            modifier = Modifier.size(140.dp)
+                        )
+                        Text(
+                            text = type.name,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
