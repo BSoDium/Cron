@@ -105,6 +105,7 @@ private fun ClippedReveal(
     }
 }
 
+@Suppress("AnimationPreviewNotRequired")
 @Composable
 internal fun PendingMemoryEntryContent(
     instruction: String?,
