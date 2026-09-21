@@ -30,19 +30,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import fr.bsodium.cron.permissions.SystemPermissions
 import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
+import fr.bsodium.cron.ui.components.CronIllustratedMessage
 import fr.bsodium.cron.ui.components.CronIllustration
 import fr.bsodium.cron.ui.components.CronIllustrationType
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 
 @Composable
 fun OnboardingScreen(
@@ -102,26 +100,12 @@ private fun WelcomeStep(onNext: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        CronIllustration(
+        CronIllustratedMessage(
             type = CronIllustrationType.Flower1,
-            modifier = Modifier.size(120.dp)
-        )
-        Spacer(modifier = Modifier.height(Spacing.xxl))
-        Text(
-            text = "Meet Cron",
-            style = CronTypography.bodySerif.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 24.sp,
-                lineHeight = 30.sp,
-            ),
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(Spacing.md))
-        Text(
-            text = "Cron watches your calendar and sleep patterns overnight, then wakes you at the ideal moment before your first appointment — automatically planned by Claude.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            title = "Meet Cron",
+            subtitle = "Cron watches your calendar and sleep patterns overnight, then wakes you at the ideal moment before your first appointment — automatically planned by Claude.",
+            illustrationSize = 120.dp,
+            subtitleStyle = MaterialTheme.typography.bodyLarge,
         )
         Spacer(modifier = Modifier.height(Spacing.xxxl + Spacing.sm))
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
@@ -184,11 +168,7 @@ private fun ApiKeyStep(
         Spacer(modifier = Modifier.height(Spacing.xxl))
         Text(
             text = "Anthropic API key",
-            style = CronTypography.bodySerif.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 24.sp,
-                lineHeight = 30.sp,
-            ),
+            style = CronTypography.illustratedTitle,
         )
         Spacer(modifier = Modifier.height(Spacing.md))
         Text(
@@ -375,26 +355,12 @@ private fun DoneStep(onFinish: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        CronIllustration(
+        CronIllustratedMessage(
             type = CronIllustrationType.Flower2,
-            modifier = Modifier.size(160.dp)
-        )
-        Spacer(modifier = Modifier.height(Spacing.xxl))
-        Text(
-            text = "You're all set",
-            style = CronTypography.bodySerif.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 24.sp,
-                lineHeight = 30.sp,
-            ),
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(Spacing.md))
-        Text(
-            text = "Cron will plan your first alarm tonight. You'll see the session status on the home screen.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            title = "You're all set",
+            subtitle = "Cron will plan your first alarm tonight. You'll see the session status on the home screen.",
+            illustrationSize = 160.dp,
+            subtitleStyle = MaterialTheme.typography.bodyLarge,
         )
         Spacer(modifier = Modifier.height(Spacing.xxxl + Spacing.sm))
         Button(onClick = onFinish, modifier = Modifier.fillMaxWidth()) {

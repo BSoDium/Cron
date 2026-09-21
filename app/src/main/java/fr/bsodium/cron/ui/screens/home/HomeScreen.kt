@@ -80,6 +80,11 @@ private const val EMPTY_STATE_DATE_LABEL = "No alarm is set"
 // Matches SettingsNavGraph's PUSH_MS/EaseOutCubic push — see docs/expressive.md § Sanctioned exceptions.
 private const val PLAN_DETAIL_ENTER_MS = 240
 
+// This Box's own bottom edge already excludes Spacing.navBarClearance (reserved for the floating
+// nav pill below), so bias 0 still reads top-heavy: the eye counts that reserved strip as part of
+// the gap under the subtitle. This bias cancels it out — measured pixel-equal top/bottom margins.
+private val ONBOARDING_HINT_BIAS = BiasAlignment(0f, 0.3f)
+
 /** What the home body should show — kept coarse (not the thread content) so it only crossfades on a
  *  real state change, never on each streaming update. */
 private enum class HomePhase { Loading, Idle, Plan }
@@ -404,7 +409,7 @@ internal fun HomeIdleContent(
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.xl),
-            contentAlignment = BiasAlignment(0f, -0.4f),
+            contentAlignment = ONBOARDING_HINT_BIAS,
         ) {
             OnboardingHint()
         }

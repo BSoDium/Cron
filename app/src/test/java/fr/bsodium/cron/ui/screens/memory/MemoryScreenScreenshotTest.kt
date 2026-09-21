@@ -3,13 +3,14 @@ package fr.bsodium.cron.ui.screens.memory
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import com.github.takahirom.roborazzi.captureRoboImage
+import fr.bsodium.cron.FabRegistry
+import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.theme.CronTheme
 import kotlinx.datetime.Clock
@@ -140,9 +141,13 @@ class MemoryScreenScreenshotTest {
     }
 
     /** Tapping the collapsed FAB must fade in the full-screen composer, dimming the list to the
-     *  page background underneath rather than leaving it visible. */
+     *  page background underneath rather than leaving it visible. The FAB itself lives outside this
+     *  screen (nav bar or split FAB, depending on compact mode) — [MemoryContent] only registers its
+     *  action with [FabRegistry], so the test triggers that registered action directly instead of
+     *  rendering a fake on-screen FAB just for the click. */
     @Test
     fun tapping_fab_expands_to_full_screen_composer() {
+        val fabRegistry = FabRegistry()
         composeTestRule.setContent {
             CronTheme {
                 MemoryContent(
@@ -153,10 +158,13 @@ class MemoryScreenScreenshotTest {
                     onDelete = {},
                     onRetry = {},
                     onAddAnyway = {},
+                    fabRegistry = fabRegistry,
                 )
             }
         }
-        composeTestRule.onNodeWithContentDescription("Tell Cron something to remember").performClick()
+        composeTestRule.runOnIdle {
+            fabRegistry.actionFor(ROUTE_MEMORY)?.onClick?.invoke()
+        }
         composeTestRule.waitForIdle()
         composeTestRule.onRoot().captureRoboImage()
     }

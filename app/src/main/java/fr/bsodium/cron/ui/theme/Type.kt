@@ -172,6 +172,13 @@ object CronTypography {
         lineHeight = 26.sp,
     )
 
+    /** Heading under a [fr.bsodium.cron.ui.components.CronIllustration] — empty states, onboarding steps. */
+    val illustratedTitle: TextStyle = bodySerif.copy(
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 24.sp,
+        lineHeight = 30.sp,
+    )
+
     /** Code label — AI tool-call name chips and their result labels (Martian Mono). */
     val labelMono: TextStyle = TextStyle(
         fontFamily = CodeFontFamily,
