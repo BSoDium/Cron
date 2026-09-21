@@ -14,11 +14,12 @@ import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.Spacing
 
 private val IllustrationSize = 200.dp
-private val TextMaxWidth = 240.dp
 
-// The page title above pulls the eye up, so dead center (bias 0) still reads as too high — nudge
-// down a little; smaller than Home's onboarding hint since there's no card competing for weight.
-private val VerticalBias = BiasAlignment(0f, 0.12f)
+// This Box's own bottom edge already excludes Spacing.navBarClearance (reserved for the floating
+// nav pill below), so bias 0 still reads top-heavy: the eye counts that reserved strip as part of
+// the gap under the subtitle. This bias cancels it out — measured pixel-equal top/bottom margins
+// at the default (no-permission-banner) empty state.
+private val VerticalBias = BiasAlignment(0f, 0.28f)
 
 /**
  * Empty state for the Memory screen when no entries have been created yet.
@@ -38,7 +39,6 @@ internal fun MemoryEmptyState(
             title = "Your memories are empty",
             subtitle = "Tell Cron something to remember and it will appear here.",
             illustrationSize = IllustrationSize,
-            textMaxWidth = TextMaxWidth,
         )
     }
 }

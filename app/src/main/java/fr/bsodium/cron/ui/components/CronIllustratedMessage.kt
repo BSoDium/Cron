@@ -23,8 +23,16 @@ import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
+import fr.bsodium.cron.ui.theme.TightTextStyle
 
 private val DefaultIllustrationSize = 200.dp
+
+// Standardized text-width-to-illustration-width ratio, so the copy always reads as tailored to
+// the art above it rather than stretching full-width — tune this one value, every call site follows.
+// Floored at MinTextWidth so a small illustration (WelcomeStep's 120dp) doesn't force a long
+// subtitle into a narrow, ransom-note wrap.
+private const val TEXT_WIDTH_RATIO = 1.2f
+private val MinTextWidth = 220.dp
 
 /**
  * Illustration, serif heading, supporting line — the shared layout behind empty states and
@@ -38,7 +46,7 @@ fun CronIllustratedMessage(
     subtitle: String,
     modifier: Modifier = Modifier,
     illustrationSize: Dp = DefaultIllustrationSize,
-    textMaxWidth: Dp = Dp.Unspecified,
+    textMaxWidth: Dp = (illustrationSize * TEXT_WIDTH_RATIO).coerceAtLeast(MinTextWidth),
     subtitleStyle: TextStyle = MaterialTheme.typography.bodyMedium,
     titleColor: Color = MaterialTheme.colorScheme.onBackground,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -52,7 +60,9 @@ fun CronIllustratedMessage(
         Spacer(Modifier.height(Spacing.xxl))
         Text(
             text = title,
-            style = CronTypography.illustratedTitle,
+            // Merge tight leading so the illustration/title gap is only Spacing.xxl, not that
+            // plus the font's own invisible top padding — see TightTextStyle's KDoc.
+            style = CronTypography.illustratedTitle.merge(TightTextStyle),
             color = titleColor,
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = textMaxWidth),
@@ -60,7 +70,9 @@ fun CronIllustratedMessage(
         Spacer(Modifier.height(Spacing.md))
         Text(
             text = subtitle,
-            style = subtitleStyle,
+            // Same here: without this, the subtitle's bottom leading makes the gap below it read
+            // wider than the (font-padding-free) gap above the illustration, even at bias 0.
+            style = subtitleStyle.merge(TightTextStyle),
             color = subtitleColor,
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = textMaxWidth),
@@ -79,7 +91,6 @@ private fun CronIllustratedMessagePreview() {
                 type = CronIllustrationType.Flowers1,
                 title = "Your memories are empty",
                 subtitle = "Tell Cron something to remember and it will appear here.",
-                textMaxWidth = 240.dp,
                 modifier = Modifier.padding(Spacing.xxl),
             )
         }
