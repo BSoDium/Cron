@@ -1,5 +1,8 @@
 package fr.bsodium.cron.ui.screens.memory
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -33,6 +37,7 @@ import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.FabAction
 import fr.bsodium.cron.ui.components.PageAppBar
+import fr.bsodium.cron.ui.components.PrimaryActionFab
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEmptyState
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
@@ -180,6 +185,29 @@ internal fun MemoryContent(
                             }
                     }
                 }
+            }
+        }
+
+        // Standalone previews and screenshot tests do not provide the app-level FAB host.
+        if (fabRegistry == null) {
+            AnimatedVisibility(
+                visible = !composerExpanded,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = navInsetBottom + Spacing.navBarClearance),
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                label = "memory-fab-visibility",
+            ) {
+                PrimaryActionFab(
+                    FabAction(
+                        onClick = { composerExpanded = true },
+                        label = "Remember",
+                        icon = MaterialSymbol.HistoryEdu,
+                        filled = false,
+                        tooltipLabel = "Tell Cron something to remember",
+                    )
+                )
             }
         }
 
