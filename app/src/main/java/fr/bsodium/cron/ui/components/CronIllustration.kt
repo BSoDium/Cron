@@ -17,7 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,31 +41,24 @@ fun CronIllustration(
     
     val illustration = remember(source, scheme) {
         source.rethemed { name, original ->
-            when {
-                // High Emphasis / Bold Roles
-                name == "primary" || name == "flower-center" || name == "flower-pistil" ||
-                name == "sun" || name == "eye" -> scheme.primary
+            when (name) {
+                // Category 1: Hero Elements (Vibrant & Specific Hues)
+                // Use Container tokens for fill colors to ensure lower luminance in dark mode.
+                "hero-primary" -> lerp(scheme.primaryContainer, original, 0.15f)
+                "hero-secondary" -> lerp(scheme.secondaryContainer, original, 0.15f)
+                "hero-tertiary" -> lerp(scheme.tertiaryContainer, original, 0.15f)
 
-                // Mid-Tone / Softer Containers
-                name == "primary_soft" || name == "flower-petal" || name == "water-dark" ||
-                name == "eyelid" || name == "upper-lip" || name == "lower-lip" -> scheme.primaryContainer
+                // Category 2: Structural and Contextual Elements (Neutrals & Shadows)
+                // Preserves form while receding into the background with low alpha.
+                "structural" -> scheme.onSurfaceVariant.copy(alpha = 0.5f)
 
-                // Secondary Palette (Structure & Features)
-                name == "secondary" || name == "jar" || name == "nose" || name == "eyebrow" ||
-                name == "flower-outline" || name.endsWith("-stem") -> scheme.secondary
+                // Category 3: Specific Environmental Elements
+                // Receding, background-oriented tones for sky/clouds.
+                "environmental" -> lerp(scheme.surfaceContainerHigh, scheme.surfaceVariant, 0.3f)
 
-                // Light Accents
-                name == "secondary_soft" || name == "water-light" -> scheme.secondaryContainer
-
-                // Tertiary Palette (Natural elements / Accents)
-                name == "tertiary" || name == "flower-leaf" || name == "flower-stem" -> scheme.tertiary
-
-                // Outlines & Contrast
-                name == "ink" || name == "face-line"  -> scheme.onSurface
-
-                // Background-ish / Subtle
-                name == "surface" || name == "cloud" || name == "jar-opening" ||
-                name == "flower-highlight" -> scheme.surfaceVariant
+                // High Contrast / Detail
+                "ink" -> scheme.onSurface
+                "surface" -> scheme.surface
 
                 else -> original
             }
