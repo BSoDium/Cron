@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.graphicsLayer
  * @param baseColor Exact default/resting color of the text glyphs.
  * @param highlightColor Exact color of the sweeping highlight across the glyphs.
  */
+@Suppress("AnimationPreviewNotRequired")
 @Composable
 fun Modifier.textShimmer(
     durationMillis: Int = 1600,
