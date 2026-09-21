@@ -43,17 +43,20 @@ fun CronIllustration(
         source.rethemed { name, original ->
             when (name) {
                 // Category 1: Hero Elements (Vibrant & Specific Hues)
-                // Use Container tokens for fill colors to ensure lower luminance in dark mode.
+                // Highlights: Use full tokens for small elements that must "pop"
+                "highlight-primary" -> lerp(scheme.primary, original, 0.1f)
+                "highlight-secondary" -> lerp(scheme.secondary, original, 0.1f)
+                "highlight-tertiary" -> lerp(scheme.tertiary, original, 0.1f)
+
+                // Fills: Use Container tokens for large fields to maintain hue with lower luminance.
                 "hero-primary" -> lerp(scheme.primaryContainer, original, 0.15f)
                 "hero-secondary" -> lerp(scheme.secondaryContainer, original, 0.15f)
                 "hero-tertiary" -> lerp(scheme.tertiaryContainer, original, 0.15f)
 
                 // Category 2: Structural and Contextual Elements (Neutrals & Shadows)
-                // Preserves form while receding into the background with low alpha.
                 "structural" -> scheme.onSurfaceVariant.copy(alpha = 0.5f)
 
                 // Category 3: Specific Environmental Elements
-                // Receding, background-oriented tones for sky/clouds.
                 "environmental" -> lerp(scheme.surfaceContainerHigh, scheme.surfaceVariant, 0.3f)
 
                 // High Contrast / Detail
@@ -79,6 +82,7 @@ enum class CronIllustrationType(@param:DrawableRes internal val resourceId: Int)
     Flower1(R.drawable.illus_flower_1),
     Flower2(R.drawable.illus_flower_2),
     Face(R.drawable.illus_face),
+    Abstract(R.drawable.illus_abstract),
 }
 
 @Preview(name = "Illustrations Library — Light", showBackground = true)
