@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -35,10 +36,8 @@ import fr.bsodium.cron.FabRegistry
 import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.FabAction
-import fr.bsodium.cron.ui.components.FabChevronSlot
 import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.components.PrimaryActionFab
-import fr.bsodium.cron.ui.components.SplitActionFab
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEmptyState
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
@@ -61,9 +60,7 @@ import java.util.Locale
 fun MemoryScreen(
     viewModel: MemoryViewModel,
     fabRegistry: FabRegistry,
-    useCompactNav: Boolean,
     modifier: Modifier = Modifier,
-    fabChevron: FabChevronSlot? = null,
     onComposerExpandedChange: (Boolean) -> Unit = {},
 ) {
     val entries by viewModel.entries.collectAsState()
@@ -78,8 +75,6 @@ fun MemoryScreen(
         onRetry = viewModel::retryEntry,
         onAddAnyway = viewModel::addAnyway,
         fabRegistry = fabRegistry,
-        useCompactNav = useCompactNav,
-        fabChevron = fabChevron,
         onComposerExpandedChange = onComposerExpandedChange,
         modifier = modifier,
     )
@@ -97,8 +92,6 @@ internal fun MemoryContent(
     onRetry: (Long) -> Unit = {},
     onAddAnyway: (Long) -> Unit = {},
     fabRegistry: FabRegistry? = null,
-    useCompactNav: Boolean = false,
-    fabChevron: FabChevronSlot? = null,
     onComposerExpandedChange: (Boolean) -> Unit = {},
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
@@ -196,7 +189,7 @@ internal fun MemoryContent(
         }
 
         // Standalone previews and screenshot tests do not provide the app-level FAB host.
-        if (!useCompactNav && fabRegistry == null) {
+        if (fabRegistry == null) {
             AnimatedVisibility(
                 visible = !composerExpanded,
                 modifier = Modifier
@@ -206,16 +199,15 @@ internal fun MemoryContent(
                 exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
                 label = "memory-fab-visibility",
             ) {
-                val action = FabAction(
-                    onClick = { composerExpanded = true },
-                    label = "Remember",
-                    splitLabel = "Remember",
-                    icon = MaterialSymbol.HistoryEdu,
-                    filled = false,
-                    tooltipLabel = "Tell Cron something to remember",
+                PrimaryActionFab(
+                    FabAction(
+                        onClick = { composerExpanded = true },
+                        label = "Remember",
+                        icon = MaterialSymbol.HistoryEdu,
+                        filled = false,
+                        tooltipLabel = "Tell Cron something to remember",
+                    )
                 )
-                if (fabChevron != null) SplitActionFab(action, fabChevron)
-                else PrimaryActionFab(action)
             }
         }
 

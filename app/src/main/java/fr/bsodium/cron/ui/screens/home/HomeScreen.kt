@@ -363,7 +363,7 @@ private fun HomeRootContent(
 
 /** First-run / no-plan / loading layout: greeting, the alarm card, and the onboarding hint. */
 @Composable
-private fun HomeIdleContent(
+internal fun HomeIdleContent(
     uiState: HomeUiState,
     statusInsetTop: Dp,
     navInsetBottom: Dp,

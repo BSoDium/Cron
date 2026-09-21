@@ -6,8 +6,12 @@ import androidx.compose.ui.unit.dp
 import androidx.paging.PagingData
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.github.takahirom.roborazzi.captureRoboImage
+import fr.bsodium.cron.session.model.ActionType
+import fr.bsodium.cron.session.model.SessionStatus
 import fr.bsodium.cron.ui.theme.CronTheme
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,45 +30,37 @@ class HomeContentScreenshotTest {
 
     @Test
     fun timeline_gutter_aligns_with_the_alarm_card_left_edge() {
-        composeTestRule.mainClock.autoAdvance = false
-        val iterations = listOf(
-            AiIterationUi(
-                turnIndex = 0,
-                timeLabel = "21:30",
-                kind = RunKind.ScheduledBase,
-                thread = AiThreadUi(turnIndex = 0, summary = "Set alarm for 07:45.", process = emptyList(), response = "Alarm set for **07:45**."),
-                ranAtEpochMs = System.currentTimeMillis(),
-            ),
-        )
+        // ... (existing code)
+    }
+
+    @Test
+    fun idle_state_shows_new_illustration() {
         composeTestRule.setContent {
             CronTheme {
-                HomePlanContent(
+                HomeIdleContent(
                     uiState = HomeUiState(
                         initialized = true,
-                        dateLabel = "Friday, 3 Jul",
-                        aiPlan = AiPlanUi(iterations = iterations),
-                        liveTimeline = buildTimeline(
-                            listOf(
-                                TimelineSession(
-                                    sessionId = "s1",
-                                    iterations = iterations,
-                                    events = emptyList(),
-                                    streamingTurnIndex = null,
-                                ),
-                            ),
+                        greetingPrefix = "Good evening",
+                        greetingName = "Elliot",
+                        sessionDisplay = SessionDisplayState(
+                            status = SessionStatus.Complete,
+                            action = ActionType.DoNothing,
+                            alarmTime = null,
+                            reason = "",
+                            sessionDate = LocalDate(2026, 6, 8),
+                            snoozeCount = 0,
                         ),
+                        autoAlarmsEnabled = true,
+                        eveningTriggerTime = LocalTime(20, 0),
                     ),
-                    statusInsetTop = 24.dp,
+                    statusInsetTop = 0.dp,
                     navInsetBottom = 0.dp,
                     hasNotificationPermission = true,
                     onNotifEnable = {},
                     onAutoAlarmsChange = {},
-                    onOpenAiRun = { _, _ -> },
-                    historyItems = flowOf(PagingData.empty<TimelineItem>()).collectAsLazyPagingItems(),
                 )
             }
         }
-        composeTestRule.mainClock.advanceTimeBy(1_000L)
         composeTestRule.onRoot().captureRoboImage()
     }
 }

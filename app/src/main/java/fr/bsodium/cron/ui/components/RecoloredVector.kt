@@ -9,12 +9,9 @@ import androidx.compose.ui.graphics.vector.VectorNode
 import androidx.compose.ui.graphics.vector.VectorPath
 
 /**
- * Rebuilds this vector with every solid fill AND solid stroke remapped by [map]. Used to retint a
- * multi-color asset (the onboarding illustration, the no-plan illustration) onto the live Material You
- * `colorScheme` at the Compose layer — the app's framework `Theme.Cron` can't expose the dynamic palette
- * to the drawable via `?attr/color*`. Gradient brushes pass through unchanged; alpha/`pathData` preserved.
+ * Rebuilds this vector remapping solid colors based on the [VectorPath.name] and original color.
  */
-fun ImageVector.recolored(map: (Color) -> Color): ImageVector {
+fun ImageVector.rethemed(map: (name: String, Color) -> Color): ImageVector {
     val builder = ImageVector.Builder(
         name = name,
         defaultWidth = defaultWidth,
@@ -25,19 +22,19 @@ fun ImageVector.recolored(map: (Color) -> Color): ImageVector {
         tintBlendMode = tintBlendMode,
         autoMirror = autoMirror,
     )
-    root.forEach { builder.addNode(it, map) }
+    root.forEach { builder.addNodeSemantic(it, map) }
     return builder.build()
 }
 
-private fun ImageVector.Builder.addNode(node: VectorNode, map: (Color) -> Color) {
+private fun ImageVector.Builder.addNodeSemantic(node: VectorNode, map: (String, Color) -> Color) {
     when (node) {
         is VectorPath -> addPath(
             pathData = node.pathData,
             pathFillType = node.pathFillType,
             name = node.name,
-            fill = node.fill.remap(map),
+            fill = node.fill.remapSemantic(node.name, map),
             fillAlpha = node.fillAlpha,
-            stroke = node.stroke.remap(map),
+            stroke = node.stroke.remapSemantic(node.name, map),
             strokeAlpha = node.strokeAlpha,
             strokeLineWidth = node.strokeLineWidth,
             strokeLineCap = node.strokeLineCap,
@@ -59,11 +56,16 @@ private fun ImageVector.Builder.addNode(node: VectorNode, map: (Color) -> Color)
                 translationY = node.translationY,
                 clipPathData = node.clipPathData,
             )
-            node.forEach { addNode(it, map) }
+            node.forEach { addNodeSemantic(it, map) }
             clearGroup()
         }
     }
 }
 
-private fun Brush?.remap(map: (Color) -> Color): Brush? =
-    if (this is SolidColor) SolidColor(map(value)) else this
+private fun Brush?.remapSemantic(name: String, map: (String, Color) -> Color): Brush? =
+    if (this is SolidColor) SolidColor(map(name, value)) else this
+
+/**
+ * Rebuilds this vector with every solid fill AND solid stroke remapped by [map].
+ */
+fun ImageVector.recolored(map: (Color) -> Color): ImageVector = rethemed { _, color -> map(color) }

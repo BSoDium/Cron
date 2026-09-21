@@ -318,8 +318,6 @@ class MainActivity : ComponentActivity() {
                                     MemoryScreen(
                                         viewModel = viewModel<MemoryViewModel>(),
                                         fabRegistry = fabRegistry,
-                                        useCompactNav = useCompactNav,
-                                        fabChevron = fabChevron,
                                         onComposerExpandedChange = { memoryComposerExpanded = it },
                                     )
                                 }

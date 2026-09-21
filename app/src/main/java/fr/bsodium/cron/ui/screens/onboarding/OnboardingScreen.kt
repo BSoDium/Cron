@@ -35,12 +35,14 @@ import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import fr.bsodium.cron.permissions.SystemPermissions
 import fr.bsodium.cron.sensors.healthconnect.SleepStageReader
+import fr.bsodium.cron.ui.components.CronIllustration
+import fr.bsodium.cron.ui.components.CronIllustrationType
+import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
-
-private val WELCOME_ICON_SIZE = 72.dp
-private val DONE_ICON_SIZE = 64.dp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun OnboardingScreen(
@@ -100,19 +102,21 @@ private fun WelcomeStep(onNext: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Symbol(
-            symbol = MaterialSymbol.Alarm,
-            contentDescription = null,
-            size = WELCOME_ICON_SIZE,
-            tint = MaterialTheme.colorScheme.primary,
+        CronIllustration(
+            type = CronIllustrationType.Flower1,
+            modifier = Modifier.size(120.dp)
         )
         Spacer(modifier = Modifier.height(Spacing.xxl))
         Text(
             text = "Meet Cron",
-            style = MaterialTheme.typography.headlineLarge,
+            style = CronTypography.bodySerif.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 24.sp,
+                lineHeight = 30.sp,
+            ),
             textAlign = TextAlign.Center,
         )
-        Spacer(modifier = Modifier.height(Spacing.lg))
+        Spacer(modifier = Modifier.height(Spacing.md))
         Text(
             text = "Cron watches your calendar and sleep patterns overnight, then wakes you at the ideal moment before your first appointment — automatically planned by Claude.",
             style = MaterialTheme.typography.bodyLarge,
@@ -173,7 +177,19 @@ private fun ApiKeyStep(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Anthropic API key", style = MaterialTheme.typography.headlineSmall)
+        CronIllustration(
+            type = CronIllustrationType.Face,
+            modifier = Modifier.size(120.dp).align(Alignment.CenterHorizontally)
+        )
+        Spacer(modifier = Modifier.height(Spacing.xxl))
+        Text(
+            text = "Anthropic API key",
+            style = CronTypography.bodySerif.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 24.sp,
+                lineHeight = 30.sp,
+            ),
+        )
         Spacer(modifier = Modifier.height(Spacing.md))
         Text(
             text = "Cron uses Claude to plan your alarm. Paste your API key below — it's stored encrypted on this device and never leaves it.",
@@ -359,16 +375,18 @@ private fun DoneStep(onFinish: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Symbol(
-            symbol = MaterialSymbol.Alarm,
-            contentDescription = null,
-            size = DONE_ICON_SIZE,
-            tint = MaterialTheme.colorScheme.primary,
+        CronIllustration(
+            type = CronIllustrationType.Flower2,
+            modifier = Modifier.size(160.dp)
         )
         Spacer(modifier = Modifier.height(Spacing.xxl))
         Text(
             text = "You're all set",
-            style = MaterialTheme.typography.headlineMedium,
+            style = CronTypography.bodySerif.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 24.sp,
+                lineHeight = 30.sp,
+            ),
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(Spacing.md))
