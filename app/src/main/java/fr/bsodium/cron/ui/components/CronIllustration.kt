@@ -40,16 +40,33 @@ fun CronIllustration(
     val source = ImageVector.vectorResource(type.resourceId)
     
     val illustration = remember(source, scheme) {
-        source.recolored { original ->
-            when (original) {
-                SENTINEL_PRIMARY -> scheme.primary
-                SENTINEL_PRIMARY_VARIANT -> scheme.primaryContainer
-                SENTINEL_SECONDARY -> scheme.secondary
-                SENTINEL_SECONDARY_VARIANT -> scheme.secondaryContainer
-                SENTINEL_TERTIARY -> scheme.tertiary
-                SENTINEL_TERTIARY_VARIANT -> scheme.tertiaryContainer
-                SENTINEL_PAPER -> scheme.surfaceVariant
-                SENTINEL_INK -> scheme.onSurface
+        source.rethemed { name, original ->
+            when {
+                // High Emphasis / Bold Roles
+                name == "primary" || name == "flower-center" || name == "flower-pistil" ||
+                name == "sun" || name == "eye" -> scheme.primary
+
+                // Mid-Tone / Softer Containers
+                name == "primary_soft" || name == "flower-petal" || name == "water-dark" ||
+                name == "eyelid" || name == "upper-lip" || name == "lower-lip" -> scheme.primaryContainer
+
+                // Secondary Palette (Structure & Features)
+                name == "secondary" || name == "jar" || name == "nose" || name == "eyebrow" ||
+                name == "flower-outline" || name.endsWith("-stem") -> scheme.secondary
+
+                // Light Accents
+                name == "secondary_soft" || name == "water-light" -> scheme.secondaryContainer
+
+                // Tertiary Palette (Natural elements / Accents)
+                name == "tertiary" || name == "flower-leaf" || name == "flower-stem" -> scheme.tertiary
+
+                // Outlines & Contrast
+                name == "ink" || name == "face-line"  -> scheme.onSurface
+
+                // Background-ish / Subtle
+                name == "surface" || name == "cloud" || name == "jar-opening" ||
+                name == "flower-highlight" -> scheme.surfaceVariant
+
                 else -> original
             }
         }
@@ -70,15 +87,6 @@ enum class CronIllustrationType(@param:DrawableRes internal val resourceId: Int)
     Flower2(R.drawable.illus_flower_2),
     Face(R.drawable.illus_face),
 }
-
-private val SENTINEL_PRIMARY = Color(0xFFFF0001)
-private val SENTINEL_SECONDARY = Color(0xFFFF0002)
-private val SENTINEL_SECONDARY_VARIANT = Color(0xFFFF0003)
-private val SENTINEL_TERTIARY = Color(0xFFFF0004)
-private val SENTINEL_TERTIARY_VARIANT = Color(0xFFFF0005)
-private val SENTINEL_PAPER = Color(0xFFFF0006)
-private val SENTINEL_INK = Color(0xFFFF0007)
-private val SENTINEL_PRIMARY_VARIANT = Color(0xFFFF0008)
 
 @Preview(name = "Illustrations Library — Light", showBackground = true)
 @Preview(name = "Illustrations Library — Dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)

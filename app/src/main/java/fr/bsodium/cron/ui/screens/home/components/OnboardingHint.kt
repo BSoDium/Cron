@@ -35,21 +35,21 @@ internal fun OnboardingHint(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CronIllustration(
-            type = CronIllustrationType.Landscape,
+            type = CronIllustrationType.Flowers2,
             modifier = Modifier.size(220.dp)
         )
-        Spacer(Modifier.height(Spacing.lg))
+        Spacer(Modifier.height(Spacing.xxl))
         Text(
             text = "Let's get started",
             style = CronTypography.bodySerif.copy(
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 30.sp,
-                lineHeight = 36.sp,
+                fontSize = 24.sp,
+                lineHeight = 30.sp,
             ),
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(Spacing.sm))
+        Spacer(Modifier.height(Spacing.md))
         Text(
             text = "Cron reads your calendar and last night's sleep to pick the " +
                 "smartest wake-up time. Run it to plan your morning.",

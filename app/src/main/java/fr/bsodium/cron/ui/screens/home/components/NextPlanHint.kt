@@ -27,7 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.R
 import fr.bsodium.cron.alarm.nextEveningPlanInstant
-import fr.bsodium.cron.ui.components.recolored
+import fr.bsodium.cron.ui.components.CronIllustration
+import fr.bsodium.cron.ui.components.CronIllustrationType
 import fr.bsodium.cron.ui.theme.CronTheme
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
@@ -53,15 +54,22 @@ internal fun NextPlanHint(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        NoPlanIllustration(Modifier.size(180.dp))
-        Spacer(Modifier.height(Spacing.md))
+        CronIllustration(
+            type = CronIllustrationType.Landscape,
+            modifier = Modifier.size(180.dp)
+        )
+        Spacer(Modifier.height(Spacing.xxl))
         Text(
             text = "No plan available yet",
-            style = CronTypography.bodySerif.copy(fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 30.sp),
+            style = CronTypography.bodySerif.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 24.sp,
+                lineHeight = 30.sp,
+            ),
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(Spacing.sm))
+        Spacer(Modifier.height(Spacing.md))
         Text(
             text = nextPlanSubline(autoAlarmsEnabled, eveningTriggerTime),
             style = MaterialTheme.typography.bodyMedium,
@@ -88,60 +96,6 @@ private fun nextPlanSubline(autoAlarmsEnabled: Boolean, eveningTriggerTime: Loca
     // Locale.US for the clock readout (ASCII digits) per the LCD/clock formatting rule.
     val hhmm = String.format(Locale.US, "%02d:%02d", eveningTriggerTime.hour, eveningTriggerTime.minute)
     return "No plan available for your next alarm. The next plan will run $whenWord at $hhmm."
-}
-
-/**
- * The empty-state clock, its fixed palette retinted onto Material You across three accent hues so it tracks
- * the wallpaper instead of reading monochrome: the dial → `primary`, the background "speed wings" →
- * `tertiary` (their lighter overlay → `tertiaryContainer`), the bells + feet → `secondary`; the numbers,
- * hands, ticks and shading → `onSurface` (line-art legible in light & dark); the dial face/sheen → `surface`
- * and the ground shadow → `surfaceVariant`. `recolored` only swaps colors, preserving every path's alpha.
- */
-@Composable
-private fun NoPlanIllustration(modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    val source = ImageVector.vectorResource(R.drawable.ic_no_plan_illustration)
-    val illustration = remember(
-        source,
-        scheme.onSurface, scheme.primary, scheme.secondary, scheme.tertiary,
-        scheme.tertiaryContainer, scheme.surface, scheme.surfaceVariant,
-    ) {
-        source.recolored { original ->
-            when (original) {
-                NO_PLAN_INK, NO_PLAN_BLACK -> scheme.onSurface
-                NO_PLAN_PRIMARY -> scheme.primary
-                NO_PLAN_SECONDARY -> scheme.secondary
-                NO_PLAN_TERTIARY -> scheme.tertiary
-                NO_PLAN_TERTIARY_LIGHT -> scheme.tertiaryContainer
-                NO_PLAN_PAPER -> scheme.surface
-                NO_PLAN_GROUND -> scheme.surfaceVariant
-                else -> original // any fill outside the sentinel palette (open Color space) passes through unchanged
-            }
-        }
-    }
-    Image(imageVector = illustration, contentDescription = null, modifier = modifier)
-}
-
-/** Source fills of `ic_no_plan_illustration` (sentinel hues assigned per region), remapped onto
- *  `colorScheme` (see [recolored]). */
-private val NO_PLAN_INK = Color(0xFF263238)
-private val NO_PLAN_BLACK = Color(0xFF000000)
-private val NO_PLAN_PRIMARY = Color(0xFF407BFF)
-private val NO_PLAN_SECONDARY = Color(0xFFEE3377)
-private val NO_PLAN_TERTIARY = Color(0xFF11AA99)
-private val NO_PLAN_TERTIARY_LIGHT = Color(0xFF66E0D0)
-private val NO_PLAN_PAPER = Color(0xFFFFFFFF)
-private val NO_PLAN_GROUND = Color(0xFFF5F5F5)
-
-@Preview(showBackground = true, name = "No-plan illustration — light")
-@Preview(showBackground = true, name = "No-plan illustration — dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-private fun NoPlanIllustrationPreview() {
-    CronTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            NoPlanIllustration(Modifier.padding(Spacing.xl).size(220.dp))
-        }
-    }
 }
 
 @Preview(showBackground = true, name = "Next plan — auto on")
