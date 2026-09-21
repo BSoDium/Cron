@@ -404,7 +404,7 @@ internal fun HomeIdleContent(
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.xl),
-            contentAlignment = BiasAlignment(0f, -0.4f),
+            contentAlignment = BiasAlignment(0f, 0f),
         ) {
             OnboardingHint()
         }

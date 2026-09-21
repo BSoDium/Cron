@@ -1,11 +1,10 @@
 package fr.bsodium.cron.ui.screens.memory.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -17,6 +16,10 @@ import fr.bsodium.cron.ui.theme.Spacing
 private val IllustrationSize = 200.dp
 private val TextMaxWidth = 240.dp
 
+// The page title above pulls the eye up, so dead center (bias 0) still reads as too high — nudge
+// down a little; smaller than Home's onboarding hint since there's no card competing for weight.
+private val VerticalBias = BiasAlignment(0f, 0.12f)
+
 /**
  * Empty state for the Memory screen when no entries have been created yet.
  */
@@ -24,12 +27,11 @@ private val TextMaxWidth = 240.dp
 internal fun MemoryEmptyState(
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = Spacing.xxl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        contentAlignment = VerticalBias,
     ) {
         CronIllustratedMessage(
             type = CronIllustrationType.Flowers1,
