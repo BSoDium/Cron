@@ -49,6 +49,25 @@ class MemoryScreenScreenshotTest {
                 MemoryContent(
                     entries = sampleEntries,
                     isMutating = false,
+                    isLoading = false,
+                    onSend = {},
+                    onDelete = {},
+                    onRetry = {},
+                    onAddAnyway = {},
+                )
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
+    @Test
+    fun loading_state() {
+        composeTestRule.setContent {
+            CronTheme {
+                MemoryContent(
+                    entries = emptyList(),
+                    isMutating = false,
+                    isLoading = true,
                     onSend = {},
                     onDelete = {},
                     onRetry = {},
@@ -66,6 +85,7 @@ class MemoryScreenScreenshotTest {
                 MemoryContent(
                     entries = emptyList(),
                     isMutating = false,
+                    isLoading = false,
                     onSend = {},
                     onDelete = {},
                     onRetry = {},
@@ -84,6 +104,7 @@ class MemoryScreenScreenshotTest {
                 MemoryContent(
                     entries = entriesWithPending,
                     isMutating = true,
+                    isLoading = false,
                     onSend = {},
                     onDelete = {},
                     onRetry = {},
@@ -103,6 +124,7 @@ class MemoryScreenScreenshotTest {
                 MemoryContent(
                     entries = sampleEntries,
                     isMutating = false,
+                    isLoading = false,
                     onSend = {},
                     onDelete = {},
                     onRetry = {},
@@ -126,6 +148,7 @@ class MemoryScreenScreenshotTest {
                 MemoryContent(
                     entries = sampleEntries,
                     isMutating = false,
+                    isLoading = false,
                     onSend = {},
                     onDelete = {},
                     onRetry = {},
@@ -147,6 +170,7 @@ class MemoryScreenScreenshotTest {
                 MemoryContent(
                     entries = sampleEntries,
                     isMutating = false,
+                    isLoading = false,
                     onSend = {},
                     onDelete = {},
                     onRetry = {},
@@ -184,6 +208,7 @@ class MemoryScreenScreenshotTest {
                 MemoryContent(
                     entries = entriesWithFailure,
                     isMutating = false,
+                    isLoading = false,
                     onSend = {},
                     onDelete = {},
                     onAddAnyway = { addAnywayClicked = true }
