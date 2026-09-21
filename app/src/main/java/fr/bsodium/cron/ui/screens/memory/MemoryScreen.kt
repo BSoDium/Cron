@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.memory
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -128,24 +129,30 @@ internal fun MemoryContent(
                 )
             },
         ) { inner ->
-            Box(
+            val viewState = when {
+                isLoading -> MemoryViewState.Loading
+                entries.isEmpty() && !isMutating -> MemoryViewState.Empty
+                else -> MemoryViewState.Content
+            }
+            Crossfade(
+                targetState = viewState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(
                         top = inner.calculateTopPadding(),
                         bottom = navInsetBottom + Spacing.navBarClearance,
-                    )
-            ) {
-                if (isLoading) {
-                    MemorySkeleton(
+                    ),
+                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                label = "memory-view-state-crossfade",
+            ) { state ->
+                when (state) {
+                    MemoryViewState.Loading -> MemorySkeleton(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
                     )
-                } else if (entries.isEmpty() && !isMutating) {
-                    MemoryEmptyState()
-                } else {
-                    LazyColumn(
+                    MemoryViewState.Empty -> MemoryEmptyState()
+                    MemoryViewState.Content -> LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = Spacing.lg,
@@ -198,6 +205,8 @@ internal fun MemoryContent(
 }
 
 private const val UNCATEGORISED = "Uncategorised"
+
+private enum class MemoryViewState { Loading, Empty, Content }
 
 @Composable
 private fun SectionHeader(
