@@ -14,6 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -36,45 +40,57 @@ private val ROW_VERTICAL_PADDING = Spacing.md
  *  instead of needing to measure the row stack it sits behind. */
 private val ROW_HEIGHT = ROW_VERTICAL_PADDING + INTERIOR_ANCHOR_SIZE
 
-/** How many trailing rows taper toward transparent, capped so a short stack (e.g. the 2-row append
- *  placeholder) doesn't fade from its very first row. */
-private const val MAX_FADE_TAIL_ROWS = 3
+/** Extra track length, in [ROW_HEIGHT] units, appended past the last real row — purely empty space
+ *  with no row content, so the placeholder rows themselves stay fully legible and only the bare track
+ *  trails off into it. This is what sells "more timeline, not loaded yet" rather than fading the
+ *  content the user is meant to actually read. */
+private const val TRAILING_FADE_ROW_UNITS = 2.5f
 
 /**
  * A skeleton loader for the Home timeline's row list — [rowCount] pulsing placeholders shaped like
  * [TimelineNode]'s real row (gutter, anchor socket, title, trailing time), with a static track spine
  * behind them mirroring [TimelineTrackOverlay]. Every shape pulses via the shared
  * [fr.bsodium.cron.ui.components.skeletonPulse], staggered top-to-bottom so the stack reads as one
- * wave rather than a single flat blink. The last few rows taper toward transparent, so the stack
- * reads as trailing off into data that hasn't arrived yet rather than a hard-edged block — used both
- * for the timeline's own initial load and, at a smaller [rowCount], as the trailing placeholder while
- * Paging fetches the next page of history during a scroll.
+ * wave rather than a single flat blink. The track itself runs [TRAILING_FADE_ROW_UNITS] rows past the
+ * last placeholder and fades to fully transparent over that stretch, so the stack reads as trailing
+ * off into data that hasn't arrived yet rather than stopping at a hard edge — used both for the
+ * timeline's own initial load and, at a smaller [rowCount], as the trailing placeholder while Paging
+ * fetches the next page of history during a scroll.
  */
 @Composable
 internal fun TimelineRowsSkeleton(rowCount: Int, modifier: Modifier = Modifier) {
-    val fadeTailRows = minOf(MAX_FADE_TAIL_ROWS, rowCount - 1).coerceAtLeast(0)
+    val rowsHeight = ROW_HEIGHT * rowCount
+    val totalTrackHeight = rowsHeight + ROW_HEIGHT * TRAILING_FADE_ROW_UNITS
+    val fadeStartFraction = rowsHeight / totalTrackHeight
     Box(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = (NODE_GUTTER - TRACK_WIDTH) / 2)
                 .width(TRACK_WIDTH)
-                .height(ROW_HEIGHT * rowCount)
+                .height(totalTrackHeight)
                 .clip(Radius.full)
-                .skeletonPulse(staggerIndex = 0),
+                .skeletonPulse(staggerIndex = 0)
+                // Forces an offscreen compositing layer so the DstIn mask below applies to the
+                // track's already-drawn pixels, not just this Box's own background (see
+                // ui/components/TextShimmer.kt for the same pattern).
+                .graphicsLayer { alpha = 0.99f }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            fadeStartFraction to Color.Black,
+                            1f to Color.Transparent,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
         )
         Column(modifier = Modifier.fillMaxWidth()) {
             repeat(rowCount) { index ->
-                val rowsFromEnd = rowCount - index
-                val rowAlpha = if (fadeTailRows > 0 && rowsFromEnd <= fadeTailRows) {
-                    rowsFromEnd.toFloat() / (fadeTailRows + 1)
-                } else {
-                    1f
-                }
                 TimelineSkeletonRow(
                     staggerIndex = index,
                     titleWidthFraction = TITLE_WIDTH_FRACTIONS[index % TITLE_WIDTH_FRACTIONS.size],
-                    modifier = Modifier.graphicsLayer { alpha = rowAlpha },
                 )
             }
         }
