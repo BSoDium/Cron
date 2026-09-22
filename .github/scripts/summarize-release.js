@@ -57,6 +57,11 @@ module.exports = async ({ github, context, core }) => {
     return;
   }
 
+  if (process.env.APPLY !== 'true') {
+    core.info(`Dry run (APPLY not set) — generated summary for ${tag}, not writing it back:\n\n${summary}`);
+    return;
+  }
+
   const newBody = `${summary}\n\n<details>\n<summary>Full changelog</summary>\n\n${release.body}\n\n</details>`;
 
   await github.rest.repos.updateRelease({
