@@ -56,7 +56,10 @@ private fun CategoryHeaderSkeleton(
             .height(16.dp)
             .clip(Radius.full)
             // See docs/compose-gotchas.md — textShimmer() and blend-mode layer isolation.
-            .textShimmer()
+            .textShimmer(
+                baseColor = MaterialTheme.colorScheme.surfaceContainer,
+                highlightColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            )
             .background(MaterialTheme.colorScheme.surfaceVariant)
     )
 }
@@ -70,7 +73,10 @@ private fun MemoryEntrySkeleton(
             .fillMaxWidth()
             .height(entryCardHeight)
             .clip(RoundedCornerShape(Radius.lg))
-            .textShimmer()
+            .textShimmer(
+                baseColor = MaterialTheme.colorScheme.surfaceContainer,
+                highlightColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            )
             .background(MaterialTheme.colorScheme.surfaceVariant)
     )
 }
