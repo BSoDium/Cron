@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.settings.components.DisplayNameRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 
 @Composable
@@ -67,7 +67,7 @@ fun AccountSettingsScreen(
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun AccountSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         AccountSettingsScreen(
             displayName = "Elliot",
             hasApiKey = true,

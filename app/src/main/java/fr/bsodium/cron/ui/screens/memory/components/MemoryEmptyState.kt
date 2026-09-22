@@ -10,7 +10,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.CronIllustratedMessage
 import fr.bsodium.cron.ui.components.CronIllustrationType
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 
 private val IllustrationSize = 200.dp
@@ -46,7 +46,7 @@ internal fun MemoryEmptyState(
 @Preview(showBackground = true)
 @Composable
 private fun MemoryEmptyStatePreview() {
-    CronTheme {
+    CronPreview {
         MemoryEmptyState()
     }
 }

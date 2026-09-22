@@ -35,4 +35,4 @@ Pitfalls that have caused bugs or broken builds in this repo. Read before writin
 
 ## Previews
 
-- Provide a `@Preview` for any non-trivial or reusable composable — **mandatory for important components** (cards, the nav/FAB, the thinking thread, each screen's key pieces). Keep the preview `private`, wrap it in `CronTheme`, and feed representative sample data so it renders without a device. A component you can't preview without real DB/network data is a sign its rendering should be split from its data-loading.
+- Provide a `@Preview` for any non-trivial or reusable composable — **mandatory for important components** (cards, the nav/FAB, the thinking thread, each screen's key pieces). Keep the preview `private`, wrap it in `CronPreview` (not bare `CronTheme`; see `docs/preview-quirks.md`), and feed representative sample data so it renders without a device. A component you can't preview without real DB/network data is a sign its rendering should be split from its data-loading.

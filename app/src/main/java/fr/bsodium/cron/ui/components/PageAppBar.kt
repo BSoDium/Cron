@@ -23,7 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Symbol
@@ -113,7 +113,7 @@ fun PageAppBar(
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun PageAppBarPreview() {
-    CronTheme {
+    CronPreview {
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -128,7 +128,7 @@ private fun PageAppBarPreview() {
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun PageAppBarWithBackPreview() {
-    CronTheme {
+    CronPreview {
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -143,7 +143,7 @@ private fun PageAppBarWithBackPreview() {
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun PageAppBarWithSubtitlePreview() {
-    CronTheme {
+    CronPreview {
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         Scaffold(
             modifier = Modifier.fillMaxSize(),

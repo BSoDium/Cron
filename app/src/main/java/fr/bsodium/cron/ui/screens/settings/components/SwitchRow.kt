@@ -13,7 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.components.rememberCronHaptics
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 
 /** A title/subtitle row with a trailing [Switch] for a boolean preference. */
@@ -50,7 +50,7 @@ internal fun SwitchRow(
 @Preview(showBackground = true, widthDp = 412, fontScale = 1.0f)
 @Composable
 private fun SwitchRowPreview() {
-    CronTheme {
+    CronPreview {
         SwitchRow(
             title = "Haptic feedback",
             subtitle = "Subtle ticks while the assistant writes",

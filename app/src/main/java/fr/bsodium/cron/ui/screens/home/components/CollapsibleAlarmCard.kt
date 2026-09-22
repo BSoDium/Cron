@@ -15,7 +15,7 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.CountdownFontFamily
 import fr.bsodium.cron.ui.theme.Radius
@@ -161,7 +161,7 @@ internal fun CollapsibleAlarmCard(
 @Preview(showBackground = true, name = "Collapsed")
 @Composable
 private fun CollapsedAlarmCardPreview() {
-    CronTheme {
+    CronPreview {
         Box(modifier = Modifier.padding(Spacing.md)) {
             CollapsibleAlarmCard(
                 dateLabel = "Saturday 6",
@@ -178,7 +178,7 @@ private fun CollapsedAlarmCardPreview() {
 @Preview(showBackground = true, name = "Collapse scrub")
 @Composable
 private fun CollapsibleAlarmCardPreview() {
-    CronTheme {
+    CronPreview {
         Column(
             modifier = Modifier.padding(Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),

@@ -27,7 +27,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.BuildConfig
 import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.screens.settings.components.SettingsCategoryRow
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -176,7 +176,7 @@ private fun groupItemShape(isFirst: Boolean, isLast: Boolean): RoundedCornerShap
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun SettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         SettingsScreen(onOpenCategory = {})
     }
 }

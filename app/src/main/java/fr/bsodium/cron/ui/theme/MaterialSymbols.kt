@@ -287,7 +287,7 @@ fun Symbol(
 @Preview(showBackground = true, name = "Material Symbols — outlined")
 @Composable
 private fun SymbolGalleryOutlinedPreview() {
-    CronTheme {
+    CronPreview {
         FlowRow(
             modifier = Modifier.padding(Spacing.lg),
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
@@ -304,7 +304,7 @@ private fun SymbolGalleryOutlinedPreview() {
 @Preview(showBackground = true, name = "Material Symbols — filled + bold")
 @Composable
 private fun SymbolGalleryFilledPreview() {
-    CronTheme {
+    CronPreview {
         FlowRow(
             modifier = Modifier.padding(Spacing.lg),
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
@@ -328,7 +328,7 @@ private fun SymbolGalleryFilledPreview() {
 @Preview(showBackground = true, name = "Material Symbols — sharp")
 @Composable
 private fun SymbolGallerySharpPreview() {
-    CronTheme {
+    CronPreview {
         CompositionLocalProvider(LocalSymbolFamily provides SymbolFamily.Sharp) {
             FlowRow(
                 modifier = Modifier.padding(Spacing.lg),

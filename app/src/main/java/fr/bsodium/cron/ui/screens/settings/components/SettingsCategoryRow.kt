@@ -21,7 +21,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -95,7 +95,7 @@ internal fun SettingsCategoryRow(
 @Preview(showBackground = true, widthDp = 412, fontScale = 1.0f)
 @Composable
 private fun SettingsCategoryRowPreview() {
-    CronTheme {
+    CronPreview {
         SettingsCategoryRow(
             icon = MaterialSymbol.Schedule,
             title = "Schedule",

@@ -10,7 +10,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.CronIllustratedMessage
 import fr.bsodium.cron.ui.components.CronIllustrationType
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 
 private val IllustrationSize = 220.dp
@@ -35,7 +35,7 @@ internal fun OnboardingHint(modifier: Modifier = Modifier) {
 @Preview(name = "Onboarding hint — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun OnboardingHintPreview() {
-    CronTheme {
+    CronPreview {
         Surface(color = MaterialTheme.colorScheme.background) {
             OnboardingHint(Modifier.padding(Spacing.xxl))
         }

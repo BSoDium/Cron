@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +13,7 @@ import fr.bsodium.cron.ui.screens.home.AiIterationUi
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.TimelineItem
-import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalTime
@@ -27,10 +25,10 @@ import kotlinx.datetime.LocalTime
 @PreviewLightDark
 @Composable
 internal fun AiRunHeroGalleryPreview() {
-    CronTheme {
+    CronPreview {
         val registry = rememberTimelineTrackRegistry()
         val listState = rememberLazyListState()
-        Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                 GallerySectionLabel("Latest hero states")

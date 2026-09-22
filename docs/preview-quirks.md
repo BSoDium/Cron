@@ -5,6 +5,27 @@ and requires a workaround gated on `LocalInspectionMode.current`.
 
 ---
 
+## Preview background doesn't match the real page background
+
+**Symptom:** An element with fine contrast against the app's actual background — e.g. a
+surface-tinted icon or a translucent card — renders correctly on-device but is barely visible
+or invisible in Compose Preview.
+
+**Root cause:** `MainActivity`'s root `Scaffold` sets `containerColor = CronColors.pageBackground`
+(`surfaceContainer` in light mode, `surface` in dark mode) — not M3's default
+`colorScheme.background`. A bare `CronTheme { ... }` preview has no `Surface` behind it, so
+Layoutlib renders it on a transparent/white canvas (or, if manually wrapped in
+`Surface(color = MaterialTheme.colorScheme.background)`, the wrong shade) instead of the app's
+real page color.
+
+**Fix:** Use `CronPreview { ... }` (`ui/theme/CronPreview.kt`) instead of `CronTheme { ... }` in
+every `@Preview` function. It wraps content in `CronTheme` plus a `Surface` painted with
+`CronColors.pageBackground`, matching what actually ships. Don't hand-roll a
+`Modifier.background(CronColors.pageBackground)` on the root of a preview — `CronPreview`
+already covers it.
+
+---
+
 ## Negative letter-spacing clips the last glyph
 
 **Symptom:** The last character of an expanded `LargeFlexibleTopAppBar` title is clipped in

@@ -17,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -88,7 +88,7 @@ private fun CreditRow(entry: CreditEntry, onClick: () -> Unit) {
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun AboutSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         AboutSettingsScreen(onBack = {})
     }
 }

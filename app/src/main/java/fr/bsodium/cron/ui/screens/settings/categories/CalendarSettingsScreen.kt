@@ -6,7 +6,7 @@ import fr.bsodium.cron.calendar.DEFAULT_RSVP_STATUSES
 import fr.bsodium.cron.calendar.RsvpStatus
 import fr.bsodium.cron.ui.screens.settings.components.CheckboxRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -56,7 +56,7 @@ fun CalendarSettingsScreen(
 @Preview(showBackground = true, widthDp = 412, heightDp = 892, fontScale = 1.0f)
 @Composable
 private fun CalendarSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         CalendarSettingsScreen(
             allowedStatuses = DEFAULT_RSVP_STATUSES,
             onAllowedStatuses = {},

@@ -36,7 +36,7 @@ import fr.bsodium.cron.ui.components.PageAppBar
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.screens.home.components.AiThinkingThread
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
@@ -215,7 +215,7 @@ private fun rememberPullConnection(
 @Preview(showBackground = true, name = "Plan detail — settled")
 @Composable
 private fun PlanDetailScreenPreview() {
-    CronTheme {
+    CronPreview {
         PlanDetailScreen(
             iteration = AiIterationUi(
                 turnIndex = 0,

@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
 import fr.bsodium.cron.ui.screens.settings.components.TimePickerRow
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import kotlinx.datetime.LocalTime
 
 @Composable
@@ -34,7 +34,7 @@ fun FreeDaysSettingsScreen(
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun FreeDaysSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         FreeDaysSettingsScreen(
             wakeStart = LocalTime(8, 0),
             wakeEnd = LocalTime(9, 30),

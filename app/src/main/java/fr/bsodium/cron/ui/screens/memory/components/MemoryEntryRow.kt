@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.memory.MemoryEntry
 import fr.bsodium.cron.ui.components.rememberCronHaptics
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -244,7 +244,7 @@ internal fun MemoryEntryRow(
 private fun MemoryEntryRowPreview() {
     val now = Clock.System.now()
     val yesterday = now.minus(1.days)
-    CronTheme {
+    CronPreview {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             MemoryEntryRow(
                 entry = MemoryEntry(

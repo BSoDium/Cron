@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import kotlin.math.roundToInt
 
 enum class AiPulseMode {
@@ -198,7 +198,7 @@ private fun aiPulseModifier(
 @Preview(name = "Loading State — Smooth Frequency")
 @Composable
 private fun AiPulseCardPreview() {
-    CronTheme {
+    CronPreview {
         Box(
             modifier = Modifier
                 .size(width = 320.dp, height = 120.dp)
@@ -217,7 +217,7 @@ private fun AiPulseCardPreview() {
 @Preview(name = "AiPulse — active (Mode 1)")
 @Composable
 private fun AiPulsePreview() {
-    CronTheme {
+    CronPreview {
         Box(
             modifier = Modifier
                 .size(200.dp)

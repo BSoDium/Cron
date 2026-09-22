@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.home.AiThreadUi
 import fr.bsodium.cron.ui.screens.home.ProcessItem
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 
 private val PREVIEW_THREAD = AiThreadUi(
@@ -35,7 +35,7 @@ private val PREVIEW_THREAD = AiThreadUi(
 @Preview(showBackground = true, name = "Thread — settled")
 @Composable
 private fun AiThinkingThreadPreview() {
-    CronTheme {
+    CronPreview {
         Surface(color = MaterialTheme.colorScheme.background) {
             AiThinkingThread(
                 thread = PREVIEW_THREAD,
@@ -48,7 +48,7 @@ private fun AiThinkingThreadPreview() {
 @Preview(showBackground = true, name = "Disclosure — expanded")
 @Composable
 private fun ThinkingDisclosureExpandedPreview() {
-    CronTheme {
+    CronPreview {
         Surface(color = MaterialTheme.colorScheme.background) {
             Column(modifier = Modifier.padding(horizontal = Spacing.xl, vertical = Spacing.xl)) {
                 ThinkingDisclosure(
@@ -69,7 +69,7 @@ private fun ThinkingDisclosureExpandedPreview() {
 @Preview(showBackground = true, name = "Thread — running")
 @Composable
 private fun AiThinkingThreadRunningPreview() {
-    CronTheme {
+    CronPreview {
         Surface(color = MaterialTheme.colorScheme.background) {
             AiThinkingThread(
                 thread = AiThreadUi(

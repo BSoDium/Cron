@@ -15,7 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -63,7 +63,7 @@ fun HomeGreetingRow(
 @Preview(showBackground = true)
 @Composable
 private fun GreetingHeaderPreview() {
-    CronTheme {
+    CronPreview {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
             HomeGreetingRow(prefix = "Good morning", name = "Elliot", autoAlarmsEnabled = true, onAutoAlarmsChange = {})
             HomeGreetingRow(prefix = "Good evening", name = "Maximilian-Alexander", autoAlarmsEnabled = false, onAutoAlarmsChange = {})

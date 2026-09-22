@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.settings.components.BufferSlider
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 
 @Composable
 fun BuffersSettingsScreen(
@@ -36,7 +36,7 @@ fun BuffersSettingsScreen(
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun BuffersSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         BuffersSettingsScreen(
             commuteBufferMinutes = 15,
             preparationBufferMinutes = 30,

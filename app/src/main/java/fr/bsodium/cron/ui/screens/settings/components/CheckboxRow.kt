@@ -19,7 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.bleedHorizontally
 import fr.bsodium.cron.ui.components.rememberCronHaptics
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
@@ -73,7 +73,7 @@ internal fun CheckboxRow(
 @Preview(showBackground = true, widthDp = 412, fontScale = 1.0f)
 @Composable
 private fun CheckboxRowPreview() {
-    CronTheme {
+    CronPreview {
         Column {
             CheckboxRow(title = "Drive", subtitle = "Estimate by car", checked = true, icon = MaterialSymbol.DirectionsCar, onCheckedChange = {})
             CheckboxRow(title = "Transit", subtitle = "Estimate by bus, tram, or train", checked = false, icon = MaterialSymbol.DirectionsTransit, onCheckedChange = {})

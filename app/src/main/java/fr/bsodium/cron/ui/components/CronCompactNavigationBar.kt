@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HOME
 import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 
 /**
@@ -146,7 +146,7 @@ private fun FabSlot(
 @Preview(showBackground = true)
 @Composable
 private fun CronCompactNavigationBarPreview() {
-    CronTheme {
+    CronPreview {
         CronCompactNavigationBar(
             currentRoute = ROUTE_HOME,
             onNavigate = {},
@@ -159,7 +159,7 @@ private fun CronCompactNavigationBarPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun CronCompactNavigationBarNoFabPreview() {
-    CronTheme {
+    CronPreview {
         CronCompactNavigationBar(
             currentRoute = SETTINGS_ROOT,
             onNavigate = {},

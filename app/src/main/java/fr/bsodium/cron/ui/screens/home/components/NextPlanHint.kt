@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.alarm.nextEveningPlanInstant
 import fr.bsodium.cron.ui.components.CronIllustratedMessage
 import fr.bsodium.cron.ui.components.CronIllustrationType
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
@@ -63,7 +63,7 @@ private fun nextPlanSubline(autoAlarmsEnabled: Boolean, eveningTriggerTime: Loca
 @Preview(showBackground = true, name = "Next plan — auto on")
 @Composable
 private fun NextPlanHintAutoOnPreview() {
-    CronTheme {
+    CronPreview {
         NextPlanHint(autoAlarmsEnabled = true, eveningTriggerTime = LocalTime(20, 0), modifier = Modifier.padding(Spacing.xl))
     }
 }
@@ -71,7 +71,7 @@ private fun NextPlanHintAutoOnPreview() {
 @Preview(showBackground = true, name = "Next plan — auto off")
 @Composable
 private fun NextPlanHintAutoOffPreview() {
-    CronTheme {
+    CronPreview {
         NextPlanHint(autoAlarmsEnabled = false, eveningTriggerTime = LocalTime(20, 0), modifier = Modifier.padding(Spacing.xl))
     }
 }

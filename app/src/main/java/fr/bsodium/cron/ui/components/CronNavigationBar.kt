@@ -14,7 +14,7 @@ import fr.bsodium.cron.ROUTE_HOME
 import fr.bsodium.cron.ROUTE_MEMORY
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Symbol
 
@@ -67,7 +67,7 @@ fun CronNavigationBar(
 @Preview(showBackground = true)
 @Composable
 private fun CronNavigationBarPreview() {
-    CronTheme {
+    CronPreview {
         CronNavigationBar(currentRoute = ROUTE_HOME, onNavigate = {})
     }
 }

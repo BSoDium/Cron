@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,8 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.PreviewLightDark
-import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
@@ -23,10 +21,10 @@ import fr.bsodium.cron.ui.theme.Spacing
 @PreviewLightDark
 @Composable
 private fun TimelineNodeAnchorsPreview() {
-    CronTheme {
+    CronPreview {
         val registry = rememberTimelineTrackRegistry()
         val listState = rememberLazyListState()
-        Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                 TimelineNode(
@@ -113,10 +111,10 @@ private fun TimelineNodeAnchorsPreview() {
 @PreviewLightDark
 @Composable
 private fun TimelineNodeWithContentPreview() {
-    CronTheme {
+    CronPreview {
         val registry = rememberTimelineTrackRegistry()
         val listState = rememberLazyListState()
-        Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                 TimelineNode(

@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
 import fr.bsodium.cron.ui.screens.settings.components.TimePickerRow
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import kotlinx.datetime.LocalTime
 
 @Composable
@@ -34,7 +34,7 @@ fun ScheduleSettingsScreen(
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun ScheduleSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         ScheduleSettingsScreen(
             eveningTrigger = LocalTime(20, 0),
             hardLatest = LocalTime(10, 0),
