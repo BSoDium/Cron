@@ -1,5 +1,6 @@
-const MODEL = process.env.RELEASE_SUMMARY_MODEL || 'openai/gpt-4o-mini';
-const ENDPOINT = 'https://models.github.ai/inference/chat/completions';
+const MODEL = process.env.RELEASE_SUMMARY_MODEL || 'claude-haiku-4-5-20251001';
+const ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
 
 const SYSTEM_PROMPT = `You write release notes for Cron, an Android alarm app.
 You'll be given a raw "What's Changed" list of merged PR titles (often using
@@ -12,7 +13,7 @@ Rewrite it as a short summary for end users, not developers:
 
 module.exports = async ({ github, context, core }) => {
   const tag = process.env.TAG;
-  const token = process.env.GITHUB_TOKEN;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
 
   const { data: release } = await github.rest.repos.getReleaseByTag({
     owner: context.repo.owner,
@@ -30,16 +31,16 @@ module.exports = async ({ github, context, core }) => {
     const response = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         model: MODEL,
+        max_tokens: 512,
         temperature: 0.3,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: release.body },
-        ],
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: release.body }],
       }),
     });
 
@@ -48,7 +49,7 @@ module.exports = async ({ github, context, core }) => {
     }
 
     const payload = await response.json();
-    summary = payload.choices?.[0]?.message?.content?.trim();
+    summary = payload.content?.[0]?.text?.trim();
     if (!summary) {
       throw new Error('Empty completion from model.');
     }

@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      models: read
 
     steps:
       - name: Checkout code
@@ -99,6 +98,7 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           APPLY: ${{ github.event_name == 'push' || inputs.apply }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           script: |
             const script = require('./.github/scripts/summarize-release.js');
