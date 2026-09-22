@@ -81,7 +81,17 @@ class TimelineSkeletonScreenshotTest {
         composeTestRule.setContent {
             CronTheme {
                 Surface(color = CronColors.pageBackground) {
-                    Box(modifier = Modifier.padding(Spacing.md)) {
+                    // Extra top room so the connector overlap (uncapped by default) renders in full
+                    // rather than getting clipped by this test's own canvas — see appended_after_real_rows
+                    // for it against real content, which naturally provides that headroom.
+                    Box(
+                        modifier = Modifier.padding(
+                            start = Spacing.md,
+                            end = Spacing.md,
+                            top = Spacing.md + Spacing.xxxl,
+                            bottom = Spacing.md,
+                        ),
+                    ) {
                         TimelineRowsSkeleton(rowCount = 2)
                     }
                 }
