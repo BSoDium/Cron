@@ -1,9 +1,11 @@
 package fr.bsodium.cron.ui.screens.home.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -225,14 +227,13 @@ private fun SessionTimelinePreview() {
     }
 }
 
-/** Shows [TimelineRowsSkeleton] exactly the way `sessionTimelineItems` actually places it — chained
- *  directly onto the bottom of already-loaded real rows, not floating on its own — for the scroll-
- *  triggered Paging append case: the user has real history on screen, scrolls near the end, and the
- *  next page hasn't arrived yet. The real rows above render through the same [TimelineTrackOverlay] +
- *  [AiRunNode]/[EventNode] path production uses; the skeleton below is its own separate, unregistered
- *  track (see [TimelineRowsSkeleton]'s KDoc for why), lined up against the real one purely because
- *  both share [NODE_GUTTER]/[TRACK_WIDTH]. `topCapped` stays false so the seam reads as one
- *  continuous track, not a fresh cap sitting right under the real one above it. */
+/** Shows [TimelineRowsSkeleton] exactly the way `sessionTimelineItems`/`HomePlanContent` actually
+ *  place it — a real `LazyColumn` with real rows followed by the `APPEND_LOADING_ITEM_KEY` skeleton
+ *  item, [TimelineTrackOverlay] and [SkeletonTrackConnector] both behind it as siblings — for the
+ *  scroll-triggered Paging append case: the user has real history on screen, scrolls near the end,
+ *  and the next page hasn't arrived yet. A real `LazyColumn` (not a plain `Column`) is required here:
+ *  [SkeletonTrackConnector] reads `LazyListState.layoutInfo`, which only a real one populates — see
+ *  its own KDoc for why it's the one bridging the seam, not [TimelineRowsSkeleton] itself. */
 @PreviewLightDark
 @Composable
 private fun SessionTimelineAppendSkeletonPreview() {
@@ -262,32 +263,39 @@ private fun SessionTimelineAppendSkeletonPreview() {
         val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize()) {
             TimelineTrackOverlay(registry = registry, listState = listState)
-            Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
+            SkeletonTrackConnector(listState = listState, contentStartPadding = Spacing.xl)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = Spacing.xl),
+            ) {
                 timeline.forEachIndexed { index, item ->
-                    // isSegmentBottom = true, same as real production: Paging hasn't confirmed
-                    // there's more yet, so the last loaded row still caps until the next page lands.
-                    when (item) {
-                        is TimelineItem.AiRun -> AiRunNode(
-                            item = item,
-                            registry = registry,
-                            isSegmentTop = index == 0,
-                            isSegmentBottom = index == timeline.lastIndex,
-                            isAsleepAbove = asleepStates[index],
-                            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-                            onClick = {},
-                        )
-                        is TimelineItem.Event -> EventNode(
-                            item = item,
-                            registry = registry,
-                            isSegmentTop = index == 0,
-                            isSegmentBottom = index == timeline.lastIndex,
-                            isAsleepAbove = asleepStates[index],
-                            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-                        )
-                        is TimelineItem.DayHeader -> DayHeaderRow(item = item)
+                    item(key = item.id) {
+                        // isSegmentBottom = true, same as real production: Paging hasn't confirmed
+                        // there's more yet, so the last loaded row still caps until the next page lands.
+                        when (item) {
+                            is TimelineItem.AiRun -> AiRunNode(
+                                item = item,
+                                registry = registry,
+                                isSegmentTop = index == 0,
+                                isSegmentBottom = index == timeline.lastIndex,
+                                isAsleepAbove = asleepStates[index],
+                                isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+                                onClick = {},
+                            )
+                            is TimelineItem.Event -> EventNode(
+                                item = item,
+                                registry = registry,
+                                isSegmentTop = index == 0,
+                                isSegmentBottom = index == timeline.lastIndex,
+                                isAsleepAbove = asleepStates[index],
+                                isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+                            )
+                            is TimelineItem.DayHeader -> DayHeaderRow(item = item)
+                        }
                     }
                 }
-                TimelineRowsSkeleton(rowCount = 2)
+                item(key = APPEND_LOADING_ITEM_KEY) { TimelineRowsSkeleton(rowCount = 2) }
             }
         }
     }

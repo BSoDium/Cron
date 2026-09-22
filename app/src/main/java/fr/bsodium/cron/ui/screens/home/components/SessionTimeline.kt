@@ -58,6 +58,11 @@ import java.util.Locale
 
 private const val APPEND_SKELETON_ROWS = 2
 
+/** The Paging append-loading placeholder's own `LazyListScope.item` key — shared with
+ *  [SkeletonTrackConnector], which looks this row up in `LazyListState.layoutInfo.visibleItemsInfo`
+ *  to know where its connecting track segment should end. */
+internal const val APPEND_LOADING_ITEM_KEY = "append-loading"
+
 internal fun LazyListScope.sessionTimelineItems(
     liveTimeline: List<TimelineItem>,
     historyItems: LazyPagingItems<TimelineItem>,
@@ -143,7 +148,7 @@ internal fun LazyListScope.sessionTimelineItems(
         // they'll actually arrive in, rather than the list popping straight from nothing to content.
         // topCapped stays false (the default): this tail always continues an already-open track, so
         // its first placeholder row reads as a pill like the real rows above it, never a fresh cap.
-        is LoadState.Loading -> item(key = "append-loading") { TimelineRowsSkeleton(rowCount = APPEND_SKELETON_ROWS) }
+        is LoadState.Loading -> item(key = APPEND_LOADING_ITEM_KEY) { TimelineRowsSkeleton(rowCount = APPEND_SKELETON_ROWS) }
         is LoadState.Error -> item(key = "append-error") { AppendErrorRow(onRetry = historyItems::retry) }
         is LoadState.NotLoading -> Unit
     }

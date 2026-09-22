@@ -47,6 +47,7 @@ import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
+import fr.bsodium.cron.ui.screens.home.components.SkeletonTrackConnector
 import fr.bsodium.cron.ui.screens.home.components.TimelineRowsSkeleton
 import fr.bsodium.cron.ui.screens.home.components.TimelineTrackOverlay
 import fr.bsodium.cron.ui.screens.home.components.rememberTimelineTrackRegistry
@@ -160,6 +161,10 @@ internal fun HomePlanContent(
             listState = listState,
             visible = timelineSettled,
         )
+        // Behind the LazyColumn too (drawn before it, same as the overlay above) — bridges the seam
+        // between the last real row and the Paging append skeleton's own track. See its own KDoc for
+        // why that connecting piece can't live inside the skeleton item itself.
+        SkeletonTrackConnector(listState = listState, contentStartPadding = Spacing.md)
         LazyColumn(
             state = listState,
             overscrollEffect = sharedOverscrollEffect?.withoutVisualEffect(),

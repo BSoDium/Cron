@@ -1,10 +1,11 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -81,17 +82,7 @@ class TimelineSkeletonScreenshotTest {
         composeTestRule.setContent {
             CronTheme {
                 Surface(color = CronColors.pageBackground) {
-                    // Extra top room so the connector overlap (uncapped by default) renders in full
-                    // rather than getting clipped by this test's own canvas — see appended_after_real_rows
-                    // for it against real content, which naturally provides that headroom.
-                    Box(
-                        modifier = Modifier.padding(
-                            start = Spacing.md,
-                            end = Spacing.md,
-                            top = Spacing.md + Spacing.xxxl,
-                            bottom = Spacing.md,
-                        ),
-                    ) {
+                    Box(modifier = Modifier.padding(Spacing.md)) {
                         TimelineRowsSkeleton(rowCount = 2)
                     }
                 }
@@ -101,9 +92,11 @@ class TimelineSkeletonScreenshotTest {
         composeTestRule.onRoot().captureRoboImage()
     }
 
-    /** The scroll-triggered Paging append case: real rows already on screen, chained directly into
-     *  the skeleton below — not the skeleton floating on its own, like the other tests here. Confirms
-     *  the two tracks line up and the seam reads as one continuous line, not a fresh cap. */
+    /** The scroll-triggered Paging append case, built the way `HomePlanContent` actually assembles it
+     *  — a real `LazyColumn` (required: [SkeletonTrackConnector] reads `LazyListState.layoutInfo`,
+     *  which a plain `Column` never populates) with real rows followed by the `APPEND_LOADING_ITEM_KEY`
+     *  skeleton item, [TimelineTrackOverlay] and [SkeletonTrackConnector] both behind it as siblings.
+     *  Confirms the two tracks read as one continuous line, not two pieces meeting at a seam. */
     @Test
     fun appended_after_real_rows() {
         composeTestRule.mainClock.autoAdvance = false
@@ -142,30 +135,37 @@ class TimelineSkeletonScreenshotTest {
                     val listState = rememberLazyListState()
                     Box(modifier = Modifier.fillMaxSize()) {
                         TimelineTrackOverlay(registry = registry, listState = listState)
-                        Column(modifier = Modifier.padding(Spacing.md)) {
+                        SkeletonTrackConnector(listState = listState, contentStartPadding = Spacing.md)
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
+                        ) {
                             timeline.forEachIndexed { index, item ->
-                                when (item) {
-                                    is TimelineItem.AiRun -> AiRunNode(
-                                        item = item,
-                                        registry = registry,
-                                        isSegmentTop = index == 0,
-                                        isSegmentBottom = index == timeline.lastIndex,
-                                        isAsleepAbove = asleepStates[index],
-                                        isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-                                        onClick = {},
-                                    )
-                                    is TimelineItem.Event -> EventNode(
-                                        item = item,
-                                        registry = registry,
-                                        isSegmentTop = index == 0,
-                                        isSegmentBottom = index == timeline.lastIndex,
-                                        isAsleepAbove = asleepStates[index],
-                                        isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-                                    )
-                                    is TimelineItem.DayHeader -> DayHeaderRow(item = item)
+                                item(key = item.id) {
+                                    when (item) {
+                                        is TimelineItem.AiRun -> AiRunNode(
+                                            item = item,
+                                            registry = registry,
+                                            isSegmentTop = index == 0,
+                                            isSegmentBottom = index == timeline.lastIndex,
+                                            isAsleepAbove = asleepStates[index],
+                                            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+                                            onClick = {},
+                                        )
+                                        is TimelineItem.Event -> EventNode(
+                                            item = item,
+                                            registry = registry,
+                                            isSegmentTop = index == 0,
+                                            isSegmentBottom = index == timeline.lastIndex,
+                                            isAsleepAbove = asleepStates[index],
+                                            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+                                        )
+                                        is TimelineItem.DayHeader -> DayHeaderRow(item = item)
+                                    }
                                 }
                             }
-                            TimelineRowsSkeleton(rowCount = 2)
+                            item(key = APPEND_LOADING_ITEM_KEY) { TimelineRowsSkeleton(rowCount = 2) }
                         }
                     }
                 }

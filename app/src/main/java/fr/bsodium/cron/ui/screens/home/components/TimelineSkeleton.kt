@@ -7,11 +7,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import fr.bsodium.cron.ui.components.skeletonPulse
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronPreview
@@ -59,13 +58,19 @@ private val ANCHOR_SLOT_HEIGHT = FLUSH_ANCHOR_SIZE
 private const val FADE_ROW_UNITS = 2f
 private const val TRAILING_ROW_UNITS = 1f
 
-/** How far the append placeholder's track reaches up past its own top edge — enough to clear the
- *  real anchor directly above it (its own [ROW_VERTICAL_PADDING] trailing gap, plus half that
- *  anchor's [TRACK_WIDTH] footprint to reach its vertical center) — so the skeleton's own rounded
- *  top end tucks fully behind that anchor instead of reading as a second, separate track starting
- *  fresh below a gap. Only applied when [TimelineRowsSkeleton]'s `topCapped` is false: the initial
- *  load has no real content above it to reach into. */
-private val TRACK_CONNECTOR_OVERLAP = ROW_VERTICAL_PADDING + TRACK_WIDTH / 2
+/** The track's own shape when [TimelineRowsSkeleton]'s `topCapped` is false: flat across the top
+ *  rather than [Radius.full]'s usual rounding on both ends. [SkeletonTrackConnector] draws the piece
+ *  that bridges up to real content, itself rounded at its own top to match the real track's cap and
+ *  flat at its own bottom — if this track's top rounded too, the two flat/round transitions would
+ *  stack into a visible "pinch" right at the handoff instead of one continuous line. Only the bottom
+ *  (hidden behind the fade scrim regardless) stays rounded, matching [Radius.full]'s own corner
+ *  radius so the two shapes are indistinguishable where they'd otherwise differ. */
+private val TRACK_FLAT_TOP_SHAPE = RoundedCornerShape(
+    topStart = 0.dp,
+    topEnd = 0.dp,
+    bottomStart = TRACK_WIDTH / 2,
+    bottomEnd = TRACK_WIDTH / 2,
+)
 
 /**
  * A skeleton loader for the Home timeline's row list — [rowCount] pulsing placeholders shaped like
@@ -93,46 +98,31 @@ private val TRACK_CONNECTOR_OVERLAP = ROW_VERTICAL_PADDING + TRACK_WIDTH / 2
  * Used both for the timeline's own initial load ([topCapped] true — see
  * [TimelineRowsSkeletonInitialPreview]) and, at a smaller [rowCount], as the trailing placeholder
  * while Paging fetches the next page of history during a scroll ([topCapped] false, chained directly
- * below the last real row already on screen — see [TimelineRowsSkeletonAppendPreview] for it in
- * isolation, and `SessionTimelinePreviews.kt`'s `SessionTimelineAppendSkeletonPreview` for it chained
- * onto real rows the way `sessionTimelineItems` actually places it). It draws its own self-contained
- * track rather than registering into [TimelineTrackOverlay]'s live anchor registry: that overlay only
- * exists to track real, positioned rows, and a placeholder has nothing worth animating a socket onto.
- * Because both skeleton and real rows share [NODE_GUTTER]/[TRACK_WIDTH], the two tracks still line up
- * exactly where they meet.
- *
- * When [topCapped] is false, the track also reaches [TRACK_CONNECTOR_OVERLAP] past its own top edge
- * to tuck behind the real row directly above it, at a lower [androidx.compose.ui.zIndex] than that
- * real content so it paints underneath wherever the two overlap — the two tracks read as one
- * continuous line with the seam hidden, rather than two separate pieces meeting end to end. Only the
- * track moves; the rows/title/time placeholders stay exactly where their own top/bottom padding
- * already puts them, which is already the same spacing real consecutive rows use — nothing about the
- * text needs to shift to land on that same rhythm.
+ * below the last real row already on screen — see [TimelineRowsSkeletonAppendPreview]). It draws its
+ * own self-contained track rather than registering into [TimelineTrackOverlay]'s live anchor
+ * registry: that overlay only exists to track real, positioned rows, and a placeholder has nothing
+ * worth animating a socket onto. Because both skeleton and real rows share [NODE_GUTTER]/
+ * [TRACK_WIDTH], the two tracks still line up exactly where they meet — but this composable's own
+ * top edge otherwise abuts the real content above with a small natural gap (the real row's own
+ * trailing padding). Visually bridging that gap so the append case reads as one continuous track is
+ * [SkeletonTrackConnector]'s job, not this one's: it needs the real last anchor's live position to do
+ * that without risking a paint-order conflict with [TimelineTrackOverlay]'s own `Canvas`, which this
+ * composable — a plain `LazyColumn` item — has no way to read or safely draw behind. See
+ * [SkeletonTrackConnector]'s KDoc for why that has to live in a separate composable instead of here.
  */
 @Composable
 internal fun TimelineRowsSkeleton(rowCount: Int, topCapped: Boolean = false, modifier: Modifier = Modifier) {
     val trackHeight = ROW_HEIGHT * (rowCount.toFloat() + TRAILING_ROW_UNITS)
     val fadeRowUnits = minOf(FADE_ROW_UNITS, rowCount.toFloat())
     val fadeStartFraction = 1f - ROW_HEIGHT * (fadeRowUnits + TRAILING_ROW_UNITS) / trackHeight
-    val connectorOverlap = if (topCapped) 0.dp else TRACK_CONNECTOR_OVERLAP
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            // Pinned to the un-overlapped height: Box would otherwise grow to fit the track's own
-            // taller (connectorOverlap-extended) measured size below, turning "reach up" into extra
-            // blank space at the bottom instead. Box doesn't clip non-fillMaxSize children to this
-            // explicit size, so the track drawing above it is unaffected.
-            .height(trackHeight)
-            .then(if (connectorOverlap > 0.dp) Modifier.zIndex(-1f) else Modifier),
-    ) {
+    Box(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = (NODE_GUTTER - TRACK_WIDTH) / 2)
-                .offset(y = -connectorOverlap)
                 .width(TRACK_WIDTH)
-                .height(trackHeight + connectorOverlap)
-                .clip(Radius.full)
+                .height(trackHeight)
+                .clip(if (topCapped) Radius.full else TRACK_FLAT_TOP_SHAPE)
                 .skeletonPulse(staggerIndex = 0),
         )
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -233,10 +223,7 @@ private fun TimelineRowsSkeletonInitialPreview() {
 @Composable
 private fun TimelineRowsSkeletonAppendPreview() {
     CronPreview {
-        // Enough headroom to show the connector overlap in full, uncropped — in real use that space
-        // is the real row above it (see SessionTimelinePreviews.kt's SessionTimelineAppendSkeletonPreview
-        // for the connector against actual content); here it's just empty space above.
-        Box(modifier = Modifier.padding(top = Spacing.md + TRACK_CONNECTOR_OVERLAP)) {
+        Box(modifier = Modifier.padding(top = Spacing.md)) {
             TimelineRowsSkeleton(rowCount = 2)
         }
     }

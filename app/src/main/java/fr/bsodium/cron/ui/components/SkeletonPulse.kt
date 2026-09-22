@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import fr.bsodium.cron.ui.theme.CronColors
 
@@ -40,11 +41,10 @@ private const val StaggerStepMillis = 90
 private val PulseEasing = CubicBezierEasing(0.445f, 0.05f, 0.55f, 0.95f)
 
 /**
- * The pulsing placeholder fill shared by every skeleton shape across the app: every pixel of the
- * shape fades together between a low phase — close to [CronColors.pageBackground] but never
- * identical to it — and a higher, more "elevated" phase, both blended toward `onSurface` so the pair
- * stays visible in every color scheme (see [PulseLowBlend]'s KDoc for why this isn't anchored to
- * [CronColors.elementSurface]).
+ * The pulsing placeholder color shared by every skeleton shape across the app: fades between a low
+ * phase — close to [CronColors.pageBackground] but never identical to it — and a higher, more
+ * "elevated" phase, both blended toward `onSurface` so the pair stays visible in every color scheme
+ * (see [PulseLowBlend]'s KDoc for why this isn't anchored to [CronColors.elementSurface]).
  *
  * @param staggerIndex This shape's position in an ordered stack of skeleton shapes (e.g. a row's
  * index in a list) — each successive index delays its pulse's start by [StaggerStepMillis], so a
@@ -54,7 +54,7 @@ private val PulseEasing = CubicBezierEasing(0.445f, 0.05f, 0.55f, 0.95f)
  * standalone shape.
  */
 @Composable
-fun Modifier.skeletonPulse(staggerIndex: Int = 0): Modifier {
+fun rememberSkeletonPulseColor(staggerIndex: Int = 0): Color {
     val background = CronColors.pageBackground
     val onSurface = MaterialTheme.colorScheme.onSurface
     val low = lerp(background, onSurface, PulseLowBlend)
@@ -70,5 +70,11 @@ fun Modifier.skeletonPulse(staggerIndex: Int = 0): Modifier {
         ),
         label = "skeleton-pulse-fraction",
     )
-    return this.background(lerp(low, high, fraction))
+    return lerp(low, high, fraction)
 }
+
+/** [Modifier.background]-applying convenience over [rememberSkeletonPulseColor] — the shape form
+ *  every skeleton `Box` uses; a plain `Canvas`-based draw (e.g. [fr.bsodium.cron.ui.screens.home.components.SkeletonTrackConnector],
+ *  which paints outside the normal layout tree) calls [rememberSkeletonPulseColor] directly instead. */
+@Composable
+fun Modifier.skeletonPulse(staggerIndex: Int = 0): Modifier = this.background(rememberSkeletonPulseColor(staggerIndex))
