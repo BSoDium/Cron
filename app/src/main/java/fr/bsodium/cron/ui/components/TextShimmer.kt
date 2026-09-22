@@ -32,9 +32,10 @@ fun Modifier.textShimmer(
     highlightColor: Color = MaterialTheme.colorScheme.surfaceVariant,
 ): Modifier {
     val transition = rememberInfiniteTransition(label = "text_shimmer_transition")
+    // targetValue must clear the gradient past the bounds (>= 2.0) or Restart snaps mid-fade, visibly jumping.
     val progress by transition.animateFloat(
         initialValue = -0.5f,
-        targetValue = 1.5f,
+        targetValue = 2.5f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = durationMillis, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
