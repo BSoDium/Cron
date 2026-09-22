@@ -7,7 +7,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Symbol
 
@@ -35,7 +35,7 @@ internal fun LatestAnchor(symbol: MaterialSymbol, isAsleep: Boolean, modifier: M
 @Preview(showBackground = true, name = "Latest anchor — glyph")
 @Composable
 private fun LatestAnchorPreview() {
-    CronTheme {
+    CronPreview {
         LatestAnchor(symbol = MaterialSymbol.Schedule, isAsleep = false)
     }
 }

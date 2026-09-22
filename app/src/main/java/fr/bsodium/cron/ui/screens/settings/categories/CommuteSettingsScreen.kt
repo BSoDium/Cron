@@ -5,7 +5,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.session.model.CommuteMode
 import fr.bsodium.cron.ui.screens.settings.components.CheckboxRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -56,7 +56,7 @@ fun CommuteSettingsScreen(
 @Preview(showBackground = true, widthDp = 412, heightDp = 892, fontScale = 1.0f)
 @Composable
 private fun CommuteSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         CommuteSettingsScreen(
             allowedModes = setOf(CommuteMode.Transit, CommuteMode.Bike, CommuteMode.Walk),
             onAllowedModes = {},

@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,8 +16,7 @@ import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.label
-import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.Symbol
@@ -109,11 +107,10 @@ private fun TriggerIconsPreview() {
     // Real production kinds → the preview renders the exact icon/label pairs the app ships.
     val kinds: List<RunKind> = listOf(RunKind.ScheduledBase, RunKind.ManualBase) +
         TriggerType.entries.map { RunKind.Replan(it) }
-    CronTheme {
+    CronPreview {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(CronColors.pageBackground)
                 .padding(Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {

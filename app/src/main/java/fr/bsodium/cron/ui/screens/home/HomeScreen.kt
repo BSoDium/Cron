@@ -65,7 +65,7 @@ import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
 import fr.bsodium.cron.ui.screens.home.components.rememberAlarmTiming
 import fr.bsodium.cron.ui.screens.settings.components.TimePickerDialog
 import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -425,7 +425,7 @@ internal fun HomeIdleContent(
 @Preview(showBackground = true, name = "Home — no plan yet")
 @Composable
 private fun HomeNoPlanPreview() {
-    CronTheme {
+    CronPreview {
         HomeIdleContent(
             uiState = HomeUiState(
                 initialized = true,

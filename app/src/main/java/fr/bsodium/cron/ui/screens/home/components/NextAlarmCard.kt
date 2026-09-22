@@ -46,7 +46,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -165,7 +165,7 @@ internal fun AlarmCardContent(
 @Preview(showBackground = true, name = "Alarm set")
 @Composable
 private fun NextAlarmCardPreview() {
-    CronTheme {
+    CronPreview {
         NextAlarmCard(
             dateLabel = "Monday 1",
             alarmTime = LocalTime(6, 40),
@@ -178,7 +178,7 @@ private fun NextAlarmCardPreview() {
 @Preview(showBackground = true, name = "Spent — woke up")
 @Composable
 private fun NextAlarmCardSpentPreview() {
-    CronTheme {
+    CronPreview {
         NextAlarmCard(
             dateLabel = "Today, you'll wake up at",
             alarmTime = LocalTime(6, 40),

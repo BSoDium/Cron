@@ -2,7 +2,6 @@
 
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,8 +29,7 @@ import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.R
 import fr.bsodium.cron.ui.screens.home.TimelineItem
-import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Instant
@@ -175,8 +173,8 @@ private fun relativeDayLabel(date: LocalDate): String {
 @PreviewLightDark
 @Composable
 private fun DayHeaderRowPreview() {
-    CronTheme {
-        Column(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
+    CronPreview {
+        Column(modifier = Modifier.fillMaxSize()) {
             DayHeaderRow(
                 item = TimelineItem.DayHeader(date = LocalDate(2026, 7, 3), timestamp = Instant.fromEpochMilliseconds(0)),
                 modifier = Modifier.padding(horizontal = Spacing.md),

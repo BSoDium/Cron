@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
 import fr.bsodium.cron.ui.screens.settings.components.SwitchRow
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 
 @Composable
 fun AppSettingsScreen(
@@ -35,7 +35,7 @@ fun AppSettingsScreen(
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun AppSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         AppSettingsScreen(
             hapticsEnabled = true,
             compactNavEnabled = false,

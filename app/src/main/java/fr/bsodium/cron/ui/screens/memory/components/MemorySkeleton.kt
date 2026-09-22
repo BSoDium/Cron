@@ -19,7 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.textShimmer
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -103,7 +103,7 @@ private fun MemoryEntrySkeleton(
 @Preview(showBackground = true)
 @Composable
 private fun MemorySkeletonPreview() {
-    CronTheme {
+    CronPreview {
         Box(modifier = Modifier.padding(Spacing.lg)) {
             MemorySkeleton()
         }

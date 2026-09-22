@@ -13,7 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -58,11 +58,11 @@ internal fun AppendErrorRow(onRetry: () -> Unit, modifier: Modifier = Modifier) 
 @Preview(showBackground = true)
 @Composable
 private fun AppendLoadingRowPreview() {
-    CronTheme { AppendLoadingRow() }
+    CronPreview { AppendLoadingRow() }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun AppendErrorRowPreview() {
-    CronTheme { AppendErrorRow(onRetry = {}) }
+    CronPreview { AppendErrorRow(onRetry = {}) }
 }

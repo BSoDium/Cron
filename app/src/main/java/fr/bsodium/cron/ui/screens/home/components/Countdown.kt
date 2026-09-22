@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.ExpressiveCondensedFontFamily
 import fr.bsodium.cron.ui.theme.Spacing
@@ -203,7 +203,7 @@ internal fun rememberAlarmTiming(alarmTime: LocalTime?, sessionDate: LocalDate?)
 @Preview(showBackground = true, name = "Countdown — left vs right align")
 @Composable
 private fun CountdownStackPreview() {
-    CronTheme {
+    CronPreview {
         Row(
             modifier = Modifier.padding(Spacing.lg),
             horizontalArrangement = Arrangement.spacedBy(Spacing.xxl),

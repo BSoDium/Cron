@@ -27,7 +27,7 @@ import fr.bsodium.cron.ui.components.PredictiveBackCard
 import fr.bsodium.cron.ui.screens.settings.LocalSettingsListState
 import fr.bsodium.cron.ui.screens.settings.SettingsScreen
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 
 /**
@@ -98,7 +98,7 @@ internal fun SettingsDetailScaffold(
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f, name = "SettingsDetailScaffold — no description")
 @Composable
 private fun SettingsDetailScaffoldNoDescriptionPreview() {
-    CronTheme {
+    CronPreview {
         SettingsDetailScaffold(title = "Assistant", onBack = {}) {
             SwitchRow(
                 title = "Haptic feedback",
@@ -114,7 +114,7 @@ private fun SettingsDetailScaffoldNoDescriptionPreview() {
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f, name = "SettingsDetailScaffold — with description")
 @Composable
 private fun SettingsDetailScaffoldWithDescriptionPreview() {
-    CronTheme {
+    CronPreview {
         SettingsDetailScaffold(title = "Assistant", subtitle = "Subtle feedback while writing an answer", onBack = {}) {
             SwitchRow(
                 title = "Haptic feedback",

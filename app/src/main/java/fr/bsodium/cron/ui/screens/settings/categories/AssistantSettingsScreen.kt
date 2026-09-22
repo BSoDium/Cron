@@ -9,7 +9,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import fr.bsodium.cron.ai.BudgetStore
 import fr.bsodium.cron.ui.screens.settings.components.DailyBudgetRow
 import fr.bsodium.cron.ui.screens.settings.components.SettingsDetailScaffold
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 
 @Composable
 fun AssistantSettingsScreen(
@@ -42,7 +42,7 @@ fun AssistantSettingsScreen(
 @Preview(showBackground = true, widthDp = 480, heightDp = 300, fontScale = 1.0f)
 @Composable
 private fun AssistantSettingsScreenPreview() {
-    CronTheme {
+    CronPreview {
         AssistantSettingsScreen(
             dailyTokenLimit = BudgetStore.DEFAULT_DAILY_TOKEN_LIMIT,
             tokensUsedToday = 12_400,

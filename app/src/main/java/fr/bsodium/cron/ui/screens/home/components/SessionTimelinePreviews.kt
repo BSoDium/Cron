@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
@@ -21,8 +20,7 @@ import fr.bsodium.cron.ui.screens.home.ProcessItem
 import fr.bsodium.cron.ui.screens.home.RunKind
 import fr.bsodium.cron.ui.screens.home.TimelineItem
 import fr.bsodium.cron.ui.screens.home.timelineAsleepStates
-import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalTime
@@ -190,10 +188,10 @@ private fun SessionTimelinePreview() {
     val asleepStates = timelineAsleepStates(timeline)
     val firstAnchorIndex = timeline.indexOfFirst { it !is TimelineItem.DayHeader }
     val lastAnchorIndex = timeline.indexOfLast { it !is TimelineItem.DayHeader }
-    CronTheme {
+    CronPreview {
         val registry = rememberTimelineTrackRegistry()
         val listState = rememberLazyListState()
-        Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
                 timeline.forEachIndexed { index, item ->
@@ -234,11 +232,11 @@ private fun SessionTimelinePreview() {
 @Composable
 private fun AiRunNodeHeroDemotePreview() {
     val now = Instant.fromEpochMilliseconds(System.currentTimeMillis())
-    CronTheme {
+    CronPreview {
         var isLatest by remember { mutableStateOf(true) }
         val registry = rememberTimelineTrackRegistry()
         val listState = rememberLazyListState()
-        Box(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground).clickable { isLatest = !isLatest }) {
+        Box(modifier = Modifier.fillMaxSize().clickable { isLatest = !isLatest }) {
             TimelineTrackOverlay(registry = registry, listState = listState)
             Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
                 AiRunNode(

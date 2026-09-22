@@ -54,7 +54,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HOME
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -365,7 +365,7 @@ internal fun PrimaryActionFab(action: FabAction?) {
 @Preview(showBackground = true)
 @Composable
 private fun CronCompactNavigationBarSplitPreview() {
-    CronTheme {
+    CronPreview {
         val mockState = remember { mutableStateOf(true) }
         val expandedState = remember { mutableStateOf(false) }
         CronCompactNavigationBar(

@@ -37,7 +37,7 @@ import fr.bsodium.cron.ui.screens.memory.components.MemoryEmptyState
 import fr.bsodium.cron.ui.screens.memory.components.MemoryEntryRow
 import fr.bsodium.cron.ui.screens.memory.components.MemoryFullScreenComposer
 import fr.bsodium.cron.ui.screens.memory.components.MemorySkeleton
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Clock
@@ -216,7 +216,7 @@ private fun SectionHeader(
 @Composable
 private fun MemoryContentPreview() {
     val now = Clock.System.now()
-    CronTheme {
+    CronPreview {
         MemoryContent(
             entries = listOf(
                 MemoryEntry(id = 1, text = "Prefers earlier wake-ups on gym days", category = "Schedule", createdAt = now, updatedAt = now),
@@ -235,7 +235,7 @@ private fun MemoryContentPreview() {
 @Preview(showBackground = true, name = "Memory — loading")
 @Composable
 private fun MemoryContentLoadingPreview() {
-    CronTheme {
+    CronPreview {
         MemoryContent(
             entries = emptyList(),
             isMutating = false,
@@ -251,7 +251,7 @@ private fun MemoryContentLoadingPreview() {
 @Preview(showBackground = true, name = "Memory — empty")
 @Composable
 private fun MemoryContentEmptyPreview() {
-    CronTheme {
+    CronPreview {
         MemoryContent(
             entries = emptyList(),
             isMutating = false,
@@ -268,7 +268,7 @@ private fun MemoryContentEmptyPreview() {
 @Composable
 private fun MemoryContentMutatingPreview() {
     val now = Clock.System.now()
-    CronTheme {
+    CronPreview {
         MemoryContent(
             entries = listOf(
                 MemoryEntry(id = 1, text = "Commutes by bike", category = null, createdAt = now, updatedAt = now),
@@ -288,7 +288,7 @@ private fun MemoryContentMutatingPreview() {
 @Composable
 private fun MemoryContentFailurePreview() {
     val now = Clock.System.now()
-    CronTheme {
+    CronPreview {
         MemoryContent(
             entries = listOf(
                 MemoryEntry(

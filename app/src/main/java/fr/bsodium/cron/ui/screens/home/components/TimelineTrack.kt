@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -42,7 +42,7 @@ internal fun MonoPill(
 @Preview(showBackground = true)
 @Composable
 private fun MonoPillPreview() {
-    CronTheme {
+    CronPreview {
         MonoPill(text = "9 min", modifier = Modifier.padding(Spacing.lg))
     }
 }

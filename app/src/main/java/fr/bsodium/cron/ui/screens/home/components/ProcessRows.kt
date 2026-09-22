@@ -38,7 +38,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.ProcessItem
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
@@ -296,7 +296,7 @@ internal fun DoneRow(isFirst: Boolean, isLast: Boolean) {
 @Preview(showBackground = true)
 @Composable
 private fun ProcessTextRowPreview() {
-    CronTheme {
+    CronPreview {
         ProcessTextRow(
             text = "Checking the calendar and preparing a concise sleep plan for tonight.",
             isFirst = true,

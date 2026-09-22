@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -226,7 +226,7 @@ private val THINKING_POOL: List<RoundedPolygon> = RESTING_SET + SHARP + Material
 @Preview(showBackground = true)
 @Composable
 private fun ThinkingShapePreview() {
-    CronTheme {
+    CronPreview {
         Row(
             horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
             modifier = Modifier.padding(Spacing.lg),

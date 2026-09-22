@@ -23,7 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
 import java.util.Locale
@@ -116,7 +116,7 @@ private fun formatTokenLimit(tokens: Int): String =
 @Preview(showBackground = true, widthDp = 412, fontScale = 1.0f)
 @Composable
 private fun DailyBudgetRowPreview() {
-    CronTheme {
+    CronPreview {
         DailyBudgetRow(limit = 250_000, usedToday = 12_480, onSelect = {})
     }
 }

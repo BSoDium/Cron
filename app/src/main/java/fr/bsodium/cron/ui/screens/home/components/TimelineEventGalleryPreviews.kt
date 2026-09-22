@@ -1,6 +1,5 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.ui.screens.home.TimelineItem
-import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.datetime.Instant
@@ -34,8 +32,8 @@ import kotlinx.datetime.Instant
 @PreviewLightDark
 @Composable
 internal fun EventCapGalleryPreview() {
-    CronTheme {
-        Column(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
+    CronPreview {
+        Column(modifier = Modifier.fillMaxSize()) {
             EventGalleryTrackBlock(sectionLabel = "Cap anchors — awake track", isAsleep = false, atCap = true)
             EventGalleryTrackBlock(sectionLabel = "Cap anchors — sleep track", isAsleep = true, atCap = true)
         }
@@ -45,8 +43,8 @@ internal fun EventCapGalleryPreview() {
 @PreviewLightDark
 @Composable
 internal fun EventInteriorGalleryPreview() {
-    CronTheme {
-        Column(modifier = Modifier.fillMaxSize().background(CronColors.pageBackground)) {
+    CronPreview {
+        Column(modifier = Modifier.fillMaxSize()) {
             EventGalleryTrackBlock(sectionLabel = "Interior pills — awake track", isAsleep = false, atCap = false)
             EventGalleryTrackBlock(sectionLabel = "Interior pills — sleep track", isAsleep = true, atCap = false)
         }

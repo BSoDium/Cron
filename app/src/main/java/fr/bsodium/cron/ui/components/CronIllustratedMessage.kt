@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,7 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.Spacing
 import fr.bsodium.cron.ui.theme.TightTextStyle
@@ -85,14 +84,12 @@ fun CronIllustratedMessage(
 @Preview(name = "Illustrated message — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun CronIllustratedMessagePreview() {
-    CronTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            CronIllustratedMessage(
-                type = CronIllustrationType.Flowers1,
-                title = "Your memories are empty",
-                subtitle = "Tell Cron something to remember and it will appear here.",
-                modifier = Modifier.padding(Spacing.xxl),
-            )
-        }
+    CronPreview {
+        CronIllustratedMessage(
+            type = CronIllustrationType.Flowers1,
+            title = "Your memories are empty",
+            subtitle = "Tell Cron something to remember and it will appear here.",
+            modifier = Modifier.padding(Spacing.xxl),
+        )
     }
 }

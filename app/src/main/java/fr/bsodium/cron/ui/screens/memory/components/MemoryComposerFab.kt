@@ -17,7 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -67,7 +67,7 @@ internal fun MemoryComposerFab(visible: Boolean, onClick: () -> Unit, modifier: 
 @Preview(showBackground = true, name = "Memory FAB")
 @Composable
 private fun MemoryComposerFabPreview() {
-    CronTheme {
+    CronPreview {
         MemoryComposerFab(visible = true, onClick = {})
     }
 }

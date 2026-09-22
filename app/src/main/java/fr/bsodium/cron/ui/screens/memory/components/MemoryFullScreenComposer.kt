@@ -71,7 +71,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bsodium.cron.ui.components.rememberCronHaptics
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.CronTypography
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
@@ -404,7 +404,7 @@ private fun bottomCurtain(background: Color): Brush = Brush.verticalGradient(
 @Preview(showBackground = true, name = "Memory full-screen composer — empty")
 @Composable
 private fun MemoryFullScreenComposerEmptyPreview() {
-    CronTheme {
+    CronPreview {
         MemoryFullScreenComposer(visible = true, value = "", onValueChange = {}, onSend = {}, onDismiss = {}, enabled = true)
     }
 }
@@ -412,7 +412,7 @@ private fun MemoryFullScreenComposerEmptyPreview() {
 @Preview(showBackground = true, name = "Memory full-screen composer — typing")
 @Composable
 private fun MemoryFullScreenComposerTypingPreview() {
-    CronTheme {
+    CronPreview {
         MemoryFullScreenComposer(
             visible = true,
             value = "I wake up earlier on gym days and prefer the window seat",

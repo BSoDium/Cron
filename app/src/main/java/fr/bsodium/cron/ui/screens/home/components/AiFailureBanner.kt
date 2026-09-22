@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.screens.home.AiTurnFailure
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.components.IconTooltip
 import fr.bsodium.cron.ui.theme.MaterialSymbol
 import fr.bsodium.cron.ui.theme.Radius
@@ -80,7 +80,7 @@ private fun AiTurnFailure.bannerMessage(): String = when (this) {
 @Preview
 @Composable
 private fun AiFailureBannerPreview() {
-    CronTheme {
+    CronPreview {
         AiFailureBanner(
             failure = AiTurnFailure.BudgetExhausted(used = 80_802, limit = 250_000),
             onOpenSettings = {},

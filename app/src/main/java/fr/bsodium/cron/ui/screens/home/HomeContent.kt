@@ -51,7 +51,7 @@ import fr.bsodium.cron.ui.screens.home.components.TimelineTrackOverlay
 import fr.bsodium.cron.ui.screens.home.components.rememberTimelineTrackRegistry
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
 import fr.bsodium.cron.ui.theme.CronColors
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.flow.flowOf
 
@@ -253,7 +253,7 @@ private fun BoxScope.StickyAlarm(
 @Preview(showBackground = true)
 @Composable
 private fun HomePlanContentPreview() {
-    CronTheme {
+    CronPreview {
         HomePlanContent(
             uiState = HomeUiState(
                 initialized = true,

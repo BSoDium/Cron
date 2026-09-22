@@ -32,7 +32,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ROUTE_HOME
 import fr.bsodium.cron.ROUTE_MEMORY
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.screens.settings.SETTINGS_ROOT
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.MaterialSymbol
@@ -133,7 +133,7 @@ private fun RowScope.NavSlot(
 @Preview(showBackground = true, name = "NavPill — interactive")
 @Composable
 private fun NavPillPreview() {
-    CronTheme {
+    CronPreview {
         var route by remember { mutableStateOf(ROUTE_HOME) }
         NavPill(
             currentRoute = route,

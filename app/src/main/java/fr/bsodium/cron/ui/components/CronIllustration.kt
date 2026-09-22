@@ -23,7 +23,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.R
-import fr.bsodium.cron.ui.theme.CronTheme
+import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Spacing
 
 /**
@@ -89,7 +89,7 @@ enum class CronIllustrationType(@param:DrawableRes internal val resourceId: Int)
 @Preview(name = "Illustrations Library — Dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun CronIllustrationLibraryPreview() {
-    CronTheme {
+    CronPreview {
         Surface(color = MaterialTheme.colorScheme.background) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
