@@ -20,6 +20,10 @@ Pitfalls that have caused bugs or broken builds in this repo. Read before writin
 - `Modifier.padding(...)` overloads don't mix: `start/top/end/bottom` and `horizontal/vertical` are separate overloads, so `padding(start = …, vertical = …)` does not compile. Pick one set. (This broke a build.)
 - Apply `Modifier.clip(shape)` **before** `.clickable(...)` so the ripple respects the shape. Putting `clickable` first gives you a square highlight on a rounded surface.
 
+## `textShimmer()` and blend-mode layer isolation
+
+- `Modifier.textShimmer()` (`TextShimmer.kt`) forces its own `graphicsLayer { alpha = 0.99f }` so its `BlendMode.SrcIn` gradient composites only against what's drawn *inside that layer*, not the whole screen behind it. That isolation layer's content is whatever comes **after** `textShimmer()` in the modifier chain (i.e. nested inside it) — anything painted by a modifier placed **before** it (a sibling `.background(...)`, say) lands in the parent layer and is invisible to `textShimmer()`'s own `drawContent()`. The gradient then masks against emptiness and silently renders as a no-op: you get a static, non-animating fill with zero visible shimmer, no error, no lint warning. Fix: put `.background(...)` **after** `.textShimmer()`, e.g. `.clip(shape).textShimmer().background(color)` (found and fixed in `MemorySkeleton.kt`'s entry-card skeleton — the loading state looked static instead of shimmering).
+
 ## Touch targets
 
 - Inner clickable rows must hit a minimum 48dp touch target. Don't ship a 44dp pill because it "looks right" — bump the inner box; the visual radius will absorb it.

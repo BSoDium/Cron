@@ -149,7 +149,7 @@ internal fun MemoryContent(
                     MemoryViewState.Loading -> MemorySkeleton(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
+                            .padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm)
                     )
                     MemoryViewState.Empty -> MemoryEmptyState()
                     MemoryViewState.Content -> LazyColumn(

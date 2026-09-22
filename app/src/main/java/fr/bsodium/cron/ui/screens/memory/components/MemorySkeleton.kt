@@ -35,12 +35,9 @@ internal fun MemorySkeleton(
         verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         repeat(2) { sectionIndex ->
+            // Must match SectionHeader's (MemoryScreen.kt) top padding exactly, first section included.
             CategoryHeaderSkeleton(
-                modifier = Modifier.padding(
-                    start = Spacing.lg,
-                    top = if (sectionIndex == 0) 0.dp else Spacing.lg,
-                    bottom = Spacing.xs
-                )
+                modifier = Modifier.padding(start = Spacing.lg, top = Spacing.lg, bottom = Spacing.xs)
             )
             repeat(if (sectionIndex == 0) 3 else 2) {
                 MemoryEntrySkeleton()
@@ -58,8 +55,9 @@ private fun CategoryHeaderSkeleton(
             .width(80.dp)
             .height(16.dp)
             .clip(Radius.full)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            // See docs/compose-gotchas.md — textShimmer() and blend-mode layer isolation.
             .textShimmer()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
     )
 }
 
@@ -72,8 +70,8 @@ private fun MemoryEntrySkeleton(
             .fillMaxWidth()
             .height(entryCardHeight)
             .clip(RoundedCornerShape(Radius.lg))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
             .textShimmer()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
     )
 }
 
