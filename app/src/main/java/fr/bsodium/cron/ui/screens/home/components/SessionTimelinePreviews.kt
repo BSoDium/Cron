@@ -225,6 +225,74 @@ private fun SessionTimelinePreview() {
     }
 }
 
+/** Shows [TimelineRowsSkeleton] exactly the way `sessionTimelineItems` actually places it — chained
+ *  directly onto the bottom of already-loaded real rows, not floating on its own — for the scroll-
+ *  triggered Paging append case: the user has real history on screen, scrolls near the end, and the
+ *  next page hasn't arrived yet. The real rows above render through the same [TimelineTrackOverlay] +
+ *  [AiRunNode]/[EventNode] path production uses; the skeleton below is its own separate, unregistered
+ *  track (see [TimelineRowsSkeleton]'s KDoc for why), lined up against the real one purely because
+ *  both share [NODE_GUTTER]/[TRACK_WIDTH]. `topCapped` stays false so the seam reads as one
+ *  continuous track, not a fresh cap sitting right under the real one above it. */
+@PreviewLightDark
+@Composable
+private fun SessionTimelineAppendSkeletonPreview() {
+    val now = Instant.fromEpochMilliseconds(System.currentTimeMillis())
+    val timeline = listOf(
+        TimelineItem.AiRun(
+            timestamp = now,
+            iteration = previewIteration(
+                turn = 1,
+                kind = RunKind.Replan(TriggerType.CalendarChange),
+                response = "Moved alarm to **07:15** — your first meeting shifted to 09:00.",
+            ),
+            sessionId = "s1",
+            isStreaming = false,
+            isLatest = true,
+        ),
+        TimelineItem.Event(
+            timestamp = now,
+            trigger = TriggerType.SleepOnset,
+            label = "You fell asleep",
+            detail = null,
+        ),
+    )
+    val asleepStates = timelineAsleepStates(timeline)
+    CronPreview {
+        val registry = rememberTimelineTrackRegistry()
+        val listState = rememberLazyListState()
+        Box(modifier = Modifier.fillMaxSize()) {
+            TimelineTrackOverlay(registry = registry, listState = listState)
+            Column(modifier = Modifier.padding(horizontal = Spacing.xl)) {
+                timeline.forEachIndexed { index, item ->
+                    // isSegmentBottom = true, same as real production: Paging hasn't confirmed
+                    // there's more yet, so the last loaded row still caps until the next page lands.
+                    when (item) {
+                        is TimelineItem.AiRun -> AiRunNode(
+                            item = item,
+                            registry = registry,
+                            isSegmentTop = index == 0,
+                            isSegmentBottom = index == timeline.lastIndex,
+                            isAsleepAbove = asleepStates[index],
+                            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+                            onClick = {},
+                        )
+                        is TimelineItem.Event -> EventNode(
+                            item = item,
+                            registry = registry,
+                            isSegmentTop = index == 0,
+                            isSegmentBottom = index == timeline.lastIndex,
+                            isAsleepAbove = asleepStates[index],
+                            isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
+                        )
+                        is TimelineItem.DayHeader -> DayHeaderRow(item = item)
+                    }
+                }
+                TimelineRowsSkeleton(rowCount = 2)
+            }
+        }
+    }
+}
+
 /** Interactive: tap to toggle the run between latest (hero PREV › NEW) and superseded (plain row) so
  *  the Animation Inspector can scrub the `ai-run-hero-demote` crossfade + the anchor's radius shrink.
  *  See docs/animation-previews.md's interactive-preview pattern. */

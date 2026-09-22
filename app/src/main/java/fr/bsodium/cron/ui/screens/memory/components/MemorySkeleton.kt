@@ -23,6 +23,8 @@ private val entryCardHeight = 72.dp
 
 /**
  * A skeleton loader for the Memory screen, mimicking the categorized list of [MemoryEntryRow] items.
+ * Hand-mirrors [MemoryEntryRow]'s card shape and `SectionHeader`'s (`MemoryScreen.kt`) label padding —
+ * changing either real layout needs a matching change here, and both carry a pointer back to this file.
  */
 @Composable
 internal fun MemorySkeleton(

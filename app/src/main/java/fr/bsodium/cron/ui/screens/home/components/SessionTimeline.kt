@@ -141,6 +141,8 @@ internal fun LazyListScope.sessionTimelineItems(
         // A small skeleton, not just a spinner (#187/#231 already moved off the old "View full
         // history" dead-end button) — the next page's rows fade into view in roughly the shape
         // they'll actually arrive in, rather than the list popping straight from nothing to content.
+        // topCapped stays false (the default): this tail always continues an already-open track, so
+        // its first placeholder row reads as a pill like the real rows above it, never a fresh cap.
         is LoadState.Loading -> item(key = "append-loading") { TimelineRowsSkeleton(rowCount = APPEND_SKELETON_ROWS) }
         is LoadState.Error -> item(key = "append-error") { AppendErrorRow(onRetry = historyItems::retry) }
         is LoadState.NotLoading -> Unit

@@ -208,6 +208,7 @@ private const val UNCATEGORISED = "Uncategorised"
 
 private enum class MemoryViewState { Loading, Empty, Content }
 
+// Changing this label's padding? MemorySkeleton.kt's CategoryHeaderSkeleton copies it exactly.
 @Composable
 private fun SectionHeader(
     label: String,

@@ -65,7 +65,10 @@ private val ICON_EDGE_PADDING = Spacing.lg
  *  true (the assistant's mutation turn hasn't finalized this row yet — see
  *  `MemoryRepository.addPending`), it renders with a shimmer placeholder in the same shape and
  *  position instead of the entry's not-yet-real text, so the row flips to real content in place
- *  rather than a separate placeholder being swapped for a second, real one. */
+ *  rather than a separate placeholder being swapped for a second, real one.
+ *
+ *  Changing this row's card height/shape? `MemorySkeleton.kt`'s `MemoryEntrySkeleton` hand-mirrors
+ *  it for the whole-screen loading placeholder — update that shape too. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MemoryEntryRow(

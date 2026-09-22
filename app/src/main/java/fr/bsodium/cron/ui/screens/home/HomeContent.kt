@@ -192,6 +192,9 @@ internal fun HomePlanContent(
                 item(key = "timeline-skeleton") {
                     TimelineRowsSkeleton(
                         rowCount = INITIAL_LOAD_SKELETON_ROWS,
+                        // The actual top of the timeline (nothing real loaded above it yet), unlike
+                        // SessionTimeline.kt's append placeholder — gets the one cap circle.
+                        topCapped = true,
                         modifier = Modifier.padding(top = Spacing.xxxl),
                     )
                 }

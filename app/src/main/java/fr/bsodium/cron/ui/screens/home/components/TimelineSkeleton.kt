@@ -60,11 +60,17 @@ private const val TRAILING_ROW_UNITS = 1f
 /**
  * A skeleton loader for the Home timeline's row list — [rowCount] pulsing placeholders shaped like
  * [TimelineNode]'s real row (gutter, anchor socket, title, trailing time), with a static track spine
- * behind them mirroring [TimelineTrackOverlay]. The first and last rows get a circular "cap" anchor;
- * every row in between gets the same short horizontal pill real interior (non-cap) anchors use — see
- * [TimelineNode]'s `AnchorShape.Pill` branch. Every shape pulses via the shared
+ * behind them mirroring [TimelineTrackOverlay]. Only the very first row can get a circular "cap"
+ * anchor, and only when [topCapped] is true — every other row, including the last, gets the same
+ * short horizontal pill real interior (non-cap) anchors use (see [TimelineNode]'s `AnchorShape.Pill`
+ * branch), because the stack never visually terminates: it either fades into not-yet-loaded history
+ * ([topCapped] false, chained below already-loaded real rows) or into not-yet-loaded newest content
+ * ([topCapped] true, the placeholder for a fresh timeline with nothing loaded yet). A trailing cap
+ * circle would wrongly claim "the timeline ends here." Every shape pulses via the shared
  * [fr.bsodium.cron.ui.components.skeletonPulse], staggered top-to-bottom so the stack reads as one
- * wave rather than a single flat blink.
+ * wave rather than a single flat blink — the track itself pulses one stagger step behind row 0
+ * rather than in lockstep with it, so a cap circle drawn directly over the track never lands on the
+ * exact same instantaneous color and silently disappears into it.
  *
  * The whole stack — track and rows alike, not just the empty space past them — fades to the page
  * background over its last couple of rows, via a plain [Brush.verticalGradient] scrim drawn on top
@@ -74,11 +80,19 @@ private const val TRAILING_ROW_UNITS = 1f
  * panel), while a plain alpha-blended overlay needs no special compositing and renders identically
  * everywhere. See docs/preview-quirks.md.
  *
- * Used both for the timeline's own initial load and, at a smaller [rowCount], as the trailing
- * placeholder while Paging fetches the next page of history during a scroll.
+ * Used both for the timeline's own initial load ([topCapped] true — see
+ * [TimelineRowsSkeletonInitialPreview]) and, at a smaller [rowCount], as the trailing placeholder
+ * while Paging fetches the next page of history during a scroll ([topCapped] false, chained directly
+ * below the last real row already on screen — see [TimelineRowsSkeletonAppendPreview] for it in
+ * isolation, and `SessionTimelinePreviews.kt`'s `SessionTimelineAppendSkeletonPreview` for it chained
+ * onto real rows the way `sessionTimelineItems` actually places it). It draws its own self-contained
+ * track rather than registering into [TimelineTrackOverlay]'s live anchor registry: that overlay only
+ * exists to track real, positioned rows, and a placeholder has nothing worth animating a socket onto.
+ * Because both skeleton and real rows share [NODE_GUTTER]/[TRACK_WIDTH], the two tracks still line up
+ * exactly where they meet.
  */
 @Composable
-internal fun TimelineRowsSkeleton(rowCount: Int, modifier: Modifier = Modifier) {
+internal fun TimelineRowsSkeleton(rowCount: Int, topCapped: Boolean = false, modifier: Modifier = Modifier) {
     val trackHeight = ROW_HEIGHT * (rowCount.toFloat() + TRAILING_ROW_UNITS)
     val fadeRowUnits = minOf(FADE_ROW_UNITS, rowCount.toFloat())
     val fadeStartFraction = 1f - ROW_HEIGHT * (fadeRowUnits + TRAILING_ROW_UNITS) / trackHeight
@@ -95,8 +109,10 @@ internal fun TimelineRowsSkeleton(rowCount: Int, modifier: Modifier = Modifier) 
         Column(modifier = Modifier.fillMaxWidth()) {
             repeat(rowCount) { index ->
                 TimelineSkeletonRow(
-                    staggerIndex = index,
-                    isCap = index == 0 || index == rowCount - 1,
+                    // Offset by 1 from the track's own staggerIndex = 0 above — see the KDoc's cap-
+                    // over-track note for why row 0 would otherwise be invisible against it.
+                    staggerIndex = index + 1,
+                    isCap = topCapped && index == 0,
                     titleWidthFraction = TITLE_WIDTH_FRACTIONS[index % TITLE_WIDTH_FRACTIONS.size],
                 )
             }
@@ -179,7 +195,7 @@ private fun TimelineSkeletonRow(
 private fun TimelineRowsSkeletonInitialPreview() {
     CronPreview {
         Box(modifier = Modifier.padding(top = Spacing.md)) {
-            TimelineRowsSkeleton(rowCount = 6)
+            TimelineRowsSkeleton(rowCount = 6, topCapped = true)
         }
     }
 }

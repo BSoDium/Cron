@@ -169,6 +169,8 @@ private fun TimelineAnchor.socketAccentColor(isAsleep: Boolean): Color = when (t
     is TimelineAnchor.Latest -> trackAccentColor(isAsleep)
 }
 
+/** Changing this row's gutter/anchor/title/spacing layout? [TimelineRowsSkeleton] hand-mirrors it
+ *  for the loading placeholder — update that shape too, or the skeleton-to-real handoff will jump. */
 @Composable
 internal fun TimelineNode(
     id: String,
