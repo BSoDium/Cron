@@ -45,6 +45,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import fr.bsodium.cron.FabRegistry
@@ -62,6 +63,7 @@ import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
 import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
+import fr.bsodium.cron.ui.screens.home.components.TimelineSkeleton
 import fr.bsodium.cron.ui.screens.home.components.rememberAlarmTiming
 import fr.bsodium.cron.ui.screens.settings.components.TimePickerDialog
 import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
@@ -265,11 +267,18 @@ private fun HomeRootContent(
     Box(modifier = Modifier.fillMaxSize()) {
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
+        // Paging's own initial fetch can still be running well after `initialized` flips true (that
+        // flag only reflects HomeViewModel.uiState's first combine, not historyItems) — without this,
+        // a slow cold start showed the Idle onboarding screen for a frame or two, then "violently"
+        // popped straight to Plan as rows streamed in, instead of holding the skeleton until there's
+        // something real (or genuinely nothing) to show.
+        val historyStillLoading = historyItems.loadState.refresh is LoadState.Loading && historyItems.itemCount == 0
         val homePhase = when {
             !uiState.initialized -> HomePhase.Loading
             displayPlan != null -> HomePhase.Plan
             lastPlan != null && uiState.isRetrying -> HomePhase.Plan
             uiState.liveTimeline.isNotEmpty() || historyItems.itemCount > 0 -> HomePhase.Plan
+            historyStillLoading -> HomePhase.Loading
             else -> HomePhase.Idle
         }
         Crossfade(
@@ -279,7 +288,12 @@ private fun HomeRootContent(
             modifier = Modifier.fillMaxSize(),
         ) { phase ->
             when (phase) {
-                HomePhase.Loading -> Unit
+                HomePhase.Loading -> TimelineSkeleton(
+                    statusInsetTop = statusInsetTop,
+                    navInsetBottom = navInsetBottom,
+                    modifier = Modifier.fillMaxSize(),
+                )
+
                 HomePhase.Idle -> HomeIdleContent(
                     uiState = uiState,
                     statusInsetTop = statusInsetTop,
