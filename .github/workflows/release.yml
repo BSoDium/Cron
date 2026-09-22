@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to re-summarize (e.g. v0.5.0)'
+        required: true
+      apply:
+        description: 'Write the summary to the release (unchecked = dry-run, just logs it)'
+        type: boolean
+        default: false
 
 jobs:
   release:
@@ -19,6 +28,7 @@ jobs:
           fetch-tags: true
 
       - name: Set up JDK 21
+        if: github.event_name == 'push'
         uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
@@ -26,16 +36,20 @@ jobs:
           cache: 'gradle'
 
       - name: Grant execute permission for gradlew
+        if: github.event_name == 'push'
         run: chmod +x gradlew
 
       - name: Create local.properties
+        if: github.event_name == 'push'
         run: |
           echo "GOOGLE_ROUTES_API_KEY=${{ secrets.GOOGLE_ROUTES_API_KEY }}" > local.properties
 
       - name: Decode signing keystore
+        if: github.event_name == 'push'
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > android_keystore.jks
 
       - name: Build release APK
+        if: github.event_name == 'push'
         env:
             # Absolute path: app/build.gradle.kts resolves file() against the :app module dir,
             # but the decode step writes to the workspace root.
@@ -47,9 +61,15 @@ jobs:
 
       - name: Get tag name
         id: tag
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Check if pre-release
+        if: github.event_name == 'push'
         id: prerelease
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
@@ -62,6 +82,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v3
         with:
           files: app/build/outputs/apk/release/*.apk
@@ -70,3 +91,15 @@ jobs:
           prerelease: ${{ steps.prerelease.outputs.is_prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summarize release notes with AI
+        uses: actions/github-script@v9
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          APPLY: ${{ github.event_name == 'push' || inputs.apply }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          script: |
+            const script = require('./.github/scripts/summarize-release.js');
+            await script({ github, context, core });
