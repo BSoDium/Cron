@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -52,6 +54,27 @@ import fr.bsodium.cron.ui.theme.Spacing
  *
  * Draws nothing at all once [APPEND_LOADING_ITEM_KEY] isn't present, or nothing is composed above it
  * this frame (both read fresh from `visibleItemsInfo` every draw, no stale caching).
+ *
+ * The join is faded, not a crisp filled edge. [TimelineTrackOverlay]'s own segment fill rounds its
+ * bottom cap with a corner radius equal to half [TRACK_WIDTH] (`drawSegment`'s `corner`), which —
+ * because that radius equals half the rect's own width — collapses to a literal semicircle whose
+ * pole sits exactly at `anchor.cy + halfTrack`, the same Y this composable hands off from. Rounding
+ * this composable's own top edge by that same radius (the obvious first attempt) builds the mirror
+ * image directly below: two circles of equal radius, tangent to each other at that single point. Two
+ * externally tangent equal circles genuinely pinch to zero width right at the point they touch —
+ * mathematically smooth on each side individually, but visibly a seam once you consider it's two
+ * independently painted, independently colored fills meeting there rather than one continuous shape.
+ * A flat (unrounded) top trades that pinch for a hard step instead, since the real content immediately
+ * above is genuinely zero-width at that exact Y — there's no shape whose crisp edge can match it.
+ * Neither can be fixed by reaching higher and painting more of the anchor's own circle from here:
+ * this composable is composed after (so paints on top of) [TimelineTrackOverlay] in the shared outer
+ * `Box`, so any fill above `anchor.cy + halfTrack` would cover the real anchor's own disc and rim —
+ * the exact Round-B regression this file's own git history already ruled out once.
+ *
+ * Fading the fill in from [Color.Transparent] at the seam up to full opacity over the same
+ * half-[TRACK_WIDTH] span the corner rounding already spans sidesteps the problem rather than solving
+ * it geometrically: there's no Y at which two differently-colored, fully-opaque regions are adjacent,
+ * so there's nothing for the eye to read as a boundary.
  */
 @Composable
 internal fun SkeletonTrackConnector(
@@ -102,7 +125,17 @@ internal fun SkeletonTrackConnector(
                         bottomRightCornerRadius = CornerRadius.Zero,
                     ),
                 )
-                drawPath(path, color)
+                val fadeEnd = minOf(bottom, top + halfTrack)
+                drawPath(
+                    path,
+                    brush = Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        (fadeEnd - top) / (bottom - top) to color,
+                        1f to color,
+                        startY = top,
+                        endY = bottom,
+                    ),
+                )
             },
     )
 }
