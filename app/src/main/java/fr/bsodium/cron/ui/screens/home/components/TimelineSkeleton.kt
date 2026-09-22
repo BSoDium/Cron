@@ -1,47 +1,26 @@
 package fr.bsodium.cron.ui.screens.home.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.skeletonPulse
 import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
-
-private val GREETING_PREFIX_BAR_WIDTH = 90.dp
-private val GREETING_PREFIX_BAR_HEIGHT = 16.dp
-private val GREETING_NAME_BAR_WIDTH = 150.dp
-private val GREETING_NAME_BAR_HEIGHT = 24.dp
-private val GREETING_TOGGLE_WIDTH = 96.dp
-
-/** Approximates [CollapsibleAlarmCard]'s expanded-state height — the real card's is intrinsic
- *  (measured live from its LCD clock content via `SubcomposeLayout`), so there's no fixed token to
- *  mirror exactly; this is a plausible resting height for the placeholder block. */
-private val ALARM_CARD_SKELETON_HEIGHT = 160.dp
 
 /** Placeholder row title widths, hand-varied so the stack doesn't read as one repeated block —
  *  mirrors the natural mix of short event labels and longer AI-run titles in the real timeline. */
@@ -52,130 +31,62 @@ private val TIME_BAR_WIDTH = 34.dp
 private val TIME_BAR_HEIGHT = 12.dp
 private val ROW_VERTICAL_PADDING = Spacing.md
 
-/** Placeholder rows stacked before the bottom fade takes over — enough to read as a real list under
- *  the alarm card without needing to fill (or scroll) the whole viewport. */
-private const val ROW_COUNT = 6
+/** Each row's own layout height — top padding plus the anchor circle, its tallest child — matching
+ *  [TimelineSkeletonRow]'s real measured height so the track box below can be sized deterministically
+ *  instead of needing to measure the row stack it sits behind. */
+private val ROW_HEIGHT = ROW_VERTICAL_PADDING + INTERIOR_ANCHOR_SIZE
 
-/** Where the bottom fade-to-nothing mask starts, as a fraction of the row stack's own measured
- *  height — content above this line stays fully opaque; the empty track past the last row trails
- *  off into it, reading as "more timeline, not loaded yet" rather than a hard-edged placeholder. */
-private const val FADE_START_FRACTION = 0.45f
+/** How many trailing rows taper toward transparent, capped so a short stack (e.g. the 2-row append
+ *  placeholder) doesn't fade from its very first row. */
+private const val MAX_FADE_TAIL_ROWS = 3
 
 /**
- * A skeleton loader for the whole Home "timeline" view — the greeting row, the sticky alarm card,
- * and the anchored row list below it — laid out exactly like [HomePlanContent], so the real content
- * fades in without a jump once it arrives. The row list mirrors [TimelineNode]'s row shape (gutter,
- * anchor socket, title, trailing time) and the continuous track spine [TimelineTrackOverlay] paints
- * behind real rows — a static pulsing capsule here, since there's no real anchor geometry yet to
- * trace — fading to fully transparent toward the bottom so it reads as a timeline trailing off into
- * data that hasn't arrived yet, not a hard-edged loading block.
+ * A skeleton loader for the Home timeline's row list — [rowCount] pulsing placeholders shaped like
+ * [TimelineNode]'s real row (gutter, anchor socket, title, trailing time), with a static track spine
+ * behind them mirroring [TimelineTrackOverlay]. Every shape pulses via the shared
+ * [fr.bsodium.cron.ui.components.skeletonPulse], staggered top-to-bottom so the stack reads as one
+ * wave rather than a single flat blink. The last few rows taper toward transparent, so the stack
+ * reads as trailing off into data that hasn't arrived yet rather than a hard-edged block — used both
+ * for the timeline's own initial load and, at a smaller [rowCount], as the trailing placeholder while
+ * Paging fetches the next page of history during a scroll.
  */
 @Composable
-internal fun TimelineSkeleton(
-    statusInsetTop: Dp,
-    navInsetBottom: Dp,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(
-                start = Spacing.md,
-                end = Spacing.md,
-                top = statusInsetTop + Spacing.md,
-                bottom = navInsetBottom + Spacing.navBarClearance,
-            ),
-    ) {
-        GreetingSkeleton(modifier = Modifier.padding(bottom = Spacing.md))
-        AlarmCardSkeleton(modifier = Modifier.padding(bottom = Spacing.xxl))
-        TimelineRowsSkeleton(modifier = Modifier.weight(1f).fillMaxWidth())
-    }
-}
-
-@Composable
-private fun GreetingSkeleton(modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Box(
-                modifier = Modifier
-                    .width(GREETING_PREFIX_BAR_WIDTH)
-                    .height(GREETING_PREFIX_BAR_HEIGHT)
-                    .clip(Radius.full)
-                    .skeletonPulse(),
-            )
-            Spacer(Modifier.height(Spacing.xs))
-            Box(
-                modifier = Modifier
-                    .width(GREETING_NAME_BAR_WIDTH)
-                    .height(GREETING_NAME_BAR_HEIGHT)
-                    .clip(Radius.full)
-                    .skeletonPulse(),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(GREETING_TOGGLE_WIDTH)
-                .clip(Radius.full)
-                .skeletonPulse(),
-        )
-    }
-}
-
-@Composable
-private fun AlarmCardSkeleton(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(ALARM_CARD_SKELETON_HEIGHT)
-            .clip(RoundedCornerShape(Radius.xl))
-            .skeletonPulse(),
-    )
-}
-
-@Composable
-private fun TimelineRowsSkeleton(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            // Forces an offscreen compositing layer so the DstIn mask below applies to the whole
-            // subtree's already-drawn pixels, not just this Box's own background (see TextShimmer.kt).
-            .graphicsLayer { alpha = 0.99f }
-            .drawWithContent {
-                drawContent()
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        FADE_START_FRACTION to Color.Black,
-                        1f to Color.Transparent,
-                    ),
-                    blendMode = BlendMode.DstIn,
-                )
-            },
-    ) {
+internal fun TimelineRowsSkeleton(rowCount: Int, modifier: Modifier = Modifier) {
+    val fadeTailRows = minOf(MAX_FADE_TAIL_ROWS, rowCount - 1).coerceAtLeast(0)
+    Box(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = (NODE_GUTTER - TRACK_WIDTH) / 2)
                 .width(TRACK_WIDTH)
-                .fillMaxHeight()
+                .height(ROW_HEIGHT * rowCount)
                 .clip(Radius.full)
-                .skeletonPulse(),
+                .skeletonPulse(staggerIndex = 0),
         )
         Column(modifier = Modifier.fillMaxWidth()) {
-            repeat(ROW_COUNT) { index ->
-                TimelineSkeletonRow(titleWidthFraction = TITLE_WIDTH_FRACTIONS[index % TITLE_WIDTH_FRACTIONS.size])
+            repeat(rowCount) { index ->
+                val rowsFromEnd = rowCount - index
+                val rowAlpha = if (fadeTailRows > 0 && rowsFromEnd <= fadeTailRows) {
+                    rowsFromEnd.toFloat() / (fadeTailRows + 1)
+                } else {
+                    1f
+                }
+                TimelineSkeletonRow(
+                    staggerIndex = index,
+                    titleWidthFraction = TITLE_WIDTH_FRACTIONS[index % TITLE_WIDTH_FRACTIONS.size],
+                    modifier = Modifier.graphicsLayer { alpha = rowAlpha },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TimelineSkeletonRow(titleWidthFraction: Float, modifier: Modifier = Modifier) {
+private fun TimelineSkeletonRow(
+    staggerIndex: Int,
+    titleWidthFraction: Float,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -190,7 +101,7 @@ private fun TimelineSkeletonRow(titleWidthFraction: Float, modifier: Modifier = 
                 modifier = Modifier
                     .size(INTERIOR_ANCHOR_SIZE)
                     .clip(CircleShape)
-                    .skeletonPulse(),
+                    .skeletonPulse(staggerIndex),
             )
         }
         Spacer(Modifier.width(Spacing.md))
@@ -200,7 +111,7 @@ private fun TimelineSkeletonRow(titleWidthFraction: Float, modifier: Modifier = 
                     .fillMaxWidth(titleWidthFraction)
                     .height(TITLE_BAR_HEIGHT)
                     .clip(Radius.full)
-                    .skeletonPulse(),
+                    .skeletonPulse(staggerIndex),
             )
         }
         Spacer(Modifier.width(Spacing.md))
@@ -209,15 +120,27 @@ private fun TimelineSkeletonRow(titleWidthFraction: Float, modifier: Modifier = 
                 .width(TIME_BAR_WIDTH)
                 .height(TIME_BAR_HEIGHT)
                 .clip(Radius.full)
-                .skeletonPulse(),
+                .skeletonPulse(staggerIndex),
         )
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, name = "Timeline rows skeleton — initial load")
 @Composable
-private fun TimelineSkeletonPreview() {
+private fun TimelineRowsSkeletonInitialPreview() {
     CronPreview {
-        TimelineSkeleton(statusInsetTop = 0.dp, navInsetBottom = 0.dp)
+        Box(modifier = Modifier.padding(top = Spacing.md)) {
+            TimelineRowsSkeleton(rowCount = 6)
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Timeline rows skeleton — append placeholder")
+@Composable
+private fun TimelineRowsSkeletonAppendPreview() {
+    CronPreview {
+        Box(modifier = Modifier.padding(top = Spacing.md)) {
+            TimelineRowsSkeleton(rowCount = 2)
+        }
     }
 }

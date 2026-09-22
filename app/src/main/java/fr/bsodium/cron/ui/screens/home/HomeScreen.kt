@@ -63,7 +63,6 @@ import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
 import fr.bsodium.cron.ui.screens.home.components.OnboardingHint
 import fr.bsodium.cron.ui.screens.home.components.SettingsChangedPill
 import fr.bsodium.cron.ui.screens.home.components.StreamingHaptics
-import fr.bsodium.cron.ui.screens.home.components.TimelineSkeleton
 import fr.bsodium.cron.ui.screens.home.components.rememberAlarmTiming
 import fr.bsodium.cron.ui.screens.settings.components.TimePickerDialog
 import fr.bsodium.cron.ui.screens.home.components.rememberRevealedThread
@@ -88,8 +87,11 @@ private const val PLAN_DETAIL_ENTER_MS = 240
 private val ONBOARDING_HINT_BIAS = BiasAlignment(0f, 0.3f)
 
 /** What the home body should show — kept coarse (not the thread content) so it only crossfades on a
- *  real state change, never on each streaming update. */
-private enum class HomePhase { Loading, Idle, Plan }
+ *  real state change, never on each streaming update. There's no separate "loading" phase: the
+ *  greeting and alarm card render as soon as their own (near-instant) data is available, and Plan
+ *  covers the window before the row list itself is ready too — see `historyStillLoading` below and
+ *  `HomePlanContent`'s own `historyStillLoading` param, which swaps just the row list for a skeleton. */
+private enum class HomePhase { Idle, Plan }
 
 @Composable
 fun HomeScreen(
@@ -270,15 +272,15 @@ private fun HomeRootContent(
         // Paging's own initial fetch can still be running well after `initialized` flips true (that
         // flag only reflects HomeViewModel.uiState's first combine, not historyItems) — without this,
         // a slow cold start showed the Idle onboarding screen for a frame or two, then "violently"
-        // popped straight to Plan as rows streamed in, instead of holding the skeleton until there's
-        // something real (or genuinely nothing) to show.
-        val historyStillLoading = historyItems.loadState.refresh is LoadState.Loading && historyItems.itemCount == 0
+        // popped straight to real rows as they streamed in, instead of holding a skeleton until
+        // there's something real (or genuinely nothing) to show.
+        val historyStillLoading = !uiState.initialized ||
+            (historyItems.loadState.refresh is LoadState.Loading && historyItems.itemCount == 0)
         val homePhase = when {
-            !uiState.initialized -> HomePhase.Loading
             displayPlan != null -> HomePhase.Plan
             lastPlan != null && uiState.isRetrying -> HomePhase.Plan
             uiState.liveTimeline.isNotEmpty() || historyItems.itemCount > 0 -> HomePhase.Plan
-            historyStillLoading -> HomePhase.Loading
+            historyStillLoading -> HomePhase.Plan
             else -> HomePhase.Idle
         }
         Crossfade(
@@ -288,12 +290,6 @@ private fun HomeRootContent(
             modifier = Modifier.fillMaxSize(),
         ) { phase ->
             when (phase) {
-                HomePhase.Loading -> TimelineSkeleton(
-                    statusInsetTop = statusInsetTop,
-                    navInsetBottom = navInsetBottom,
-                    modifier = Modifier.fillMaxSize(),
-                )
-
                 HomePhase.Idle -> HomeIdleContent(
                     uiState = uiState,
                     statusInsetTop = statusInsetTop,
@@ -316,6 +312,7 @@ private fun HomeRootContent(
                     onAlarmTimeClick = onAlarmTimeClick,
                     onOpenAiRun = onOpenAiRun,
                     historyItems = historyItems,
+                    historyStillLoading = historyStillLoading,
                 )
             }
         }

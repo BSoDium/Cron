@@ -28,6 +28,9 @@ private val entryCardHeight = 72.dp
 internal fun MemorySkeleton(
     modifier: Modifier = Modifier,
 ) {
+    // Every header/entry shares one running count, not a per-section index — the wave should roll
+    // continuously down the whole list, not restart at each category boundary.
+    var staggerIndex = 0
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -35,10 +38,11 @@ internal fun MemorySkeleton(
         repeat(2) { sectionIndex ->
             // Must match SectionHeader's (MemoryScreen.kt) top padding exactly, first section included.
             CategoryHeaderSkeleton(
+                staggerIndex = staggerIndex++,
                 modifier = Modifier.padding(start = Spacing.lg, top = Spacing.lg, bottom = Spacing.xs)
             )
             repeat(if (sectionIndex == 0) 3 else 2) {
-                MemoryEntrySkeleton()
+                MemoryEntrySkeleton(staggerIndex = staggerIndex++)
             }
         }
     }
@@ -46,6 +50,7 @@ internal fun MemorySkeleton(
 
 @Composable
 private fun CategoryHeaderSkeleton(
+    staggerIndex: Int,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -53,12 +58,13 @@ private fun CategoryHeaderSkeleton(
             .width(80.dp)
             .height(16.dp)
             .clip(Radius.full)
-            .skeletonPulse()
+            .skeletonPulse(staggerIndex)
     )
 }
 
 @Composable
 private fun MemoryEntrySkeleton(
+    staggerIndex: Int,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -66,7 +72,7 @@ private fun MemoryEntrySkeleton(
             .fillMaxWidth()
             .height(entryCardHeight)
             .clip(RoundedCornerShape(Radius.lg))
-            .skeletonPulse()
+            .skeletonPulse(staggerIndex)
     )
 }
 

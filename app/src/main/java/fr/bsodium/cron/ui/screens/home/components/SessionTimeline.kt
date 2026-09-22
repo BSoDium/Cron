@@ -56,6 +56,8 @@ import kotlinx.datetime.toLocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+private const val APPEND_SKELETON_ROWS = 2
+
 internal fun LazyListScope.sessionTimelineItems(
     liveTimeline: List<TimelineItem>,
     historyItems: LazyPagingItems<TimelineItem>,
@@ -136,7 +138,10 @@ internal fun LazyListScope.sessionTimelineItems(
     }
 
     when (historyItems.loadState.append) {
-        is LoadState.Loading -> item(key = "append-loading") { AppendLoadingRow() }
+        // A small skeleton, not just a spinner (#187/#231 already moved off the old "View full
+        // history" dead-end button) — the next page's rows fade into view in roughly the shape
+        // they'll actually arrive in, rather than the list popping straight from nothing to content.
+        is LoadState.Loading -> item(key = "append-loading") { TimelineRowsSkeleton(rowCount = APPEND_SKELETON_ROWS) }
         is LoadState.Error -> item(key = "append-error") { AppendErrorRow(onRetry = historyItems::retry) }
         is LoadState.NotLoading -> Unit
     }

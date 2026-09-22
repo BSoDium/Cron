@@ -47,6 +47,7 @@ import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
+import fr.bsodium.cron.ui.screens.home.components.TimelineRowsSkeleton
 import fr.bsodium.cron.ui.screens.home.components.TimelineTrackOverlay
 import fr.bsodium.cron.ui.screens.home.components.rememberTimelineTrackRegistry
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
@@ -56,6 +57,11 @@ import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.flow.flowOf
 
 private val ALARM_COLLAPSE_RANGE = 120.dp
+
+/** Placeholder rows shown in place of the real row list while its own data is still loading
+ *  ([HomePlanContent]'s `historyStillLoading`) — enough to read as a real list without overflowing a
+ *  typical viewport before the fade-out tail kicks in. */
+private const val INITIAL_LOAD_SKELETON_ROWS = 6
 
 /** Roughly 8-10 timeline rows' worth of ahead-of-viewport composition/measurement, kept warm so a
  *  fast fling doesn't outrun `LazyColumn`'s default one-item-ahead prefetch and force several rows'
@@ -104,6 +110,10 @@ internal fun HomePlanContent(
     onAlarmTimeClick: (() -> Unit)? = null,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
     historyItems: LazyPagingItems<TimelineItem>,
+    // True while there's nothing to show yet AND Paging's own initial fetch hasn't resolved — the
+    // greeting/alarm card above render normally regardless (their own data loads near-instantly), only
+    // the row list itself swaps to a skeleton so a slow cold start doesn't show a blank gap.
+    historyStillLoading: Boolean = false,
 ) {
     val listState = rememberLazyListState(cacheWindow = LazyLayoutCacheWindow(ahead = TIMELINE_PREFETCH_AHEAD))
     val sharedOverscrollEffect = rememberOverscrollEffect()
@@ -178,14 +188,23 @@ internal fun HomePlanContent(
             item(key = "alarm-spacer") {
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.xxl))
             }
-            sessionTimelineItems(
-                liveTimeline = uiState.liveTimeline,
-                historyItems = historyItems,
-                registry = trackRegistry,
-                newlyArrivedIds = uiState.newlyArrivedIds,
-                suppressEntranceAnimation = !timelineSettled,
-                onOpenAiRun = onOpenAiRun,
-            )
+            if (historyStillLoading) {
+                item(key = "timeline-skeleton") {
+                    TimelineRowsSkeleton(
+                        rowCount = INITIAL_LOAD_SKELETON_ROWS,
+                        modifier = Modifier.padding(top = Spacing.xxxl),
+                    )
+                }
+            } else {
+                sessionTimelineItems(
+                    liveTimeline = uiState.liveTimeline,
+                    historyItems = historyItems,
+                    registry = trackRegistry,
+                    newlyArrivedIds = uiState.newlyArrivedIds,
+                    suppressEntranceAnimation = !timelineSettled,
+                    onOpenAiRun = onOpenAiRun,
+                )
+            }
             if (!hasNotificationPermission) {
                 item(key = "notif-permission") {
                     NotificationPermissionRow(
