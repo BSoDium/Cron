@@ -1,5 +1,6 @@
 package fr.bsodium.cron.ui.screens.home.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,14 +15,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import fr.bsodium.cron.ui.components.skeletonPulse
+import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronPreview
 import fr.bsodium.cron.ui.theme.Radius
 import fr.bsodium.cron.ui.theme.Spacing
@@ -33,111 +32,145 @@ private val TITLE_WIDTH_FRACTIONS = listOf(0.62f, 0.4f, 0.78f, 0.5f, 0.34f)
 private val TITLE_BAR_HEIGHT = 14.dp
 private val TIME_BAR_WIDTH = 34.dp
 private val TIME_BAR_HEIGHT = 12.dp
+
+/** Matches [TimelineNode]'s own `verticalPadding` — each row reserves this both above (as top
+ *  padding) and below (as a trailing spacer), the same two-sided pattern the real row uses, so
+ *  consecutive rows land the same distance apart as real ones do. */
 private val ROW_VERTICAL_PADDING = Spacing.md
 
-/** Each row's own layout height — top padding plus the anchor circle, its tallest child — matching
- *  [TimelineSkeletonRow]'s real measured height so the track box below can be sized deterministically
- *  instead of needing to measure the row stack it sits behind. */
-private val ROW_HEIGHT = ROW_VERTICAL_PADDING + INTERIOR_ANCHOR_SIZE
+/** A row's own layout height with the fixed anchor-slot height below: top padding, the anchor slot,
+ *  bottom padding. Real [TimelineNode] rows vary this with content (the hero row, multi-line
+ *  subtext…) — every placeholder row is deliberately the same simple one-line shape, so this is exact
+ *  rather than an approximation, and the track box below can be sized off it directly. */
+private val ROW_HEIGHT = ROW_VERTICAL_PADDING * 2 + FLUSH_ANCHOR_SIZE
 
-/** Extra track length, in [ROW_HEIGHT] units, appended past the last real row — purely empty space
- *  with no row content, so the placeholder rows themselves stay fully legible and only the bare track
- *  trails off into it. This is what sells "more timeline, not loaded yet" rather than fading the
- *  content the user is meant to actually read. */
-private const val TRAILING_FADE_ROW_UNITS = 2.5f
+/** Every anchor slot reserves this fixed height regardless of which shape it draws — the larger,
+ *  cap-sized footprint — so a pill row (visually shorter than a cap circle) doesn't shrink its own
+ *  row and throw off [ROW_HEIGHT]'s otherwise-uniform math. The shape itself still centers within it
+ *  at its own real size. */
+private val ANCHOR_SLOT_HEIGHT = FLUSH_ANCHOR_SIZE
+
+/** How many of the trailing rows the fade-out gradient sweeps across, expressed as a count of
+ *  [ROW_HEIGHT] units measured up from the very bottom of the track (which itself runs
+ *  [TRAILING_ROW_UNITS] past the last real row) — capped so a short stack (e.g. the 2-row append
+ *  placeholder) still gets a visible taper instead of the gradient collapsing to nothing. */
+private const val FADE_ROW_UNITS = 2f
+private const val TRAILING_ROW_UNITS = 1f
 
 /**
  * A skeleton loader for the Home timeline's row list — [rowCount] pulsing placeholders shaped like
  * [TimelineNode]'s real row (gutter, anchor socket, title, trailing time), with a static track spine
- * behind them mirroring [TimelineTrackOverlay]. Every shape pulses via the shared
+ * behind them mirroring [TimelineTrackOverlay]. The first and last rows get a circular "cap" anchor;
+ * every row in between gets the same short horizontal pill real interior (non-cap) anchors use — see
+ * [TimelineNode]'s `AnchorShape.Pill` branch. Every shape pulses via the shared
  * [fr.bsodium.cron.ui.components.skeletonPulse], staggered top-to-bottom so the stack reads as one
- * wave rather than a single flat blink. The track itself runs [TRAILING_FADE_ROW_UNITS] rows past the
- * last placeholder and fades to fully transparent over that stretch, so the stack reads as trailing
- * off into data that hasn't arrived yet rather than stopping at a hard edge — used both for the
- * timeline's own initial load and, at a smaller [rowCount], as the trailing placeholder while Paging
- * fetches the next page of history during a scroll.
+ * wave rather than a single flat blink.
+ *
+ * The whole stack — track and rows alike, not just the empty space past them — fades to the page
+ * background over its last couple of rows, via a plain [Brush.verticalGradient] scrim drawn on top
+ * rather than a `BlendMode`-masked one: Layoutlib's Compose Preview renderer doesn't apply
+ * `drawWithContent` + `BlendMode` content masking (confirmed live — the same code renders correctly
+ * under Roborazzi and would on a real device, but shows no fade at all in Android Studio's Preview
+ * panel), while a plain alpha-blended overlay needs no special compositing and renders identically
+ * everywhere. See docs/preview-quirks.md.
+ *
+ * Used both for the timeline's own initial load and, at a smaller [rowCount], as the trailing
+ * placeholder while Paging fetches the next page of history during a scroll.
  */
 @Composable
 internal fun TimelineRowsSkeleton(rowCount: Int, modifier: Modifier = Modifier) {
-    val rowsHeight = ROW_HEIGHT * rowCount
-    val totalTrackHeight = rowsHeight + ROW_HEIGHT * TRAILING_FADE_ROW_UNITS
-    val fadeStartFraction = rowsHeight / totalTrackHeight
+    val trackHeight = ROW_HEIGHT * (rowCount.toFloat() + TRAILING_ROW_UNITS)
+    val fadeRowUnits = minOf(FADE_ROW_UNITS, rowCount.toFloat())
+    val fadeStartFraction = 1f - ROW_HEIGHT * (fadeRowUnits + TRAILING_ROW_UNITS) / trackHeight
     Box(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = (NODE_GUTTER - TRACK_WIDTH) / 2)
                 .width(TRACK_WIDTH)
-                .height(totalTrackHeight)
+                .height(trackHeight)
                 .clip(Radius.full)
-                .skeletonPulse(staggerIndex = 0)
-                // Forces an offscreen compositing layer so the DstIn mask below applies to the
-                // track's already-drawn pixels, not just this Box's own background (see
-                // ui/components/TextShimmer.kt for the same pattern).
-                .graphicsLayer { alpha = 0.99f }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            fadeStartFraction to Color.Black,
-                            1f to Color.Transparent,
-                        ),
-                        blendMode = BlendMode.DstIn,
-                    )
-                },
+                .skeletonPulse(staggerIndex = 0),
         )
         Column(modifier = Modifier.fillMaxWidth()) {
             repeat(rowCount) { index ->
                 TimelineSkeletonRow(
                     staggerIndex = index,
+                    isCap = index == 0 || index == rowCount - 1,
                     titleWidthFraction = TITLE_WIDTH_FRACTIONS[index % TITLE_WIDTH_FRACTIONS.size],
                 )
             }
         }
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        fadeStartFraction to Color.Transparent,
+                        1f to CronColors.pageBackground,
+                    ),
+                ),
+        )
     }
 }
 
 @Composable
 private fun TimelineSkeletonRow(
     staggerIndex: Int,
+    isCap: Boolean,
     titleWidthFraction: Float,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(top = ROW_VERTICAL_PADDING, end = Spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.width(NODE_GUTTER),
-            contentAlignment = Alignment.Center,
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = ROW_VERTICAL_PADDING, end = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(INTERIOR_ANCHOR_SIZE)
-                    .clip(CircleShape)
-                    .skeletonPulse(staggerIndex),
-            )
-        }
-        Spacer(Modifier.width(Spacing.md))
-        Box(modifier = Modifier.weight(1f)) {
+                    .width(NODE_GUTTER)
+                    .height(ANCHOR_SLOT_HEIGHT),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isCap) {
+                    Box(
+                        modifier = Modifier
+                            .size(FLUSH_ANCHOR_SIZE)
+                            .clip(CircleShape)
+                            .skeletonPulse(staggerIndex),
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .width(FLUSH_ANCHOR_SIZE)
+                            .height(INTERIOR_ANCHOR_SIZE)
+                            .clip(Radius.full)
+                            .skeletonPulse(staggerIndex),
+                    )
+                }
+            }
+            Spacer(Modifier.width(Spacing.md))
+            Box(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(titleWidthFraction)
+                        .height(TITLE_BAR_HEIGHT)
+                        .clip(Radius.full)
+                        .skeletonPulse(staggerIndex),
+                )
+            }
+            Spacer(Modifier.width(Spacing.md))
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(titleWidthFraction)
-                    .height(TITLE_BAR_HEIGHT)
+                    .width(TIME_BAR_WIDTH)
+                    .height(TIME_BAR_HEIGHT)
                     .clip(Radius.full)
                     .skeletonPulse(staggerIndex),
             )
         }
-        Spacer(Modifier.width(Spacing.md))
-        Box(
-            modifier = Modifier
-                .width(TIME_BAR_WIDTH)
-                .height(TIME_BAR_HEIGHT)
-                .clip(Radius.full)
-                .skeletonPulse(staggerIndex),
-        )
+        Spacer(Modifier.height(ROW_VERTICAL_PADDING))
     }
 }
 
