@@ -9,7 +9,9 @@ Rewrite it as a short summary for end users, not developers:
 - 3-6 bullet points grouped by what a user would notice (new features, fixes, other).
 - Plain language: drop prefixes, PR numbers, usernames, and internal jargon.
 - Skip purely internal changes (ci, chore, refactor, style, test) unless nothing else remains.
-- No preamble, no closing remarks, just the bullets in Markdown.`;
+- No preamble, no closing remarks, just the bullets in Markdown.
+- If only one bullet point remains, make it a single sentence instead.
+- If there are no user-facing changes, return a single bullet point: "Bug fixes and internal improvements."`;
 
 module.exports = async ({ github, context, core }) => {
   const tag = process.env.TAG;
