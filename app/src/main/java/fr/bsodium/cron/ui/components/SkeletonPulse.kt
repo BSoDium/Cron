@@ -31,6 +31,14 @@ private const val PulseLowBlend = 0.05f
 /** The "raised" phase — clearly more contrast than [PulseLowBlend], never so strong it reads as a
  *  solid accent color rather than a placeholder shape. */
 private const val PulseHighBlend = 0.16f
+
+/** [PulseLowBlend]/[PulseHighBlend]'s counterpart for a shape that must read as a distinct marker
+ *  sitting on top of plain skeleton fill (e.g. [TimelineSkeleton]'s anchor chip, on its own track) —
+ *  the real timeline draws its anchor sockets in a separate accent color from the track itself, a
+ *  contrast a shared stagger-phase offset alone can't reliably reproduce (see
+ *  [rememberEmphasizedSkeletonPulseColor]'s KDoc). */
+private const val EmphasizedPulseLowBlend = 0.16f
+private const val EmphasizedPulseHighBlend = 0.34f
 private const val PulseDurationMillis = 1500
 
 /** Gap between each successive [skeletonPulse] caller's own phase, driving the top-to-bottom wave —
@@ -40,11 +48,10 @@ private const val StaggerStepMillis = 90
 /** Cubic-bezier approximation of ease-in-out-sine, for a smooth breathing pulse, not a linear scan. */
 private val PulseEasing = CubicBezierEasing(0.445f, 0.05f, 0.55f, 0.95f)
 
-/**
- * The pulsing placeholder color shared by every skeleton shape across the app: fades between a low
- * phase — close to [CronColors.pageBackground] but never identical to it — and a higher, more
- * "elevated" phase, both blended toward `onSurface` so the pair stays visible in every color scheme
- * (see [PulseLowBlend]'s KDoc for why this isn't anchored to [CronColors.elementSurface]).
+/** The raw 0..1 breathing progress behind [rememberSkeletonPulseColor] and
+ *  [rememberEmphasizedSkeletonPulseColor] — split out so a shape needing both a normal and an
+ *  emphasized color (e.g. a row and its own anchor chip) can derive both from one shared animation
+ *  instead of running two independent [rememberInfiniteTransition]s for what's really the same wave.
  *
  * @param staggerIndex This shape's position in an ordered stack of skeleton shapes (e.g. a row's
  * index in a list) — each successive index delays its pulse's start by [StaggerStepMillis], so a
@@ -54,11 +61,7 @@ private val PulseEasing = CubicBezierEasing(0.445f, 0.05f, 0.55f, 0.95f)
  * standalone shape.
  */
 @Composable
-fun rememberSkeletonPulseColor(staggerIndex: Int = 0): Color {
-    val background = CronColors.pageBackground
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    val low = lerp(background, onSurface, PulseLowBlend)
-    val high = lerp(background, onSurface, PulseHighBlend)
+fun rememberSkeletonPulseFraction(staggerIndex: Int = 0): Float {
     val transition = rememberInfiniteTransition(label = "skeleton-pulse-transition")
     val fraction by transition.animateFloat(
         initialValue = 0f,
@@ -70,6 +73,50 @@ fun rememberSkeletonPulseColor(staggerIndex: Int = 0): Color {
         ),
         label = "skeleton-pulse-fraction",
     )
+    return fraction
+}
+
+/**
+ * The pulsing placeholder color shared by every skeleton shape across the app: fades between a low
+ * phase — close to [CronColors.pageBackground] but never identical to it — and a higher, more
+ * "elevated" phase, both blended toward `onSurface` so the pair stays visible in every color scheme
+ * (see [PulseLowBlend]'s KDoc for why this isn't anchored to [CronColors.elementSurface]).
+ *
+ * @param staggerIndex See [rememberSkeletonPulseFraction].
+ */
+@Composable
+fun rememberSkeletonPulseColor(staggerIndex: Int = 0): Color =
+    rememberSkeletonPulseColor(rememberSkeletonPulseFraction(staggerIndex))
+
+/** Overload for a caller that already has a [fraction] from [rememberSkeletonPulseFraction] (e.g. to
+ *  also derive [rememberEmphasizedSkeletonPulseColor] from the same wave) and would otherwise start a
+ *  second, redundant animation by calling the `staggerIndex` overload instead. */
+@Composable
+fun rememberSkeletonPulseColor(fraction: Float): Color =
+    skeletonPulseColorAt(fraction, PulseLowBlend, PulseHighBlend)
+
+/** A bolder companion to [rememberSkeletonPulseColor], for a shape that has to read as a distinct
+ *  marker sitting on top of plain skeleton fill rather than blend into it — [TimelineSkeleton]'s
+ *  per-row anchor chip against its own track, mirroring how the real timeline's anchor socket paints
+ *  in a separate accent color from the track fill behind it. A one-[staggerIndex]-step delay between
+ *  an anchor and its track (`TimelineSkeleton.kt`'s own history: "fix invisible cap anchor") isn't a
+ *  reliable enough contrast on its own — at [PulseDurationMillis] = 1500ms and [StaggerStepMillis] =
+ *  90ms, a one-step offset is only 6% of the cycle, so for most of that cycle the two phases (and
+ *  therefore colors) land within a couple of RGB units of each other, confirmed by direct pixel
+ *  sampling of a recorded skeleton screenshot. Takes [fraction] directly (from
+ *  [rememberSkeletonPulseFraction]) rather than its own `staggerIndex`, so the chip still rides the
+ *  exact same wave timing as the rest of its row — it's the blend amount that's different, not the
+ *  animation. */
+@Composable
+fun rememberEmphasizedSkeletonPulseColor(fraction: Float): Color =
+    skeletonPulseColorAt(fraction, EmphasizedPulseLowBlend, EmphasizedPulseHighBlend)
+
+@Composable
+private fun skeletonPulseColorAt(fraction: Float, lowBlend: Float, highBlend: Float): Color {
+    val background = CronColors.pageBackground
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val low = lerp(background, onSurface, lowBlend)
+    val high = lerp(background, onSurface, highBlend)
     return lerp(low, high, fraction)
 }
 

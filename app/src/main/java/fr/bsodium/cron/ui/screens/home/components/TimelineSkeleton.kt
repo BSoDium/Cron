@@ -20,7 +20,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.components.rememberEmphasizedSkeletonPulseColor
 import fr.bsodium.cron.ui.components.rememberSkeletonPulseColor
+import fr.bsodium.cron.ui.components.rememberSkeletonPulseFraction
 import fr.bsodium.cron.ui.components.skeletonPulse
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronPreview
@@ -157,8 +159,10 @@ private fun TimelineSkeletonRow(
     titleWidthFraction: Float,
     modifier: Modifier = Modifier,
 ) {
-    // One shared color for the whole row instead of each shape independently pulsing (same staggerIndex, so they'd always match anyway) — collapses 3 InfiniteTransitions down to 1.
-    val pulseColor = rememberSkeletonPulseColor(staggerIndex)
+    // One shared fraction for the whole row instead of each shape independently animating — collapses 3 InfiniteTransitions down to 1, deriving both blends below from the same wave.
+    val fraction = rememberSkeletonPulseFraction(staggerIndex)
+    val pulseColor = rememberSkeletonPulseColor(fraction)
+    val anchorColor = rememberEmphasizedSkeletonPulseColor(fraction)
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -177,7 +181,7 @@ private fun TimelineSkeletonRow(
                         modifier = Modifier
                             .size(FLUSH_ANCHOR_SIZE)
                             .clip(CircleShape)
-                            .background(pulseColor),
+                            .background(anchorColor),
                     )
                 } else {
                     Box(
@@ -185,7 +189,7 @@ private fun TimelineSkeletonRow(
                             .width(FLUSH_ANCHOR_SIZE)
                             .height(INTERIOR_ANCHOR_SIZE)
                             .clip(Radius.full)
-                            .background(pulseColor),
+                            .background(anchorColor),
                     )
                 }
             }
