@@ -7,11 +7,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import fr.bsodium.cron.ui.components.rememberSkeletonPulseColor
@@ -75,6 +78,23 @@ import fr.bsodium.cron.ui.theme.Spacing
  * half-[TRACK_WIDTH] span the corner rounding already spans sidesteps the problem rather than solving
  * it geometrically: there's no Y at which two differently-colored, fully-opaque regions are adjacent,
  * so there's nothing for the eye to read as a boundary.
+ *
+ * That still left the rectangular corners flanking the real anchor's own circle unpainted: the real
+ * cap's fill only exists *inside* its own governing circle (radius `halfTrack`, centered on the
+ * anchor — the same circle `bgBottom = anchor.cy + halfTrack`'s pole sits on), so for any Y between
+ * the anchor's center and that pole, the real fill occupies a shrinking disc while this composable's
+ * own [TRACK_WIDTH]-wide footprint is wider than that disc — the difference between the two shows as
+ * raw page background either side of the circle, not covered by anything. This composable now paints
+ * from the anchor's own center downward and `clipPath`s out that exact same circle (identical radius
+ * and center as the real cap's own) via [ClipOp.Difference], so its fill can only ever land strictly
+ * outside where the real content already painted — by construction, not by staying a safe guessed
+ * distance away from it. Using the anchor's smaller accent-socket radius here instead of `halfTrack`
+ * would under-exclude and reopen the exact covering regression described above; `halfTrack` is the
+ * radius that actually bounds the real track's own fill, not the smaller shape drawn on top of it. If
+ * anti-aliasing between this clip and the real content's independently-rasterized circle ever leaves a
+ * visible ring at the boundary, the safe direction to nudge the exclude radius is *larger*, never
+ * smaller — larger only shrinks the covered area by a harmless sliver of page background, while
+ * smaller reopens the same real-content-covering bug this whole shape exists to avoid.
  */
 @Composable
 internal fun SkeletonTrackConnector(
@@ -88,10 +108,6 @@ internal fun SkeletonTrackConnector(
     val trackStartXPx = with(density) { contentStartPadding.toPx() + (NODE_GUTTER - TRACK_WIDTH).toPx() / 2 }
     val verticalPaddingPx = with(density) { Spacing.md.toPx() }
     val halfTrack = trackWidthPx / 2
-    // Flat at the bottom (its own path only) so it meets TimelineRowsSkeleton's independently-rounded
-    // track top at full width, not a matching taper — two shapes narrowing toward the same point from
-    // opposite directions pinch into a bowtie at the seam instead of handing off cleanly. Rounded at
-    // the top to match the real track's own cap shape at that identical boundary.
     val path = remember { Path() }
     Box(
         modifier = modifier
@@ -104,38 +120,30 @@ internal fun SkeletonTrackConnector(
                 val skeletonItem = items[skeletonIndex]
                 val aboveItem = items[skeletonIndex - 1]
                 val bottom = (skeletonItem.offset - layoutInfo.viewportStartOffset).toFloat()
-                val top = nonLatestAnchorCenterY(
+                val cy = nonLatestAnchorCenterY(
                     itemOffset = aboveItem.offset,
                     viewportStartOffset = layoutInfo.viewportStartOffset,
                     verticalPaddingPx = verticalPaddingPx,
                     anchorDiamPx = trackWidthPx,
-                ) + halfTrack
-                if (top >= bottom) return@drawBehind
-                val cornerRadius = CornerRadius(halfTrack)
+                )
+                if (cy >= bottom) return@drawBehind
+                val cx = trackStartXPx + halfTrack
                 path.reset()
-                path.addRoundRect(
-                    RoundRect(
-                        left = trackStartXPx,
-                        top = top,
-                        right = trackStartXPx + trackWidthPx,
-                        bottom = bottom,
-                        topLeftCornerRadius = cornerRadius,
-                        topRightCornerRadius = cornerRadius,
-                        bottomLeftCornerRadius = CornerRadius.Zero,
-                        bottomRightCornerRadius = CornerRadius.Zero,
-                    ),
-                )
-                val fadeEnd = minOf(bottom, top + halfTrack)
-                drawPath(
-                    path,
-                    brush = Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        (fadeEnd - top) / (bottom - top) to color,
-                        1f to color,
-                        startY = top,
-                        endY = bottom,
-                    ),
-                )
+                path.addOval(Rect(center = Offset(cx, cy), radius = halfTrack))
+                val fadeEnd = minOf(bottom, cy + halfTrack)
+                clipPath(path, clipOp = ClipOp.Difference) {
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            (fadeEnd - cy) / (bottom - cy) to color,
+                            1f to color,
+                            startY = cy,
+                            endY = bottom,
+                        ),
+                        topLeft = Offset(trackStartXPx, cy),
+                        size = Size(trackWidthPx, bottom - cy),
+                    )
+                }
             },
     )
 }
