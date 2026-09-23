@@ -174,10 +174,20 @@ internal fun segmentCapDecision(anchors: List<PlacedAnchor>, ends: TrackEnds, vi
     val roundTop = top.id == ends.topId
     val roundBottom = bottom.id == ends.bottomId
     // Cap edge sits a full halfTrack beyond the terminal anchor's center (not at it) so the anchor nests concentrically inside the cap's rounded corner.
-    val bgTop = if (roundTop) top.cy - halfTrack else 0f
-    val bgBottom = if (roundBottom) bottom.cy + halfTrack else viewportHeight
+    val bgTop = if (roundTop) top.cy - capCircleRadius(halfTrack) else 0f
+    val bgBottom = if (roundBottom) bottom.cy + capCircleRadius(halfTrack) else viewportHeight
     return SegmentCapDecision(roundTop, roundBottom, bgTop, bgBottom)
 }
+
+/** The radius of the circle a segment-top/bottom cap's own rounded fill occupies, centered on that
+ *  cap's anchor — [TimelineTrackOverlay]'s `drawSegment` rounds the cap end with a corner radius equal
+ *  to [halfTrack] on a rect exactly [halfTrack] * 2 wide, which collapses to a literal semicircle of
+ *  this radius. Named and shared rather than left as an inline `halfTrack` reference so anything that
+ *  must exclude or match that exact circle from outside `TimelineTrackOverlay` (see
+ *  [SkeletonTrackConnector]'s own KDoc) has one place to call instead of independently re-deriving the
+ *  same fact — a future change to the cap's own rounding shows up here as a compile-time-traceable
+ *  call site instead of silently desyncing a second, unrelated `halfTrack` literal elsewhere. */
+internal fun capCircleRadius(halfTrack: Float): Float = halfTrack
 
 /** The complement of every in-[top]..[bottom]-range anchor's [gap]-buffered gap-range, as
  *  `(start, end)` Y ranges to draw spine line segments for — so the spine never runs through a

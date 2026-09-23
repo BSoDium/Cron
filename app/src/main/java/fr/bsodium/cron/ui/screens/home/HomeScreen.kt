@@ -45,6 +45,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import fr.bsodium.cron.FabRegistry
@@ -86,7 +87,12 @@ private const val PLAN_DETAIL_ENTER_MS = 240
 private val ONBOARDING_HINT_BIAS = BiasAlignment(0f, 0.3f)
 
 /** What the home body should show — kept coarse (not the thread content) so it only crossfades on a
- *  real state change, never on each streaming update. */
+ *  real state change, never on each streaming update. [Loading] covers only the true cold-start/reset
+ *  window before `uiState`'s first combine emission — rendering nothing rather than the greeting/alarm
+ *  card with [HomeUiState]'s default field values. Once [HomeUiState.initialized], the greeting and
+ *  alarm card render as soon as their own (near-instant) data is available, and [Plan] covers the
+ *  window before the row list itself is ready too — see `historyStillLoading` below and
+ *  `HomePlanContent`'s own `historyStillLoading` param, which swaps just the row list for a skeleton. */
 private enum class HomePhase { Loading, Idle, Plan }
 
 @Composable
@@ -265,11 +271,18 @@ private fun HomeRootContent(
     Box(modifier = Modifier.fillMaxSize()) {
         var lastPlan by remember { mutableStateOf<AiPlanUi?>(null) }
         LaunchedEffect(displayPlan) { displayPlan?.let { lastPlan = it } }
+        /** Paging's own initial fetch can still be running well after `initialized` flips true — without
+         *  this, a slow cold start showed the Idle onboarding screen for a frame or two, then "violently"
+         *  popped straight to real rows as they streamed in, instead of holding a skeleton until there's
+         *  something real (or genuinely nothing) to show. `initialized` itself is handled separately,
+         *  below, by [HomePhase.Loading] — this only covers `historyItems`' own fetch. */
+        val historyStillLoading = historyItems.loadState.refresh is LoadState.Loading && historyItems.itemCount == 0
         val homePhase = when {
             !uiState.initialized -> HomePhase.Loading
             displayPlan != null -> HomePhase.Plan
             lastPlan != null && uiState.isRetrying -> HomePhase.Plan
             uiState.liveTimeline.isNotEmpty() || historyItems.itemCount > 0 -> HomePhase.Plan
+            historyStillLoading -> HomePhase.Plan
             else -> HomePhase.Idle
         }
         Crossfade(
@@ -302,6 +315,7 @@ private fun HomeRootContent(
                     onAlarmTimeClick = onAlarmTimeClick,
                     onOpenAiRun = onOpenAiRun,
                     historyItems = historyItems,
+                    historyStillLoading = historyStillLoading,
                 )
             }
         }

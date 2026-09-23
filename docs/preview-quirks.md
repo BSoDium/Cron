@@ -77,3 +77,27 @@ Scaffold receives zero insets and the full canvas height is available to content
 ```kotlin
 windowInsets = if (LocalInspectionMode.current) WindowInsets(0) else TopAppBarDefaults.windowInsets
 ```
+
+---
+
+## `BlendMode`-masked fades don't render in Interactive/Compose Preview
+
+**Symptom:** A shape faded with the `graphicsLayer` + `drawWithContent` + `BlendMode.DstIn`/`SrcIn`
+gradient-mask pattern (see `ui/components/TextShimmer.kt`, `ui/screens/home/components/Fades.kt`)
+renders the full gradient correctly under Roborazzi (`GraphicsMode.NATIVE`, real native Skia) and
+would on a real device, but shows **no fade at all** in Android Studio's Interactive Preview
+panel — the shape stays fully opaque right to its edge.
+
+**Root cause:** Layoutlib's JVM/software rendering path doesn't correctly apply `BlendMode`
+content-masking composited through an offscreen `graphicsLayer`, unlike Robolectric's
+`GraphicsMode.NATIVE` (genuine native Skia) or a real device's Skia/RenderThread pipeline.
+
+**Fix:** Don't reach for `BlendMode`-masked fades on anything you need to actually see in
+Preview. Prefer a plain alpha-blended scrim instead — a `Box` with
+`Modifier.background(Brush.verticalGradient(...))` fading toward the real background color —
+which needs no special compositing and renders identically in Preview, Roborazzi, and on-device.
+See `ui/screens/home/components/TimelineSkeleton.kt`'s fade-out scrim for the pattern.
+
+`TextShimmer.kt` and `Fades.kt` both predate this finding and still use the `BlendMode` pattern
+unguarded — not fixed here since they're outside this change's scope, but any agent touching
+them should be aware their fade is Preview-invisible.

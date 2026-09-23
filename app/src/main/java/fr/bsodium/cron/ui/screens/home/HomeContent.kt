@@ -39,6 +39,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import androidx.paging.LoadState
 import androidx.paging.PagingData
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -47,6 +48,8 @@ import fr.bsodium.cron.ui.screens.home.components.ALARM_BAR_HEIGHT
 import fr.bsodium.cron.ui.screens.home.components.CollapsibleAlarmCard
 import fr.bsodium.cron.ui.screens.home.components.HomeGreetingRow
 import fr.bsodium.cron.ui.screens.home.components.NotificationPermissionRow
+import fr.bsodium.cron.ui.screens.home.components.SkeletonTrackConnector
+import fr.bsodium.cron.ui.screens.home.components.TimelineRowsSkeleton
 import fr.bsodium.cron.ui.screens.home.components.TimelineTrackOverlay
 import fr.bsodium.cron.ui.screens.home.components.rememberTimelineTrackRegistry
 import fr.bsodium.cron.ui.screens.home.components.sessionTimelineItems
@@ -56,6 +59,11 @@ import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.flow.flowOf
 
 private val ALARM_COLLAPSE_RANGE = 120.dp
+
+/** Placeholder rows shown in place of the real row list while its own data is still loading
+ *  ([HomePlanContent]'s `historyStillLoading`) — enough to read as a real list without overflowing a
+ *  typical viewport before the fade-out tail kicks in. */
+private const val INITIAL_LOAD_SKELETON_ROWS = 6
 
 /** Roughly 8-10 timeline rows' worth of ahead-of-viewport composition/measurement, kept warm so a
  *  fast fling doesn't outrun `LazyColumn`'s default one-item-ahead prefetch and force several rows'
@@ -93,6 +101,16 @@ private fun rememberTimelineSettled(initialized: Boolean, cardFullHeightPx: Int)
     return settled
 }
 
+/**
+ * The Home screen's "there's a plan" body: greeting, alarm card, and the session timeline row list.
+ *
+ * @param historyStillLoading True while `historyItems`' own Paging fetch hasn't resolved its first
+ * page yet — the greeting/alarm card above render normally regardless (their own data loads
+ * near-instantly), only the row list itself swaps to a skeleton so a slow cold start doesn't show a
+ * blank gap. Ignored whenever [uiState]'s own `liveTimeline` already has real content to show, so an
+ * already-available live event is never hidden behind the skeleton just because the unrelated history
+ * page is still loading.
+ */
 @Composable
 internal fun HomePlanContent(
     uiState: HomeUiState,
@@ -104,6 +122,7 @@ internal fun HomePlanContent(
     onAlarmTimeClick: (() -> Unit)? = null,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
     historyItems: LazyPagingItems<TimelineItem>,
+    historyStillLoading: Boolean = false,
 ) {
     val listState = rememberLazyListState(cacheWindow = LazyLayoutCacheWindow(ahead = TIMELINE_PREFETCH_AHEAD))
     val sharedOverscrollEffect = rememberOverscrollEffect()
@@ -150,6 +169,13 @@ internal fun HomePlanContent(
             listState = listState,
             visible = timelineSettled,
         )
+        // Behind the LazyColumn too, same as the overlay above — bridges the seam between the last real row and the Paging append skeleton's own track (see its own KDoc).
+        SkeletonTrackConnector(
+            listState = listState,
+            registry = trackRegistry,
+            isAppendLoading = historyItems.loadState.append is LoadState.Loading,
+            contentStartPadding = Spacing.md,
+        )
         LazyColumn(
             state = listState,
             overscrollEffect = sharedOverscrollEffect?.withoutVisualEffect(),
@@ -178,14 +204,26 @@ internal fun HomePlanContent(
             item(key = "alarm-spacer") {
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.xxl))
             }
-            sessionTimelineItems(
-                liveTimeline = uiState.liveTimeline,
-                historyItems = historyItems,
-                registry = trackRegistry,
-                newlyArrivedIds = uiState.newlyArrivedIds,
-                suppressEntranceAnimation = !timelineSettled,
-                onOpenAiRun = onOpenAiRun,
-            )
+            if (historyStillLoading && uiState.liveTimeline.isEmpty()) {
+                item(key = "timeline-skeleton") {
+                    TimelineRowsSkeleton(
+                        rowCount = INITIAL_LOAD_SKELETON_ROWS,
+                        // The actual top of the timeline (nothing real loaded above it yet), unlike
+                        // SessionTimeline.kt's append placeholder — gets the one cap circle.
+                        topCapped = true,
+                        modifier = Modifier.padding(top = Spacing.xxxl),
+                    )
+                }
+            } else {
+                sessionTimelineItems(
+                    liveTimeline = uiState.liveTimeline,
+                    historyItems = historyItems,
+                    registry = trackRegistry,
+                    newlyArrivedIds = uiState.newlyArrivedIds,
+                    suppressEntranceAnimation = !timelineSettled,
+                    onOpenAiRun = onOpenAiRun,
+                )
+            }
             if (!hasNotificationPermission) {
                 item(key = "notif-permission") {
                     NotificationPermissionRow(

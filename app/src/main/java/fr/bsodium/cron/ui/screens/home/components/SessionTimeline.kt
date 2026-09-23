@@ -56,6 +56,13 @@ import kotlinx.datetime.toLocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+private const val APPEND_SKELETON_ROWS = 2
+
+/** The Paging append-loading placeholder's own `LazyListScope.item` key — shared with
+ *  [SkeletonTrackConnector], which looks this row up in `LazyListState.layoutInfo.visibleItemsInfo`
+ *  to know where its connecting track segment should end. */
+internal const val APPEND_LOADING_ITEM_KEY = "append-loading"
+
 internal fun LazyListScope.sessionTimelineItems(
     liveTimeline: List<TimelineItem>,
     historyItems: LazyPagingItems<TimelineItem>,
@@ -136,7 +143,8 @@ internal fun LazyListScope.sessionTimelineItems(
     }
 
     when (historyItems.loadState.append) {
-        is LoadState.Loading -> item(key = "append-loading") { AppendLoadingRow() }
+        // A small skeleton, not just a spinner (#187/#231) — topCapped stays false (the default) since this tail always continues an already-open track, never a fresh cap.
+        is LoadState.Loading -> item(key = APPEND_LOADING_ITEM_KEY) { TimelineRowsSkeleton(rowCount = APPEND_SKELETON_ROWS) }
         is LoadState.Error -> item(key = "append-error") { AppendErrorRow(onRetry = historyItems::retry) }
         is LoadState.NotLoading -> Unit
     }
