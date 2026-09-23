@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -13,8 +16,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import fr.bsodium.cron.ui.components.rememberSkeletonPulseColor
 import fr.bsodium.cron.ui.theme.Spacing
 
@@ -42,16 +49,22 @@ import fr.bsodium.cron.ui.theme.Spacing
  * it — genuinely behind everything the list draws, real rows and the skeleton's own rows alike, by
  * construction rather than by z-order trickery.
  *
- * It doesn't touch [TimelineTrackRegistry] — it reads the same source [TimelineTrackOverlay] itself
- * falls back to for a non-Latest row's Y, `LazyListState.layoutInfo` (see `nonLatestAnchorCenterY`'s
- * KDoc), for **both** endpoints: [APPEND_LOADING_ITEM_KEY]'s own top (where this hands off to
- * [TimelineRowsSkeleton]'s own track) and the row immediately above it in `visibleItemsInfo` — not a
- * generous guessed distance, which either falls short of a tall row (a hero row's expandable response
- * block) or, for a short-enough timeline, reaches *past* the topmost composed content into genuinely
- * empty space above it and paints a visible floating patch there. Reusing `nonLatestAnchorCenterY`'s
- * exact formula plus [TimelineTrackOverlay]'s own `halfTrack` reach lands this on the identical `Y`
- * [TimelineTrackOverlay] itself stops painting at (`bgBottom = anchor.cy + halfTrack`), so the two
- * tracks hand off at the same boundary the real one already uses — not a separate estimate of it.
+ * [APPEND_LOADING_ITEM_KEY]'s own top (where this hands off to [TimelineRowsSkeleton]'s own track)
+ * comes from `LazyListState.layoutInfo` — not a generous guessed distance, which either falls short of
+ * a tall row (a hero row's expandable response block) or, for a short-enough timeline, reaches *past*
+ * the topmost composed content into genuinely empty space above it and paints a visible floating patch
+ * there.
+ *
+ * The row immediately above it, though, reads its live position from [TimelineTrackRegistry] — the
+ * same source [TimelineTrackOverlay] itself prefers for that anchor — falling back to
+ * `nonLatestAnchorCenterY`'s `layoutInfo` formula only when the live handle isn't attached (an isolated
+ * preview/test with no real [TimelineNode] registering into the registry). [TimelineTrackOverlay]'s own
+ * KDoc documents that formula as measurably wrong (~11.5px) for a row that's simply settled and at
+ * rest — exactly the state the append skeleton is shown in most of the time (scrolled to the bottom,
+ * waiting on Paging, not actively flinging) — so unconditionally relying on it here, the way an earlier
+ * version of this file did, would clip the excluded circle (see below) around a center that can
+ * measurably disagree with where [TimelineTrackOverlay] actually painted the real cap, reopening the
+ * exact covering-or-gap seam this file exists to avoid.
  *
  * Draws nothing at all once [APPEND_LOADING_ITEM_KEY] isn't present, or nothing is composed above it
  * this frame (both read fresh from `visibleItemsInfo` every draw, no stale caching).
@@ -68,38 +81,45 @@ import fr.bsodium.cron.ui.theme.Spacing
  * pole, this composable's [TRACK_WIDTH]-wide footprint was wider than the real fill's shrinking disc,
  * and the difference showed as raw page background either side of it).
  *
- * Both problems share one fix: paint from the anchor's own center downward and `clipPath` out that
- * exact same circle (identical radius and center to the real cap's own) via [ClipOp.Difference], so
- * this composable's fill can only ever land strictly outside where the real content already
- * painted — by construction, not by staying a safe guessed distance away from it, and not by fading
- * to hide an approximate boundary. Using the anchor's smaller accent-socket radius here instead of
- * `halfTrack` would under-exclude and reopen the covering regression this design avoids; `halfTrack`
- * is the radius that actually bounds the real track's own fill, not the smaller shape drawn on top of
- * it. Reaching higher than the anchor's own center is still off-limits for the same reason it always
- * was: this composable is composed after (so paints on top of) [TimelineTrackOverlay] in the shared
- * outer `Box`, so any fill outside the excluded circle but above it would cover real content that
- * genuinely exists there. If anti-aliasing between this clip and the real content's independently-
- * rasterized circle ever leaves a visible ring at the boundary, the safe direction to nudge the
- * exclude radius is *larger*, never smaller — larger only shrinks the covered area by a harmless
- * sliver of page background, while smaller reopens the same real-content-covering bug this whole
- * shape exists to avoid.
+ * Both problems share one fix: paint from the anchor's own center downward and `clipPath` out
+ * [capCircleRadius]'s exact same circle (identical radius and center to the real cap's own, not a
+ * separately-tuned literal) via [ClipOp.Difference], so this composable's fill can only ever land
+ * strictly outside where the real content already painted — by construction, not by staying a safe
+ * guessed distance away from it, and not by fading to hide an approximate boundary. Using the anchor's
+ * smaller accent-socket radius here instead would under-exclude and reopen the covering regression
+ * this design avoids; [capCircleRadius] is the radius that actually bounds the real track's own fill,
+ * not the smaller shape drawn on top of it. Reaching higher than the anchor's own center is still
+ * off-limits for the same reason it always was: this composable is composed after (so paints on top
+ * of) [TimelineTrackOverlay] in the shared outer `Box`, so any fill outside the excluded circle but
+ * above it would cover real content that genuinely exists there. If anti-aliasing between this clip
+ * and the real content's independently-rasterized circle ever leaves a visible ring at the boundary,
+ * the safe direction to nudge the exclude radius is *larger*, never smaller — larger only shrinks the
+ * covered area by a harmless sliver of page background, while smaller reopens the same real-content-
+ * covering bug this whole shape exists to avoid.
  */
 @Composable
 internal fun SkeletonTrackConnector(
     listState: LazyListState,
+    registry: TimelineTrackRegistry,
+    isAppendLoading: Boolean,
     contentStartPadding: Dp,
     modifier: Modifier = Modifier,
 ) {
+    // Composing nothing at all (not just skipping the draw work) whenever there's no append skeleton to bridge to skips even the layoutInfo scan below on every ordinary scroll frame.
+    if (!isAppendLoading) return
     val color = rememberSkeletonPulseColor(staggerIndex = 0)
     val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
     val trackWidthPx = with(density) { TRACK_WIDTH.toPx() }
     val trackStartXPx = with(density) { contentStartPadding.toPx() + (NODE_GUTTER - TRACK_WIDTH).toPx() / 2 }
     val verticalPaddingPx = with(density) { Spacing.md.toPx() }
     val halfTrack = trackWidthPx / 2
     val path = remember { Path() }
+    var ownCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     Box(
         modifier = modifier
             .fillMaxSize()
+            .onGloballyPositioned { ownCoordinates = it }
             .drawBehind {
                 val layoutInfo = listState.layoutInfo
                 val items = layoutInfo.visibleItemsInfo
@@ -108,23 +128,37 @@ internal fun SkeletonTrackConnector(
                 val skeletonItem = items[skeletonIndex]
                 val aboveItem = items[skeletonIndex - 1]
                 val bottom = (skeletonItem.offset - layoutInfo.viewportStartOffset).toFloat()
-                val cy = nonLatestAnchorCenterY(
+                val cy = liveAnchorCenterY(registry, aboveItem.key, ownCoordinates) ?: nonLatestAnchorCenterY(
                     itemOffset = aboveItem.offset,
                     viewportStartOffset = layoutInfo.viewportStartOffset,
                     verticalPaddingPx = verticalPaddingPx,
                     anchorDiamPx = trackWidthPx,
                 )
                 if (cy >= bottom) return@drawBehind
-                val cx = trackStartXPx + halfTrack
+                // Raw draw-scope X is always left-based; mirror it under RTL the way Modifier.padding(start = ...) would.
+                val left = if (layoutDirection == LayoutDirection.Rtl) size.width - trackStartXPx - trackWidthPx else trackStartXPx
+                val cx = left + halfTrack
                 path.reset()
-                path.addOval(Rect(center = Offset(cx, cy), radius = halfTrack))
+                path.addOval(Rect(center = Offset(cx, cy), radius = capCircleRadius(halfTrack)))
                 clipPath(path, clipOp = ClipOp.Difference) {
                     drawRect(
                         color = color,
-                        topLeft = Offset(trackStartXPx, cy),
+                        topLeft = Offset(left, cy),
                         size = Size(trackWidthPx, bottom - cy),
                     )
                 }
             },
     )
+}
+
+/** The row directly above the append skeleton's own live center Y, mirroring how [TimelineTrackOverlay]
+ *  resolves a fresh anchor's position from [TimelineTrackRegistry] — see this file's own KDoc for why
+ *  that live handle, not `nonLatestAnchorCenterY`'s `layoutInfo` formula, is the trustworthy source for
+ *  a row that's simply at rest. Returns `null` (letting the caller fall back to that formula) whenever
+ *  either this composable's own coordinates or the registry's entry for [key] isn't attached yet. */
+private fun liveAnchorCenterY(registry: TimelineTrackRegistry, key: Any?, ownCoordinates: LayoutCoordinates?): Float? {
+    val overlay = ownCoordinates?.takeIf { it.isAttached } ?: return null
+    val coords = (key as? String)?.let { registry.positions[it]?.coordinates }?.takeIf { it.isAttached } ?: return null
+    val center = Offset(coords.size.width / 2f, coords.size.height / 2f)
+    return overlay.localPositionOf(coords, center).y
 }

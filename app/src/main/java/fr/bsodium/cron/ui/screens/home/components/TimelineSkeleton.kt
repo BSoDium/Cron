@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import fr.bsodium.cron.ui.components.rememberSkeletonPulseColor
 import fr.bsodium.cron.ui.components.skeletonPulse
 import fr.bsodium.cron.ui.theme.CronColors
 import fr.bsodium.cron.ui.theme.CronPreview
@@ -32,7 +33,7 @@ private val TITLE_WIDTH_FRACTIONS = listOf(0.62f, 0.4f, 0.78f, 0.5f, 0.34f)
 
 private val TITLE_BAR_HEIGHT = 14.dp
 private val TIME_BAR_WIDTH = 34.dp
-private val TIME_BAR_HEIGHT = 12.dp
+private val TIME_BAR_HEIGHT = Spacing.md
 
 /** Matches [TimelineNode]'s own `verticalPadding` — each row reserves this both above (as top
  *  padding) and below (as a trailing spacer), the same two-sided pattern the real row uses, so
@@ -156,6 +157,8 @@ private fun TimelineSkeletonRow(
     titleWidthFraction: Float,
     modifier: Modifier = Modifier,
 ) {
+    // One shared color for the whole row instead of each shape independently pulsing (same staggerIndex, so they'd always match anyway) — collapses 3 InfiniteTransitions down to 1.
+    val pulseColor = rememberSkeletonPulseColor(staggerIndex)
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -174,7 +177,7 @@ private fun TimelineSkeletonRow(
                         modifier = Modifier
                             .size(FLUSH_ANCHOR_SIZE)
                             .clip(CircleShape)
-                            .skeletonPulse(staggerIndex),
+                            .background(pulseColor),
                     )
                 } else {
                     Box(
@@ -182,7 +185,7 @@ private fun TimelineSkeletonRow(
                             .width(FLUSH_ANCHOR_SIZE)
                             .height(INTERIOR_ANCHOR_SIZE)
                             .clip(Radius.full)
-                            .skeletonPulse(staggerIndex),
+                            .background(pulseColor),
                     )
                 }
             }
@@ -193,7 +196,7 @@ private fun TimelineSkeletonRow(
                         .fillMaxWidth(titleWidthFraction)
                         .height(TITLE_BAR_HEIGHT)
                         .clip(Radius.full)
-                        .skeletonPulse(staggerIndex),
+                        .background(pulseColor),
                 )
             }
             Spacer(Modifier.width(Spacing.md))
@@ -202,7 +205,7 @@ private fun TimelineSkeletonRow(
                     .width(TIME_BAR_WIDTH)
                     .height(TIME_BAR_HEIGHT)
                     .clip(Radius.full)
-                    .skeletonPulse(staggerIndex),
+                    .background(pulseColor),
             )
         }
         Spacer(Modifier.height(ROW_VERTICAL_PADDING))

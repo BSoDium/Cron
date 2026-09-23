@@ -263,7 +263,12 @@ private fun SessionTimelineAppendSkeletonPreview() {
         val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize()) {
             TimelineTrackOverlay(registry = registry, listState = listState)
-            SkeletonTrackConnector(listState = listState, contentStartPadding = Spacing.xl)
+            SkeletonTrackConnector(
+                listState = listState,
+                registry = registry,
+                isAppendLoading = true,
+                contentStartPadding = Spacing.xl,
+            )
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),

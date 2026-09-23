@@ -30,8 +30,8 @@ private val entryCardHeight = 72.dp
 internal fun MemorySkeleton(
     modifier: Modifier = Modifier,
 ) {
-    // Every header/entry shares one running count, not a per-section index — the wave should roll
-    // continuously down the whole list, not restart at each category boundary.
+    /** Every header/entry shares one running count, not a per-section index — the wave should roll
+     *  continuously down the whole list, not restart at each category boundary. */
     var staggerIndex = 0
     Column(
         modifier = modifier.fillMaxWidth(),

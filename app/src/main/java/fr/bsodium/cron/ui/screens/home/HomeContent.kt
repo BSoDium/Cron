@@ -39,6 +39,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import androidx.paging.LoadState
 import androidx.paging.PagingData
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -100,6 +101,16 @@ private fun rememberTimelineSettled(initialized: Boolean, cardFullHeightPx: Int)
     return settled
 }
 
+/**
+ * The Home screen's "there's a plan" body: greeting, alarm card, and the session timeline row list.
+ *
+ * @param historyStillLoading True while `historyItems`' own Paging fetch hasn't resolved its first
+ * page yet — the greeting/alarm card above render normally regardless (their own data loads
+ * near-instantly), only the row list itself swaps to a skeleton so a slow cold start doesn't show a
+ * blank gap. Ignored whenever [uiState]'s own `liveTimeline` already has real content to show, so an
+ * already-available live event is never hidden behind the skeleton just because the unrelated history
+ * page is still loading.
+ */
 @Composable
 internal fun HomePlanContent(
     uiState: HomeUiState,
@@ -111,9 +122,6 @@ internal fun HomePlanContent(
     onAlarmTimeClick: (() -> Unit)? = null,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
     historyItems: LazyPagingItems<TimelineItem>,
-    // True while there's nothing to show yet AND Paging's own initial fetch hasn't resolved — the
-    // greeting/alarm card above render normally regardless (their own data loads near-instantly), only
-    // the row list itself swaps to a skeleton so a slow cold start doesn't show a blank gap.
     historyStillLoading: Boolean = false,
 ) {
     val listState = rememberLazyListState(cacheWindow = LazyLayoutCacheWindow(ahead = TIMELINE_PREFETCH_AHEAD))
@@ -161,10 +169,13 @@ internal fun HomePlanContent(
             listState = listState,
             visible = timelineSettled,
         )
-        // Behind the LazyColumn too (drawn before it, same as the overlay above) — bridges the seam
-        // between the last real row and the Paging append skeleton's own track. See its own KDoc for
-        // why that connecting piece can't live inside the skeleton item itself.
-        SkeletonTrackConnector(listState = listState, contentStartPadding = Spacing.md)
+        // Behind the LazyColumn too, same as the overlay above — bridges the seam between the last real row and the Paging append skeleton's own track (see its own KDoc).
+        SkeletonTrackConnector(
+            listState = listState,
+            registry = trackRegistry,
+            isAppendLoading = historyItems.loadState.append is LoadState.Loading,
+            contentStartPadding = Spacing.md,
+        )
         LazyColumn(
             state = listState,
             overscrollEffect = sharedOverscrollEffect?.withoutVisualEffect(),
@@ -193,7 +204,7 @@ internal fun HomePlanContent(
             item(key = "alarm-spacer") {
                 Spacer(Modifier.height(with(density) { reservePx.toDp() }).padding(bottom = Spacing.xxl))
             }
-            if (historyStillLoading) {
+            if (historyStillLoading && uiState.liveTimeline.isEmpty()) {
                 item(key = "timeline-skeleton") {
                     TimelineRowsSkeleton(
                         rowCount = INITIAL_LOAD_SKELETON_ROWS,
