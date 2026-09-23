@@ -51,11 +51,8 @@ class TimelineSkeletonScreenshotTest {
                 }
             }
         }
-        // Mid-cycle, not frame zero — every row starts its pulse at fraction 0 (the low phase) until
-        // its own staggered delay elapses, so a frame-zero capture would show them all identical and
-        // prove nothing about the stagger. Advancing partway makes each row's own delay-driven offset
-        // visible as a distinct shade.
-        composeTestRule.mainClock.advanceTimeBy(500)
+        // Past every row's own start delay (6 rows × 220ms stagger step, the last starts at 1320ms) so the capture shows the full six-step cascade rather than trailing rows still flat at frame zero.
+        composeTestRule.mainClock.advanceTimeBy(1400)
         composeTestRule.onRoot().captureRoboImage()
     }
 
@@ -72,7 +69,7 @@ class TimelineSkeletonScreenshotTest {
                 }
             }
         }
-        composeTestRule.mainClock.advanceTimeBy(500)
+        composeTestRule.mainClock.advanceTimeBy(1400)
         composeTestRule.onRoot().captureRoboImage()
     }
 

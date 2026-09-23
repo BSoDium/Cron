@@ -43,7 +43,7 @@ private const val PulseDurationMillis = 1500
 
 /** Gap between each successive [skeletonPulse] caller's own phase, driving the top-to-bottom wave —
  *  see [skeletonPulse]'s `staggerIndex` param. */
-private const val StaggerStepMillis = 90
+private const val StaggerStepMillis = 220
 
 /** Cubic-bezier approximation of ease-in-out-sine, for a smooth breathing pulse, not a linear scan. */
 private val PulseEasing = CubicBezierEasing(0.445f, 0.05f, 0.55f, 0.95f)
