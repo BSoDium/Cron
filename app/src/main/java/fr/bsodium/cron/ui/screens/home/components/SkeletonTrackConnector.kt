@@ -10,8 +10,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -58,43 +56,33 @@ import fr.bsodium.cron.ui.theme.Spacing
  * Draws nothing at all once [APPEND_LOADING_ITEM_KEY] isn't present, or nothing is composed above it
  * this frame (both read fresh from `visibleItemsInfo` every draw, no stale caching).
  *
- * The join is faded, not a crisp filled edge. [TimelineTrackOverlay]'s own segment fill rounds its
- * bottom cap with a corner radius equal to half [TRACK_WIDTH] (`drawSegment`'s `corner`), which —
- * because that radius equals half the rect's own width — collapses to a literal semicircle whose
- * pole sits exactly at `anchor.cy + halfTrack`, the same Y this composable hands off from. Rounding
- * this composable's own top edge by that same radius (the obvious first attempt) builds the mirror
- * image directly below: two circles of equal radius, tangent to each other at that single point. Two
- * externally tangent equal circles genuinely pinch to zero width right at the point they touch —
- * mathematically smooth on each side individually, but visibly a seam once you consider it's two
- * independently painted, independently colored fills meeting there rather than one continuous shape.
- * A flat (unrounded) top trades that pinch for a hard step instead, since the real content immediately
- * above is genuinely zero-width at that exact Y — there's no shape whose crisp edge can match it.
- * Neither can be fixed by reaching higher and painting more of the anchor's own circle from here:
- * this composable is composed after (so paints on top of) [TimelineTrackOverlay] in the shared outer
- * `Box`, so any fill above `anchor.cy + halfTrack` would cover the real anchor's own disc and rim —
- * the exact Round-B regression this file's own git history already ruled out once.
+ * The join is a crisp filled edge, not a fade — deliberately. [TimelineTrackOverlay]'s own segment
+ * fill rounds its bottom cap with a corner radius equal to half [TRACK_WIDTH] (`drawSegment`'s
+ * `corner`), which — because that radius equals half the rect's own width — collapses to a literal
+ * semicircle centered on the anchor itself, with its pole at `anchor.cy + halfTrack`. An earlier
+ * version of this composable rounded its own top edge by that same radius, which builds the mirror
+ * image directly below: two circles of equal radius, tangent to each other at a single point, which
+ * pinches to zero width right at that point even though each side is individually smooth — and left
+ * the rectangular corners flanking the real anchor's own circle unpainted besides (the real cap's
+ * fill only exists *inside* its own circle, so for any Y between the anchor's center and that circle's
+ * pole, this composable's [TRACK_WIDTH]-wide footprint was wider than the real fill's shrinking disc,
+ * and the difference showed as raw page background either side of it).
  *
- * Fading the fill in from [Color.Transparent] at the seam up to full opacity over the same
- * half-[TRACK_WIDTH] span the corner rounding already spans sidesteps the problem rather than solving
- * it geometrically: there's no Y at which two differently-colored, fully-opaque regions are adjacent,
- * so there's nothing for the eye to read as a boundary.
- *
- * That still left the rectangular corners flanking the real anchor's own circle unpainted: the real
- * cap's fill only exists *inside* its own governing circle (radius `halfTrack`, centered on the
- * anchor — the same circle `bgBottom = anchor.cy + halfTrack`'s pole sits on), so for any Y between
- * the anchor's center and that pole, the real fill occupies a shrinking disc while this composable's
- * own [TRACK_WIDTH]-wide footprint is wider than that disc — the difference between the two shows as
- * raw page background either side of the circle, not covered by anything. This composable now paints
- * from the anchor's own center downward and `clipPath`s out that exact same circle (identical radius
- * and center as the real cap's own) via [ClipOp.Difference], so its fill can only ever land strictly
- * outside where the real content already painted — by construction, not by staying a safe guessed
- * distance away from it. Using the anchor's smaller accent-socket radius here instead of `halfTrack`
- * would under-exclude and reopen the exact covering regression described above; `halfTrack` is the
- * radius that actually bounds the real track's own fill, not the smaller shape drawn on top of it. If
- * anti-aliasing between this clip and the real content's independently-rasterized circle ever leaves a
- * visible ring at the boundary, the safe direction to nudge the exclude radius is *larger*, never
- * smaller — larger only shrinks the covered area by a harmless sliver of page background, while
- * smaller reopens the same real-content-covering bug this whole shape exists to avoid.
+ * Both problems share one fix: paint from the anchor's own center downward and `clipPath` out that
+ * exact same circle (identical radius and center to the real cap's own) via [ClipOp.Difference], so
+ * this composable's fill can only ever land strictly outside where the real content already
+ * painted — by construction, not by staying a safe guessed distance away from it, and not by fading
+ * to hide an approximate boundary. Using the anchor's smaller accent-socket radius here instead of
+ * `halfTrack` would under-exclude and reopen the covering regression this design avoids; `halfTrack`
+ * is the radius that actually bounds the real track's own fill, not the smaller shape drawn on top of
+ * it. Reaching higher than the anchor's own center is still off-limits for the same reason it always
+ * was: this composable is composed after (so paints on top of) [TimelineTrackOverlay] in the shared
+ * outer `Box`, so any fill outside the excluded circle but above it would cover real content that
+ * genuinely exists there. If anti-aliasing between this clip and the real content's independently-
+ * rasterized circle ever leaves a visible ring at the boundary, the safe direction to nudge the
+ * exclude radius is *larger*, never smaller — larger only shrinks the covered area by a harmless
+ * sliver of page background, while smaller reopens the same real-content-covering bug this whole
+ * shape exists to avoid.
  */
 @Composable
 internal fun SkeletonTrackConnector(
@@ -130,16 +118,9 @@ internal fun SkeletonTrackConnector(
                 val cx = trackStartXPx + halfTrack
                 path.reset()
                 path.addOval(Rect(center = Offset(cx, cy), radius = halfTrack))
-                val fadeEnd = minOf(bottom, cy + halfTrack)
                 clipPath(path, clipOp = ClipOp.Difference) {
                     drawRect(
-                        brush = Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            (fadeEnd - cy) / (bottom - cy) to color,
-                            1f to color,
-                            startY = cy,
-                            endY = bottom,
-                        ),
+                        color = color,
                         topLeft = Offset(trackStartXPx, cy),
                         size = Size(trackWidthPx, bottom - cy),
                     )
