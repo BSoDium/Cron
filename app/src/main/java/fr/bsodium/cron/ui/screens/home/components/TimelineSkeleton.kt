@@ -42,17 +42,21 @@ private val TIME_BAR_HEIGHT = Spacing.md
  *  consecutive rows land the same distance apart as real ones do. */
 private val ROW_VERTICAL_PADDING = Spacing.md
 
+/** Every anchor slot reserves this fixed height regardless of which shape it draws — matches real
+ *  [TimelineNode]'s own anchor gutter, which is always [TRACK_WIDTH] tall (`footprintDiameter()`),
+ *  not the smaller [FLUSH_ANCHOR_SIZE] a cap shape actually draws at — confirmed by measuring
+ *  consecutive real anchor centers 64dp apart (`ROW_VERTICAL_PADDING`×2 + [TRACK_WIDTH]), not the
+ *  56dp an earlier, [FLUSH_ANCHOR_SIZE]-based version of this constant produced. Using the smaller
+ *  size here packed every row 8dp tighter than real ones and left a cap row's own circle centered
+ *  8dp above where [Radius.full]'s cap rounding on the track below actually centers itself — both
+ *  fixed by matching the real slot height exactly rather than the smaller shape drawn inside it. */
+private val ANCHOR_SLOT_HEIGHT = TRACK_WIDTH
+
 /** A row's own layout height with the fixed anchor-slot height below: top padding, the anchor slot,
  *  bottom padding. Real [TimelineNode] rows vary this with content (the hero row, multi-line
  *  subtext…) — every placeholder row is deliberately the same simple one-line shape, so this is exact
  *  rather than an approximation, and the track box below can be sized off it directly. */
-private val ROW_HEIGHT = ROW_VERTICAL_PADDING * 2 + FLUSH_ANCHOR_SIZE
-
-/** Every anchor slot reserves this fixed height regardless of which shape it draws — the larger,
- *  cap-sized footprint — so a pill row (visually shorter than a cap circle) doesn't shrink its own
- *  row and throw off [ROW_HEIGHT]'s otherwise-uniform math. The shape itself still centers within it
- *  at its own real size. */
-private val ANCHOR_SLOT_HEIGHT = FLUSH_ANCHOR_SIZE
+private val ROW_HEIGHT = ROW_VERTICAL_PADDING * 2 + ANCHOR_SLOT_HEIGHT
 
 /** How many of the trailing rows the fade-out gradient sweeps across, expressed as a count of
  *  [ROW_HEIGHT] units measured up from the very bottom of the track (which itself runs
@@ -118,13 +122,19 @@ internal fun TimelineRowsSkeleton(rowCount: Int, topCapped: Boolean = false, mod
     val trackHeight = ROW_HEIGHT * (rowCount.toFloat() + TRAILING_ROW_UNITS)
     val fadeRowUnits = minOf(FADE_ROW_UNITS, rowCount.toFloat())
     val fadeStartFraction = 1f - ROW_HEIGHT * (fadeRowUnits + TRAILING_ROW_UNITS) / trackHeight
+    // Only a capped track rounds its top, and only that shape needs to start below y=0: Radius.full's
+    // rounding is centered on its own box's top edge plus half its width, so without this inset the
+    // cap would center at ROW_VERTICAL_PADDING less than row 0's own anchor circle centers itself at.
+    // The uncapped case must stay flush at y=0 regardless — SkeletonTrackConnector's own fill hands
+    // off exactly there.
+    val trackTopInset = if (topCapped) ROW_VERTICAL_PADDING else 0.dp
     Box(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(start = (NODE_GUTTER - TRACK_WIDTH) / 2)
+                .padding(start = (NODE_GUTTER - TRACK_WIDTH) / 2, top = trackTopInset)
                 .width(TRACK_WIDTH)
-                .height(trackHeight)
+                .height(trackHeight - trackTopInset)
                 .clip(if (topCapped) Radius.full else TRACK_FLAT_TOP_SHAPE)
                 .skeletonPulse(staggerIndex = 0),
         )
