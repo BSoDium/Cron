@@ -87,8 +87,11 @@ class MotionProbe(context: Context) {
         private val DEFAULT_WINDOW = 90.seconds
         /** 25Hz — enough to catch a footstep impact without an unreasonable sample count per window. */
         private const val SAMPLING_PERIOD_US = 40_000
-        /** Batches samples in the hardware FIFO so the AP wakes in bursts, not continuously. */
-        private const val BATCH_LATENCY_US = 10_000_000
+        /** Batches samples in the hardware FIFO so the AP wakes in bursts, not continuously. Must stay
+         *  comfortably below the shortest configured sample window (debug fast-test mode uses 8s) --
+         *  the OS only delivers a batch to the app when this delay elapses, so a batch latency longer
+         *  than the window means the window closes before a single sample is ever delivered. */
+        private const val BATCH_LATENCY_US = 2_000_000
 
         /** A firm pickup or jostle (e.g. the pocket false-positive, #97) — noticeable but a single event. */
         private const val HANDLED_PEAK_DELTA_G = 1.5f
