@@ -123,11 +123,7 @@ class SleepSessionService : Service() {
      *  `hardLatest` elsewhere (e.g. [SessionFsm.sessionWindowEnd]). */
     private suspend fun resolveBedtimeWindow(): ClosedRange<Instant>? {
         val session = SessionRepository(applicationContext).findCurrent() ?: return null
-        val eveningPlanAt = session.events
-            .filter { it.trigger == TriggerType.EveningPlan }
-            .maxByOrNull { it.timestamp }
-            ?.timestamp
-            ?: return null
+        val eveningPlanAt = latestEveningPlanAt(session.events) ?: return null
         val hardLatestAt = session.date.atTime(session.plan.hardLatest).toInstant(TimeZone.of(session.timezone))
         return bedtimeWindowFrom(eveningPlanAt, hardLatestAt, BEDTIME_WINDOW_MARGIN)
     }
@@ -312,6 +308,14 @@ class SleepSessionService : Service() {
             now: Instant,
             threshold: Duration = STALE_LOCATION_THRESHOLD,
         ): Boolean = now - capturedAt >= threshold
+
+        /** Pure selection — unit-testable. A replan appends a second [TriggerType.EveningPlan] event
+         *  rather than replacing the first, so [resolveBedtimeWindow] must anchor to the most recent
+         *  one regardless of list order. */
+        internal fun latestEveningPlanAt(events: List<SessionEvent>): Instant? = events
+            .filter { it.trigger == TriggerType.EveningPlan }
+            .maxByOrNull { it.timestamp }
+            ?.timestamp
 
         /** Pure bedtime-window arithmetic — unit-testable. Null if the margin collapses the window
          *  (hard-latest minus margin at or before the evening-plan timestamp). */

@@ -217,6 +217,48 @@ class ScreenStateMonitorSensorIntegrationTest {
     }
 
     @Test
+    fun an_unsustained_unlock_clears_its_pending_job_so_a_later_relock_does_not_spuriously_confirm_wake() = runTest {
+        // Regression for #275 finding 2: scheduleOutOfBedConfirm's "not sustained" branch must null
+        // pendingOutOfBed just like the success branch does. Simulates the documented race where the
+        // screen times out (isInteractive flips false) just before its SCREEN_OFF broadcast arrives:
+        // if the stale Job reference lingered, the following onScreenOff would misread
+        // hadPendingUnlockConfirm as true and spuriously run checkMotionForWake.
+        seedScreenOff()
+        val sink = RecordingSink()
+        val monitor = ScreenStateMonitor(
+            context = app,
+            sink = sink,
+            scope = this,
+            sleepOnsetThreshold = ZERO,
+            outOfBedThreshold = 5.seconds,
+            isAlarmRinging = { false },
+            motionProbe = FakeMotionSource(MotionSummary(50, 4.0f, 3.0f, MotionClassification.Walking)),
+        )
+        try {
+            monitor.start()
+            advanceUntilIdle()
+            sink.received.clear()
+
+            shadowOf(powerManager).setIsInteractive(true)
+            sendBroadcastAndIdle(Intent.ACTION_USER_PRESENT)
+
+            // The screen times out right at the threshold, but its SCREEN_OFF broadcast hasn't been
+            // delivered yet -- scheduleOutOfBedConfirm's delayed check sees stillInteractive=false.
+            shadowOf(powerManager).setIsInteractive(false)
+            advanceTimeBy(5.seconds)
+            advanceUntilIdle()
+
+            // The delayed broadcast now arrives.
+            sendBroadcastAndIdle(Intent.ACTION_SCREEN_OFF)
+            advanceUntilIdle()
+
+            assertEquals(0, sink.received.count { it.trigger == TriggerType.OutOfBedConfirmed })
+        } finally {
+            monitor.stop()
+        }
+    }
+
+    @Test
     fun already_asleep_a_still_relock_does_not_reonset_even_when_now_enclosed() = runTest {
         // Reproduces the on-device result that looked like a bug but wasn't: sleep already latched,
         // a brief unlock that reads Still on relock must not confirm wake AND must not spuriously
