@@ -53,8 +53,8 @@ class ScreenStateMonitor(
     private val lightReader: AmbientLightReader = AmbientLightReader(context),
     private val isAlarmRinging: () -> Boolean = { AlarmRingingState.isRinging },
     private val rawLog: RawObservationSink = NoOpObservationSink,
-    private val proximityReader: ProximityReader = ProximityReader(context),
-    private val motionProbe: MotionProbe = MotionProbe(context),
+    private val proximityReader: ProximitySource = ProximityReader(context),
+    private val motionProbe: MotionSource = MotionProbe(context),
     private val motionProbeWindow: Duration = 90.seconds,
     private val onsetRecheckInterval: Duration = ONSET_RECHECK_INTERVAL,
     /** Resolved fresh on each onset recheck (cheap: one session/event read) rather than once at

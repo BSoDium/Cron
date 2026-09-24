@@ -10,7 +10,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 /** A classification of the movement seen during one [MotionProbe.sample] window. */
 enum class MotionClassification { Unknown, Still, Handled, Walking }
@@ -24,6 +23,14 @@ data class MotionSummary(
     val classification: MotionClassification,
 )
 
+/** A short movement-sampling window, abstracted so [ScreenStateMonitor] can be tested with a fake
+ *  instead of a real accelerometer -- see docs/sleep-detection-architecture.md, and
+ *  [FakeMotionSource] in tests. */
+interface MotionSource {
+    /** Samples for [window] and returns a summary. */
+    suspend fun sample(window: Duration): MotionSummary
+}
+
 /**
  * Opens a short, batched accelerometer window and summarizes the movement seen in it — the
  * evidence that tells "unlocked for 10s then walked away" apart from "unlocked for 10s then set
@@ -33,7 +40,7 @@ data class MotionSummary(
  * AP in bursts rather than continuously — this is a short, triggered window (opened by a Tier-0
  * signal like significant motion or an unlock), never an all-night listener.
  */
-class MotionProbe(context: Context) {
+class MotionProbe(context: Context) : MotionSource {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
@@ -43,9 +50,8 @@ class MotionProbe(context: Context) {
     private val fallbackSensor: Sensor? =
         if (sensor == null) sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) else null
 
-    /** Samples for [window] (default 90s) and returns a summary. Empty/[MotionClassification.Unknown]
-     *  if this device has no motion sensor at all. */
-    suspend fun sample(window: Duration = DEFAULT_WINDOW): MotionSummary {
+    /** Empty/[MotionClassification.Unknown] if this device has no motion sensor at all. */
+    override suspend fun sample(window: Duration): MotionSummary {
         val activeSensor = sensor ?: fallbackSensor ?: return MotionSummary(0, 0f, 0f, MotionClassification.Unknown)
         val isRaw = sensor == null
         val deltas = mutableListOf<Float>()
@@ -84,7 +90,6 @@ class MotionProbe(context: Context) {
     }
 
     companion object {
-        private val DEFAULT_WINDOW = 90.seconds
         /** 25Hz — enough to catch a footstep impact without an unreasonable sample count per window. */
         private const val SAMPLING_PERIOD_US = 40_000
         /** Batches samples in the hardware FIFO so the AP wakes in bursts, not continuously. Must stay
