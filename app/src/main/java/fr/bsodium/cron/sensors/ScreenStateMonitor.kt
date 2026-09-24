@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.util.Log
 import fr.bsodium.cron.alarm.AlarmRingingState
 import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.Placement
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.coroutines.CoroutineScope
@@ -16,10 +17,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.util.Locale
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -30,9 +34,14 @@ import kotlin.time.Duration.Companion.seconds
  *  - [TriggerType.SleepOnset] when the screen has been off long enough **and** the room is dark
  *    (Google Clock's "motionless in a dark room"). Uncharged devices need a longer sustained window,
  *    since a phone set down somewhere is more likely than one charging at a bedside. Conditions are
- *    re-checked while the screen stays off, so onset still fires once the lights go out.
- *  - [TriggerType.OutOfBedConfirmed] on a genuine unlock mid-session — the strongest "awake" signal
- *    we have, so a pickup wakes the session instead of firing a plan on every handle.
+ *    re-checked while the screen stays off, so onset still fires once the lights go out. When
+ *    [PlacementClassifier] reads [Placement.Enclosed] (pocket/drawer — dark at any hour, so the dark
+ *    gate is meaningless there), [shouldEmitEnclosedOnset] is used instead: a longer window plus a
+ *    clock reading inside the session's bedtime window.
+ *  - [TriggerType.OutOfBedConfirmed] on a genuine unlock held open for [outOfBedThreshold], **or** on
+ *    a brief unlock followed by a walking accelerometer signature (see [checkMotionForWake]) — the
+ *    latter covers "unlocked for a few seconds, then pocketed and walked off," which a held-open
+ *    unlock alone would miss entirely.
  *
  * Receivers MUST be registered dynamically — static registration of ACTION_SCREEN_ON / OFF has been
  * blocked since Android 8.
@@ -47,12 +56,27 @@ class ScreenStateMonitor(
     private val lightReader: AmbientLightReader = AmbientLightReader(context),
     private val isAlarmRinging: () -> Boolean = { AlarmRingingState.isRinging },
     private val rawLog: RawObservationSink = NoOpObservationSink,
+    private val proximityReader: ProximitySource = ProximityReader(context),
+    private val motionProbe: MotionSource = MotionProbe(context),
+    private val motionProbeWindow: Duration = 90.seconds,
+    private val onsetRecheckInterval: Duration = ONSET_RECHECK_INTERVAL,
+    /** Resolved fresh on each onset recheck (cheap: one session/event read) rather than once at
+     *  construction, so it reflects the current session even if this monitor outlives a rearm. Null
+     *  when no session data is available -- Enclosed placement then falls back to the ordinary
+     *  dark-gate check, same as before this existed, rather than never onsetting at all. */
+    private val bedtimeWindowProvider: suspend () -> ClosedRange<Instant>? = { null },
 ) {
 
     private var screenOffSince: Instant? = null
     private var sleepOnsetEmitted: Boolean = false
+    /** Serializes [checkMotionForWake]'s read-check-write of [sleepOnsetEmitted] -- scope runs on
+     *  Dispatchers.IO, so two overlapping unlock/relock cycles can otherwise both read true before
+     *  either writes false and both confirm the same wake. */
+    private val sleepOnsetMutex = Mutex()
     private var pendingOnset: Job? = null
     private var pendingOutOfBed: Job? = null
+    /** Classified once per screen-off (see [refreshPlacement]); attached to the next SleepOnset. */
+    private var lastPlacement: Placement = Placement.Unknown
     /** True after [rearm] has been called; consumed by the next SleepOnset emission. */
     private var isRearm: Boolean = false
     /** The threshold the pending onset check is using; survives a screen-on/off blip during rearm. */
@@ -72,9 +96,11 @@ class ScreenStateMonitor(
 
     fun start() {
         lightReader.start()
-        // Seed from the current state — service might start with the screen already off.
+        // Seed from the current state — e.g. a killed-service restart, or already locked at first start.
         if (!powerManager.isInteractive) {
-            screenOffSince = Clock.System.now()
+            val now = Clock.System.now()
+            screenOffSince = now
+            scope.launch { refreshPlacement(now) }
             scheduleOnsetCheck()
         }
         val filter = IntentFilter().apply {
@@ -92,6 +118,7 @@ class ScreenStateMonitor(
         lightReader.stop()
         pendingOnset?.cancel()
         pendingOutOfBed?.cancel()
+        pendingOutOfBed = null
         Log.i(TAG, "ScreenStateMonitor stopped")
     }
 
@@ -104,18 +131,62 @@ class ScreenStateMonitor(
         sleepOnsetEmitted = false
         isRearm = true
         currentOnsetThreshold = threshold
-        screenOffSince = if (!powerManager.isInteractive) Clock.System.now() else null
+        val now = Clock.System.now()
+        val stillOff = !powerManager.isInteractive
+        screenOffSince = if (stillOff) now else null
+        if (stillOff) scope.launch { refreshPlacement(now) }
         scheduleOnsetCheck(threshold)
     }
 
     private fun onScreenOff() {
         val now = Clock.System.now()
         screenOffSince = now
-        scope.launch { rawLog.log(RawObservation("screen_off", now)) }
-        // A re-lock before out-of-bed confirms aborts it, so a momentary glance in bed isn't mistaken for getting up.
+        scope.launch { refreshPlacement(now) }
+        // See docs/sleep-detection-architecture.md §4 — a re-lock aborts the debounce below, but
+        // checkMotionForWake still catches "unlocked briefly, then walked away with it."
+        val hadPendingUnlockConfirm = pendingOutOfBed != null
         pendingOutOfBed?.cancel()
+        pendingOutOfBed = null
+        if (sleepOnsetEmitted && hadPendingUnlockConfirm) {
+            scope.launch { checkMotionForWake() }
+        }
         Log.d(TAG, "Screen off — onset check scheduled (threshold=$currentOnsetThreshold)")
         scheduleOnsetCheck(currentOnsetThreshold)
+    }
+
+    /** After a genuine unlock re-locks before [scheduleOutOfBedConfirm] would fire, a short
+     *  accelerometer window distinguishes "set back down" from "walked away with it" without needing
+     *  the unlock held open — see docs/sleep-detection-architecture.md §4. */
+    private suspend fun checkMotionForWake() {
+        val summary = motionProbe.sample(motionProbeWindow)
+        rawLog.log(
+            RawObservation(
+                "motion_probe",
+                Clock.System.now(),
+                """{"classification":"${summary.classification.name}","peakDeltaG":${summary.peakDeltaG},"variance":${summary.variance}}""",
+            )
+        )
+        if (!shouldConfirmWakeFromMotion(summary.classification)) return
+        val confirmed = sleepOnsetMutex.withLock {
+            (sleepOnsetEmitted).also { if (it) sleepOnsetEmitted = false }
+        }
+        if (!confirmed) return // already confirmed awake by another path meanwhile
+        sink.emit(
+            SessionEvent(
+                trigger = TriggerType.OutOfBedConfirmed,
+                timestamp = Clock.System.now(),
+                data = EventData.OutOfBedConfirmed(evidence = listOf("motion_walking")),
+            )
+        )
+        Log.i(TAG, "Walking detected right after an unlock+re-lock — out of bed")
+    }
+
+    /** Samples proximity+lux once at screen-off and stores the result for [emitOnset] to attach to
+     *  the SleepOnset event, and logs it unconditionally for hindsight relabeling (§5, F2 pattern). */
+    private suspend fun refreshPlacement(now: Instant) {
+        val covered = proximityReader.readCovered()
+        lastPlacement = PlacementClassifier.classify(covered, lightReader.latestLux())
+        rawLog.log(RawObservation("screen_off", now, """{"placement":"${lastPlacement.name.lowercase(Locale.ROOT)}"}"""))
     }
 
     private fun onScreenOn() {
@@ -169,6 +240,7 @@ class ScreenStateMonitor(
         pendingOutOfBed?.cancel()
         pendingOutOfBed = scope.launch {
             kotlinx.coroutines.delay(outOfBedThreshold)
+            pendingOutOfBed = null
             if (!shouldConfirmOutOfBed(
                     interactiveFor = outOfBedThreshold,
                     threshold = outOfBedThreshold,
@@ -197,14 +269,28 @@ class ScreenStateMonitor(
             while (isActive) {
                 val since = screenOffSince ?: return@launch
                 if (sleepOnsetEmitted) return@launch
-                val screenOff = Clock.System.now() - since
-                if (shouldEmitOnset(screenOff, threshold, lightReader.isDark(), batteryManager.isCharging)) {
+                val now = Clock.System.now()
+                val screenOff = now - since
+                if (shouldEmitOnsetNow(now, screenOff, threshold)) {
                     emitOnset(since)
                     return@launch
                 }
-                kotlinx.coroutines.delay(ONSET_RECHECK_INTERVAL)
+                kotlinx.coroutines.delay(onsetRecheckInterval)
             }
         }
+    }
+
+    /** Branches on [lastPlacement]: the ordinary dark gate is meaningless inside a pocket or drawer
+     *  (it's dark in there at any hour), so [Placement.Enclosed] instead requires a longer screen-off
+     *  window and a clock reading inside the session's bedtime window (see [shouldEmitEnclosedOnset]
+     *  and docs/sleep-detection-architecture.md §4). Falls back to the ordinary gate when no bedtime
+     *  window is resolvable, so a broken/missing session never means "can never onset." */
+    private suspend fun shouldEmitOnsetNow(now: Instant, screenOff: Duration, threshold: Duration): Boolean {
+        if (lastPlacement == Placement.Enclosed) {
+            val window = bedtimeWindowProvider()
+            if (window != null) return shouldEmitEnclosedOnset(screenOff, threshold, now, window)
+        }
+        return shouldEmitOnset(screenOff, threshold, lightReader.isDark(), batteryManager.isCharging)
     }
 
     private suspend fun emitOnset(since: Instant) {
@@ -215,7 +301,7 @@ class ScreenStateMonitor(
             SessionEvent(
                 trigger = TriggerType.SleepOnset,
                 timestamp = Clock.System.now(),
-                data = EventData.SleepOnset(screenOffSince = since, rearm = wasRearm),
+                data = EventData.SleepOnset(screenOffSince = since, rearm = wasRearm, placement = lastPlacement),
             )
         )
         Log.i(TAG, "Sleep onset emitted at ${Clock.System.now()} (rearm=$wasRearm)")
@@ -259,5 +345,37 @@ class ScreenStateMonitor(
             threshold: Duration,
             stillInteractive: Boolean,
         ): Boolean = stillInteractive && interactiveFor >= threshold
+
+        /** Pure decision — unit-testable. [MotionClassification.Walking] alone is trusted (it already
+         *  requires both a footstep-scale peak and sustained rhythmic variance, per [MotionProbe]);
+         *  [MotionClassification.Handled] is deliberately not enough on its own — a single jostle from
+         *  setting the phone back down looks like that too. */
+        internal fun shouldConfirmWakeFromMotion(classification: MotionClassification): Boolean =
+            classification == MotionClassification.Walking
+
+        /** A pocket/drawer needs a longer, undisturbed screen-off window before onset, since there's no
+         *  dark-gate signal to lean on. Calibration knob. */
+        private const val ENCLOSED_ONSET_MULTIPLIER = 1.5
+
+        /**
+         * Pure onset decision for [Placement.Enclosed] — unit-testable. No "no significant motion since
+         * screen-off" corroboration yet (that needs a continuous motion sensor, not [MotionProbe]'s
+         * triggered windows) — see docs/sleep-detection-architecture.md §4 for the full design and why
+         * this is a deliberate, documented gap rather than an oversight.
+         *
+         * Deliberately ignores charging state, unlike [shouldEmitOnset]: charging correlates with "at a
+         * fixed bedside spot" only for a phone left out in the open, which doesn't apply once it's
+         * already in a pocket or drawer — the bedtime-window check is the discriminator doing that job
+         * here instead.
+         */
+        internal fun shouldEmitEnclosedOnset(
+            screenOff: Duration,
+            baseThreshold: Duration,
+            now: Instant,
+            bedtimeWindow: ClosedRange<Instant>,
+        ): Boolean {
+            if (now !in bedtimeWindow) return false
+            return screenOff >= baseThreshold * ENCLOSED_ONSET_MULTIPLIER
+        }
     }
 }

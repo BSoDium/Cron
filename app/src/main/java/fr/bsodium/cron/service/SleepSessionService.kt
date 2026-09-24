@@ -29,9 +29,13 @@ import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.LocationSource
+import fr.bsodium.cron.session.model.Placement
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.session.model.latestEveningPlanEvent
 import fr.bsodium.cron.session.model.latestEveningPlanLocation
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -110,6 +114,21 @@ class SleepSessionService : Service() {
         Log.i(TAG, "Refreshed stale location for session ${session.id} (source=${fresh.source})")
     }
 
+    /** The session's presumed bedtime window, for [ScreenStateMonitor]'s [Placement.Enclosed] onset
+     *  gate (docs/sleep-detection-architecture.md §4's bedtime-window concept). Uses the *latest*
+     *  evening-plan timestamp -- a manual replan updates it, the same "always use the latest"
+     *  convention [fr.bsodium.cron.session.model.latestEveningPlanLocation] documents -- through
+     *  hard-latest minus [BEDTIME_WINDOW_MARGIN]; see [bedtimeWindowFrom] for the pure, tested
+     *  arithmetic. `session.date` is always the session's "morning date", so no cross-midnight math
+     *  is needed for the `date.atTime(time).toInstant(tz)` conversion already established for
+     *  `hardLatest` elsewhere (e.g. [SessionFsm.sessionWindowEnd]). */
+    private suspend fun resolveBedtimeWindow(): ClosedRange<Instant>? {
+        val session = SessionRepository(applicationContext).findCurrent() ?: return null
+        val eveningPlanAt = latestEveningPlanAt(session.events) ?: return null
+        val hardLatestAt = session.date.atTime(session.plan.hardLatest).toInstant(TimeZone.of(session.timezone))
+        return bedtimeWindowFrom(eveningPlanAt, hardLatestAt, BEDTIME_WINDOW_MARGIN)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -134,6 +153,9 @@ class SleepSessionService : Service() {
                 rearmThreshold = SleepTuning.rearmThreshold(applicationContext),
                 outOfBedThreshold = SleepTuning.outOfBedConfirmThreshold(applicationContext),
                 rawLog = observationLog,
+                motionProbeWindow = SleepTuning.motionProbeWindow(applicationContext),
+                onsetRecheckInterval = SleepTuning.onsetRecheckInterval(applicationContext),
+                bedtimeWindowProvider = { resolveBedtimeWindow() },
             ).also { it.start() }
         }
         if (activityRecognitionMonitor == null) {
@@ -277,12 +299,34 @@ class SleepSessionService : Service() {
         /** How old the evening-plan location can get before a genuine sleep onset refreshes it (#223). */
         private val STALE_LOCATION_THRESHOLD = 4.hours
 
+        /** Margin subtracted from hard-latest for the Enclosed-placement bedtime window's end bound —
+         *  see [resolveBedtimeWindow] and docs/sleep-detection-architecture.md §4. */
+        private val BEDTIME_WINDOW_MARGIN = 4.hours
+
         /** Pure staleness decision — unit-testable. */
         internal fun isLocationStale(
             capturedAt: Instant,
             now: Instant,
             threshold: Duration = STALE_LOCATION_THRESHOLD,
         ): Boolean = now - capturedAt >= threshold
+
+        /** Pure selection — unit-testable. Delegates to [fr.bsodium.cron.session.model.latestEveningPlanEvent]
+         *  so this and [fr.bsodium.cron.session.model.latestEveningPlanLocation] can't disagree on which
+         *  event is "the latest". */
+        internal fun latestEveningPlanAt(events: List<SessionEvent>): Instant? =
+            latestEveningPlanEvent(events)?.timestamp
+
+        /** Pure bedtime-window arithmetic — unit-testable. Null if the margin collapses the window
+         *  (hard-latest minus margin at or before the evening-plan timestamp). */
+        internal fun bedtimeWindowFrom(
+            eveningPlanAt: Instant,
+            hardLatestAt: Instant,
+            margin: Duration,
+        ): ClosedRange<Instant>? {
+            val end = hardLatestAt - margin
+            if (end <= eveningPlanAt) return null
+            return eveningPlanAt..end
+        }
 
         fun startIntent(context: Context): Intent =
             Intent(context, SleepSessionService::class.java)

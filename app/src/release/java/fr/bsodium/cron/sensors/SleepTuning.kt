@@ -22,4 +22,10 @@ object SleepTuning {
 
     @Suppress("UNUSED_PARAMETER")
     fun staleLocationThreshold(context: Context): Duration = 4.hours
+
+    @Suppress("UNUSED_PARAMETER")
+    fun motionProbeWindow(context: Context): Duration = 90.seconds
+
+    @Suppress("UNUSED_PARAMETER")
+    fun onsetRecheckInterval(context: Context): Duration = 5.minutes
 }

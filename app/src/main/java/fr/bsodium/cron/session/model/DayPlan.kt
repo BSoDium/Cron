@@ -36,11 +36,18 @@ data class SleepSession(
     val updatedAt: Instant,
 )
 
+/** The most recent [TriggerType.EveningPlan] event by timestamp, not list/append order — a replan
+ *  appends a new event rather than replacing the old one, and events aren't guaranteed to be stored in
+ *  timestamp order (see [fr.bsodium.cron.session.db.EventDao]). The one selector every consumer of
+ *  "the latest evening plan" must share, so two independent implementations can't disagree. */
+fun latestEveningPlanEvent(events: List<SessionEvent>): SessionEvent? =
+    events.filter { it.trigger == TriggerType.EveningPlan }.maxByOrNull { it.timestamp }
+
 /** The LATEST evening-plan location fix. A manual replan exists precisely to capture a fresh fix after
  *  the user moved, so every consumer (prompt text, commute origin bias) must read this one helper —
  *  reading the bootstrap's first event routes commutes from a stale location. */
 fun SleepSession.latestEveningPlanLocation(): LocationPayload? =
-    (events.lastOrNull { it.trigger == TriggerType.EveningPlan }?.data as? EventData.EveningPlan)?.location
+    (latestEveningPlanEvent(events)?.data as? EventData.EveningPlan)?.location
 
 data class SleepWindow(val start: Instant, val end: Instant)
 
