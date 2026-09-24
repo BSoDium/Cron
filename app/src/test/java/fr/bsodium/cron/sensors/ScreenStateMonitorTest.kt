@@ -1,5 +1,6 @@
 package fr.bsodium.cron.sensors
 
+import fr.bsodium.cron.testutil.Fixtures
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -79,5 +80,44 @@ class ScreenStateMonitorTest {
     fun still_or_unknown_motion_does_not_confirm() {
         assertFalse(ScreenStateMonitor.shouldConfirmWakeFromMotion(MotionClassification.Still))
         assertFalse(ScreenStateMonitor.shouldConfirmWakeFromMotion(MotionClassification.Unknown))
+    }
+
+    private val bedtimeWindow = Fixtures.at("2026-05-22T21:00:00Z")..Fixtures.at("2026-05-23T02:00:00Z")
+
+    @Test
+    fun enclosed_onset_fires_at_1_5x_threshold_inside_the_bedtime_window() {
+        assertTrue(
+            ScreenStateMonitor.shouldEmitEnclosedOnset(
+                screenOff = base * 3,
+                baseThreshold = base,
+                now = Fixtures.at("2026-05-22T23:00:00Z"),
+                bedtimeWindow = bedtimeWindow,
+            ),
+        )
+    }
+
+    @Test
+    fun enclosed_onset_below_1_5x_threshold_does_not_fire() {
+        assertFalse(
+            ScreenStateMonitor.shouldEmitEnclosedOnset(
+                screenOff = base,
+                baseThreshold = base,
+                now = Fixtures.at("2026-05-22T23:00:00Z"),
+                bedtimeWindow = bedtimeWindow,
+            ),
+        )
+    }
+
+    @Test
+    fun enclosed_onset_outside_the_bedtime_window_does_not_fire_even_past_threshold() {
+        // A drawer at 3pm is dark too, but nowhere near this user's bedtime -- must not onset.
+        assertFalse(
+            ScreenStateMonitor.shouldEmitEnclosedOnset(
+                screenOff = base * 10,
+                baseThreshold = base,
+                now = Fixtures.at("2026-05-22T15:00:00Z"),
+                bedtimeWindow = bedtimeWindow,
+            ),
+        )
     }
 }

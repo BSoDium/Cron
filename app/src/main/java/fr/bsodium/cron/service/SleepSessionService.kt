@@ -29,9 +29,12 @@ import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
 import fr.bsodium.cron.session.model.LocationSource
+import fr.bsodium.cron.session.model.Placement
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import fr.bsodium.cron.session.model.latestEveningPlanLocation
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -110,6 +113,25 @@ class SleepSessionService : Service() {
         Log.i(TAG, "Refreshed stale location for session ${session.id} (source=${fresh.source})")
     }
 
+    /** The session's presumed bedtime window, for [ScreenStateMonitor]'s [Placement.Enclosed] onset
+     *  gate — see docs/sleep-detection-architecture.md §4's cold-start fallback: earliest evening-plan
+     *  timestamp (already a concrete [Instant], no bootstrap event means no session yet) through
+     *  hard-latest minus a 4h margin, using the same `date.atTime(time).toInstant(tz)` conversion
+     *  already established for `hardLatest` elsewhere (e.g. [SessionFsm.sessionWindowEnd]) — `session.date`
+     *  is always the session's "morning date", so no cross-midnight math is needed here. */
+    private suspend fun resolveBedtimeWindow(): ClosedRange<Instant>? {
+        val session = SessionRepository(applicationContext).findCurrent() ?: return null
+        val eveningPlanAt = session.events
+            .filter { it.trigger == TriggerType.EveningPlan }
+            .minByOrNull { it.timestamp }
+            ?.timestamp
+            ?: return null
+        val hardLatestAt = session.date.atTime(session.plan.hardLatest).toInstant(TimeZone.of(session.timezone))
+        val end = hardLatestAt - BEDTIME_WINDOW_MARGIN
+        if (end <= eveningPlanAt) return null
+        return eveningPlanAt..end
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -136,6 +158,7 @@ class SleepSessionService : Service() {
                 rawLog = observationLog,
                 motionProbeWindow = SleepTuning.motionProbeWindow(applicationContext),
                 onsetRecheckInterval = SleepTuning.onsetRecheckInterval(applicationContext),
+                bedtimeWindowProvider = { resolveBedtimeWindow() },
             ).also { it.start() }
         }
         if (activityRecognitionMonitor == null) {
@@ -278,6 +301,10 @@ class SleepSessionService : Service() {
 
         /** How old the evening-plan location can get before a genuine sleep onset refreshes it (#223). */
         private val STALE_LOCATION_THRESHOLD = 4.hours
+
+        /** Margin subtracted from hard-latest for the Enclosed-placement bedtime window's end bound —
+         *  see [resolveBedtimeWindow] and docs/sleep-detection-architecture.md §4's cold-start rule. */
+        private val BEDTIME_WINDOW_MARGIN = 4.hours
 
         /** Pure staleness decision — unit-testable. */
         internal fun isLocationStale(
