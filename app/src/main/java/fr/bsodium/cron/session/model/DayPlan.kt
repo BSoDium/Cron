@@ -50,7 +50,10 @@ data class SleepWindow(val start: Instant, val end: Instant)
  *  (later ones are re-arms after an interruption, not a new bedtime) — not the onset's emission
  *  timestamp, which lags the real screen-off by the onset threshold (20-40+ min).
  *
- *  End is the latest of [TriggerType.OutOfBedConfirmed] or [TriggerType.AlarmDismissed]: many
+ *  End is the latest [TriggerType.OutOfBedConfirmed] when one exists -- it's the more direct signal
+ *  and reaching Awake that way doesn't cancel an already-scheduled alarm, so a later, unrelated
+ *  [TriggerType.AlarmDismissed] must not override a genuine earlier wake. Only falls back to the
+ *  latest [TriggerType.AlarmDismissed] when no [TriggerType.OutOfBedConfirmed] exists at all: many
  *  sessions end by the user dismissing the alarm without ever holding an unlock long enough to
  *  confirm out-of-bed (e.g. a brief dismiss-and-drop-the-phone-back-down), and treating those as
  *  "no wake detected" silently drops them from history and from the Health Connect write.
@@ -60,9 +63,8 @@ data class SleepWindow(val start: Instant, val end: Instant)
 fun SleepSession.detectedSleepWindow(): SleepWindow? {
     val onsetEvent = events.filter { it.trigger == TriggerType.SleepOnset }.minByOrNull { it.timestamp } ?: return null
     val start = (onsetEvent.data as? EventData.SleepOnset)?.screenOffSince ?: onsetEvent.timestamp
-    val end = events
-        .filter { it.trigger == TriggerType.OutOfBedConfirmed || it.trigger == TriggerType.AlarmDismissed }
-        .maxByOrNull { it.timestamp }?.timestamp
+    val end = events.filter { it.trigger == TriggerType.OutOfBedConfirmed }.maxByOrNull { it.timestamp }?.timestamp
+        ?: events.filter { it.trigger == TriggerType.AlarmDismissed }.maxByOrNull { it.timestamp }?.timestamp
         ?: return null
     if (end <= start) return null
     return SleepWindow(start, end)

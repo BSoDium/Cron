@@ -135,8 +135,7 @@ class ActivityRecognitionMonitor(
             else -> return // only STILL/WALKING/RUNNING are subscribed to; other Play Services codes can't arrive
         }
         val now = Clock.System.now()
-        // Logged unconditionally (unlike the FSM emission below) so a night can be relabeled with
-        // hindsight after the fact -- see docs/sleep-detection-architecture.md §5, finding F2.
+        // See docs/sleep-detection-architecture.md §5 (F2) — logged unconditionally for hindsight relabeling.
         scope.launch { rawLog.log(RawObservation("ar_${type.name.lowercase(Locale.ROOT)}", now)) }
         if (!sleepOnsetDetected) return
         if (type == ActivityType.Still) {

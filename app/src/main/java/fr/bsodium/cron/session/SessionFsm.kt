@@ -300,6 +300,11 @@ class SessionFsm(
          *  onEvent/onSnooze/refreshPlanFromSettings across those independently-created instances (#153). */
         private val mutex = Mutex()
 
+        /** Lets a non-FSM session read (e.g. [fr.bsodium.cron.session.ObservationLogRepository]
+         *  resolving "the current session" to attach a raw observation to) serialize against the same
+         *  lock guarding every transition, so it can't observe a session mid-supersede/bootstrap. */
+        suspend fun <T> withSessionLock(block: suspend () -> T): T = mutex.withLock { block() }
+
         /** How long past either ceiling in [sessionWindowEnd] a session stays live. */
         private val SESSION_WINDOW_GRACE = 3.hours
 

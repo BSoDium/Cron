@@ -18,6 +18,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -122,7 +124,10 @@ class ScreenStateMonitor(
         val offDuration = now - offSince
         screenOffSince = null
         pendingOnset?.cancel()
-        scope.launch { rawLog.log(RawObservation("screen_on", now, """{"offForSec":${offDuration.inWholeSeconds}}""")) }
+        scope.launch {
+            val payload = buildJsonObject { put("offForSec", offDuration.inWholeSeconds) }.toString()
+            rawLog.log(RawObservation("screen_on", now, payload))
+        }
         Log.d(TAG, "Screen on after ${offDuration.inWholeSeconds}s off")
     }
 

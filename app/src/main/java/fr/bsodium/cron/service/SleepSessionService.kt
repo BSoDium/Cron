@@ -177,6 +177,7 @@ class SleepSessionService : Service() {
                 data = EventData.EveningPlan(timezone = tzId, location = location),
             )
             SessionFsm(applicationContext, SessionRepository(applicationContext)).onEvent(event)
+            observationLog.invalidate() // a new session may have just been bootstrapped/superseded
             Log.i(TAG, "Evening plan session started (location_source=${location.source})")
         } catch (t: Throwable) {
             Log.e(TAG, "Evening plan setup failed", t)
