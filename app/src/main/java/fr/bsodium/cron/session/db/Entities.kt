@@ -64,6 +64,29 @@ data class AiMessageEntity(
     val createdAt: Long,
 )
 
+/** Append-only raw sensor log, independent of [SessionEventEntity]: every screen/motion transition
+ *  is written here unconditionally, not just the subset the FSM acts on, so a night can be
+ *  relabeled with hindsight after the fact. See docs/sleep-detection-architecture.md §5. */
+@Entity(
+    tableName = "observation_log",
+    indices = [Index("sessionId")],
+    foreignKeys = [
+        ForeignKey(
+            entity = SessionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["sessionId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class ObservationEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val sessionId: String,
+    val type: String, // free-form tag, e.g. "screen_off", "ar_walking" -- see RawObservationSink
+    val timestamp: Long, // epoch ms
+    val payloadJson: String, // small feature bag; "{}" until a phase needs richer payloads
+)
+
 @Entity(tableName = "memory_entries")
 data class MemoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

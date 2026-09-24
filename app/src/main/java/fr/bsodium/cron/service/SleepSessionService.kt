@@ -24,6 +24,7 @@ import fr.bsodium.cron.sensors.DebugSensorEventSink
 import fr.bsodium.cron.sensors.SensorEventSink
 import fr.bsodium.cron.sensors.ScreenStateMonitor
 import fr.bsodium.cron.sensors.SleepTuning
+import fr.bsodium.cron.session.ObservationLogRepository
 import fr.bsodium.cron.session.SessionFsm
 import fr.bsodium.cron.session.SessionRepository
 import fr.bsodium.cron.session.model.EventData
@@ -58,6 +59,7 @@ class SleepSessionService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var screenStateMonitor: ScreenStateMonitor? = null
     private var activityRecognitionMonitor: ActivityRecognitionMonitor? = null
+    private val observationLog by lazy { ObservationLogRepository(applicationContext) }
 
     /** Routes sensor events to both the debug UI and the session FSM. */
     private val fsmSink: SensorEventSink = object : SensorEventSink {
@@ -131,6 +133,7 @@ class SleepSessionService : Service() {
                 sleepOnsetThreshold = SleepTuning.onsetThreshold(applicationContext),
                 rearmThreshold = SleepTuning.rearmThreshold(applicationContext),
                 outOfBedThreshold = SleepTuning.outOfBedConfirmThreshold(applicationContext),
+                rawLog = observationLog,
             ).also { it.start() }
         }
         if (activityRecognitionMonitor == null) {
@@ -140,6 +143,7 @@ class SleepSessionService : Service() {
                 serviceScope,
                 sustainedMovementThreshold = SleepTuning.sustainedMovementThreshold(applicationContext),
                 onSustainedMovement = { screenStateMonitor?.rearm() },
+                rawLog = observationLog,
             ).also { it.start() }
         }
 
@@ -173,6 +177,7 @@ class SleepSessionService : Service() {
                 data = EventData.EveningPlan(timezone = tzId, location = location),
             )
             SessionFsm(applicationContext, SessionRepository(applicationContext)).onEvent(event)
+            observationLog.invalidate() // a new session may have just been bootstrapped/superseded
             Log.i(TAG, "Evening plan session started (location_source=${location.source})")
         } catch (t: Throwable) {
             Log.e(TAG, "Evening plan setup failed", t)

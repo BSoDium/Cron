@@ -18,6 +18,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -44,6 +46,7 @@ class ScreenStateMonitor(
     private val outOfBedThreshold: Duration = OUT_OF_BED_CONFIRM_THRESHOLD,
     private val lightReader: AmbientLightReader = AmbientLightReader(context),
     private val isAlarmRinging: () -> Boolean = { AlarmRingingState.isRinging },
+    private val rawLog: RawObservationSink = NoOpObservationSink,
 ) {
 
     private var screenOffSince: Instant? = null
@@ -106,7 +109,9 @@ class ScreenStateMonitor(
     }
 
     private fun onScreenOff() {
-        screenOffSince = Clock.System.now()
+        val now = Clock.System.now()
+        screenOffSince = now
+        scope.launch { rawLog.log(RawObservation("screen_off", now)) }
         // A re-lock before out-of-bed confirms aborts it, so a momentary glance in bed isn't mistaken for getting up.
         pendingOutOfBed?.cancel()
         Log.d(TAG, "Screen off — onset check scheduled (threshold=$currentOnsetThreshold)")
@@ -115,9 +120,14 @@ class ScreenStateMonitor(
 
     private fun onScreenOn() {
         val offSince = screenOffSince ?: return
-        val offDuration = Clock.System.now() - offSince
+        val now = Clock.System.now()
+        val offDuration = now - offSince
         screenOffSince = null
         pendingOnset?.cancel()
+        scope.launch {
+            val payload = buildJsonObject { put("offForSec", offDuration.inWholeSeconds) }.toString()
+            rawLog.log(RawObservation("screen_on", now, payload))
+        }
         Log.d(TAG, "Screen on after ${offDuration.inWholeSeconds}s off")
     }
 
@@ -137,6 +147,8 @@ class ScreenStateMonitor(
      * carries the transition to Awake as intended.
      */
     private fun onUserPresent() {
+        val now = Clock.System.now()
+        scope.launch { rawLog.log(RawObservation("user_present", now)) }
         screenOffSince = null
         pendingOnset?.cancel()
         if (!sleepOnsetEmitted) return

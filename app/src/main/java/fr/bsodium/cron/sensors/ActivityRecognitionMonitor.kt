@@ -27,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import java.util.Locale
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
@@ -50,6 +51,7 @@ class ActivityRecognitionMonitor(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val sustainedMovementThreshold: Duration = 10.minutes,
     private val onSustainedMovement: () -> Unit = {},
+    private val rawLog: RawObservationSink = NoOpObservationSink,
 ) {
 
     private val receiver = object : BroadcastReceiver() {
@@ -126,13 +128,16 @@ class ActivityRecognitionMonitor(
     }
 
     private fun handleEnter(activity: Int) {
-        if (!sleepOnsetDetected) return
         val type = when (activity) {
             DetectedActivity.STILL -> ActivityType.Still
             DetectedActivity.WALKING -> ActivityType.Walking
             DetectedActivity.RUNNING -> ActivityType.Running
             else -> return // only STILL/WALKING/RUNNING are subscribed to; other Play Services codes can't arrive
         }
+        val now = Clock.System.now()
+        // See docs/sleep-detection-architecture.md §5 (F2) — logged unconditionally for hindsight relabeling.
+        scope.launch { rawLog.log(RawObservation("ar_${type.name.lowercase(Locale.ROOT)}", now)) }
+        if (!sleepOnsetDetected) return
         if (type == ActivityType.Still) {
             pendingSustainedMovement?.cancel()
             continuousMovementSince = null
@@ -143,7 +148,7 @@ class ActivityRecognitionMonitor(
             sink.emit(
                 SessionEvent(
                     trigger = TriggerType.MidSleepActivity,
-                    timestamp = Clock.System.now(),
+                    timestamp = now,
                     data = EventData.MidSleepActivity(
                         activityType = type,
                         screenOn = false,
