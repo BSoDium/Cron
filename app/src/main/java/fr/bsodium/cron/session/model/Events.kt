@@ -32,6 +32,9 @@ sealed class EventData {
     data class SleepOnset(
         val screenOffSince: Instant,
         val rearm: Boolean,
+        /** Defaults to [Placement.Unknown] so an already-persisted event missing this field still
+         *  deserializes. See [fr.bsodium.cron.sensors.PlacementClassifier]. */
+        val placement: Placement = Placement.Unknown,
     ) : EventData()
 
     @Serializable

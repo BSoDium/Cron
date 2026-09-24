@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.util.Log
 import fr.bsodium.cron.alarm.AlarmRingingState
 import fr.bsodium.cron.session.model.EventData
+import fr.bsodium.cron.session.model.Placement
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
 import kotlinx.coroutines.CoroutineScope
@@ -47,12 +48,15 @@ class ScreenStateMonitor(
     private val lightReader: AmbientLightReader = AmbientLightReader(context),
     private val isAlarmRinging: () -> Boolean = { AlarmRingingState.isRinging },
     private val rawLog: RawObservationSink = NoOpObservationSink,
+    private val proximityReader: ProximityReader = ProximityReader(context),
 ) {
 
     private var screenOffSince: Instant? = null
     private var sleepOnsetEmitted: Boolean = false
     private var pendingOnset: Job? = null
     private var pendingOutOfBed: Job? = null
+    /** Classified once per screen-off (see [refreshPlacement]); attached to the next SleepOnset. */
+    private var lastPlacement: Placement = Placement.Unknown
     /** True after [rearm] has been called; consumed by the next SleepOnset emission. */
     private var isRearm: Boolean = false
     /** The threshold the pending onset check is using; survives a screen-on/off blip during rearm. */
@@ -104,18 +108,29 @@ class ScreenStateMonitor(
         sleepOnsetEmitted = false
         isRearm = true
         currentOnsetThreshold = threshold
-        screenOffSince = if (!powerManager.isInteractive) Clock.System.now() else null
+        val now = Clock.System.now()
+        val stillOff = !powerManager.isInteractive
+        screenOffSince = if (stillOff) now else null
+        if (stillOff) scope.launch { refreshPlacement(now) }
         scheduleOnsetCheck(threshold)
     }
 
     private fun onScreenOff() {
         val now = Clock.System.now()
         screenOffSince = now
-        scope.launch { rawLog.log(RawObservation("screen_off", now)) }
+        scope.launch { refreshPlacement(now) }
         // A re-lock before out-of-bed confirms aborts it, so a momentary glance in bed isn't mistaken for getting up.
         pendingOutOfBed?.cancel()
         Log.d(TAG, "Screen off — onset check scheduled (threshold=$currentOnsetThreshold)")
         scheduleOnsetCheck(currentOnsetThreshold)
+    }
+
+    /** Samples proximity+lux once at screen-off and stores the result for [emitOnset] to attach to
+     *  the SleepOnset event, and logs it unconditionally for hindsight relabeling (§5, F2 pattern). */
+    private suspend fun refreshPlacement(now: Instant) {
+        val covered = proximityReader.readCovered()
+        lastPlacement = PlacementClassifier.classify(covered, lightReader.latestLux())
+        rawLog.log(RawObservation("screen_off", now, """{"placement":"${lastPlacement.name}"}"""))
     }
 
     private fun onScreenOn() {
@@ -215,7 +230,7 @@ class ScreenStateMonitor(
             SessionEvent(
                 trigger = TriggerType.SleepOnset,
                 timestamp = Clock.System.now(),
-                data = EventData.SleepOnset(screenOffSince = since, rearm = wasRearm),
+                data = EventData.SleepOnset(screenOffSince = since, rearm = wasRearm, placement = lastPlacement),
             )
         )
         Log.i(TAG, "Sleep onset emitted at ${Clock.System.now()} (rearm=$wasRearm)")

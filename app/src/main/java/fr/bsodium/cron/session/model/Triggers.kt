@@ -33,6 +33,17 @@ enum class ActivityType {
     @SerialName("out_of_bed") OutOfBed,
 }
 
+/** Where the phone physically is, classified at each screen-off/dismiss (see
+ *  [fr.bsodium.cron.sensors.PlacementClassifier]). Ambient light is only meaningful signal for
+ *  onset/wake when [Open] -- a pocket or drawer is dark at any hour, so [Enclosed] needs a
+ *  different (clock-window-based) onset gate. Docs: docs/sleep-detection-architecture.md §1/§4. */
+@Serializable
+enum class Placement {
+    @SerialName("open") Open,
+    @SerialName("enclosed") Enclosed,
+    @SerialName("unknown") Unknown,
+}
+
 @Serializable
 enum class SignalConfidence {
     @SerialName("high") High,

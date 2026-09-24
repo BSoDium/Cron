@@ -44,6 +44,9 @@ class AmbientLightReader(context: Context) {
     /** True when the room is dark — or when there's no light sensor (don't block onset on missing hardware). */
     fun isDark(): Boolean = (latestLux ?: return true) < DARK_LUX_THRESHOLD
 
+    /** Raw lux, for callers that need more than the dark/not-dark gate (e.g. [PlacementClassifier]). */
+    fun latestLux(): Float? = latestLux
+
     companion object {
         private const val TAG = "AmbientLightReader"
         /** A dark bedroom reads only a few lux; dim indoor lighting is tens+. Calibration knob. */
