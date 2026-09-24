@@ -32,6 +32,7 @@ import fr.bsodium.cron.session.model.LocationSource
 import fr.bsodium.cron.session.model.Placement
 import fr.bsodium.cron.session.model.SessionEvent
 import fr.bsodium.cron.session.model.TriggerType
+import fr.bsodium.cron.session.model.latestEveningPlanEvent
 import fr.bsodium.cron.session.model.latestEveningPlanLocation
 import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
@@ -309,13 +310,11 @@ class SleepSessionService : Service() {
             threshold: Duration = STALE_LOCATION_THRESHOLD,
         ): Boolean = now - capturedAt >= threshold
 
-        /** Pure selection — unit-testable. A replan appends a second [TriggerType.EveningPlan] event
-         *  rather than replacing the first, so [resolveBedtimeWindow] must anchor to the most recent
-         *  one regardless of list order. */
-        internal fun latestEveningPlanAt(events: List<SessionEvent>): Instant? = events
-            .filter { it.trigger == TriggerType.EveningPlan }
-            .maxByOrNull { it.timestamp }
-            ?.timestamp
+        /** Pure selection — unit-testable. Delegates to [fr.bsodium.cron.session.model.latestEveningPlanEvent]
+         *  so this and [fr.bsodium.cron.session.model.latestEveningPlanLocation] can't disagree on which
+         *  event is "the latest". */
+        internal fun latestEveningPlanAt(events: List<SessionEvent>): Instant? =
+            latestEveningPlanEvent(events)?.timestamp
 
         /** Pure bedtime-window arithmetic — unit-testable. Null if the margin collapses the window
          *  (hard-latest minus margin at or before the evening-plan timestamp). */

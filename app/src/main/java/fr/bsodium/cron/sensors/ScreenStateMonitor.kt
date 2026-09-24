@@ -17,6 +17,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.buildJsonObject
@@ -67,6 +69,10 @@ class ScreenStateMonitor(
 
     private var screenOffSince: Instant? = null
     private var sleepOnsetEmitted: Boolean = false
+    /** Serializes [checkMotionForWake]'s read-check-write of [sleepOnsetEmitted] -- scope runs on
+     *  Dispatchers.IO, so two overlapping unlock/relock cycles can otherwise both read true before
+     *  either writes false and both confirm the same wake. */
+    private val sleepOnsetMutex = Mutex()
     private var pendingOnset: Job? = null
     private var pendingOutOfBed: Job? = null
     /** Classified once per screen-off (see [refreshPlacement]); attached to the next SleepOnset. */
@@ -90,8 +96,7 @@ class ScreenStateMonitor(
 
     fun start() {
         lightReader.start()
-        // Seed from the current state — service might start with the screen already off (e.g. a
-        // killed-service restart, or the phone was already locked/pocketed at first start).
+        // Seed from the current state — e.g. a killed-service restart, or already locked at first start.
         if (!powerManager.isInteractive) {
             val now = Clock.System.now()
             screenOffSince = now
@@ -162,8 +167,10 @@ class ScreenStateMonitor(
             )
         )
         if (!shouldConfirmWakeFromMotion(summary.classification)) return
-        if (!sleepOnsetEmitted) return // already confirmed awake by another path meanwhile
-        sleepOnsetEmitted = false
+        val confirmed = sleepOnsetMutex.withLock {
+            (sleepOnsetEmitted).also { if (it) sleepOnsetEmitted = false }
+        }
+        if (!confirmed) return // already confirmed awake by another path meanwhile
         sink.emit(
             SessionEvent(
                 trigger = TriggerType.OutOfBedConfirmed,
@@ -233,6 +240,7 @@ class ScreenStateMonitor(
         pendingOutOfBed?.cancel()
         pendingOutOfBed = scope.launch {
             kotlinx.coroutines.delay(outOfBedThreshold)
+            pendingOutOfBed = null
             if (!shouldConfirmOutOfBed(
                     interactiveFor = outOfBedThreshold,
                     threshold = outOfBedThreshold,
@@ -240,11 +248,9 @@ class ScreenStateMonitor(
                 )
             ) {
                 Log.i(TAG, "Unlock not sustained — treating as an in-bed glance, not out-of-bed")
-                pendingOutOfBed = null
                 return@launch
             }
             sleepOnsetEmitted = false
-            pendingOutOfBed = null
             sink.emit(
                 SessionEvent(
                     trigger = TriggerType.OutOfBedConfirmed,

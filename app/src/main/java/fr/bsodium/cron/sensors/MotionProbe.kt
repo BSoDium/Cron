@@ -69,15 +69,12 @@ class MotionProbe(context: Context) : MotionSource {
         val activeSensor = sensor ?: fallbackSensor ?: return MotionSummary(0, 0f, 0f, MotionClassification.Unknown)
         val isRaw = sensor == null
         val deltas = mutableListOf<Float>()
-        sensorManager.awaitSensorReading<Unit>(
+        sensorManager.sampleSensorWindow(
             activeSensor,
             window,
             SAMPLING_PERIOD_US,
             BATCH_LATENCY_US,
-        ) { event ->
-            deltas += deltaG(event.values, isRaw)
-            null
-        }
+        ) { event -> deltas += deltaG(event.values, isRaw) }
         return summarize(deltas)
     }
 
