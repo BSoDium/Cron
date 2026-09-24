@@ -2,14 +2,28 @@ package fr.bsodium.cron.sensors
 
 import android.content.Context
 import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.time.Duration
+
+/** 25Hz — enough to catch a footstep impact without an unreasonable sample count per window. */
+private const val SAMPLING_PERIOD_US = 40_000
+
+/** Batches samples in the hardware FIFO so the AP wakes in bursts, not continuously. Must stay
+ *  comfortably below the shortest configured sample window (debug fast-test mode uses 8s) -- the
+ *  OS only delivers a batch to the app when this delay elapses, so a batch latency longer than the
+ *  window means the window closes before a single sample is ever delivered. */
+private const val BATCH_LATENCY_US = 2_000_000
+
+/** A firm pickup or jostle (e.g. the pocket false-positive, #97) — noticeable but a single event. */
+private const val HANDLED_PEAK_DELTA_G = 1.5f
+
+/** Footstep impacts read markedly larger than a handling jostle. Calibration knob. */
+private const val WALKING_PEAK_DELTA_G = 3.0f
+
+/** Walking is rhythmic — sustained variance, not one spike. Calibration knob. */
+private const val WALKING_VARIANCE = 2.0f
 
 /** A classification of the movement seen during one [MotionProbe.sample] window. */
 enum class MotionClassification { Unknown, Still, Handled, Walking }
@@ -55,23 +69,14 @@ class MotionProbe(context: Context) : MotionSource {
         val activeSensor = sensor ?: fallbackSensor ?: return MotionSummary(0, 0f, 0f, MotionClassification.Unknown)
         val isRaw = sensor == null
         val deltas = mutableListOf<Float>()
-        withTimeoutOrNull(window) {
-            suspendCancellableCoroutine<Nothing> { cont ->
-                val listener = object : SensorEventListener {
-                    override fun onSensorChanged(event: SensorEvent) {
-                        deltas += deltaG(event.values, isRaw)
-                    }
-
-                    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-                }
-                cont.invokeOnCancellation { sensorManager.unregisterListener(listener) }
-                sensorManager.registerListener(
-                    listener,
-                    activeSensor,
-                    SAMPLING_PERIOD_US,
-                    BATCH_LATENCY_US,
-                )
-            }
+        sensorManager.awaitSensorReading<Unit>(
+            activeSensor,
+            window,
+            SAMPLING_PERIOD_US,
+            BATCH_LATENCY_US,
+        ) { event ->
+            deltas += deltaG(event.values, isRaw)
+            null
         }
         return summarize(deltas)
     }
@@ -90,21 +95,6 @@ class MotionProbe(context: Context) : MotionSource {
     }
 
     companion object {
-        /** 25Hz — enough to catch a footstep impact without an unreasonable sample count per window. */
-        private const val SAMPLING_PERIOD_US = 40_000
-        /** Batches samples in the hardware FIFO so the AP wakes in bursts, not continuously. Must stay
-         *  comfortably below the shortest configured sample window (debug fast-test mode uses 8s) --
-         *  the OS only delivers a batch to the app when this delay elapses, so a batch latency longer
-         *  than the window means the window closes before a single sample is ever delivered. */
-        private const val BATCH_LATENCY_US = 2_000_000
-
-        /** A firm pickup or jostle (e.g. the pocket false-positive, #97) — noticeable but a single event. */
-        private const val HANDLED_PEAK_DELTA_G = 1.5f
-        /** Footstep impacts read markedly larger than a handling jostle. Calibration knob. */
-        private const val WALKING_PEAK_DELTA_G = 3.0f
-        /** Walking is rhythmic — sustained variance, not one spike. Calibration knob. */
-        private const val WALKING_VARIANCE = 2.0f
-
         /** Pure decision — unit-testable. */
         internal fun classify(sampleCount: Int, peakDeltaG: Float, variance: Float): MotionClassification = when {
             sampleCount == 0 -> MotionClassification.Unknown

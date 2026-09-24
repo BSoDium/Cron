@@ -2,11 +2,7 @@ package fr.bsodium.cron.sensors
 
 import android.content.Context
 import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -29,20 +25,8 @@ class ProximityReader(context: Context) : ProximitySource {
 
     override suspend fun readCovered(timeout: Duration): Boolean? {
         val s = sensor ?: return null
-        return withTimeoutOrNull(timeout) {
-            suspendCancellableCoroutine { cont ->
-                val listener = object : SensorEventListener {
-                    override fun onSensorChanged(event: SensorEvent) {
-                        val distance = event.values.firstOrNull() ?: return
-                        sensorManager.unregisterListener(this)
-                        if (cont.isActive) cont.resumeWith(Result.success(distance < s.maximumRange))
-                    }
-
-                    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-                }
-                cont.invokeOnCancellation { sensorManager.unregisterListener(listener) }
-                sensorManager.registerListener(listener, s, SensorManager.SENSOR_DELAY_NORMAL)
-            }
+        return sensorManager.awaitSensorReading(s, timeout) { event ->
+            event.values.firstOrNull()?.let { it < s.maximumRange }
         }
     }
 }

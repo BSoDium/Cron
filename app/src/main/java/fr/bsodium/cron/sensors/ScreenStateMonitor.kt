@@ -21,6 +21,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.util.Locale
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -89,9 +90,12 @@ class ScreenStateMonitor(
 
     fun start() {
         lightReader.start()
-        // Seed from the current state — service might start with the screen already off.
+        // Seed from the current state — service might start with the screen already off (e.g. a
+        // killed-service restart, or the phone was already locked/pocketed at first start).
         if (!powerManager.isInteractive) {
-            screenOffSince = Clock.System.now()
+            val now = Clock.System.now()
+            screenOffSince = now
+            scope.launch { refreshPlacement(now) }
             scheduleOnsetCheck()
         }
         val filter = IntentFilter().apply {
@@ -109,6 +113,7 @@ class ScreenStateMonitor(
         lightReader.stop()
         pendingOnset?.cancel()
         pendingOutOfBed?.cancel()
+        pendingOutOfBed = null
         Log.i(TAG, "ScreenStateMonitor stopped")
     }
 
@@ -132,11 +137,11 @@ class ScreenStateMonitor(
         val now = Clock.System.now()
         screenOffSince = now
         scope.launch { refreshPlacement(now) }
-        // A re-lock before out-of-bed confirms aborts it, so a momentary glance in bed isn't mistaken
-        // for getting up on its own — unless the accelerometer shows the user walked away right after
-        // (checkMotionForWake), which is what a brief "unlock, then pocketed" wake looks like.
+        // See docs/sleep-detection-architecture.md §4 — a re-lock aborts the debounce below, but
+        // checkMotionForWake still catches "unlocked briefly, then walked away with it."
         val hadPendingUnlockConfirm = pendingOutOfBed != null
         pendingOutOfBed?.cancel()
+        pendingOutOfBed = null
         if (sleepOnsetEmitted && hadPendingUnlockConfirm) {
             scope.launch { checkMotionForWake() }
         }
@@ -174,7 +179,7 @@ class ScreenStateMonitor(
     private suspend fun refreshPlacement(now: Instant) {
         val covered = proximityReader.readCovered()
         lastPlacement = PlacementClassifier.classify(covered, lightReader.latestLux())
-        rawLog.log(RawObservation("screen_off", now, """{"placement":"${lastPlacement.name}"}"""))
+        rawLog.log(RawObservation("screen_off", now, """{"placement":"${lastPlacement.name.lowercase(Locale.ROOT)}"}"""))
     }
 
     private fun onScreenOn() {
@@ -235,9 +240,11 @@ class ScreenStateMonitor(
                 )
             ) {
                 Log.i(TAG, "Unlock not sustained — treating as an in-bed glance, not out-of-bed")
+                pendingOutOfBed = null
                 return@launch
             }
             sleepOnsetEmitted = false
+            pendingOutOfBed = null
             sink.emit(
                 SessionEvent(
                     trigger = TriggerType.OutOfBedConfirmed,
@@ -349,6 +356,11 @@ class ScreenStateMonitor(
          * screen-off" corroboration yet (that needs a continuous motion sensor, not [MotionProbe]'s
          * triggered windows) — see docs/sleep-detection-architecture.md §4 for the full design and why
          * this is a deliberate, documented gap rather than an oversight.
+         *
+         * Deliberately ignores charging state, unlike [shouldEmitOnset]: charging correlates with "at a
+         * fixed bedside spot" only for a phone left out in the open, which doesn't apply once it's
+         * already in a pocket or drawer — the bedtime-window check is the discriminator doing that job
+         * here instead.
          */
         internal fun shouldEmitEnclosedOnset(
             screenOff: Duration,

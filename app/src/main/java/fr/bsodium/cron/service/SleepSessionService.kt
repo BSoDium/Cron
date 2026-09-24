@@ -114,22 +114,22 @@ class SleepSessionService : Service() {
     }
 
     /** The session's presumed bedtime window, for [ScreenStateMonitor]'s [Placement.Enclosed] onset
-     *  gate — see docs/sleep-detection-architecture.md §4's cold-start fallback: earliest evening-plan
-     *  timestamp (already a concrete [Instant], no bootstrap event means no session yet) through
-     *  hard-latest minus a 4h margin, using the same `date.atTime(time).toInstant(tz)` conversion
-     *  already established for `hardLatest` elsewhere (e.g. [SessionFsm.sessionWindowEnd]) — `session.date`
-     *  is always the session's "morning date", so no cross-midnight math is needed here. */
+     *  gate (docs/sleep-detection-architecture.md §4's bedtime-window concept). Uses the *latest*
+     *  evening-plan timestamp -- a manual replan updates it, the same "always use the latest"
+     *  convention [fr.bsodium.cron.session.model.latestEveningPlanLocation] documents -- through
+     *  hard-latest minus [BEDTIME_WINDOW_MARGIN]; see [bedtimeWindowFrom] for the pure, tested
+     *  arithmetic. `session.date` is always the session's "morning date", so no cross-midnight math
+     *  is needed for the `date.atTime(time).toInstant(tz)` conversion already established for
+     *  `hardLatest` elsewhere (e.g. [SessionFsm.sessionWindowEnd]). */
     private suspend fun resolveBedtimeWindow(): ClosedRange<Instant>? {
         val session = SessionRepository(applicationContext).findCurrent() ?: return null
         val eveningPlanAt = session.events
             .filter { it.trigger == TriggerType.EveningPlan }
-            .minByOrNull { it.timestamp }
+            .maxByOrNull { it.timestamp }
             ?.timestamp
             ?: return null
         val hardLatestAt = session.date.atTime(session.plan.hardLatest).toInstant(TimeZone.of(session.timezone))
-        val end = hardLatestAt - BEDTIME_WINDOW_MARGIN
-        if (end <= eveningPlanAt) return null
-        return eveningPlanAt..end
+        return bedtimeWindowFrom(eveningPlanAt, hardLatestAt, BEDTIME_WINDOW_MARGIN)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -303,7 +303,7 @@ class SleepSessionService : Service() {
         private val STALE_LOCATION_THRESHOLD = 4.hours
 
         /** Margin subtracted from hard-latest for the Enclosed-placement bedtime window's end bound —
-         *  see [resolveBedtimeWindow] and docs/sleep-detection-architecture.md §4's cold-start rule. */
+         *  see [resolveBedtimeWindow] and docs/sleep-detection-architecture.md §4. */
         private val BEDTIME_WINDOW_MARGIN = 4.hours
 
         /** Pure staleness decision — unit-testable. */
@@ -312,6 +312,18 @@ class SleepSessionService : Service() {
             now: Instant,
             threshold: Duration = STALE_LOCATION_THRESHOLD,
         ): Boolean = now - capturedAt >= threshold
+
+        /** Pure bedtime-window arithmetic — unit-testable. Null if the margin collapses the window
+         *  (hard-latest minus margin at or before the evening-plan timestamp). */
+        internal fun bedtimeWindowFrom(
+            eveningPlanAt: Instant,
+            hardLatestAt: Instant,
+            margin: Duration,
+        ): ClosedRange<Instant>? {
+            val end = hardLatestAt - margin
+            if (end <= eveningPlanAt) return null
+            return eveningPlanAt..end
+        }
 
         fun startIntent(context: Context): Intent =
             Intent(context, SleepSessionService::class.java)
