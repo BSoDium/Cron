@@ -26,4 +26,7 @@ object SleepTuning {
 
     fun staleLocationThreshold(context: Context): Duration =
         if (SleepTestPrefs(context).fastOnset) 5.seconds else 4.hours
+
+    fun motionProbeWindow(context: Context): Duration =
+        if (SleepTestPrefs(context).fastOnset) 8.seconds else 90.seconds
 }

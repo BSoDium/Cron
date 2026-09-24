@@ -52,6 +52,7 @@ class ScreenStateMonitor(
     private val rawLog: RawObservationSink = NoOpObservationSink,
     private val proximityReader: ProximityReader = ProximityReader(context),
     private val motionProbe: MotionProbe = MotionProbe(context),
+    private val motionProbeWindow: Duration = 90.seconds,
 ) {
 
     private var screenOffSince: Instant? = null
@@ -138,7 +139,7 @@ class ScreenStateMonitor(
      *  accelerometer window distinguishes "set back down" from "walked away with it" without needing
      *  the unlock held open — see docs/sleep-detection-architecture.md §4. */
     private suspend fun checkMotionForWake() {
-        val summary = motionProbe.sample()
+        val summary = motionProbe.sample(motionProbeWindow)
         rawLog.log(
             RawObservation(
                 "motion_probe",
