@@ -32,8 +32,10 @@ import kotlin.time.Duration.Companion.seconds
  *    (Google Clock's "motionless in a dark room"). Uncharged devices need a longer sustained window,
  *    since a phone set down somewhere is more likely than one charging at a bedside. Conditions are
  *    re-checked while the screen stays off, so onset still fires once the lights go out.
- *  - [TriggerType.OutOfBedConfirmed] on a genuine unlock mid-session — the strongest "awake" signal
- *    we have, so a pickup wakes the session instead of firing a plan on every handle.
+ *  - [TriggerType.OutOfBedConfirmed] on a genuine unlock held open for [outOfBedThreshold], **or** on
+ *    a brief unlock followed by a walking accelerometer signature (see [checkMotionForWake]) — the
+ *    latter covers "unlocked for a few seconds, then pocketed and walked off," which a held-open
+ *    unlock alone would miss entirely.
  *
  * Receivers MUST be registered dynamically — static registration of ACTION_SCREEN_ON / OFF has been
  * blocked since Android 8.
@@ -49,6 +51,7 @@ class ScreenStateMonitor(
     private val isAlarmRinging: () -> Boolean = { AlarmRingingState.isRinging },
     private val rawLog: RawObservationSink = NoOpObservationSink,
     private val proximityReader: ProximityReader = ProximityReader(context),
+    private val motionProbe: MotionProbe = MotionProbe(context),
 ) {
 
     private var screenOffSince: Instant? = null
@@ -119,10 +122,41 @@ class ScreenStateMonitor(
         val now = Clock.System.now()
         screenOffSince = now
         scope.launch { refreshPlacement(now) }
-        // A re-lock before out-of-bed confirms aborts it, so a momentary glance in bed isn't mistaken for getting up.
+        // A re-lock before out-of-bed confirms aborts it, so a momentary glance in bed isn't mistaken
+        // for getting up on its own — unless the accelerometer shows the user walked away right after
+        // (checkMotionForWake), which is what a brief "unlock, then pocketed" wake looks like.
+        val hadPendingUnlockConfirm = pendingOutOfBed != null
         pendingOutOfBed?.cancel()
+        if (sleepOnsetEmitted && hadPendingUnlockConfirm) {
+            scope.launch { checkMotionForWake() }
+        }
         Log.d(TAG, "Screen off — onset check scheduled (threshold=$currentOnsetThreshold)")
         scheduleOnsetCheck(currentOnsetThreshold)
+    }
+
+    /** After a genuine unlock re-locks before [scheduleOutOfBedConfirm] would fire, a short
+     *  accelerometer window distinguishes "set back down" from "walked away with it" without needing
+     *  the unlock held open — see docs/sleep-detection-architecture.md §4. */
+    private suspend fun checkMotionForWake() {
+        val summary = motionProbe.sample()
+        rawLog.log(
+            RawObservation(
+                "motion_probe",
+                Clock.System.now(),
+                """{"classification":"${summary.classification.name}","peakDeltaG":${summary.peakDeltaG},"variance":${summary.variance}}""",
+            )
+        )
+        if (!shouldConfirmWakeFromMotion(summary.classification)) return
+        if (!sleepOnsetEmitted) return // already confirmed awake by another path meanwhile
+        sleepOnsetEmitted = false
+        sink.emit(
+            SessionEvent(
+                trigger = TriggerType.OutOfBedConfirmed,
+                timestamp = Clock.System.now(),
+                data = EventData.OutOfBedConfirmed(evidence = listOf("motion_walking")),
+            )
+        )
+        Log.i(TAG, "Walking detected right after an unlock+re-lock — out of bed")
     }
 
     /** Samples proximity+lux once at screen-off and stores the result for [emitOnset] to attach to
@@ -274,5 +308,12 @@ class ScreenStateMonitor(
             threshold: Duration,
             stillInteractive: Boolean,
         ): Boolean = stillInteractive && interactiveFor >= threshold
+
+        /** Pure decision — unit-testable. [MotionClassification.Walking] alone is trusted (it already
+         *  requires both a footstep-scale peak and sustained rhythmic variance, per [MotionProbe]);
+         *  [MotionClassification.Handled] is deliberately not enough on its own — a single jostle from
+         *  setting the phone back down looks like that too. */
+        internal fun shouldConfirmWakeFromMotion(classification: MotionClassification): Boolean =
+            classification == MotionClassification.Walking
     }
 }

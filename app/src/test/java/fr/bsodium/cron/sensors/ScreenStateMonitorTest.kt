@@ -63,4 +63,21 @@ class ScreenStateMonitorTest {
             ScreenStateMonitor.shouldConfirmOutOfBed(outOfBedThreshold * 2, outOfBedThreshold, stillInteractive = false),
         )
     }
+
+    @Test
+    fun walking_after_a_brief_unlock_confirms_out_of_bed() {
+        assertTrue(ScreenStateMonitor.shouldConfirmWakeFromMotion(MotionClassification.Walking))
+    }
+
+    @Test
+    fun a_single_handled_jostle_does_not_confirm_on_its_own() {
+        // Setting the phone back down after the glance looks like this too -- not enough alone.
+        assertFalse(ScreenStateMonitor.shouldConfirmWakeFromMotion(MotionClassification.Handled))
+    }
+
+    @Test
+    fun still_or_unknown_motion_does_not_confirm() {
+        assertFalse(ScreenStateMonitor.shouldConfirmWakeFromMotion(MotionClassification.Still))
+        assertFalse(ScreenStateMonitor.shouldConfirmWakeFromMotion(MotionClassification.Unknown))
+    }
 }
