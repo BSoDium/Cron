@@ -7,8 +7,13 @@ import org.junit.Test
 
 class SleepWindowTest {
 
-    private fun onset(at: String) = SessionEvent(trigger = TriggerType.SleepOnset, timestamp = Fixtures.at(at), data = EventData.SleepOnset(screenOffSince = Fixtures.at(at), rearm = false))
+    private fun onset(at: String, screenOffSince: String = at) = SessionEvent(
+        trigger = TriggerType.SleepOnset,
+        timestamp = Fixtures.at(at),
+        data = EventData.SleepOnset(screenOffSince = Fixtures.at(screenOffSince), rearm = false),
+    )
     private fun outOfBed(at: String) = SessionEvent(trigger = TriggerType.OutOfBedConfirmed, timestamp = Fixtures.at(at), data = EventData.OutOfBedConfirmed(evidence = listOf("device_unlocked")))
+    private fun dismissed(at: String) = SessionEvent(trigger = TriggerType.AlarmDismissed, timestamp = Fixtures.at(at), data = EventData.AlarmInteraction(snoozeCount = 0))
 
     @Test
     fun single_onset_and_wake_resolves_the_window() {
@@ -64,5 +69,39 @@ class SleepWindowTest {
             events = listOf(onset("2026-05-22T22:00:00Z"), outOfBed("2026-05-22T22:00:00Z")),
         )
         assertNull(session.detectedSleepWindow())
+    }
+
+    @Test
+    fun start_uses_screen_off_since_not_the_later_onset_emission_time() {
+        val session = Fixtures.session(
+            events = listOf(
+                onset("2026-05-22T22:40:00Z", screenOffSince = "2026-05-22T22:00:00Z"),
+                outOfBed("2026-05-23T06:00:00Z"),
+            ),
+        )
+        val window = requireNotNull(session.detectedSleepWindow())
+        assertEquals(Fixtures.at("2026-05-22T22:00:00Z"), window.start)
+    }
+
+    @Test
+    fun an_alarm_dismiss_with_no_out_of_bed_confirmation_resolves_the_end() {
+        val session = Fixtures.session(
+            events = listOf(onset("2026-05-22T22:00:00Z"), dismissed("2026-05-23T06:00:00Z")),
+        )
+        val window = requireNotNull(session.detectedSleepWindow())
+        assertEquals(Fixtures.at("2026-05-23T06:00:00Z"), window.end)
+    }
+
+    @Test
+    fun out_of_bed_confirmed_wins_over_an_earlier_dismiss() {
+        val session = Fixtures.session(
+            events = listOf(
+                onset("2026-05-22T22:00:00Z"),
+                dismissed("2026-05-23T05:55:00Z"),
+                outOfBed("2026-05-23T06:00:00Z"),
+            ),
+        )
+        val window = requireNotNull(session.detectedSleepWindow())
+        assertEquals(Fixtures.at("2026-05-23T06:00:00Z"), window.end)
     }
 }
