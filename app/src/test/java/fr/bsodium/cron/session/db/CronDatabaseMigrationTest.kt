@@ -76,6 +76,34 @@ class CronDatabaseMigrationTest {
         db.close()
     }
 
+    @Test
+    fun migrate4To5_addsObservationLogTable_cascadingOnSessionDelete() {
+        helper.createDatabase(TEST_DB, 4).apply {
+            execSQL(
+                "INSERT INTO sessions (id, date, status, planJson, currentInstructionJson, lastAiCallAt, " +
+                    "snoozeCount, timezone, cachedFirstEventSig, createdAt, updatedAt) VALUES " +
+                    "('s1', '2026-05-22', 'Complete', '{}', '{}', NULL, 0, 'UTC', NULL, 0, 0)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 5, true, MIGRATION_4_5)
+        db.execSQL("PRAGMA foreign_keys=ON") // not on by default on this raw connection, unlike Room's own
+        db.execSQL(
+            "INSERT INTO observation_log (sessionId, type, timestamp, payloadJson) VALUES ('s1', 'screen_off', 100, '{}')"
+        )
+        db.query("SELECT COUNT(*) FROM observation_log").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(1, cursor.getInt(0))
+        }
+        db.execSQL("DELETE FROM sessions WHERE id = 's1'")
+        db.query("SELECT COUNT(*) FROM observation_log").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test"
     }

@@ -31,3 +31,19 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE memory_entries ADD COLUMN failureReason TEXT")
     }
 }
+
+/** Adds the `observation_log` table -- see [ObservationEntity]. */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS observation_log (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "sessionId TEXT NOT NULL, " +
+                "type TEXT NOT NULL, " +
+                "timestamp INTEGER NOT NULL, " +
+                "payloadJson TEXT NOT NULL, " +
+                "FOREIGN KEY(sessionId) REFERENCES sessions(id) ON DELETE CASCADE)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_observation_log_sessionId ON observation_log(sessionId)")
+    }
+}
