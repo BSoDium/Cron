@@ -29,4 +29,7 @@ object SleepTuning {
 
     fun motionProbeWindow(context: Context): Duration =
         if (SleepTestPrefs(context).fastOnset) 8.seconds else 90.seconds
+
+    fun onsetRecheckInterval(context: Context): Duration =
+        if (SleepTestPrefs(context).fastOnset) 5.seconds else 5.minutes
 }

@@ -53,6 +53,7 @@ class ScreenStateMonitor(
     private val proximityReader: ProximityReader = ProximityReader(context),
     private val motionProbe: MotionProbe = MotionProbe(context),
     private val motionProbeWindow: Duration = 90.seconds,
+    private val onsetRecheckInterval: Duration = ONSET_RECHECK_INTERVAL,
 ) {
 
     private var screenOffSince: Instant? = null
@@ -252,7 +253,7 @@ class ScreenStateMonitor(
                     emitOnset(since)
                     return@launch
                 }
-                kotlinx.coroutines.delay(ONSET_RECHECK_INTERVAL)
+                kotlinx.coroutines.delay(onsetRecheckInterval)
             }
         }
     }

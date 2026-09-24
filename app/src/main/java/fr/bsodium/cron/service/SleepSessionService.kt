@@ -135,6 +135,7 @@ class SleepSessionService : Service() {
                 outOfBedThreshold = SleepTuning.outOfBedConfirmThreshold(applicationContext),
                 rawLog = observationLog,
                 motionProbeWindow = SleepTuning.motionProbeWindow(applicationContext),
+                onsetRecheckInterval = SleepTuning.onsetRecheckInterval(applicationContext),
             ).also { it.start() }
         }
         if (activityRecognitionMonitor == null) {
