@@ -6,6 +6,9 @@ claim in the actual literature and the actual mainstream implementations, then c
 current heuristic (`ScreenStateMonitor.kt`, `ActivityRecognitionMonitor.kt`) against them and gives
 concrete, prioritized changes.
 
+For the actual proposed architecture (adaptive, self-correcting, phone-only), see
+[`sleep-detection-architecture.md`](sleep-detection-architecture.md).
+
 ## 1. Correcting a common misconception: Google Clock does not do phone-only sleep tracking
 
 The "Google Clock uses ML combining brightness, movement, micro-wakes, and snore/cough detection"
