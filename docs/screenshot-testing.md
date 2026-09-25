@@ -95,6 +95,30 @@ class MyComponentScreenshotTest {
 
 For composables with live timers or animations, set `composeTestRule.mainClock.autoAdvance = false` before `setContent` to prevent the test rule from waiting forever for idle.
 
+## Capturing a whole transition, not just the resting frame
+
+A single screenshot at rest can't catch a defect that's only visible *during* an animation (a
+placement overlap, a demoted row briefly double-exposed) — see
+`TimelineAnimationScreenshotTest.kt` for the pattern: mutate the state that triggers the animation,
+then call `mainClock.advanceTimeBy(...)` in several small steps instead of one big jump, capturing a
+named frame after each step (a "filmstrip"). Two gotchas that pattern exists to work around:
+
+- **`advanceTimeBy` with a `0` (or sub-frame) delta doesn't pump a frame.** A state mutation just
+  made isn't necessarily composed/measured yet — capture too early and you silently get the
+  *pre*-mutation tree, not an unanimated first frame of the new one. Always advance by at least one
+  real frame (`16L`) before the first capture.
+- **A `LaunchedEffect(Unit)` fired during `setContent` doesn't run until the first `mainClock` tick
+  after `setContent` returns** (`autoAdvance = false` means `setContent` itself never ticks one). If
+  the mutation comes from a `LaunchedEffect` rather than a direct `MutableState` write in the test
+  body, tick one priming frame before you start timing the animation it triggers, or the whole
+  filmstrip ends up one frame short of what its file names claim.
+
+An explicit `filePath` passed to `captureRoboImage(...)` (needed to name each frame) resolves
+relative to the JVM's working directory by default, not `build/outputs/roborazzi/` — prefix
+`provideRoborazziContext().outputDirectory` (`@OptIn(ExperimentalRoborazziApi::class,
+InternalRoborazziApi::class)`) onto it explicitly, or captures land next to `app/build.gradle.kts`
+instead of the gitignored output directory.
+
 ## JDK consistency
 
 Robolectric renders fonts differently across JDK versions. Record reference images on the same JDK that CI uses to avoid spurious diffs. The project uses the Android Studio bundled JBR.

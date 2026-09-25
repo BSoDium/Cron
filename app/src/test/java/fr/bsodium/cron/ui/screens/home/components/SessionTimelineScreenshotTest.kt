@@ -41,19 +41,24 @@ import org.robolectric.annotation.GraphicsMode
 import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.hours
 
-private fun fixedIteration(
+/** Shared deterministic iteration fixture — `internal` so other `*ScreenshotTest.kt` files in this
+ *  package (e.g. `TimelineAnimationScreenshotTest.kt`) reuse the exact same fixed data rather than
+ *  each keeping their own drifting copy. */
+internal fun fixedIteration(
     turn: Int,
     kind: RunKind,
     summary: String?,
     process: List<ProcessItem> = emptyList(),
     newAlarmTime: LocalTime? = null,
     previousAlarmTime: LocalTime? = null,
+    ranAtEpochMs: Long = 0L,
 ) = AiIterationUi(
     turnIndex = turn,
     timeLabel = "23:14",
     kind = kind,
     thread = AiThreadUi(turnIndex = turn, summary = summary, process = process, response = summary, newAlarmTime = newAlarmTime),
     previousAlarmTime = previousAlarmTime,
+    ranAtEpochMs = ranAtEpochMs,
 )
 
 @Suppress("DEPRECATION")
@@ -399,16 +404,18 @@ class SessionTimelineScreenshotTest {
 }
 
 /** An always-empty, never-loading paged history feed — these tests are about the live timeline's own
- *  rendering, not pagination, so `sessionTimelineItems`' paged tail contributes nothing here. */
+ *  rendering, not pagination, so `sessionTimelineItems`' paged tail contributes nothing here. `internal`
+ *  so other `*ScreenshotTest.kt` files in this package (e.g. `TimelineAnimationScreenshotTest.kt`) reuse
+ *  it rather than re-deriving the same `PagingData`/`LoadStates` boilerplate. */
 @Composable
-private fun emptyHistoryItems(): LazyPagingItems<TimelineItem> =
+internal fun emptyHistoryItems(): LazyPagingItems<TimelineItem> =
     pagedHistoryItems(emptyList(), appendState = LoadState.NotLoading(endOfPaginationReached = true))
 
 /** A static (non-loading, unless [appendState] says otherwise) paged history feed carrying exactly
  *  [items] — for exercising `sessionTimelineItems`' paged tail (the append-loading/error rows, the
  *  live/history seam header) without a real Pager/Room round trip. */
 @Composable
-private fun pagedHistoryItems(items: List<TimelineItem>, appendState: LoadState): LazyPagingItems<TimelineItem> =
+internal fun pagedHistoryItems(items: List<TimelineItem>, appendState: LoadState): LazyPagingItems<TimelineItem> =
     flowOf(
         PagingData.from(
             items,
