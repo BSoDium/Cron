@@ -219,7 +219,6 @@ internal fun HomePlanContent(
                     liveTimeline = uiState.liveTimeline,
                     historyItems = historyItems,
                     registry = trackRegistry,
-                    newlyArrivedIds = uiState.newlyArrivedIds,
                     suppressEntranceAnimation = !timelineSettled,
                     onOpenAiRun = onOpenAiRun,
                 )

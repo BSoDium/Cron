@@ -71,18 +71,6 @@ private val SHOWN_TRIGGERS = setOf(
 )
 
 
-/** Diffs [currentIds] against [previousIds] to find ids genuinely new since the last check —
- *  the basis for the timeline's entrance-animation gating (Round 32). [previousIds] is `null`
- *  exactly once, the very first check of the caller's lifetime (true cold start), and that call
- *  always returns [emptySet]: there's no reference point yet, and the first load must render fully
- *  static, never an animated reveal. This is deliberately a pure function, not `remember`-scoped
- *  Compose state — a `remember` resets every time the timeline's composition is torn down and
- *  rebuilt (e.g. a Home→Settings→back round trip), which is exactly the class of bug this replaces
- *  (see `HomeViewModel.NewlyArrivedIdTracker`, which holds the actual `previousIds` across calls at
- *  the ViewModel layer, which survives that navigation). */
-fun diffNewlyArrivedIds(currentIds: Set<String>, previousIds: Set<String>?): Set<String> =
-    if (previousIds == null) emptySet() else currentIds - previousIds
-
 /** One session's own [TimelineItem.AiRun]/[TimelineItem.Event] rows, sorted latest-first, `isLatest`
  *  always false (only [buildTimeline]'s own single-session-list call site — the live session — ever
  *  promotes a row to Latest). Extracted so the paged historical feed

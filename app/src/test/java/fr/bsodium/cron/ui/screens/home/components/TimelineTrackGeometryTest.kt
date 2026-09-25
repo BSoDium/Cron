@@ -504,8 +504,7 @@ class TimelineTrackGeometryTest {
         )
     }
 
-    // A single shared Pill instance, not a fresh `AnchorShape.Pill()` per assertion: Pill's pressProgress lambda field makes two independently-constructed Pill() instances NOT structurally equal, since default-argument lambdas aren't guaranteed to be the same singleton across call sites.
-    private val pill = AnchorShape.Pill()
+    private val pill = AnchorShape.Pill
 
     @Test
     fun advanceShapeCrossfadeState_firstCallEver_noOutgoingShape() {

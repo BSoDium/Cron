@@ -41,8 +41,8 @@ private fun TimelineNodeAnchorsPreview() {
                 TimelineNode(
                     id = "snooze",
                     registry = registry,
-                    // Negative valence → Triangle silhouette, interior (smaller) size.
-                    anchor = TimelineAnchor.Icon(MaterialSymbol.Snooze, valence = TimelineValence.Negative),
+                    // Interior anchor — pill, smaller size.
+                    anchor = TimelineAnchor.Icon(MaterialSymbol.Snooze),
                     isSegmentTop = false,
                     isSegmentBottom = false,
                     isAsleepAbove = false,
@@ -58,8 +58,8 @@ private fun TimelineNodeAnchorsPreview() {
                 TimelineNode(
                     id = "gotup",
                     registry = registry,
-                    // Positive valence → Flower silhouette, interior size.
-                    anchor = TimelineAnchor.Icon(MaterialSymbol.DirectionsWalk, valence = TimelineValence.Positive),
+                    // Interior anchor — pill, interior size.
+                    anchor = TimelineAnchor.Icon(MaterialSymbol.DirectionsWalk),
                     isSegmentTop = false,
                     isSegmentBottom = false,
                     isAsleepAbove = false,

@@ -53,7 +53,6 @@ internal fun EventNode(
             symbol = triggerSymbol(item.trigger),
             tint = onAnchorContainer,
             containerColor = anchorContainer,
-            valence = item.trigger.timelineValence(),
         ),
         isSegmentTop = isSegmentTop,
         isSegmentBottom = isSegmentBottom,

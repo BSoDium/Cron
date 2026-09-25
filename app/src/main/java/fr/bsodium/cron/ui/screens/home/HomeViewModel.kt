@@ -48,19 +48,6 @@ import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 
-/** `timelineFlow`'s emitted value (Round 32) — the live timeline plus which ids in it are genuinely
- *  new since the previous emission. */
-private data class TimelineFlowResult(val items: List<TimelineItem>, val newlyArrivedIds: Set<String>)
-
-/** Stateful wrapper around [diffNewlyArrivedIds] — the one piece of mutable bookkeeping the diff
- *  itself doesn't need to carry. Held as a [HomeViewModel] field specifically because it must survive
- *  Home's own composition being torn down and rebuilt (see the field's own KDoc at its declaration). */
-private class NewlyArrivedIdTracker {
-    private var previousIds: Set<String>? = null
-    fun diff(currentIds: Set<String>): Set<String> =
-        diffNewlyArrivedIds(currentIds, previousIds).also { previousIds = currentIds }
-}
-
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -163,13 +150,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    /** Diffs each [timelineFlow] emission's ids against the previous one to find genuinely new
-     *  arrivals. Held here, a plain ViewModel field, so it survives Home's own composition being torn
-     *  down and rebuilt (e.g. a Home→Settings→back round trip disposes `HomePlanContent`'s
-     *  remember-scoped state, but never this ViewModel — see `MainActivity.kt`'s
-     *  `popUpTo(ROUTE_HOME) { inclusive = false }`). */
-    private val newlyArrivedIdTracker = NewlyArrivedIdTracker()
-
     private val timelineFlow = combine(
         sessionFlow.map { it?.id }.distinctUntilChanged(),
         aiPlanFlow,
@@ -197,9 +177,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             null
         }
-        val rawItems = buildTimeline(listOfNotNull(currentSession))
-        val newlyArrived = newlyArrivedIdTracker.diff(rawItems.mapTo(mutableSetOf()) { it.id })
-        TimelineFlowResult(items = rawItems, newlyArrivedIds = newlyArrived)
+        buildTimeline(listOfNotNull(currentSession))
     }.flowOn(Dispatchers.Default)
 
     private val statusFlow = combine(
@@ -238,8 +216,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             dateLabel = formatDateLabel(display.session, status.autoAlarmsEnabled),
 
             aiPlan = plan,
-            liveTimeline = timeline.items,
-            newlyArrivedIds = timeline.newlyArrivedIds,
+            liveTimeline = timeline,
             // Sourced from plan itself (not a second StreamingTurnStore.active subscription) so the spinner and the response body can never disagree in one emission (#198).
             isRetrying = status.isRetrying || plan?.iterations?.lastOrNull()?.thread?.isStreaming == true,
             initialized = true,

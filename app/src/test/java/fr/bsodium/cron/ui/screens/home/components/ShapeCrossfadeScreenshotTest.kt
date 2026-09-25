@@ -29,12 +29,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
 
 /** Phase 11 (docs/color-roles.md) — verifies `TimelineTrackOverlay.drawSocket`'s Circle↔Pill crossfade
- *  blend at fixed fractions, mirroring `PillPressMorphScreenshotTest.kt`'s technique: register a fixed
- *  [AnchorDescriptor] directly against [TimelineTrackRegistry] rather than driving a real
- *  `animateFloatAsState`/`Animatable`, so the rendered geometry is deterministic and independent of
- *  spring timing — this only proves the blend logic itself is correct at a known fraction, not that the
- *  full transition feels synchronized in real time (that needs a live device, see docs/color-roles.md
- *  Round 40's own note on why this bug class specifically evades static-frame verification). */
+ *  blend at fixed fractions: register a fixed [AnchorDescriptor] directly against
+ *  [TimelineTrackRegistry] rather than driving a real `animateFloatAsState`/`Animatable`, so the
+ *  rendered geometry is deterministic and independent of spring timing — this only proves the blend
+ *  logic itself is correct at a known fraction, not that the full transition feels synchronized in
+ *  real time (that needs a live device, see docs/color-roles.md Round 40's own note on why this bug
+ *  class specifically evades static-frame verification). */
 @Suppress("DEPRECATION")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(RobolectricTestRunner::class)
@@ -79,7 +79,7 @@ private fun ShapeCrossfadeExample(registry: TimelineTrackRegistry, id: String, f
             id,
             AnchorDescriptor(
                 contentRadiusPx = with(density) { INTERIOR_ANCHOR_SIZE.toPx() / 2f },
-                shape = AnchorShape.Pill(),
+                shape = AnchorShape.Pill,
                 outgoingShape = AnchorShape.Circle,
                 shapeCrossfadeFraction = fraction,
                 accentColor = accentColor,
