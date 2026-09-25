@@ -127,6 +127,9 @@ class SessionFsm(
         val date = SessionRepository.morningDate(eveningPlanEvent.timestamp, tz)
         val session = repository.createSession(plan, date, data.timezone)
 
+        // No-ops if EveningPlanReceiver already started it; a manual replan bootstrapping fresh (no prior session) otherwise never got a running ScreenStateMonitor at all.
+        context.startForegroundService(SleepSessionService.startIntent(context))
+
         // Arm hard-latest immediately — the safety floor is non-negotiable.
         hardLatestScheduler.arm(
             hardLatest = plan.hardLatest,
