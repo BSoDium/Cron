@@ -245,8 +245,8 @@ class SessionTimelineScreenshotTest {
      *  successor reach once both have finished reflowing (also what a Home→Settings→back round trip
      *  renders immediately) via the real `sessionTimelineItems` — capturing that resting frame
      *  (rather than a static `TimelineTestContent` flattening) exercises `AiRunNode`/`TimelineNode`'s
-     *  actual `isNewlyArrived`-aware rendering path end to end, to guard against the two rows'
-     *  content ever being simultaneously fully opaque and visually superimposed. */
+     *  actual rendering path end to end, to guard against the two rows' content ever being
+     *  simultaneously fully opaque and visually superimposed. */
     @Test
     fun a_settled_demoted_run_and_its_successor_never_visually_overlap() {
         composeTestRule.mainClock.autoAdvance = false

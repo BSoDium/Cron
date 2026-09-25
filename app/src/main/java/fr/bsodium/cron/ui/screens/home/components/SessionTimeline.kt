@@ -67,7 +67,6 @@ internal fun LazyListScope.sessionTimelineItems(
     liveTimeline: List<TimelineItem>,
     historyItems: LazyPagingItems<TimelineItem>,
     registry: TimelineTrackRegistry,
-    newlyArrivedIds: Set<String> = emptySet(),
     // Forces every row's animateItem specs to null while the timeline's own composition is still settling after a fresh mount (see HomeContent.kt's rememberTimelineSettled), so cold-start/navigation never replays an entrance animation for unchanged data.
     suppressEntranceAnimation: Boolean = false,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
@@ -98,7 +97,6 @@ internal fun LazyListScope.sessionTimelineItems(
                 firstAnchorIndex = firstAnchorIndex,
                 lastAnchorIndex = lastAnchorIndex,
                 registry = registry,
-                newlyArrivedIds = newlyArrivedIds,
                 suppressEntranceAnimation = suppressEntranceAnimation,
                 onOpenAiRun = onOpenAiRun,
             )
@@ -114,7 +112,6 @@ internal fun LazyListScope.sessionTimelineItems(
                 firstAnchorIndex = firstAnchorIndex,
                 lastAnchorIndex = lastAnchorIndex,
                 registry = registry,
-                newlyArrivedIds = newlyArrivedIds,
                 suppressEntranceAnimation = suppressEntranceAnimation,
                 onOpenAiRun = onOpenAiRun,
             )
@@ -136,7 +133,6 @@ internal fun LazyListScope.sessionTimelineItems(
             firstAnchorIndex = firstAnchorIndex,
             lastAnchorIndex = lastAnchorIndex,
             registry = registry,
-            newlyArrivedIds = newlyArrivedIds,
             suppressEntranceAnimation = suppressEntranceAnimation,
             onOpenAiRun = onOpenAiRun,
         )
@@ -161,7 +157,6 @@ private fun LazyItemScope.TimelineRowContent(
     firstAnchorIndex: Int,
     lastAnchorIndex: Int,
     registry: TimelineTrackRegistry,
-    newlyArrivedIds: Set<String>,
     suppressEntranceAnimation: Boolean,
     onOpenAiRun: (iteration: AiIterationUi, sessionId: String) -> Unit,
 ) {
@@ -180,7 +175,6 @@ private fun LazyItemScope.TimelineRowContent(
                 isSegmentBottom = index == lastAnchorIndex,
                 isAsleepAbove = asleepStates[index],
                 isAsleepBelow = asleepStates.getOrNull(index + 1) ?: asleepStates[index],
-                isNewlyArrived = item.id in newlyArrivedIds,
                 onClick = { onOpenAiRun(item.iteration, item.sessionId) },
                 // zIndex still guards the tail end of the transition (e.g. a demoted row's own fade/shape settling) even with the placement snap above.
                 modifier = Modifier
@@ -268,8 +262,6 @@ internal fun AiRunNode(
     isAsleepAbove: Boolean,
     isAsleepBelow: Boolean,
     onClick: () -> Unit,
-    // Whether this row's own id is genuinely new since HomeViewModel's last emission (see TimelineMapper.kt's diffNewlyArrivedIds) — only meaningful for the Latest row, gating its Circle→Cookie9Sided arrival morph, since a plain isLatest check alone is also true on a fresh mount with no new data.
-    isNewlyArrived: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -303,7 +295,6 @@ internal fun AiRunNode(
             symbol = symbol,
             tint = if (atCap) trackOnAccentColor(isCapNestedInSleepPill) else scheme.onPrimaryContainer,
             containerColor = if (atCap) trackAccentColor(isCapNestedInSleepPill) else scheme.primaryContainer,
-            valence = iter.kind.timelineValence(),
         )
     }
     val contentColor = scheme.onSurfaceVariant
@@ -324,7 +315,6 @@ internal fun AiRunNode(
         isSegmentBottom = isSegmentBottom,
         isAsleepAbove = isAsleepAbove,
         isAsleepBelow = isAsleepBelow,
-        isNewlyArrived = isNewlyArrived,
         // Matches the title Crossfade's own targetState below (item.isLatest, not anchor is TimelineAnchor.Latest) — see TimelineNode.kt's isHeroPositioned KDoc for the lag this fixes: the anchor's Loader shape can still be showing (isStreaming) while this row is already the newest one, but the hero padding/alignment blend shouldn't wait for streaming to end just because the shape does.
         isHeroPositioned = item.isLatest,
         onClick = onClick,

@@ -146,32 +146,8 @@ class TimelineMapperTest {
         assertEquals(listOf(true, true, true), timelineAsleepStates(timeline))
     }
 
-    /** True cold start: no reference point yet, so the first load must render fully static, never
-     *  an animated reveal. */
-    @Test
-    fun diffNewlyArrivedIds_the_very_first_check_never_marks_anything_new() {
-        assertEquals(emptySet<String>(), diffNewlyArrivedIds(setOf("a", "b"), previousIds = null))
-    }
-
-    @Test
-    fun diffNewlyArrivedIds_a_later_check_marks_only_the_added_id() {
-        assertEquals(setOf("c"), diffNewlyArrivedIds(setOf("a", "b", "c"), previousIds = setOf("a", "b")))
-    }
-
-    @Test
-    fun diffNewlyArrivedIds_an_identical_re_check_marks_nothing_new() {
-        // The Home→Settings→back case: same ids as last time, nothing should animate.
-        assertEquals(emptySet<String>(), diffNewlyArrivedIds(setOf("a", "b"), previousIds = setOf("a", "b")))
-    }
-
-    @Test
-    fun diffNewlyArrivedIds_a_removed_id_does_not_appear_as_new() {
-        assertEquals(emptySet<String>(), diffNewlyArrivedIds(setOf("a"), previousIds = setOf("a", "b")))
-    }
-
-    /** Guards the entrance-animation pipeline: newlyArrivedIds is only meaningful if buildTimeline
-     *  itself doesn't spuriously reshuffle/rename ids across repeated calls with the same underlying
-     *  session data. */
+    /** [buildTimeline] must not spuriously reshuffle/rename ids across repeated calls with the same
+     *  underlying session data. */
     @Test
     fun buildTimeline_is_idempotent_given_identical_input() {
         val session = TimelineSession(

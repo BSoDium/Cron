@@ -66,7 +66,7 @@ class TimelineNodeScreenshotTest {
                             title = { Text("Replanning", style = MaterialTheme.typography.bodyMedium) },
                             status = { Text("Latest · 07:16", style = CronTypography.labelMonoSmall, color = dim) },
                         )
-                        // Interior + Negative valence → smaller Triangle silhouette (in an accent container so the carved shape reads against the track).
+                        // Interior anchor — smaller pill (in an accent container so the carved shape reads against the track).
                         TimelineNode(
                             id = "snooze",
                             registry = registry,
@@ -74,7 +74,6 @@ class TimelineNodeScreenshotTest {
                                 symbol = MaterialSymbol.Snooze,
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                valence = TimelineValence.Negative,
                             ),
                             isSegmentTop = false,
                             isSegmentBottom = false,
@@ -88,7 +87,7 @@ class TimelineNodeScreenshotTest {
                                 }
                             },
                         )
-                        // Interior + Positive valence → smaller Flower silhouette.
+                        // Interior anchor — smaller pill.
                         TimelineNode(
                             id = "gotup",
                             registry = registry,
@@ -96,7 +95,6 @@ class TimelineNodeScreenshotTest {
                                 symbol = MaterialSymbol.DirectionsWalk,
                                 tint = MaterialTheme.colorScheme.onTertiaryContainer,
                                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                valence = TimelineValence.Positive,
                             ),
                             isSegmentTop = false,
                             isSegmentBottom = false,
@@ -159,7 +157,7 @@ class TimelineNodeScreenshotTest {
                 }
             }
         }
-        // Let the latest-anchor's arrival morph (circle → Cookie9Sided) settle before capturing.
+        // Let the anchor-radius/hero-padding springs settle before capturing.
         composeTestRule.mainClock.advanceTimeBy(1_000L)
         composeTestRule.onRoot().captureRoboImage()
     }
@@ -476,7 +474,7 @@ class TimelineNodeScreenshotTest {
                 }
             }
         }
-        // Let the latest-anchor's arrival morph (circle → Cookie9Sided) settle before capturing.
+        // Let the anchor-radius/hero-padding springs settle before capturing.
         composeTestRule.mainClock.advanceTimeBy(1_000L)
         composeTestRule.onRoot().captureRoboImage()
     }

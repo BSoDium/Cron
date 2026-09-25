@@ -66,30 +66,10 @@ internal fun TriggerType.timelineAccent(): TimelineAccent = when (this) {
     -> TimelineAccent.Schedule
 }
 
-/** Semantic silhouette dimension — orthogonal to [TimelineAccent] (hue). Positive events read as a
- *  soft `Flower`, negative ones as a sharp `Triangle`, neutral ones stay a plain circle (no shape
- *  change). Carries an at-a-glance "was this good or bad" read the color and icon alone don't. */
-internal enum class TimelineValence { Positive, Negative, Neutral }
-
-/** Exhaustive so a new [TriggerType] forces a deliberate valence choice rather than falling through. */
-internal fun TriggerType.timelineValence(): TimelineValence = when (this) {
-    TriggerType.OutOfBedConfirmed, TriggerType.WakeWindowOpportunity -> TimelineValence.Positive
-    TriggerType.HardLatestFired, TriggerType.AlarmSnoozed -> TimelineValence.Negative
-    TriggerType.SleepOnset, TriggerType.AlarmDismissed, TriggerType.CalendarChange,
-    TriggerType.HcStageUpdate, TriggerType.MidSleepActivity, TriggerType.EveningPlan -> TimelineValence.Neutral
-}
-
-/** A replan inherits its trigger's valence (a safety-alarm replan reads as negative, same as the event
- *  would); a scheduled/manual base plan is neutral. Exhaustive over the sealed [RunKind]. */
-internal fun RunKind.timelineValence(): TimelineValence = when (this) {
-    RunKind.ScheduledBase, RunKind.ManualBase -> TimelineValence.Neutral
-    is RunKind.Replan -> trigger?.timelineValence() ?: TimelineValence.Neutral
-}
-
 /** Track-aware — every cap anchor's fill matches whichever track it's on:
  *  [MaterialTheme.colorScheme.secondaryContainer] on the sleep track, [MaterialTheme.colorScheme.primary]
  *  on the awake one, with no exception for a "muted" tier either — every anchor on a given track is
- *  literally the same color, full stop, differentiated only by icon/shape. Both delegate to
+ *  literally the same color, full stop, differentiated only by icon. Both delegate to
  *  `SessionTimeline.kt`'s `trackAccentColor`/`trackOnAccentColor`, so a same-track collision is
  *  structurally impossible, unlike the per-accent/per-importance `*Container` pairing this replaced
  *  (which needed its own escape hatch per accent/track combination to avoid one). */

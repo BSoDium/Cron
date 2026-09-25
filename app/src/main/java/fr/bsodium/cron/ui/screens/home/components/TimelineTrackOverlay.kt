@@ -26,7 +26,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.lerp
 import fr.bsodium.cron.ui.theme.Spacing
 
 /** Thickness of the center-line spine — thin, a detail line rather than another track. */
@@ -48,13 +47,6 @@ private const val AWAKE_SPINE_BLEND = 0.45f
  *  more presence ("elevated") against the bolder, darker sleep track. `onSecondary` (not `onPrimary`)
  *  since Round 21 moved the sleep track itself from `primary` to `secondary`. */
 private const val ASLEEP_SPINE_BLEND = 0.4f
-
-/** Corner radius (as a fraction of a fully-pressed [AnchorShape.Pill]'s square footprint width) a
- *  pressed Pill's `drawRoundRect` shrinks toward — matches `MaterialShapes.Square`'s own rounding
- *  (`CornerRounding(radius = 0.3f)` on a unit `RoundedPolygon.rectangle`, read from the M3 source),
- *  so the plain-geometry replacement (Round 27.10) still lands on a recognizably "rounded square"
- *  corner rather than an arbitrary guess. */
-private const val SQUARE_CORNER_FRACTION = 0.3f
 
 /** The whole timeline track, painted once behind every row. Reads live anchor geometry from
  *  [registry] and draws one continuous set of paths — a round-capped background stadium per segment,
@@ -100,7 +92,6 @@ internal fun TimelineTrackOverlay(
     // A minority blend toward a role that reads on the track's own fill — a hint of a line, not a drawn boundary; a by-eye starting point, adjust if it doesn't read live.
     val awakeSpineColor = lerp(awakeColor, MaterialTheme.colorScheme.onSurfaceVariant, AWAKE_SPINE_BLEND)
     val asleepSpineColor = lerp(asleepColor, MaterialTheme.colorScheme.onSecondary, ASLEEP_SPINE_BLEND)
-    val scratch = remember { android.graphics.Path() }
     var overlayCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val endState = remember { TrackEndState() }
     val staleness = remember { AnchorStalenessTracker() }
@@ -126,7 +117,7 @@ internal fun TimelineTrackOverlay(
                         staleness = staleness,
                         context = context,
                     )
-                    drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, scratch, context)
+                    drawTrack(placed, endState, awakeColor, asleepColor, awakeSpineColor, asleepSpineColor, context)
                 }
             },
     )
@@ -306,7 +297,6 @@ private fun DrawScope.drawTrack(
     asleepColor: Color,
     awakeSpineColor: Color,
     asleepSpineColor: Color,
-    scratch: android.graphics.Path,
     context: Context,
 ) {
     if (placed.isEmpty()) return
@@ -329,7 +319,6 @@ private fun DrawScope.drawTrack(
         asleepColor = asleepColor,
         awakeSpineColor = awakeSpineColor,
         asleepSpineColor = asleepSpineColor,
-        scratch = scratch,
         ends = endState.ends,
         context = context,
     )
@@ -347,7 +336,6 @@ private fun DrawScope.drawSegment(
     asleepColor: Color,
     awakeSpineColor: Color,
     asleepSpineColor: Color,
-    scratch: android.graphics.Path,
     ends: TrackEnds,
     context: Context,
 ) {
@@ -376,7 +364,7 @@ private fun DrawScope.drawSegment(
     }
 
     anchors.forEach { anchor ->
-        drawSocket(anchor, scratch)
+        drawSocket(anchor)
     }
 }
 
@@ -405,57 +393,42 @@ private fun DrawScope.drawSpine(
  *  size — already animated by the same `atCap`-triggered spring that drives the crossfade fraction, so
  *  the outgoing shape visibly shrinks-while-fading and the incoming one grows-while-fading in step,
  *  with no extra coupling required. */
-private fun DrawScope.drawSocket(anchor: PlacedAnchor, scratch: android.graphics.Path) {
+private fun DrawScope.drawSocket(anchor: PlacedAnchor) {
     val d = anchor.descriptor
     val outgoing = d.outgoingShape
     if (outgoing != null && d.shapeCrossfadeFraction < 1f) {
-        drawOneSocketShape(outgoing, anchor, scratch, alpha = 1f - d.shapeCrossfadeFraction)
-        drawOneSocketShape(d.shape, anchor, scratch, alpha = d.shapeCrossfadeFraction)
+        drawOneSocketShape(outgoing, anchor, alpha = 1f - d.shapeCrossfadeFraction)
+        drawOneSocketShape(d.shape, anchor, alpha = d.shapeCrossfadeFraction)
     } else {
-        drawOneSocketShape(d.shape, anchor, scratch, alpha = 1f)
+        drawOneSocketShape(d.shape, anchor, alpha = 1f)
     }
 }
 
 /** One shape's worth of [drawSocket] at a given [alpha] — see that function's KDoc. A cap anchor's
  *  content radius is already flush (`== halfTrack - CAP_ANCHOR_PADDING`), so a circular socket fills
- *  the track to the same thin rim everywhere — no cap-only inflation needed. The Latest morph is
- *  bounded within the same flush diameter by [buildMorphPath]'s scale-to-fit, so it nests just as
- *  flush without ever overflowing. An interior [AnchorShape.Pill] is full [TimelineNode]'s
- *  `FLUSH_ANCHOR_SIZE` wide (matching a cap anchor's own width, per spec) but only `2 × contentRadiusPx`
- *  tall by default — a plain `drawRoundRect` capsule whose height grows to meet that width and whose
- *  corner radius shrinks toward [SQUARE_CORNER_FRACTION] of that width as [AnchorShape.Pill.pressProgress]
- *  goes 0→1, so an unpressed/non-clickable Pill (always `pressProgress() == 0`) renders the exact same
- *  full capsule either way. */
+ *  the track to the same thin rim everywhere — no cap-only inflation needed. An interior
+ *  [AnchorShape.Pill] is full [TimelineNode]'s `FLUSH_ANCHOR_SIZE` wide (matching a cap anchor's own
+ *  width, per spec) but only `2 × contentRadiusPx` tall — a plain `drawRoundRect` capsule with a fully
+ *  rounded corner radius (half its height), so it always reads as a stadium shape. */
 private fun DrawScope.drawOneSocketShape(
     shape: AnchorShape,
     anchor: PlacedAnchor,
-    scratch: android.graphics.Path,
     alpha: Float,
 ) {
     val d = anchor.descriptor
     val color = d.accentColor.copy(alpha = d.accentColor.alpha * alpha)
     when (shape) {
         AnchorShape.Circle -> drawCircle(color, radius = d.contentRadiusPx, center = Offset(anchor.cx, anchor.cy))
-        is AnchorShape.Pill -> {
+        AnchorShape.Pill -> {
             val pillWidth = FLUSH_ANCHOR_SIZE.toPx()
-            val pressed = shape.pressProgress().coerceIn(0f, 1f)
-            val pillHeight = lerp(d.contentRadiusPx * 2, pillWidth, pressed)
-            val cornerRadius = lerp(pillHeight / 2f, pillWidth * SQUARE_CORNER_FRACTION, pressed)
+            val pillHeight = d.contentRadiusPx * 2
             drawRoundRect(
                 color = color,
                 topLeft = Offset(anchor.cx - pillWidth / 2f, anchor.cy - pillHeight / 2f),
                 size = Size(pillWidth, pillHeight),
-                cornerRadius = CornerRadius(cornerRadius),
+                cornerRadius = CornerRadius(pillHeight / 2f),
             )
         }
-        is AnchorShape.Polygon -> drawPath(
-            buildPolygonPath(shape.polygon, anchor.cx, anchor.cy, d.contentRadiusPx * 2, scratch),
-            color,
-        )
-        is AnchorShape.MorphShape -> drawPath(
-            buildMorphPath(shape.morph, shape.progress(), anchor.cx, anchor.cy, d.contentRadiusPx * 2, scratch),
-            color,
-        )
     }
 }
 
