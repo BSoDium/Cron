@@ -29,10 +29,13 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-private fun previewDayHeader(dateOffsetDays: Int): TimelineItem.DayHeader {
-    val ts = Instant.fromEpochMilliseconds(System.currentTimeMillis() - dateOffsetDays * 86_400_000L)
-    return TimelineItem.DayHeader(date = ts.toLocalDateTime(TimeZone.currentSystemDefault()).date, timestamp = ts)
-}
+/** Shared by every preview/playground in this package that needs a [TimelineItem.DayHeader] for an
+ *  arbitrary instant, so the date-from-instant derivation lives in exactly one place. */
+internal fun dayHeaderAt(instant: Instant): TimelineItem.DayHeader =
+    TimelineItem.DayHeader(date = instant.toLocalDateTime(TimeZone.currentSystemDefault()).date, timestamp = instant)
+
+private fun previewDayHeader(dateOffsetDays: Int): TimelineItem.DayHeader =
+    dayHeaderAt(Instant.fromEpochMilliseconds(System.currentTimeMillis() - dateOffsetDays * 86_400_000L))
 
 private fun previewIteration(
     turn: Int,

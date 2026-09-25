@@ -23,8 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.paging.LoadState
-import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -38,8 +36,6 @@ import fr.bsodium.cron.ui.theme.Spacing
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 
 private const val PLAYGROUND_SESSION_ID = "playground"
 
@@ -78,17 +74,14 @@ private fun playgroundReplanRun(id: Int, ranAtEpochMs: Long, newTime: LocalTime,
     isLatest = true,
 )
 
-private fun playgroundEvent(id: Int, epochMs: Long, trigger: TriggerType, label: String) = TimelineItem.Event(
+private fun playgroundEvent(epochMs: Long, trigger: TriggerType, label: String) = TimelineItem.Event(
     timestamp = Instant.fromEpochMilliseconds(epochMs),
     trigger = trigger,
     label = label,
     detail = null,
 )
 
-private fun playgroundDayHeader(epochMs: Long): TimelineItem.DayHeader {
-    val ts = Instant.fromEpochMilliseconds(epochMs)
-    return TimelineItem.DayHeader(date = ts.toLocalDateTime(TimeZone.currentSystemDefault()).date, timestamp = ts)
-}
+private fun playgroundDayHeader(epochMs: Long): TimelineItem.DayHeader = dayHeaderAt(Instant.fromEpochMilliseconds(epochMs))
 
 /** Promotes [newItem] to Latest and demotes whichever [TimelineItem.AiRun] currently holds that
  *  title — mirrors the real promotion `buildTimeline` performs on every replan, so the playground
@@ -140,26 +133,27 @@ private fun TimelineAnimationPlaygroundPreview() {
                     timeline = timeline.promoteToLatest(playgroundReplanRun(id, epochMs, newTime = LocalTime(7, 15), previousTime = LocalTime(7, 45)))
                 }) { PlaygroundButtonText("+ Replan (promotes)") }
                 Button(onClick = {
-                    val (id, epochMs) = tick()
-                    timeline = listOf(playgroundEvent(id, epochMs, TriggerType.AlarmSnoozed, "Alarm snoozed")) + timeline
+                    val (_, epochMs) = tick()
+                    timeline = listOf(playgroundEvent(epochMs, TriggerType.AlarmSnoozed, "Alarm snoozed")) + timeline
                 }) { PlaygroundButtonText("+ Snooze event") }
                 Button(onClick = {
-                    val (id, epochMs) = tick()
-                    timeline = listOf(playgroundEvent(id, epochMs, TriggerType.CalendarChange, "Your schedule changed")) + timeline
+                    val (_, epochMs) = tick()
+                    timeline = listOf(playgroundEvent(epochMs, TriggerType.CalendarChange, "Your schedule changed")) + timeline
                 }) { PlaygroundButtonText("+ Calendar event") }
                 Button(onClick = {
                     val (id, epochMs) = tick()
-                    val yesterday = epochMs - 86_400_000L
+                    // (id + 1) keeps every click's day distinct and, added not subtracted, keeps it newer than everything already prepended above it.
+                    val newDay = epochMs + (id + 1) * 86_400_000L
                     timeline = listOf(
-                        playgroundEvent(id, epochMs, TriggerType.OutOfBedConfirmed, "You got up"),
-                        playgroundDayHeader(yesterday),
+                        playgroundDayHeader(newDay),
+                        playgroundEvent(newDay, TriggerType.OutOfBedConfirmed, "You got up"),
                     ) + timeline
                 }) { PlaygroundButtonText("+ New day boundary") }
                 Button(onClick = {
                     val (id1, epochMs1) = tick()
-                    val (id2, epochMs2) = tick()
+                    val (_, epochMs2) = tick()
                     timeline = timeline.promoteToLatest(playgroundReplanRun(id1, epochMs1, newTime = LocalTime(6, 30), previousTime = LocalTime(7, 15)))
-                    timeline = listOf(playgroundEvent(id2, epochMs2, TriggerType.SleepOnset, "You fell asleep")) + timeline
+                    timeline = listOf(playgroundEvent(epochMs2, TriggerType.SleepOnset, "You fell asleep")) + timeline
                 }) { PlaygroundButtonText("+ Burst (2 at once)") }
                 OutlinedButton(onClick = { timeline = timeline.drop(1) }) { PlaygroundButtonText("Remove newest") }
                 OutlinedButton(onClick = { timeline = emptyList() }) { PlaygroundButtonText("Reset") }
@@ -185,16 +179,8 @@ private fun PlaygroundButtonText(text: String) {
 }
 
 /** An always-empty, never-loading paged history feed — the playground is only about the live
- *  timeline's own insertion/removal animation, not pagination. */
+ *  timeline's own insertion/removal animation, not pagination. Matches `HomeContent.kt`'s own preview
+ *  history feed (`PagingData.empty()`), rather than hand-building `LoadStates`. */
 @Composable
 private fun emptyPlaygroundHistory(): LazyPagingItems<TimelineItem> =
-    flowOf(
-        PagingData.from(
-            emptyList<TimelineItem>(),
-            LoadStates(
-                refresh = LoadState.NotLoading(endOfPaginationReached = false),
-                prepend = LoadState.NotLoading(endOfPaginationReached = true),
-                append = LoadState.NotLoading(endOfPaginationReached = true),
-            ),
-        ),
-    ).collectAsLazyPagingItems()
+    flowOf(PagingData.empty<TimelineItem>()).collectAsLazyPagingItems()
